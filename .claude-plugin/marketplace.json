@@ -1,0 +1,17 @@
+{
+  "name": "ihistand",
+  "owner": {
+    "name": "Ivan Histand",
+    "email": "ihistand@rotoplas.com",
+    "url": "https://github.com/ihistand"
+  },
+  "description": "Claude Code plugins for data engineering and business intelligence workflows",
+  "plugins": [
+    {
+      "name": "dataform-toolkit",
+      "source": "./dataform-toolkit",
+      "version": "1.0.0",
+      "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices, TDD workflow, and ETL agent integration"
+    }
+  ]
+}
