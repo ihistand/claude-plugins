@@ -1,0 +1,12 @@
+{
+  "name": "dataform-toolkit",
+  "version": "1.0.0",
+  "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices. Enforces TDD workflow, proper ref() usage, comprehensive documentation, and safe development patterns. Includes quick-access commands for common ETL workflows.",
+  "author": {
+    "name": "Ivan Histand",
+    "email": "ihistand@rotoplas.com",
+    "url": "https://github.com/ihistand"
+  },
+  "skills": "./skills",
+  "commands": "./commands"
+}
