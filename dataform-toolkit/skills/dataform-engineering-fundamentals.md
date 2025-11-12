@@ -11,9 +11,9 @@ description: Use when developing BigQuery Dataform transformations, SQLX files, 
 
 **REQUIRED FOUNDATION:** This skill builds upon superpowers:test-driven-development. All TDD principles from that skill apply to Dataform development. This skill adapts TDD specifically for BigQuery Dataform SQLX files.
 
-**Official Documentation:** For Dataform syntax, configuration options, and API reference, see https://cloud.google.com/dataform/docs
+**Official Documentation:** For Dataform syntax, configuration options, and API reference, see https://docs.cloud.google.com/dataform/docs?hl=en
 
-**Best Practices Guide:** For repository structure, naming conventions, and managing large workflows, see https://cloud.google.com/dataform/docs/best-practices-repositories
+**Best Practices Guide:** For repository structure, naming conventions, and managing large workflows, see https://docs.cloud.google.com/dataform/docs/best-practices-repositories?hl=en
 
 Time pressure does not justify skipping safety checks or creating technical debt. The time "saved" by shortcuts gets multiplied into hours of debugging, broken dependencies, and production issues.
 
@@ -159,7 +159,7 @@ bq query --use_legacy_sql=false \
 
 Even for "quick" work, follow these patterns:
 
-**Reference:** For detailed guidance on repository structure, naming conventions, and managing large workflows, see https://cloud.google.com/dataform/docs/best-practices-repositories
+**Reference:** For detailed guidance on repository structure, naming conventions, and managing large workflows, see https://docs.cloud.google.com/dataform/docs/best-practices-repositories?hl=en
 
 ### Layered Structure
 
@@ -315,7 +315,7 @@ Column descriptions should be derived from:
 2. **Third-party Documentation**: Use official API documentation for external systems (CRM, ERP, analytics platforms)
 3. **Business Logic**: Document calculated fields, transformations, and business rules
 4. **BI Tool Requirements**: Include context that dashboard builders and analysts need
-5. **Dataform Documentation**: Reference https://cloud.google.com/dataform/docs for Dataform-specific configuration and built-in functions
+5. **Dataform Documentation**: Reference https://docs.cloud.google.com/dataform/docs?hl=en for Dataform-specific configuration and built-in functions
 
 **Example with ERP source documentation**:
 ```sql
@@ -611,7 +611,7 @@ When under extreme time pressure (board meeting in 2 hours, production down, sta
 
 **RECOMMENDED APPROACH:** When encountering ANY bug, test failure, or unexpected behavior, use superpowers:systematic-debugging before attempting fixes. For errors deep in execution or cascading failures, use superpowers:root-cause-tracing to identify the original trigger.
 
-**Official Reference:** For Dataform-specific errors, configuration issues, or syntax questions, consult https://cloud.google.com/dataform/docs
+**Official Reference:** For Dataform-specific errors, configuration issues, or syntax questions, consult https://docs.cloud.google.com/dataform/docs?hl=en
 
 ### "Table not found" errors
 
