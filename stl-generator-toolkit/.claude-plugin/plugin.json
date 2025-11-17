@@ -1,0 +1,12 @@
+{
+  "name": "stl-generator-toolkit",
+  "version": "1.0.0",
+  "description": "Comprehensive toolkit for generating 3D printable STL files for woodworking jigs and fixtures using CadQuery. Includes pre-built scripts for circle cutting jigs, angle wedges, spacing blocks, and custom parametric designs. Optimized for Elegoo Neptune 4 Pro with engineering best practices.",
+  "author": {
+    "name": "Ivan Histand",
+    "email": "ihistand@rotoplas.com",
+    "url": "https://github.com/ihistand"
+  },
+  "skills": "./skills",
+  "commands": "./commands"
+}

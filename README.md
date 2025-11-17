@@ -1,6 +1,6 @@
 # Claude Code Plugins by Ivan Histand
 
-Claude Code plugins for data engineering and business intelligence workflows.
+Claude Code plugins for data engineering, business intelligence, and 3D printing workflows.
 
 ## Available Plugins
 
@@ -18,6 +18,22 @@ Comprehensive toolkit for BigQuery Dataform development with engineering best pr
 
 **For full documentation:** See [dataform-toolkit/README.md](./dataform-toolkit/README.md)
 
+### stl-generator-toolkit
+
+Comprehensive toolkit for generating 3D printable STL files for woodworking jigs and fixtures using CadQuery.
+
+**Features:**
+- **stl-generator skill** - Pre-built scripts, CadQuery patterns, printer specifications (Elegoo Neptune 4 Pro), and design best practices
+- **Slash commands** for common jigs:
+  - `/stl-generate` - Generate custom STL files for any woodworking jig
+  - `/stl-circle-jig` - Quick generation of circle cutting jigs for router work
+  - `/stl-angle-wedge` - Generate angle guide wedges for compound cuts
+  - `/stl-spacing-block` - Create precision spacing blocks for assembly
+- **Pre-built scripts**: Circle cutting jigs, angle wedges, spacing blocks
+- **Reference files**: CadQuery patterns and printer specifications
+
+**For full documentation:** See [stl-generator-toolkit/README.md](./stl-generator-toolkit/README.md)
+
 ## Installation
 
 ### Install the Marketplace
@@ -33,17 +49,28 @@ Comprehensive toolkit for BigQuery Dataform development with engineering best pr
 # Install dataform-toolkit
 /plugin install dataform-toolkit@ihistand
 
+# Install stl-generator-toolkit
+/plugin install stl-generator-toolkit@ihistand
+
 # Restart Claude Code for changes to take effect
 ```
 
-## Usage Example
+## Usage Examples
 
-After installing dataform-toolkit:
+### Dataform Development
 
 ```
 User: I need to create a new customer metrics table in Dataform
 Claude: /dataform-new-table
 [Guides through TDD workflow: write tests first, then implementation]
+```
+
+### 3D Printing
+
+```
+User: I need a jig for cutting 300mm diameter circles for lampshade rings
+Claude: /stl-circle-jig
+[Generates STL file with specified dimensions, ready for 3D printing]
 ```
 
 ## Plugin Development
@@ -66,6 +93,14 @@ claude-plugins/
 │   │   └── plugin.json           # Plugin configuration
 │   ├── skills/                   # dataform-engineering-fundamentals
 │   ├── commands/                 # Slash commands
+│   └── README.md                 # Plugin documentation
+├── stl-generator-toolkit/        # 3D printing STL generator
+│   ├── .claude-plugin/
+│   │   └── plugin.json           # Plugin configuration
+│   ├── skills/                   # stl-generator
+│   ├── commands/                 # Slash commands
+│   ├── scripts/                  # Pre-built Python scripts
+│   ├── references/               # CadQuery patterns & printer specs
 │   └── README.md                 # Plugin documentation
 └── README.md                     # This file
 ```

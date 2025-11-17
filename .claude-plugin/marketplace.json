@@ -5,13 +5,19 @@
     "email": "ihistand@rotoplas.com",
     "url": "https://github.com/ihistand"
   },
-  "description": "Claude Code plugins for data engineering and business intelligence workflows",
+  "description": "Claude Code plugins for data engineering, business intelligence, and 3D printing workflows",
   "plugins": [
     {
       "name": "dataform-toolkit",
       "source": "./dataform-toolkit",
       "version": "1.0.0",
       "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices, TDD workflow, and ETL agent integration"
+    },
+    {
+      "name": "stl-generator-toolkit",
+      "source": "./stl-generator-toolkit",
+      "version": "1.0.0",
+      "description": "Comprehensive toolkit for generating 3D printable STL files for woodworking jigs and fixtures using CadQuery, with pre-built scripts and parametric design patterns"
     }
   ]
 }
