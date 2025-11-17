@@ -36,11 +36,14 @@ Comprehensive toolkit for generating 3D printable STL files for woodworking jigs
 
 ## Installation
 
-### Install the Marketplace
+### Install from GitHub
 
 ```bash
 # Add this marketplace to Claude Code
 /plugin marketplace add ihistand/claude-plugins
+
+# Or use the full GitHub URL
+/plugin marketplace add https://github.com/ihistand/claude-plugins
 ```
 
 ### Install Plugins
@@ -126,6 +129,7 @@ Contributions are welcome! Please open an issue or pull request for:
 
 ## Related Resources
 
+- **GitHub Repository**: [ihistand/claude-plugins](https://github.com/ihistand/claude-plugins)
 - [Claude Code Documentation](https://docs.claude.com/en/docs/claude-code)
 - [Plugin Development Guide](https://docs.claude.com/en/docs/claude-code/plugins)
 - [Superpowers Framework](https://github.com/obra/superpowers)

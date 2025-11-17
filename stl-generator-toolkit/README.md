@@ -39,17 +39,24 @@ Comprehensive toolkit for generating 3D printable STL files for woodworking jigs
 
 ## Installation
 
-### Option 1: Install from Marketplace
+### Option 1: Install from GitHub
 
 ```bash
 # Add marketplace
 /plugin marketplace add ihistand/claude-plugins
 
+# Or use the full GitHub URL
+/plugin marketplace add https://github.com/ihistand/claude-plugins
+
 # Install plugin
 /plugin install stl-generator-toolkit@ihistand
 ```
 
+Then restart Claude Code.
+
 ### Option 2: Install from Local Directory
+
+For development or offline use:
 
 ```bash
 # Add marketplace locally
@@ -239,6 +246,7 @@ Always read `printer_specs.md` when starting a new jig design.
 
 ## Official Documentation
 
+- **GitHub Repository**: [ihistand/claude-plugins](https://github.com/ihistand/claude-plugins)
 - [CadQuery Documentation](https://cadquery.readthedocs.io/)
 - [Elegoo Neptune 4 Pro Specifications](https://www.elegoo.com/products/elegoo-neptune-4-pro-fdm-3d-printer)
 - [OpenSCAD Documentation](https://openscad.org/documentation.html) (alternative CAD tool)

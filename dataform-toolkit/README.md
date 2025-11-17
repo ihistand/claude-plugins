@@ -42,24 +42,32 @@ The skill is designed to be bulletproof against rationalization - it works espec
 
 ## Installation
 
-### Option 1: Install from Local Directory
+### Option 1: Install from GitHub
 
 ```bash
-# From your Claude Code session
-/plugin marketplace add /path/to/plugins/dataform-toolkit
-/plugin install dataform-toolkit@dev
+# Add marketplace
+/plugin marketplace add ihistand/claude-plugins
+
+# Or use the full GitHub URL
+/plugin marketplace add https://github.com/ihistand/claude-plugins
+
+# Install plugin
+/plugin install dataform-toolkit@ihistand
 ```
 
 Then restart Claude Code.
 
-### Option 2: Install from Git Repository (Future)
+### Option 2: Install from Local Directory
 
-Once published to a Git repository:
+For development or offline use:
 
 ```bash
-/plugin marketplace add <your-org>/<repository-name>
-/plugin install dataform-toolkit@<marketplace-name>
+# From your Claude Code session
+/plugin marketplace add /path/to/claude-plugins
+/plugin install dataform-toolkit@dev
 ```
+
+Then restart Claude Code.
 
 ## Usage Examples
 
@@ -180,6 +188,7 @@ Even under extreme time pressure (board meeting in 2 hours, production down, sta
 
 ## Official Documentation
 
+- **GitHub Repository**: [ihistand/claude-plugins](https://github.com/ihistand/claude-plugins)
 - [Dataform Documentation](https://cloud.google.com/dataform/docs)
 - [Dataform Best Practices](https://cloud.google.com/dataform/docs/best-practices-repositories)
 - [BigQuery GoogleSQL Reference](https://cloud.google.com/bigquery/docs/reference/standard-sql)
