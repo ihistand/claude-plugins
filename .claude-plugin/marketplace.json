@@ -14,6 +14,12 @@
       "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices, TDD workflow, and ETL agent integration"
     },
     {
+      "name": "acuantia-dataform",
+      "source": "./acuantia-dataform",
+      "version": "1.0.0",
+      "description": "Acuantia-specific patterns for BigQuery Dataform development. Extends dataform-engineering-fundamentals with ODS two-arg ref() syntax, looker_ filename conventions, and integration with callrail/dialpad/looker projects."
+    },
+    {
       "name": "stl-generator-toolkit",
       "source": "./stl-generator-toolkit",
       "version": "1.0.0",

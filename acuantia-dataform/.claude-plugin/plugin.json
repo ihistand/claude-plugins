@@ -1,0 +1,11 @@
+{
+  "name": "acuantia-dataform",
+  "version": "1.0.0",
+  "description": "Acuantia-specific patterns for BigQuery Dataform development. Extends dataform-engineering-fundamentals with ODS two-arg ref() syntax, looker_ filename conventions, and integration with callrail/dialpad/looker projects.",
+  "author": {
+    "name": "Ivan Histand",
+    "email": "ihistand@rotoplas.com",
+    "url": "https://github.com/ihistand"
+  },
+  "skills": "./skills"
+}
