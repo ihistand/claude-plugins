@@ -12,16 +12,17 @@ export function renderHome(plugins) {
       </div>
       <p class="plugin-card-desc">${p.description}</p>
       <div class="plugin-card-install">${p.install}</div>
-      <br>
       <a href="#${p.id}" class="plugin-card-link">View docs &rarr;</a>
     </div>
   `).join('')
 
   return `
-    <div class="page-header">
-      <h1>Claude Plugins</h1>
-      <p class="plugin-description">Developer documentation for the ihistand plugin marketplace.</p>
+    <div class="content-inner">
+      <div class="page-header">
+        <h1>Claude Plugins</h1>
+        <p class="plugin-description">Developer documentation for the ihistand plugin marketplace.</p>
+      </div>
+      ${cards}
     </div>
-    ${cards}
   `
 }

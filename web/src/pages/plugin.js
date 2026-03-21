@@ -46,21 +46,23 @@ export function renderPlugin(plugin) {
   ` : ''
 
   return `
-    <div class="page-header">
-      <div class="page-title-row">
-        <h1>${plugin.name}</h1>
-        <span class="badge">${plugin.version}</span>
+    <div class="content-inner">
+      <div class="page-header">
+        <div class="page-title-row">
+          <h1>${plugin.name}</h1>
+          <span class="badge">${plugin.version}</span>
+        </div>
+        <p class="plugin-description">${plugin.description}</p>
       </div>
-      <p class="plugin-description">${plugin.description}</p>
-    </div>
 
-    <div class="install-block">
-      <span class="install-label">INSTALL</span>
-      <span class="install-cmd">${plugin.install}</span>
-    </div>
+      <div class="install-block">
+        <span class="install-label">INSTALL</span>
+        <span class="install-cmd">${plugin.install}</span>
+      </div>
 
-    ${commandsSection}
-    ${skillsSection}
-    ${referencesSection}
+      ${commandsSection}
+      ${skillsSection}
+      ${referencesSection}
+    </div>
   `
 }

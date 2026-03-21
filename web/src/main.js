@@ -35,6 +35,7 @@ function render() {
     el.innerHTML = renderHome(plugins)
   }
 
+  el.scrollTop = 0
   updateActiveNav(hash)
 }
 
