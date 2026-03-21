@@ -1,0 +1,94 @@
+<h2>Which layout works best for a developer docs hub?</h2>
+<p class="subtitle">Three approaches for organizing plugin documentation</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-nav" style="font-size:11px;padding:6px 12px;">Claude Plugins Docs &nbsp;|&nbsp; dataform-toolkit &nbsp;|&nbsp; stl-generator &nbsp;|&nbsp; acuantia-dataform</div>
+      <div style="padding:12px;background:#1a1a2e;min-height:120px;">
+        <div style="background:#252540;border-radius:6px;padding:10px;margin-bottom:8px;">
+          <div style="font-size:10px;color:#aaa;font-family:monospace;margin-bottom:4px;">PLUGIN</div>
+          <div style="font-size:13px;color:#e0e0ff;font-weight:600;">dataform-toolkit</div>
+          <div style="font-size:11px;color:#888;margin-top:4px;">Skills · Commands · Examples</div>
+        </div>
+        <div style="background:#252540;border-radius:6px;padding:10px;">
+          <div style="font-size:10px;color:#aaa;font-family:monospace;margin-bottom:4px;">PLUGIN</div>
+          <div style="font-size:13px;color:#e0e0ff;font-weight:600;">stl-generator-toolkit</div>
+          <div style="font-size:11px;color:#888;margin-top:4px;">Skills · Commands · Scripts</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Single Page, Plugin Cards</h3>
+      <p>Top nav links to each plugin section. All content scrolls on one page. Simple, fast to build.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>No routing needed</li><li>Easy to CMD+F search</li><li>Works without a server</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Gets long as plugins grow</li><li>Less structured per-plugin</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;background:#1a1a2e;min-height:160px;">
+        <div class="mock-sidebar" style="width:140px;flex-shrink:0;font-size:11px;padding:10px;">
+          <div style="color:#888;font-size:10px;margin-bottom:6px;">PLUGINS</div>
+          <div style="color:#a0c4ff;margin-bottom:4px;">dataform-toolkit</div>
+          <div style="padding-left:8px;color:#777;font-size:10px;margin-bottom:2px;">Overview</div>
+          <div style="padding-left:8px;color:#777;font-size:10px;margin-bottom:2px;">Skills</div>
+          <div style="padding-left:8px;color:#777;font-size:10px;margin-bottom:8px;">Commands</div>
+          <div style="color:#888;margin-bottom:4px;">stl-generator</div>
+          <div style="color:#888;margin-bottom:4px;">acuantia-dataform</div>
+        </div>
+        <div class="mock-content" style="flex:1;padding:10px;">
+          <div style="font-size:13px;color:#e0e0ff;font-weight:600;margin-bottom:6px;">dataform-toolkit</div>
+          <div style="font-size:11px;color:#aaa;margin-bottom:8px;">Comprehensive toolkit for BigQuery Dataform development</div>
+          <div style="background:#252540;border-radius:4px;padding:6px;font-family:monospace;font-size:10px;color:#7ec8e3;">/dataform-test &nbsp; /dataform-deploy</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Sidebar Nav + Content Pane</h3>
+      <p>Left sidebar with plugin/section tree. Content loads in main pane. Classic docs layout (like Docusaurus/Stripe).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Scales well</li><li>Easy to navigate deep content</li><li>Familiar for devs</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More JS to wire up</li><li>More initial complexity</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;min-height:160px;padding:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div style="background:#252540;border-radius:6px;padding:8px;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">BQ</div>
+            <div style="font-size:10px;color:#a0c4ff;">dataform-toolkit</div>
+          </div>
+          <div style="background:#252540;border-radius:6px;padding:8px;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">3D</div>
+            <div style="font-size:10px;color:#a0c4ff;">stl-generator</div>
+          </div>
+          <div style="background:#252540;border-radius:6px;padding:8px;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">AC</div>
+            <div style="font-size:10px;color:#a0c4ff;">acuantia-dataform</div>
+          </div>
+        </div>
+        <div style="background:#252540;border-radius:6px;padding:10px;">
+          <div style="font-size:11px;color:#e0e0ff;font-weight:600;margin-bottom:4px;">dataform-toolkit — Commands</div>
+          <div style="font-family:monospace;font-size:10px;color:#7ec8e3;">/dataform-test · /dataform-deploy · /dataform-new-table · /dataform-etl</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Hub + Detail Pages</h3>
+      <p>Landing page with plugin grid. Click a plugin to see its dedicated full-page docs. Client-side routing (hash-based).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean landing experience</li><li>Each plugin gets full page</li><li>Easy to extend</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More pages to maintain</li><li>Needs hash routing</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,68 @@
+<h2>Which visual style fits best?</h2>
+<p class="subtitle">Both use the sidebar layout — difference is tone and color</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;height:200px;background:#0f0f0f;border-radius:6px;overflow:hidden;font-family:monospace;">
+        <div style="width:160px;background:#141414;border-right:1px solid #222;padding:12px;flex-shrink:0;">
+          <div style="color:#666;font-size:9px;letter-spacing:1px;margin-bottom:10px;">CLAUDE PLUGINS</div>
+          <div style="color:#fff;font-size:11px;margin-bottom:6px;padding:4px 6px;background:#222;border-radius:3px;">Overview</div>
+          <div style="color:#888;font-size:10px;margin-bottom:4px;letter-spacing:.5px;margin-top:10px;">PLUGINS</div>
+          <div style="color:#a78bfa;font-size:11px;margin-bottom:4px;padding:4px 6px;">dataform-toolkit</div>
+          <div style="color:#666;font-size:11px;margin-bottom:4px;padding:4px 6px;">stl-generator</div>
+          <div style="color:#666;font-size:11px;padding:4px 6px;">acuantia-dataform</div>
+        </div>
+        <div style="flex:1;padding:16px;overflow:hidden;">
+          <div style="color:#a78bfa;font-size:11px;letter-spacing:1px;margin-bottom:4px;">PLUGIN</div>
+          <div style="color:#fff;font-size:15px;font-weight:700;margin-bottom:4px;">dataform-toolkit</div>
+          <div style="color:#888;font-size:11px;margin-bottom:12px;">v1.0.0 · BigQuery Dataform development</div>
+          <div style="background:#1a1a1a;border-radius:4px;padding:8px;margin-bottom:10px;">
+            <div style="color:#666;font-size:9px;margin-bottom:4px;">INSTALL</div>
+            <div style="color:#a78bfa;font-size:10px;">/plugin install dataform-toolkit@ihistand</div>
+          </div>
+          <div style="color:#888;font-size:9px;letter-spacing:.5px;margin-bottom:6px;">COMMANDS</div>
+          <div style="color:#ccc;font-size:10px;margin-bottom:3px;">/dataform-test &nbsp;<span style="color:#555;">— Test tables in dev</span></div>
+          <div style="color:#ccc;font-size:10px;">/dataform-deploy &nbsp;<span style="color:#555;">— Deploy to production</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Dark Terminal</h3>
+      <p>Near-black background, purple accents, monospace type. Feels native to the Claude Code / developer tool aesthetic.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;height:200px;background:#f8f9fa;border-radius:6px;overflow:hidden;font-family:system-ui,sans-serif;">
+        <div style="width:160px;background:#fff;border-right:1px solid #e5e7eb;padding:12px;flex-shrink:0;">
+          <div style="color:#9ca3af;font-size:9px;letter-spacing:1px;margin-bottom:10px;">CLAUDE PLUGINS</div>
+          <div style="color:#111;font-size:11px;margin-bottom:6px;padding:4px 6px;background:#f3f4f6;border-radius:3px;">Overview</div>
+          <div style="color:#9ca3af;font-size:10px;margin-bottom:4px;letter-spacing:.5px;margin-top:10px;">PLUGINS</div>
+          <div style="color:#4f46e5;font-size:11px;margin-bottom:4px;padding:4px 6px;font-weight:600;">dataform-toolkit</div>
+          <div style="color:#6b7280;font-size:11px;margin-bottom:4px;padding:4px 6px;">stl-generator</div>
+          <div style="color:#6b7280;font-size:11px;padding:4px 6px;">acuantia-dataform</div>
+        </div>
+        <div style="flex:1;padding:16px;overflow:hidden;">
+          <div style="color:#4f46e5;font-size:11px;letter-spacing:1px;margin-bottom:4px;font-weight:600;">PLUGIN</div>
+          <div style="color:#111;font-size:15px;font-weight:700;margin-bottom:4px;">dataform-toolkit</div>
+          <div style="color:#6b7280;font-size:11px;margin-bottom:12px;">v1.0.0 · BigQuery Dataform development</div>
+          <div style="background:#f3f4f6;border-radius:4px;padding:8px;margin-bottom:10px;border:1px solid #e5e7eb;">
+            <div style="color:#9ca3af;font-size:9px;margin-bottom:4px;">INSTALL</div>
+            <div style="color:#4f46e5;font-size:10px;font-family:monospace;">/plugin install dataform-toolkit@ihistand</div>
+          </div>
+          <div style="color:#9ca3af;font-size:9px;letter-spacing:.5px;margin-bottom:6px;">COMMANDS</div>
+          <div style="color:#374151;font-size:10px;margin-bottom:3px;font-family:monospace;">/dataform-test &nbsp;<span style="color:#9ca3af;">— Test tables in dev</span></div>
+          <div style="color:#374151;font-size:10px;font-family:monospace;">/dataform-deploy &nbsp;<span style="color:#9ca3af;">— Deploy to production</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Clean Light</h3>
+      <p>White/gray background, indigo accents, system font. Feels like Stripe Docs or Linear — polished and readable.</p>
+    </div>
+  </div>
+
+</div>
