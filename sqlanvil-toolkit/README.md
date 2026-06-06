@@ -18,6 +18,18 @@ sqlanvil is a fork of Dataform repositioned for Postgres/Supabase. Your Dataform
 
 The skill is designed to be bulletproof against rationalization — it fires especially when you're under time pressure or reaching for a BigQuery habit.
 
+### Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/sqlanvil-compile` | Compile + surface config/graph errors (static, no warehouse) |
+| `/sqlanvil-test` | Validate model(s) against a `--schema-suffix dev` sandbox |
+| `/sqlanvil-run` | Run/deploy to the warehouse with pre-flight checks |
+| `/sqlanvil-new-table` | Create a new table via TDD (RED → GREEN → REFACTOR) |
+| `/sqlanvil-introspect` | Generate a cross-warehouse source declaration from a named connection |
+
+Commands use the global `sqlanvil` CLI (`npm i -g @sqlanvil/cli`).
+
 ## Installation
 
 ```bash

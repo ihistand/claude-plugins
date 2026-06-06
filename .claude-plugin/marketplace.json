@@ -16,8 +16,8 @@
     {
       "name": "sqlanvil-toolkit",
       "source": "./sqlanvil-toolkit",
-      "version": "1.0.0",
-      "description": "Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase: corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow"
+      "version": "1.1.0",
+      "description": "Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase: corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow. Includes /sqlanvil-compile, -test, -run, -new-table, -introspect commands"
     },
     {
       "name": "acuantia-dataform",
