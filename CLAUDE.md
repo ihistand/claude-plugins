@@ -38,6 +38,28 @@ claude-plugins/
 
 ## Plugin Development Patterns
 
+### Skill Source of Truth — sync, don't hand-edit the plugin copies
+
+The skill `.md` files under each plugin's `skills/` directory are **copies**. The
+canonical source is the **claude-skills** repo (`~/projects/claude-skills/<skill>/SKILL.md`,
+remote `ihistand/claude-skills`). A published plugin can't symlink to a path on your
+machine, so it must ship a copy — but the copy must never drift from the canonical skill.
+
+**Workflow:** edit the skill in `~/projects/claude-skills`, then from this repo run:
+
+```bash
+./scripts/sync-skills.sh     # copies canonical SKILL.md -> <plugin>/skills/<skill>.md
+git status                   # review, then commit + push to publish
+```
+
+The script is idempotent and reports which copies changed. Add new skill↔plugin pairs to
+the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin `skills/*.md`
+files directly — the next sync overwrites them.
+
+Current mappings:
+- `dataform-engineering-fundamentals` → `dataform-toolkit/skills/`
+- `sqlanvil-engineering-fundamentals` → `sqlanvil-toolkit/skills/` (PostgreSQL/Supabase; named connections + introspect)
+
 ### Skills Design Philosophy
 
 Skills in this repository follow the "superpowers framework" approach:

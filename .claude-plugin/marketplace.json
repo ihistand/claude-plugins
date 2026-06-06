@@ -14,6 +14,12 @@
       "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices, TDD workflow, and ETL agent integration"
     },
     {
+      "name": "sqlanvil-toolkit",
+      "source": "./sqlanvil-toolkit",
+      "version": "1.0.0",
+      "description": "Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase: corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow"
+    },
+    {
       "name": "acuantia-dataform",
       "source": "./acuantia-dataform",
       "version": "1.0.0",
