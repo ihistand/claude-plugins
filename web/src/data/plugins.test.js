@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { plugins } from './plugins.js'
 
 describe('plugins data', () => {
-  it('exports an array of 3 plugins', () => {
+  it('exports an array of 4 plugins', () => {
     expect(Array.isArray(plugins)).toBe(true)
-    expect(plugins).toHaveLength(3)
+    expect(plugins).toHaveLength(4)
   })
 
   it('each plugin has required fields', () => {
@@ -44,6 +44,7 @@ describe('plugins data', () => {
   it('plugin ids match known routes', () => {
     const ids = plugins.map(p => p.id)
     expect(ids).toContain('dataform-toolkit')
+    expect(ids).toContain('sqlanvil-toolkit')
     expect(ids).toContain('stl-generator-toolkit')
     expect(ids).toContain('acuantia-dataform')
   })

@@ -14,7 +14,7 @@ describe('renderPlugin', () => {
   it('renders plugin name and version', () => {
     const html = renderPlugin(dataform)
     expect(html).toContain('dataform-toolkit')
-    expect(html).toContain('1.0.0')
+    expect(html).toContain(dataform.version)
   })
 
   it('renders install command', () => {

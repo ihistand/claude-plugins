@@ -135,6 +135,54 @@ p  { font-size: 14px; line-height: 1.6; color: #374151; }
   flex: 1;
 }
 
+/* One-time setup block (home) */
+.setup-block {
+  background: #eef2ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 28px;
+}
+
+.setup-label {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 0 0 6px;
+}
+
+.setup-cmd {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 13px;
+  color: #4f46e5;
+}
+
+/* "Extend a skill" section (home) */
+.extend-section {
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.extend-section h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.extend-section p {
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.extend-section code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 12px;
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 /* Section header */
 .section-header {
   font-size: 10px;

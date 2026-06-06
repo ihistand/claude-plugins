@@ -2,7 +2,7 @@ export const plugins = [
   {
     id: 'dataform-toolkit',
     name: 'dataform-toolkit',
-    version: '1.0.0',
+    version: '1.1.0',
     description: 'Comprehensive toolkit for BigQuery Dataform development with TDD workflow and ETL agent integration',
     install: '/plugin install dataform-toolkit@ihistand',
     commands: [
@@ -17,6 +17,27 @@ export const plugins = [
     references: [
       { label: 'Dataform Documentation', url: 'https://cloud.google.com/dataform/docs' },
       { label: 'BigQuery GoogleSQL Reference', url: 'https://cloud.google.com/bigquery/docs/reference/standard-sql' },
+    ],
+  },
+  {
+    id: 'sqlanvil-toolkit',
+    name: 'sqlanvil-toolkit',
+    version: '1.1.0',
+    description: 'Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase — corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow',
+    install: '/plugin install sqlanvil-toolkit@ihistand',
+    commands: [
+      { name: '/sqlanvil-compile', description: 'Compile + surface config/graph errors (static, no warehouse)', workflow: 'compile → fix BigQuery-isms / config errors' },
+      { name: '/sqlanvil-test', description: 'Validate models against a dev schema', workflow: 'compile → run --schema-suffix dev → validation queries' },
+      { name: '/sqlanvil-run', description: 'Run/deploy to the warehouse with pre-flight checks', workflow: 'Confirm dev-tested → compile → run --credentials' },
+      { name: '/sqlanvil-new-table', description: 'Create a new table via TDD', workflow: 'RED (assertions fail) → GREEN (postgres:{} model) → REFACTOR' },
+      { name: '/sqlanvil-introspect', description: 'Generate a cross-warehouse source declaration', workflow: 'Named connection → introspect → ref() the FDW foreign table' },
+    ],
+    skills: [
+      { name: 'sqlanvil-engineering-fundamentals', description: 'PostgreSQL/Supabase deltas: flat warehouse config, postgres:{} DDL, --- separators, named connections + introspect' },
+    ],
+    references: [
+      { label: 'SQLAnvil', url: 'https://github.com/sqlanvil/sqlanvil' },
+      { label: 'SQLAnvil Docs', url: 'https://sqlanvil.com/docs/' },
     ],
   },
   {
@@ -40,7 +61,8 @@ export const plugins = [
     id: 'acuantia-dataform',
     name: 'acuantia-dataform',
     version: '1.0.0',
-    description: 'Acuantia-specific patterns for BigQuery Dataform — ODS two-arg ref() syntax, looker_ filename conventions, and cross-project coordination',
+    extends: 'dataform-engineering-fundamentals',
+    description: 'Example of extending a base skill for one team\'s standards: layers Acuantia-specific patterns on top of dataform-engineering-fundamentals — ODS two-arg ref() syntax, looker_ filename conventions, and cross-project coordination',
     install: '/plugin install acuantia-dataform@ihistand',
     commands: [],
     skills: [
