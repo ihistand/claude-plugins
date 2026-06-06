@@ -10,7 +10,7 @@
     {
       "name": "dataform-toolkit",
       "source": "./dataform-toolkit",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "description": "Comprehensive toolkit for BigQuery Dataform development with engineering best practices, TDD workflow, and ETL agent integration"
     },
     {
