@@ -15,6 +15,8 @@ Comprehensive toolkit for BigQuery Dataform development with engineering best pr
 
 The skill is designed to be bulletproof against rationalization - it works especially when you're under time pressure, tired, or tempted to skip best practices.
 
+The skill's source lives in [ihistand/claude-skills](https://github.com/ihistand/claude-skills). To use it without this plugin (or in another agent), install it standalone: `npx skills add ihistand/claude-skills -s dataform-engineering-fundamentals`.
+
 ### Slash Commands
 
 **`/dataform-test`** - Test a Dataform table in dev environment with complete safety checks:
@@ -195,7 +197,7 @@ Even under extreme time pressure (board meeting in 2 hours, production down, sta
 
 ## License
 
-Created by Ivan Histand (ihistand@rotoplas.com)
+Created by Ivan Histand (ivan@histand.net)
 
 ## Contributing
 
