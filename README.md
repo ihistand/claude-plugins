@@ -1,22 +1,8 @@
 # Claude Code Plugins by Ivan Histand
 
-Claude Code plugins for data engineering, business intelligence, and 3D printing workflows.
+Claude Code plugins for data engineering (sqlanvil-toolkit, acuantia-dataform) and 3D printing workflows (stl-generator-toolkit). The former dataform-toolkit plugin was retired 2026-09-15; its dataform-engineering-fundamentals skill now lives in the acuantia-gcp-dataform repo.
 
 ## Available Plugins
-
-### dataform-toolkit
-
-Comprehensive toolkit for BigQuery Dataform development with engineering best practices.
-
-**Features:**
-- **dataform-engineering-fundamentals skill** - Enforces TDD workflow, proper ref() usage, safety practices, and comprehensive documentation
-- **Slash commands** for common workflows:
-  - `/dataform-test` - Test tables in dev environment with safety checks
-  - `/dataform-deploy` - Deploy to production with verification
-  - `/dataform-new-table` - Create tables using TDD workflow (RED-GREEN-REFACTOR)
-  - `/dataform-etl` - Launch ETL agent specialized in Dataform development
-
-**For full documentation:** See [dataform-toolkit/README.md](./dataform-toolkit/README.md)
 
 ### stl-generator-toolkit
 
@@ -49,9 +35,6 @@ Comprehensive toolkit for generating 3D printable STL files for woodworking jigs
 ### Install Plugins
 
 ```bash
-# Install dataform-toolkit
-/plugin install dataform-toolkit@ihistand
-
 # Install stl-generator-toolkit
 /plugin install stl-generator-toolkit@ihistand
 
@@ -59,14 +42,6 @@ Comprehensive toolkit for generating 3D printable STL files for woodworking jigs
 ```
 
 ## Usage Examples
-
-### Dataform Development
-
-```
-User: I need to create a new customer metrics table in Dataform
-Claude: /dataform-new-table
-[Guides through TDD workflow: write tests first, then implementation]
-```
 
 ### 3D Printing
 
@@ -91,12 +66,6 @@ This repository follows the Claude Code plugin development best practices:
 claude-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace definition
-├── dataform-toolkit/             # Dataform development toolkit
-│   ├── .claude-plugin/
-│   │   └── plugin.json           # Plugin configuration
-│   ├── skills/                   # dataform-engineering-fundamentals
-│   ├── commands/                 # Slash commands
-│   └── README.md                 # Plugin documentation
 ├── stl-generator-toolkit/        # 3D printing STL generator
 │   ├── .claude-plugin/
 │   │   └── plugin.json           # Plugin configuration
