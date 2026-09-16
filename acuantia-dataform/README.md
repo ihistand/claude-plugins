@@ -61,11 +61,7 @@ config {
 
 ## Prerequisites
 
-This skill requires the `dataform-engineering-fundamentals` skill. Install the `dataform-toolkit` plugin first:
-
-```bash
-/plugin install dataform-toolkit@ihistand
-```
+This skill builds on the `dataform-engineering-fundamentals` skill, which lives in the `acuantia-gcp-dataform` repo (`.claude/skills/`) and loads automatically when you work there. No separate plugin is needed (the former `dataform-toolkit` plugin was retired 2026-09-15).
 
 ## Documentation
 
