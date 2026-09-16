@@ -2,32 +2,32 @@ import { describe, it, expect } from 'vitest'
 import { renderPlugin } from './plugin.js'
 import { plugins } from '../data/plugins.js'
 
-const dataform = plugins.find(p => p.id === 'dataform-toolkit')
+const sqlanvil = plugins.find(p => p.id === 'sqlanvil-toolkit')
 const acuantia = plugins.find(p => p.id === 'acuantia-dataform')
 const stl = plugins.find(p => p.id === 'stl-generator-toolkit')
 
 describe('renderPlugin', () => {
   it('returns a string', () => {
-    expect(typeof renderPlugin(dataform)).toBe('string')
+    expect(typeof renderPlugin(sqlanvil)).toBe('string')
   })
 
   it('renders plugin name and version', () => {
-    const html = renderPlugin(dataform)
-    expect(html).toContain('dataform-toolkit')
-    expect(html).toContain(dataform.version)
+    const html = renderPlugin(sqlanvil)
+    expect(html).toContain('sqlanvil-toolkit')
+    expect(html).toContain(sqlanvil.version)
   })
 
   it('renders install command', () => {
-    const html = renderPlugin(dataform)
-    expect(html).toContain('/plugin install dataform-toolkit@ihistand')
+    const html = renderPlugin(sqlanvil)
+    expect(html).toContain('/plugin install sqlanvil-toolkit@ihistand')
   })
 
   it('renders commands table when commands exist', () => {
-    const html = renderPlugin(dataform)
-    expect(html).toContain('/dataform-test')
-    expect(html).toContain('/dataform-deploy')
-    expect(html).toContain('/dataform-new-table')
-    expect(html).toContain('/dataform-etl')
+    const html = renderPlugin(sqlanvil)
+    expect(html).toContain('/sqlanvil-compile')
+    expect(html).toContain('/sqlanvil-test')
+    expect(html).toContain('/sqlanvil-run')
+    expect(html).toContain('/sqlanvil-new-table')
   })
 
   it('omits commands section when commands array is empty', () => {
@@ -37,14 +37,14 @@ describe('renderPlugin', () => {
   })
 
   it('renders skills section', () => {
-    const html = renderPlugin(dataform)
-    expect(html).toContain('dataform-engineering-fundamentals')
+    const html = renderPlugin(sqlanvil)
+    expect(html).toContain('sqlanvil-engineering-fundamentals')
   })
 
   it('renders references when present', () => {
-    const html = renderPlugin(dataform)
-    expect(html).toContain('Dataform Documentation')
-    expect(html).toContain('https://cloud.google.com/dataform/docs')
+    const html = renderPlugin(sqlanvil)
+    expect(html).toContain('SQLAnvil Docs')
+    expect(html).toContain('https://sqlanvil.com/docs/')
   })
 
   it('omits references section when references array is empty', () => {

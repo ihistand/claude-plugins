@@ -12,9 +12,9 @@ describe('resolveRoute', () => {
   })
 
   it('returns { page: "plugin", plugin } for known plugin hash', () => {
-    const result = resolveRoute('#dataform-toolkit', plugins)
+    const result = resolveRoute('#sqlanvil-toolkit', plugins)
     expect(result.page).toBe('plugin')
-    expect(result.plugin.id).toBe('dataform-toolkit')
+    expect(result.plugin.id).toBe('sqlanvil-toolkit')
   })
 
   it('returns { page: "plugin", plugin } for stl-generator-toolkit', () => {

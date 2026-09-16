@@ -17,7 +17,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # <canonical-skill-dir-name> <plugin-dir-name>
 SKILLS=(
-  "dataform-engineering-fundamentals dataform-toolkit"
   "sqlanvil-engineering-fundamentals sqlanvil-toolkit"
 )
 

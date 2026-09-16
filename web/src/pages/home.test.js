@@ -26,7 +26,6 @@ describe('renderHome', () => {
   })
 
   it('renders links to each plugin detail page', () => {
-    expect(html).toContain('#dataform-toolkit')
     expect(html).toContain('#sqlanvil-toolkit')
     expect(html).toContain('#stl-generator-toolkit')
     expect(html).toContain('#acuantia-dataform')

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude Code plugin marketplace repository containing data engineering and business intelligence workflow plugins. The primary plugin is **dataform-toolkit**, which provides comprehensive BigQuery Dataform development support with enforced engineering best practices.
+This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects), **acuantia-dataform** (one team's Dataform conventions), and **stl-generator-toolkit**. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
 
 **Author**: Ivan Histand (ihistand@rotoplas.com)
 
@@ -14,17 +14,17 @@ This is a Claude Code plugin marketplace repository containing data engineering 
 claude-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace configuration (name: "ihistand")
-├── dataform-toolkit/             # Primary plugin
+├── sqlanvil-toolkit/             # Example plugin layout
 │   ├── .claude-plugin/
 │   │   └── plugin.json           # Plugin metadata
 │   ├── skills/
-│   │   └── dataform-engineering-fundamentals.md  # Core TDD/safety skill
-│   ├── commands/
-│   │   ├── dataform-test.md      # Test tables in dev environment
-│   │   ├── dataform-deploy.md    # Deploy to production safely
-│   │   ├── dataform-new-table.md # TDD workflow for new tables
-│   │   └── dataform-etl.md       # Launch ETL agent
+│   │   └── sqlanvil-engineering-fundamentals.md  # Copy synced from claude-skills
+│   ├── commands/                 # /sqlanvil-* slash commands
 │   └── README.md
+├── acuantia-dataform/
+├── stl-generator-toolkit/
+├── scripts/sync-skills.sh        # Copies canonical skills into plugins
+├── web/                          # Docs site (vitest)
 └── README.md
 ```
 
@@ -57,7 +57,6 @@ the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin `skil
 files directly — the next sync overwrites them.
 
 Current mappings:
-- `dataform-engineering-fundamentals` → `dataform-toolkit/skills/`
 - `sqlanvil-engineering-fundamentals` → `sqlanvil-toolkit/skills/` (PostgreSQL/Supabase; named connections + introspect)
 
 ### Skills Design Philosophy
@@ -70,7 +69,7 @@ Skills in this repository follow the "superpowers framework" approach:
 - Reference **related skills** for workflow chains
 - Use **non-negotiable language** for critical practices
 
-Example from dataform-engineering-fundamentals:
+Example from sqlanvil-engineering-fundamentals:
 - "ALWAYS use ${ref()}" not "Consider using ${ref()}"
 - "Non-Negotiable Safety Practices" section
 - "Red Flags - STOP Immediately" section
@@ -103,7 +102,7 @@ Commands should:
 /plugin marketplace add /path/to/claude-plugins
 
 # Install plugin
-/plugin install dataform-toolkit@dev
+/plugin install sqlanvil-toolkit@dev
 
 # Restart Claude Code for changes to take effect
 ```
@@ -115,56 +114,23 @@ Once published to GitHub:
 ```bash
 # Users can install via
 /plugin marketplace add ihistand/claude-plugins
-/plugin install dataform-toolkit@ihistand
+/plugin install sqlanvil-toolkit@ihistand
 ```
 
-## Dataform-Toolkit Plugin Details
+## Retired Plugins
 
-### Core Philosophy
-
-The dataform-toolkit enforces **Test-Driven Development (TDD)** for BigQuery Dataform transformations. Key principles:
-
-1. **Safety First**: `--schema-suffix dev` and `--dry-run` are ALWAYS required
-2. **Dependency Management**: ALWAYS use `${ref()}`, NEVER hardcoded table paths
-3. **Documentation**: `columns: {}` blocks mandatory for all tables
-4. **Tests First**: Write assertions before implementation (RED-GREEN-REFACTOR)
-5. **No Shortcuts**: Time pressure does not justify skipping best practices
-
-### Available Commands
-
-| Command | Purpose | Key Workflow |
-|---------|---------|--------------|
-| `/dataform-test` | Test table in dev | compile → dry-run → dev execution → validation |
-| `/dataform-deploy` | Deploy to production | Verify dev testing → Check tests pass → Production deploy |
-| `/dataform-new-table` | Create new table | TDD cycle: RED (tests fail) → GREEN (tests pass) → REFACTOR |
-| `/dataform-etl` | Launch ETL agent | Complex transformations, troubleshooting, data quality |
-
-### Skills Integration
-
-The **dataform-engineering-fundamentals** skill builds upon:
-- `superpowers:test-driven-development` - Core TDD principles
-- `superpowers:brainstorming` - Requirements refinement before coding
-- `superpowers:systematic-debugging` - Structured troubleshooting
-- `superpowers:root-cause-tracing` - Error source identification
-- `elements-of-style:writing-clearly-and-concisely` - Clear documentation
-
-### Non-Negotiable Practices
-
-When working on dataform-toolkit or using it in other projects:
-
-1. **ALWAYS use ${ref()}** - Never hardcoded table paths
-2. **Create source declarations first** - Before using any external tables
-3. **Use .sqlx files for NEW declarations** - Not .js files
-4. **Include columns: {} documentation** - For every table with type: "table"
-5. **Test in dev before production** - `--schema-suffix dev` required
-6. **Write tests first (TDD)** - Assertions before implementation
-7. **No schema: config in operations/tests** - Uses defaults from workflow_settings.yaml
+**dataform-toolkit** (retired 2026-09-15). Never invoked after publication: its
+`dataform-engineering-fundamentals` skill was shadowed by the repo-local copy in
+`acuantia-gcp-dataform/.claude/skills` (now the only copy), `/dataform-deploy`
+contradicted that repo's real deploy flow (dev → main merge in the Dataform UI), and
+`/dataform-etl` depended on an agent that shipped with no plugin. Do not re-add it; the
+skill's discipline patterns live on in sqlanvil-engineering-fundamentals.
 
 ## Common Development Tasks
 
 ### Adding a New Slash Command
 
-1. Create markdown file in `dataform-toolkit/commands/`
+1. Create markdown file in `<plugin>/commands/`
 2. Add YAML frontmatter with description
 3. Write clear workflow instructions
 4. Reference relevant skills
@@ -184,7 +150,7 @@ When working on dataform-toolkit or using it in other projects:
 
 Update version in:
 - `.claude-plugin/marketplace.json` (plugins array)
-- `dataform-toolkit/.claude-plugin/plugin.json` (version field)
+- `<plugin>/.claude-plugin/plugin.json` (version field)
 
 ## Git Workflow
 
@@ -208,12 +174,11 @@ Following Strunk & White principles (elements-of-style skill):
 
 - [Claude Code Plugin Development Guide](https://docs.claude.com/en/docs/claude-code/plugins)
 - [Superpowers Framework](https://github.com/obra/superpowers)
-- [Dataform Documentation](https://cloud.google.com/dataform/docs)
-- [BigQuery GoogleSQL Reference](https://cloud.google.com/bigquery/docs/reference/standard-sql)
+- [SQLAnvil Docs](https://sqlanvil.com/docs/)
 
 ## Notes for Future Development
 
-**Adding New Plugins**: Follow the dataform-toolkit structure:
+**Adding New Plugins**: Follow the sqlanvil-toolkit structure:
 - Create plugin directory
 - Add `.claude-plugin/plugin.json`
 - Organize skills/ and commands/ subdirectories

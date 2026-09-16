@@ -5,7 +5,7 @@ import { renderPlugin } from './pages/plugin.js'
 /**
  * Pure routing function — maps a hash string to a route descriptor.
  * Exported for testing; not dependent on DOM.
- * @param {string} hash - e.g. "" or "#dataform-toolkit"
+ * @param {string} hash - e.g. "" or "#sqlanvil-toolkit"
  * @param {Array} pluginList - the plugins array
  * @returns {{ page: 'home' } | { page: 'plugin', plugin: Object }}
  */

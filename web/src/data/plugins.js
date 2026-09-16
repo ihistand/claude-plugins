@@ -1,25 +1,5 @@
 export const plugins = [
   {
-    id: 'dataform-toolkit',
-    name: 'dataform-toolkit',
-    version: '1.1.0',
-    description: 'Comprehensive toolkit for BigQuery Dataform development with TDD workflow and ETL agent integration',
-    install: '/plugin install dataform-toolkit@ihistand',
-    commands: [
-      { name: '/dataform-test', description: 'Test tables in dev environment', workflow: 'compile → dry-run → dev execution → validation' },
-      { name: '/dataform-deploy', description: 'Deploy to production safely', workflow: 'Verify dev testing → Check tests pass → Production deploy' },
-      { name: '/dataform-new-table', description: 'Create new table with TDD', workflow: 'RED (tests fail) → GREEN (tests pass) → REFACTOR' },
-      { name: '/dataform-etl', description: 'Launch ETL agent', workflow: 'Complex transformations, troubleshooting, data quality' },
-    ],
-    skills: [
-      { name: 'dataform-engineering-fundamentals', description: 'Enforces TDD workflow, ref() usage, safety practices, and documentation standards' },
-    ],
-    references: [
-      { label: 'Dataform Documentation', url: 'https://cloud.google.com/dataform/docs' },
-      { label: 'BigQuery GoogleSQL Reference', url: 'https://cloud.google.com/bigquery/docs/reference/standard-sql' },
-    ],
-  },
-  {
     id: 'sqlanvil-toolkit',
     name: 'sqlanvil-toolkit',
     version: '1.1.0',
