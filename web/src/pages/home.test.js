@@ -28,7 +28,6 @@ describe('renderHome', () => {
   it('renders links to each plugin detail page', () => {
     expect(html).toContain('#sqlanvil-toolkit')
     expect(html).toContain('#stl-generator-toolkit')
-    expect(html).toContain('#acuantia-dataform')
   })
 
   it('renders a version badge for every plugin', () => {
@@ -36,9 +35,9 @@ describe('renderHome', () => {
     expect(versions.length).toBeGreaterThanOrEqual(plugins.length)
   })
 
-  it('renders the "extend a skill" section citing acuantia', () => {
+  it('renders the "extend a skill" section', () => {
     expect(html).toContain('Extend a skill for your team')
-    expect(html).toContain('acuantia-dataform')
+    expect(html).toContain('dataform-engineering-fundamentals')
     expect(html).toContain('sqlanvil-engineering-fundamentals')
   })
 })

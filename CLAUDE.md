@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects), **acuantia-dataform** (one team's Dataform conventions), and **stl-generator-toolkit**. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
+This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects) and **stl-generator-toolkit**. The **acuantia-dataform** plugin moved to Acuantia's private marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and the stale copy here was removed 2026-09-20. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
 
 **Author**: Ivan Histand (ihistand@rotoplas.com)
 
@@ -21,7 +21,6 @@ claude-plugins/
 │   │   └── sqlanvil-engineering-fundamentals.md  # Copy synced from claude-skills
 │   ├── commands/                 # /sqlanvil-* slash commands
 │   └── README.md
-├── acuantia-dataform/
 ├── stl-generator-toolkit/
 ├── scripts/sync-skills.sh        # Copies canonical skills into plugins
 ├── web/                          # Docs site (vitest)

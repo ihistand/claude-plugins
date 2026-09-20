@@ -32,12 +32,12 @@ export function renderHome(plugins) {
         <p>Skills layer. You can write a thin, org-specific skill on top of a base
         skill: it names the base as a required prerequisite and adds only your own
         conventions, without repeating the generic rules.</p>
-        <p><strong>acuantia-dataform</strong> is a worked example — it extends
-        <code>dataform-engineering-fundamentals</code> with one team's ODS two-argument
+        <p>For example, a team's Dataform plugin can extend
+        <code>dataform-engineering-fundamentals</code> with its own ODS two-argument
         <code>ref()</code> syntax, <code>looker_</code> filename conventions, and
-        cross-project coordination. Do the same on top of
-        <code>sqlanvil-engineering-fundamentals</code> for your own Postgres/Supabase
-        standards.</p>
+        cross-project coordination, and ship from a private team marketplace. Do the
+        same on top of <code>sqlanvil-engineering-fundamentals</code> for your own
+        Postgres/Supabase standards.</p>
       </div>
     </div>
   `

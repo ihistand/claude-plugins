@@ -14,12 +14,6 @@
       "description": "Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase: corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow. Includes /sqlanvil-compile, -test, -run, -new-table, -introspect commands"
     },
     {
-      "name": "acuantia-dataform",
-      "source": "./acuantia-dataform",
-      "version": "1.0.0",
-      "description": "Acuantia-specific patterns for BigQuery Dataform development. Extends dataform-engineering-fundamentals with ODS two-arg ref() syntax, looker_ filename conventions, and integration with callrail/dialpad/looker projects."
-    },
-    {
       "name": "stl-generator-toolkit",
       "source": "./stl-generator-toolkit",
       "version": "1.0.0",

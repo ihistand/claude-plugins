@@ -3,7 +3,6 @@ import { renderPlugin } from './plugin.js'
 import { plugins } from '../data/plugins.js'
 
 const sqlanvil = plugins.find(p => p.id === 'sqlanvil-toolkit')
-const acuantia = plugins.find(p => p.id === 'acuantia-dataform')
 const stl = plugins.find(p => p.id === 'stl-generator-toolkit')
 
 describe('renderPlugin', () => {
@@ -31,7 +30,7 @@ describe('renderPlugin', () => {
   })
 
   it('omits commands section when commands array is empty', () => {
-    const html = renderPlugin(acuantia)
+    const html = renderPlugin({ ...stl, commands: [] })
     expect(html).not.toContain('commands-table')
     expect(html).not.toContain('COMMANDS')
   })

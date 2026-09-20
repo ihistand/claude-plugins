@@ -1,6 +1,6 @@
 # Claude Code Plugins by Ivan Histand
 
-Claude Code plugins for data engineering (sqlanvil-toolkit, acuantia-dataform) and 3D printing workflows (stl-generator-toolkit). The former dataform-toolkit plugin was retired 2026-09-15; its dataform-engineering-fundamentals skill now lives in the acuantia-gcp-dataform repo.
+Claude Code plugins for data engineering (sqlanvil-toolkit) and 3D printing workflows (stl-generator-toolkit). The former dataform-toolkit plugin was retired 2026-09-15; its dataform-engineering-fundamentals skill now lives in the acuantia-gcp-dataform repo. The acuantia-dataform plugin moved to Acuantia's private team marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and was removed from here on 2026-09-20.
 
 ## Available Plugins
 

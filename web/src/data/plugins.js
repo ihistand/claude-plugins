@@ -37,17 +37,4 @@ export const plugins = [
     ],
     references: [],
   },
-  {
-    id: 'acuantia-dataform',
-    name: 'acuantia-dataform',
-    version: '1.0.0',
-    extends: 'dataform-engineering-fundamentals',
-    description: 'Example of extending a base skill for one team\'s standards: layers Acuantia-specific patterns on top of dataform-engineering-fundamentals — ODS two-arg ref() syntax, looker_ filename conventions, and cross-project coordination',
-    install: '/plugin install acuantia-dataform@ihistand',
-    commands: [],
-    skills: [
-      { name: 'acuantia-dataform', description: 'Extends dataform-engineering-fundamentals with Acuantia-specific conventions: ODS two-arg ref(), looker_ prefixes, acuantia dataset schemas, and Looker integration patterns' },
-    ],
-    references: [],
-  },
 ]
