@@ -18,7 +18,7 @@ claude-plugins/
 │   ├── .claude-plugin/
 │   │   └── plugin.json           # Plugin metadata
 │   ├── skills/
-│   │   └── sqlanvil-engineering-fundamentals.md  # Copy synced from claude-skills
+│   │   └── sqlanvil-engineering-fundamentals/SKILL.md  # Copy synced from SQLAnvil/agent-skills
 │   ├── commands/                 # /sqlanvil-* slash commands
 │   └── README.md
 ├── stl-generator-toolkit/
@@ -39,31 +39,32 @@ claude-plugins/
 
 ### Skill Source of Truth — sync, don't hand-edit the plugin copies
 
-The skill `.md` files under each plugin's `skills/` directory are **copies**. The
-canonical source is the **claude-skills** repo (`~/projects-ivan/claude-skills/<skill>/SKILL.md`,
-remote `ihistand/claude-skills`). A published plugin can't symlink to a path on your
-machine, so it must ship a copy — but the copy must never drift from the canonical skill.
+The skills under each plugin's `skills/` directory are **copies**. A published plugin
+can't symlink to a path on your machine, so it must ship a copy, but the copy must
+never drift from the canonical skill. Canonical sources:
 
-**Workflow:** edit the skill in `~/projects-ivan/claude-skills`, then from this repo run:
+- `stl-generator`: **claude-skills** (`~/projects-ivan/claude-skills/stl-generator/`,
+  remote `ihistand/claude-skills`) → `stl-generator-toolkit/skills/stl-generator/`
+- `sqlanvil-engineering-fundamentals`: **SQLAnvil/agent-skills**
+  (`~/projects-ivan/sqlanvil/agent-skills/skills/sqlanvil-engineering-fundamentals/`,
+  updated on every sqlanvil release) → `sqlanvil-toolkit/skills/sqlanvil-engineering-fundamentals/`
+
+**Workflow:** edit the canonical skill, then from this repo run:
 
 ```bash
-./scripts/sync-skills.sh     # copies canonical skills into the plugins (see layouts below)
+./scripts/sync-skills.sh     # mirrors each canonical skill directory into its plugin
 git status                   # review, then commit + push to publish
 ```
 
 The script is idempotent and reports which copies changed. Add new skill↔plugin pairs to
-the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin `skills/*.md`
-files directly — the next sync overwrites them.
+the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin copies
+directly — the next sync overwrites them. After a sqlanvil release updates the
+agent-skills repo, run the sync here too, or the plugin falls behind (it had drifted
+from core 1.2 to 1.32.9 before 2026-10-04).
 
 Claude Code only loads plugin skills laid out as `skills/<name>/SKILL.md`. A flat
 `skills/<name>.md` is silently ignored (verified 2026-10-04 with `claude -p --plugin-dir`:
-the commands load, the skill does not). The script's `dir` layout mirrors the whole
-skill directory; the `file` layout is the legacy flat copy.
-
-Current mappings:
-- `stl-generator` → `stl-generator-toolkit/skills/stl-generator/` (`dir`; includes scripts/ and references/)
-- `sqlanvil-engineering-fundamentals` → `sqlanvil-toolkit/skills/` (`file`, so not loaded; PostgreSQL/Supabase.
-  Its canonical copy has MOVED to SQLAnvil/agent-skills, so the sync reports it missing)
+the commands load, the skill does not), which is why the script mirrors whole directories.
 
 ### Skills Design Philosophy
 

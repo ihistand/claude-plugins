@@ -20,4 +20,4 @@ This is a Claude Code plugin marketplace repository containing data engineering 
 - **sqlanvil-toolkit**: TDD and safety practices for sqlanvil projects on PostgreSQL/Supabase; `/sqlanvil-compile`, `-test`, `-run`, `-new-table`, `-introspect`.
 - **stl-generator-toolkit**: CadQuery STL generation for woodworking jigs; `/stl-*` commands.
 
-Skill files under each plugin are copies synced from `~/projects/claude-skills` by `scripts/sync-skills.sh`; edit the canonical skill, not the copy.
+Skill directories under each plugin are copies synced by `scripts/sync-skills.sh` from their canonical repos (see CLAUDE.md); edit the canonical skill, not the copy.

@@ -1,6 +1,8 @@
 # SQLAnvil Toolkit
 
-Engineering best practices for writing [**sqlanvil**](https://github.com/sqlanvil/sqlanvil) data projects on **PostgreSQL** and **Supabase**.
+Engineering best practices for writing [**sqlanvil**](https://github.com/sqlanvil/sqlanvil) data projects on **PostgreSQL**, **Supabase**, and **MySQL/MariaDB**.
+
+The skill is a copy of the canonical one in [SQLAnvil/agent-skills](https://github.com/SQLAnvil/agent-skills), synced by `scripts/sync-skills.sh` and pinned to the current sqlanvil release. Outside Claude Code, `npx skills add SQLAnvil/agent-skills` installs the same skill.
 
 sqlanvil is a fork of Dataform repositioned for Postgres/Supabase. Your Dataform/BigQuery instincts are *mostly* right — but a handful of differences (config blocks, credentials, DDL, statement separators, CLI verbs) silently produce broken sqlanvil code. This plugin is that delta.
 
@@ -13,8 +15,8 @@ sqlanvil is a fork of Dataform repositioned for Postgres/Supabase. Your Dataform
 - First-class `postgres: {}` config — indexes (numeric `method` enum), partitioning, storage options, materialized views — never hand-rolled DDL
 - `---` statement separator (never `;`), procedures/functions via `type: "operations"`
 - Supabase extras: RLS policies, Realtime, pgvector
-- **Named connections** — read a table from *another* warehouse (BigQuery, a second Postgres) as a live foreign table via the auto-generated FDW bridge, generated with `./scripts/run introspect`
-- The CLI is `./scripts/run <verb>` — no global `dataform`, no `npm run`
+- **Named connections** — read a table from *another* warehouse (BigQuery, a second Postgres) as a live foreign table via the auto-generated FDW bridge, generated with `sqlanvil introspect`
+- The CLI is the global `sqlanvil` (`npm i -g @sqlanvil/cli`) — no `dataform`, no `npm run`; `./scripts/run <verb>` only inside a sqlanvil repo checkout
 
 The skill is designed to be bulletproof against rationalization — it fires especially when you're under time pressure or reaching for a BigQuery habit.
 
@@ -45,7 +47,6 @@ Then restart Claude Code. The skill auto-activates when you edit `.sqlx`, `workf
 ## Related Skills
 
 - **superpowers:test-driven-development** — foundational TDD principles
-- **dataform-engineering-fundamentals** — the warehouse-agnostic architecture/`${ref()}`/documentation rules carry over; this skill is the Postgres/Supabase delta on top
 - **elements-of-style:writing-clearly-and-concisely** — clear documentation writing
 
 ## Official Documentation

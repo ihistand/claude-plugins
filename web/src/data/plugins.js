@@ -2,7 +2,7 @@ export const plugins = [
   {
     id: 'sqlanvil-toolkit',
     name: 'sqlanvil-toolkit',
-    version: '1.1.0',
+    version: '1.2.0',
     description: 'Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase — corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow',
     install: '/plugin install sqlanvil-toolkit@ihistand',
     commands: [
