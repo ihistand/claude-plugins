@@ -1,25 +1,11 @@
 ---
-description: Generate custom 3D printable STL files for woodworking jigs
+description: Design a custom 3D-printable woodworking jig or fixture and export the STL
+argument-hint: <what the jig should do>
 ---
 
-You are generating a custom STL file for 3D printing using the stl-generator skill.
+Use the stl-generator skill to design: $ARGUMENTS
 
-**Workflow:**
-
-1. Invoke the stl-generator skill
-2. Ask the user what type of jig or fixture they need
-3. Gather requirements:
-   - Dimensions and specifications
-   - Functional requirements
-   - Any special features needed
-4. Check if a pre-built script exists (circle cutting jig, angle wedge, spacing block)
-5. If pre-built script exists:
-   - Run the appropriate script with user's parameters
-   - Move STL to `/mnt/user-data/outputs/`
-6. If custom design needed:
-   - Write CadQuery code following patterns from references
-   - Export STL file
-   - Move to `/mnt/user-data/outputs/`
-7. Provide download link and print settings recommendations
-
-**Critical**: Always verify design fits within 225×225×265mm build volume (Elegoo Neptune 4 Pro).
+If one of its ready scripts fits (circle-cutting trammel, angle wedge, spacing
+blocks), use that. Otherwise follow the skill's "Custom jigs" section: build123d,
+`export_checked` from `${CLAUDE_PLUGIN_ROOT}/skills/stl-generator/scripts/printcheck.py`
+(copied next to the new script), and verify the part by measuring it before handing it over.

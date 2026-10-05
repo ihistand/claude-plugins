@@ -16,8 +16,8 @@
     {
       "name": "stl-generator-toolkit",
       "source": "./stl-generator-toolkit",
-      "version": "1.0.0",
-      "description": "Comprehensive toolkit for generating 3D printable STL files for woodworking jigs and fixtures using CadQuery, with pre-built scripts and parametric design patterns"
+      "version": "2.0.0",
+      "description": "Generate 3D-printable STL files for woodworking jigs with build123d: a router circle-cutting trammel, exact angle wedges, spacing blocks, and custom designs, with a print-readiness check that refuses STLs that would misprint. Defaults to an Elegoo Neptune 4 Pro bed; --bed for any printer."
     }
   ]
 }

@@ -40,14 +40,14 @@ claude-plugins/
 ### Skill Source of Truth — sync, don't hand-edit the plugin copies
 
 The skill `.md` files under each plugin's `skills/` directory are **copies**. The
-canonical source is the **claude-skills** repo (`~/projects/claude-skills/<skill>/SKILL.md`,
+canonical source is the **claude-skills** repo (`~/projects-ivan/claude-skills/<skill>/SKILL.md`,
 remote `ihistand/claude-skills`). A published plugin can't symlink to a path on your
 machine, so it must ship a copy — but the copy must never drift from the canonical skill.
 
-**Workflow:** edit the skill in `~/projects/claude-skills`, then from this repo run:
+**Workflow:** edit the skill in `~/projects-ivan/claude-skills`, then from this repo run:
 
 ```bash
-./scripts/sync-skills.sh     # copies canonical SKILL.md -> <plugin>/skills/<skill>.md
+./scripts/sync-skills.sh     # copies canonical skills into the plugins (see layouts below)
 git status                   # review, then commit + push to publish
 ```
 
@@ -55,8 +55,15 @@ The script is idempotent and reports which copies changed. Add new skill↔plugi
 the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin `skills/*.md`
 files directly — the next sync overwrites them.
 
+Claude Code only loads plugin skills laid out as `skills/<name>/SKILL.md`. A flat
+`skills/<name>.md` is silently ignored (verified 2026-10-04 with `claude -p --plugin-dir`:
+the commands load, the skill does not). The script's `dir` layout mirrors the whole
+skill directory; the `file` layout is the legacy flat copy.
+
 Current mappings:
-- `sqlanvil-engineering-fundamentals` → `sqlanvil-toolkit/skills/` (PostgreSQL/Supabase; named connections + introspect)
+- `stl-generator` → `stl-generator-toolkit/skills/stl-generator/` (`dir`; includes scripts/ and references/)
+- `sqlanvil-engineering-fundamentals` → `sqlanvil-toolkit/skills/` (`file`, so not loaded; PostgreSQL/Supabase.
+  Its canonical copy has MOVED to SQLAnvil/agent-skills, so the sync reports it missing)
 
 ### Skills Design Philosophy
 
