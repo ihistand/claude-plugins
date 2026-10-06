@@ -18,7 +18,8 @@ claude-plugins/
 │   ├── .claude-plugin/
 │   │   └── plugin.json           # Plugin metadata
 │   ├── skills/
-│   │   └── sqlanvil-engineering-fundamentals/SKILL.md  # Copy synced from SQLAnvil/agent-skills
+│   │   ├── sqlanvil-engineering-fundamentals/SKILL.md  # Copies synced from SQLAnvil/agent-skills
+│   │   └── sqlanvil-sqlx-lint/SKILL.md
 │   ├── commands/                 # /sqlanvil-* slash commands
 │   └── README.md
 ├── stl-generator-toolkit/
@@ -45,9 +46,10 @@ never drift from the canonical skill. Canonical sources:
 
 - `stl-generator`: **claude-skills** (`~/projects-ivan/claude-skills/stl-generator/`,
   remote `ihistand/claude-skills`) → `stl-generator-toolkit/skills/stl-generator/`
-- `sqlanvil-engineering-fundamentals`: **SQLAnvil/agent-skills**
-  (`~/projects-ivan/sqlanvil/agent-skills/skills/sqlanvil-engineering-fundamentals/`,
-  updated on every sqlanvil release) → `sqlanvil-toolkit/skills/sqlanvil-engineering-fundamentals/`
+- `sqlanvil-engineering-fundamentals` and `sqlanvil-sqlx-lint`: **SQLAnvil/agent-skills**
+  (`~/projects-ivan/sqlanvil/agent-skills/skills/<skill>/`, updated on every sqlanvil
+  release; runbook §3.6 step 4 in `sqlanvil/docs/npm_publishing.md` is this sync)
+  → `sqlanvil-toolkit/skills/<skill>/`
 
 **Workflow:** edit the canonical skill, then from this repo run:
 

@@ -20,6 +20,8 @@ sqlanvil is a fork of Dataform repositioned for Postgres/Supabase. Your Dataform
 
 The skill is designed to be bulletproof against rationalization — it fires especially when you're under time pressure or reaching for a BigQuery habit.
 
+**sqlanvil-sqlx-lint** — runs the [sqlanvil-sqlx-lint](https://github.com/SQLAnvil/sqlanvil-sqlx-lint) convention checker on `.sqlx` files an agent writes or edits, and when its pre-commit hook fails. It checks what SQL linters and `sqlanvil compile` cannot see: `columns` documentation, `${ref()}` usage, schema suffixes, directory policies, and Dataform habits sqlanvil ignores or fails on at run time (BigQuery options on Postgres, `;` instead of `---`, unguarded DDL on incrementals). Needs the linter installed (`pip install sqlanvil-sqlx-lint`).
+
 ### Slash Commands
 
 | Command | Purpose |

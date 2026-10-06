@@ -24,6 +24,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # <skill-dir-name> <plugin-dir-name> <source-root>
 SKILLS=(
   "sqlanvil-engineering-fundamentals sqlanvil-toolkit $SQLANVIL_SKILLS"
+  "sqlanvil-sqlx-lint sqlanvil-toolkit $SQLANVIL_SKILLS"
   "stl-generator stl-generator-toolkit $CLAUDE_SKILLS"
 )
 

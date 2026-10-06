@@ -2,7 +2,7 @@ export const plugins = [
   {
     id: 'sqlanvil-toolkit',
     name: 'sqlanvil-toolkit',
-    version: '1.2.0',
+    version: '1.3.0',
     description: 'Engineering best practices for sqlanvil data projects on PostgreSQL and Supabase — corrects Dataform/BigQuery priors, plus named connections (cross-warehouse sources) and the introspect workflow',
     install: '/plugin install sqlanvil-toolkit@ihistand',
     commands: [
@@ -14,6 +14,7 @@ export const plugins = [
     ],
     skills: [
       { name: 'sqlanvil-engineering-fundamentals', description: 'PostgreSQL/Supabase deltas: flat warehouse config, postgres:{} DDL, --- separators, named connections + introspect' },
+      { name: 'sqlanvil-sqlx-lint', description: 'Runs the sqlanvil-sqlx-lint convention checker on .sqlx files: columns docs, ref() usage, schema suffixes, and Dataform habits sqlanvil ignores' },
     ],
     references: [
       { label: 'SQLAnvil', url: 'https://github.com/sqlanvil/sqlanvil' },
