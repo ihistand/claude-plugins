@@ -16,8 +16,8 @@
     {
       "name": "stl-generator-toolkit",
       "source": "./stl-generator-toolkit",
-      "version": "2.0.0",
-      "description": "Generate 3D-printable STL files for woodworking jigs with build123d: a router circle-cutting trammel, exact angle wedges, spacing blocks, and custom designs, with a print-readiness check that refuses STLs that would misprint. Defaults to an Elegoo Neptune 4 Pro bed; --bed for any printer."
+      "version": "2.1.0",
+      "description": "Generate 3D-printable STL files with build123d: woodworking jigs (circle-cutting trammel, exact angle wedges, spacing blocks, custom designs) and replacement parts from a measured original, such as a threaded light globe. A print-readiness check refuses STLs that would misprint and flags overhangs. Defaults to an Elegoo Neptune 4 Pro bed; --bed for any printer."
     }
   ]
 }

@@ -24,7 +24,7 @@ export const plugins = [
   {
     id: 'stl-generator-toolkit',
     name: 'stl-generator-toolkit',
-    version: '2.0.0',
+    version: '2.1.0',
     description: 'Generate 3D-printable STL files for woodworking jigs with build123d: a router circle-cutting trammel, exact angle wedges, spacing blocks, and custom designs, with a print-readiness check that refuses STLs that would misprint',
     install: '/plugin install stl-generator-toolkit@ihistand',
     commands: [
@@ -34,7 +34,7 @@ export const plugins = [
       { name: '/stl-spacing-block', description: 'Spacing and setup blocks, single or a set', workflow: 'Height(s) → flat measuring faces, engraved labels → STL' },
     ],
     skills: [
-      { name: 'stl-generator', description: 'Tested build123d scripts, a print-readiness check, clearances for a default Elegoo Neptune 4 Pro (any printer via --bed), and jig design rules' },
+      { name: 'stl-generator', description: 'Tested build123d scripts (jigs and a threaded light globe), a print-readiness check with overhang warnings, a guide to measuring replacement parts, and jig design rules' },
     ],
     references: [],
   },

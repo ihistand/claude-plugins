@@ -1,7 +1,7 @@
 # STL Generator Toolkit
 
-Generate 3D-printable STL files for woodworking jigs and fixtures with
-[build123d](https://github.com/gumyr/build123d). Ships the **stl-generator** skill,
+Generate 3D-printable STL files for woodworking jigs and fixtures, and for replacement
+parts modeled from a measured original, with [build123d](https://github.com/gumyr/build123d). Ships the **stl-generator** skill,
 tested ready-made scripts, and a print-readiness check that refuses an STL that would
 misprint (a part floating above the bed, an invalid shape, a part too big for the bed).
 
@@ -19,7 +19,7 @@ rules, clearances, and build123d patterns.
 | `/stl-spacing-block <height>` or `--set 5,10,15,20` | Spacing and setup blocks with flat measuring faces, engraved labels, and finger scallops; sets lay out to fit the bed. |
 | `/stl-generate <description>` | Any custom jig: uses a ready script when one fits, otherwise designs one in build123d. |
 
-The skill also triggers on its own when you ask for a jig, without a slash command.
+The skill also triggers on its own when you ask for a jig, or for a replacement part copied from a measured original. Its `threaded_globe.py` builds a replacement threaded light globe (a sphere on a threaded collar) from caliper measurements: split into two halves that print with supports only inside, plus a collar-only test piece to check the thread fit first.
 
 ## Requirements
 
@@ -52,5 +52,5 @@ stl-generator-toolkit/
 └── skills/stl-generator/          # synced from ihistand/claude-skills; don't edit here
     ├── SKILL.md
     ├── references/                # printer_specs.md, build123d_patterns.md
-    └── scripts/                   # circle_cutting_jig, angle_wedge, spacing_block, printcheck
+    └── scripts/                   # circle_cutting_jig, angle_wedge, spacing_block, threaded_globe, printcheck
 ```
