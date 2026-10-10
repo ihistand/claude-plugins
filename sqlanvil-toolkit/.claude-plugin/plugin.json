@@ -1,6 +1,6 @@
 {
   "name": "sqlanvil-toolkit",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Toolkit for writing sqlanvil data projects on PostgreSQL and Supabase. Corrects the Dataform/BigQuery priors that produce broken sqlanvil config, credentials, and DDL, and covers named connections (cross-warehouse sources via the auto-generated FDW bridge) and the introspect workflow.",
   "author": {
     "name": "Ivan Histand",
