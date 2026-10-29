@@ -39,7 +39,7 @@ paths:
     delete:
       operationId: deleteOrder
       summary: Delete an order
-      description: Role admin only. Idempotent, so a second delete answers 404.
+      description: Role admin only.
       x-prd-ids: [FR-003, AC-003.1, AC-003.2]
       x-error-codes: [FORBIDDEN]
       x-preconditions: [orders/one_existing, customers/two_customers]

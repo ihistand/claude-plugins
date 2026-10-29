@@ -120,11 +120,13 @@ def _parse_block(m: re.Match, rel: str, n: int, body: list[tuple[int, str]]) -> 
             cur.text += " " + text.strip()
         else:
             cur = None
-    for ln, text in _field_lines(body, "Errors")[:1]:
-        head = text.split("(")[0]
+    for ln, text in _field_lines(body, "Errors"):  # continuation lines included
+        head, paren, _ = text.partition("(")
         for code in (c.strip() for c in head.split(",")):
             if re.fullmatch(r"[A-Z][A-Z0-9_]*", code):
                 b.errors.append((code, ln))
+        if paren:  # the parenthetical closes the code list
+            break
     tl = _field_lines(body, "Tests")
     for ln, text in tl:
         for tid, level in _TEST.findall(text):

@@ -16,7 +16,7 @@ IMPORT_EMPTY:
   metric: orders_import_empty_total
 ORDER_NOT_FOUND:
   meaning: No order has the requested id.
-  when: getOrder or deleteOrder receives an id that is not in orders.
+  when: getOrder receives an id that is not in orders.
   status: 404
   message: Order not found
   log_level: info

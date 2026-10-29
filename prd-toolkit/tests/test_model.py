@@ -1,5 +1,7 @@
 import pytest
 
+from conftest import edit
+
 from prdlint.markdown import frontmatter, sections, strip_code, tables
 from prdlint.model import NotAPrd, load
 from prdlint.yamlload import LineDict, load_yaml
@@ -68,7 +70,7 @@ def test_test_cases_are_line_dicts(prd):
     p = load(prd)
     tc = next(t for t in p.test_cases if t.id == "T-003.2")
     assert isinstance(tc.data, LineDict)
-    assert tc.data["identity"] == "test-rep" and tc.line == tc.data.line - 1
+    assert tc.data["identity"] == "test-rep" and tc.line == 51
     assert tc.file == "test-cases/api.yaml"
 
 
@@ -100,3 +102,18 @@ def test_frontmatter_and_sections_helpers():
     assert [(s.number, s.title) for s in secs] == [(1, "One"), (2, "Two")]
     t = tables(secs[1].body)[0]
     assert t.header == ["A", "B"] and t.rows[0].cells == ["`x|y`", "2"] and t.rows[0].line == 9
+
+
+def test_wrapped_errors_line_keeps_all_codes(prd):
+    edit(prd, "features/import.md",
+         "Errors: IMPORT_DUPLICATE, IMPORT_EMPTY (contracts/errors.yaml)",
+         "Errors: IMPORT_DUPLICATE,\n  IMPORT_EMPTY (contracts/errors.yaml)")
+    fr1 = next(b for b in load(prd).blocks if b.id == "FR-001")
+    assert [c for c, _ in fr1.errors] == ["IMPORT_DUPLICATE", "IMPORT_EMPTY"]
+    assert fr1.errors[1][1] == fr1.errors[0][1] + 1
+
+
+def test_flow_style_test_case_line_is_the_key_line(prd):
+    (prd / "test-cases/api.yaml").write_text("# c\nT-002.1: {}\n")
+    tc = next(t for t in load(prd).test_cases if t.id == "T-002.1")
+    assert tc.line == 2
