@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects) and **stl-generator-toolkit**. The **acuantia-dataform** plugin moved to Acuantia's private marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and the stale copy here was removed 2026-09-20. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
+This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects), **stl-generator-toolkit**, and **prd-toolkit** (the living PRD). The **acuantia-dataform** plugin moved to Acuantia's private marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and the stale copy here was removed 2026-09-20. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
 
 **Author**: Ivan Histand (ihistand@rotoplas.com)
 
@@ -63,6 +63,8 @@ the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin copie
 directly — the next sync overwrites them. After a sqlanvil release updates the
 agent-skills repo, run the sync here too, or the plugin falls behind (it had drifted
 from core 1.2 to 1.32.9 before 2026-10-04).
+
+`prd-toolkit` is the exception: it is authored in place in this repo (its skills share scripts, templates and references and are useless apart) and is not in `sync-skills.sh`.
 
 Claude Code only loads plugin skills laid out as `skills/<name>/SKILL.md`. A flat
 `skills/<name>.md` is silently ignored (verified 2026-10-04 with `claude -p --plugin-dir`:

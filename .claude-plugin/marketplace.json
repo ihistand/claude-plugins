@@ -5,7 +5,7 @@
     "email": "ihistand@rotoplas.com",
     "url": "https://github.com/ihistand"
   },
-  "description": "Claude Code plugins for data engineering, business intelligence, and 3D printing workflows",
+  "description": "Claude Code plugins for data engineering, business intelligence, 3D printing and product-requirements workflows",
   "plugins": [
     {
       "name": "sqlanvil-toolkit",
@@ -18,6 +18,12 @@
       "source": "./stl-generator-toolkit",
       "version": "2.1.0",
       "description": "Generate 3D-printable STL files with build123d: woodworking jigs (circle-cutting trammel, exact angle wedges, spacing blocks, custom designs) and replacement parts from a measured original, such as a threaded light globe. A print-readiness check refuses STLs that would misprint and flags overhangs. Defaults to an Elegoo Neptune 4 Pro bed; --bed for any printer."
+    },
+    {
+      "name": "prd-toolkit",
+      "source": "./prd-toolkit",
+      "version": "0.1.0",
+      "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it. Includes /prd-new and /prd-change."
     }
   ]
 }

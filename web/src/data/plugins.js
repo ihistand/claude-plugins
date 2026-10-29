@@ -38,4 +38,22 @@ export const plugins = [
     ],
     references: [],
   },
+  {
+    id: 'prd-toolkit',
+    name: 'prd-toolkit',
+    version: '0.1.0',
+    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it. Includes /prd-new and /prd-change.',
+    install: '/plugin install prd-toolkit@ihistand',
+    commands: [
+      { name: '/prd-new', description: 'Start a PRD for a new project', workflow: 'Interview → docs/prd/<slug>/ with contracts and test cases → lint → fresh-agent dry run → approve → CLAUDE.md block' },
+      { name: '/prd-change', description: 'Change the PRD before changing behaviour', workflow: 'New or changed IDs → version bump → lint → approval → only then the code' },
+    ],
+    skills: [
+      { name: 'authoring-prds', description: 'Interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from; also approves and signs off a draft PRD' },
+      { name: 'changing-prds', description: 'Changes the PRD first, with new IDs and a version bump, before any code, when behaviour changes in a repo that has docs/prd/' },
+    ],
+    references: [
+      { label: 'Design spec', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-29-prd-toolkit-design.md' },
+    ],
+  },
 ]
