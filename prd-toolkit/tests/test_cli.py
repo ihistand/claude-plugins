@@ -27,3 +27,25 @@ def test_not_a_prd_exits_2(tmp_path, capsys):
 def test_sample_tids(prd, capsys):
     assert main(["--sample-tids", "3", str(prd)]) == 0
     assert len(set(capsys.readouterr().out.split())) == 3
+
+
+def test_unexpected_load_error_exits_2_without_traceback(prd, capsys, monkeypatch):
+    def boom(_):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr("prdlint.model.load", boom)
+    assert main([str(prd)]) == 2
+    err = capsys.readouterr().err
+    assert "internal error: OSError" in err and "Traceback" not in err
+
+
+def test_invalid_utf8_exits_2(prd, capsys):
+    with open(prd / "prd.md", "ab") as f:
+        f.write(b"\xff\xfe")
+    assert main([str(prd)]) == 2
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_negative_sample_tids_is_usage_error(prd, capsys):
+    assert main(["--sample-tids", "-1", str(prd)]) == 2
+    assert "Traceback" not in capsys.readouterr().err

@@ -48,10 +48,17 @@ def main(argv: list[str]) -> int:
         parser.print_usage(sys.stderr)
         return 2
 
+    if args.sample_tids is not None and args.sample_tids < 0:
+        print("prd_lint: --sample-tids N must be >= 0", file=sys.stderr)
+        return 2
+
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
         print(f"prd_lint: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"prd_lint: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
 
     if args.sample_tids is not None:
@@ -64,6 +71,9 @@ def main(argv: list[str]) -> int:
         findings = registry.run(prd)
     except registry.RuleCrash as e:
         print(f"prd_lint: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"prd_lint: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     prefix = _display_root(prd.root)
     for f in findings:
