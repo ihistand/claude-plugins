@@ -1,4 +1,7 @@
-# Phase 6 dry-run prompt
+# Dry-run prompt
+
+Shared by `authoring-prds` (phase 6) and `changing-prds` (step 4). Each skill says what to do
+when the dry run fails.
 
 Dispatch a fresh general-purpose subagent (Agent tool) with this prompt. Fill the three slots.
 Give it nothing else: no summary of the PRD, no hints, no answers. In 0.1 the read-only
@@ -33,6 +36,5 @@ Report, in this order:
 3. FILES READ: every path you opened, listed or searched.
 ```
 
-The dry run passes only when QUESTIONS is `none`, TESTS has one path for every sampled T-id,
-and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it. Turn each
-question into a `[NEEDS CLARIFICATION: …]` marker in the file it names and return to phase 3.
+The dry run passes only when QUESTIONS is `none`, TESTS has one path for every T-id in the
+slot, and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it.

@@ -58,7 +58,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 - **Next free FR or NFR number** = the highest FR or NFR number in the PRD, across both kinds and
   removed ones included, + 1. With FR-001..FR-003 and NFR-004, the next is **FR-005**.
 - **Next free AC number** in a block = its highest AC number, removed ones included, + 1.
-- T-ids are per requirement: `T-005.1` belongs to FR-005.
+- **Next free T number** for a requirement = the highest it has ever used, + 1. Count the T-ids
+  on its `Tests:` line, in `test-cases/` and in every §14 changelog row: a deleted test case
+  survives only in the changelog. T-ids are per requirement: `T-005.1` belongs to FR-005.
 - `id-removed-reused` fails when a test case, `x-prd-ids` or `Traces:` cites a removed ID.
 
 | Item | Changed | Removed |
@@ -84,18 +86,24 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
    step 1 listed. Set the PRD status to `In review`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
-   §14 changelog row: `| 2.0.0 | <date> | <change> | <every new, changed and removed ID> |`.
+   §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
+   lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
+   test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 questions`,
+   `no dry run (removal only)` or `no dry run (wording only)`.
 4. **Lint and dry run.** Lint must exit 0. Then dry-run the new and revised T-ids only: dispatch
    a fresh general-purpose subagent with
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md`, those T-ids in its slot. It
-   passes on the terms that file states. Any question it asks is a gap: fix the PRD and run it
-   again. A gap that predates this change counts the same, because the changed T-ids cannot be
-   tested without its answer: ask the user for it. A removal with no new or revised T-ids has
-   no dry run; say so. If you cannot dispatch a subagent, report the dry run as not run; the
-   change cannot be approved until it runs.
-5. **Approval, then commit.** Show the user the restatement, the changes by ID, the new version
-   and why that level, the decisions from step 1, the lint result and the dry-run report. Wait
-   for explicit approval. Then: status `Approved`; lint exit 0; rerun
+   passes on the terms that file states. Anything else fails it, and every question is a gap:
+   fix the PRD and run it again. A gap that predates this change counts the same, because the
+   changed T-ids cannot be tested without its answer: ask the user for it. A removal with no new
+   or revised T-ids has no dry run; say so. If you cannot dispatch a subagent, report the dry
+   run as not run; the change cannot be approved until it runs.
+5. **Approval, then commit.** First check what this conversation holds. If it does not hold a
+   passing dry-run report, or the recorded reason there is none, for the current files, run
+   step 4 now. `In review` and a clean lint are not evidence that it ran; a new session starts
+   with neither. Then show the user the restatement, the changes by ID, the new version and why
+   that level, the decisions from step 1, the lint result and the dry-run report. Wait for
+   explicit approval. Then: status `Approved`; lint exit 0; rerun
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
@@ -111,6 +119,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
   `removed` marker.
 - "If you still want FR-003, I'll do it." Any offer to reuse an ID on request.
 - A changed status code or error with its test case's `expect` and `errors.yaml` untouched.
+- A changelog row whose IDs cell leaves out a removed AC or a deleted test case's T-id.
 - Asking the user to pick the ID, the version level or anything else a rule here decides.
 - "Approve this change and treat the older gaps as a separate change." Any offer to approve
   over a failed dry run.

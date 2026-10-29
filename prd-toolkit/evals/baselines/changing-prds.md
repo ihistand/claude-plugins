@@ -31,10 +31,10 @@ so the next free number is 5.
 
 | ID | Baseline failure | With skill (final SKILL.md) |
 |---|---|---|
-| C1 | Minor bump (1.1.0) for a changed status code, citing §9; no PRD edit | Pass (runs 1 and 2): 2.0.0, changelog row, `ORDER_DELETED` 410 in `errors.yaml`, a 410 response in `openapi.yaml`, new and revised test cases, lint exit 0. Run 1 offered to handle failed-dry-run gaps "as a separate change"; closed in the refactor, gone in run 2. Run 3, after the description ruling, still triggers and passes |
+| C1 | Minor bump (1.1.0) for a changed status code, citing §9; no PRD edit | Pass (runs 1 and 2): 2.0.0, changelog row, `ORDER_DELETED` 410 in `errors.yaml`, a 410 response in `openapi.yaml`, new and revised test cases, lint exit 0. Run 1 offered to handle failed-dry-run gaps "as a separate change"; closed in the refactor, gone in run 2. Runs 3 and 4 (after the description ruling and fix round 1) still trigger and pass |
 | C2 | Not the headline one (it chose FR-005), but offered to reuse FR-003 "if you still want" it | Pass (runs 1 and 2): FR-005, 2.1.0, no offer to reuse, lint exit 0 |
 | C3 | Code first, PRD untouched ("As you asked, I left the PRD unchanged") | Pass (runs 4 to 6) after the controller ruling added `, or when asked to change code and let the PRD follow,` to the description: invoked 3 of 3 with no CLAUDE.md, PRD edited, 1.1.0, lint exit 0, no code. Red on the original pinned description (runs 1 to 3: invoked 0 of 3) |
-| C4 | Deleted AC-001.3 and T-001.3; minor bump; code edited in the same pass | Pass (runs 1 and 2): AC-001.3 marked `(removed in 2.0.0)`, T-001.3 deleted, 2.0.0 with a changelog row, no code, lint exit 0 |
+| C4 | Deleted AC-001.3 and T-001.3; minor bump; code edited in the same pass | Pass (runs 1 to 3): AC-001.3 marked `(removed in 2.0.0)`, T-001.3 deleted, 2.0.0 with a changelog row, no code, lint exit 0. From run 3 the row also lists T-001.3 and `no dry run (removal only)` |
 
 Every with-skill run that loaded the skill edited only `docs/prd/orders/`, changed no code,
 committed nothing, set the PRD to `In review`, ran lint (exit 0 on the result) and stopped for
@@ -175,6 +175,23 @@ instead of 404 for deleted orders.`); nine PRD files plus a `deleted_orders/one_
 **Result:** pass. The description change did not stop C1 triggering. (The answer's last line
 notes that the dry-run subagent found test files from an earlier run in the shared scratchpad
 `dryrun-410/` folder, outside the repo; it does not affect the PRD result.)
+
+#### Run 4 (after fix round 1: T-id rule, changelog dry-run record, fresh-session gate)
+
+Invoked the skill; the same nine PRD files plus a `deleted_orders/one_deleted` fixture;
+`version: 2.0.0`, `status: In review`; `ORDER_GONE` (410) in `errors.yaml`; lint exit 0; no
+code. The changelog row now carries the dry-run state and the revised T-ids:
+`| 2.0.0 | 2026-10-29 | getOrder answers 410 ORDER_GONE instead of 404 for a deleted order; deleteOrder records a tombstone in the new table deleted_orders; dry run pending | UJ-01, FR-002, AC-002.2, AC-002.3, T-002.3, FR-003, AC-003.1, T-003.1 |`.
+Answer, trimmed (`[…]` marks a trim):
+
+> This isn't a tiny wording fix. A 410 changes existing behaviour, so the PRD goes from **1.0.0 to 2.0.0**: a test that passes today, getting 404 for a deleted order, would fail afterwards. I've drafted the PRD change and it passes lint. It can't be approved yet: the dry run failed on gaps that predate this change. I haven't touched any code or committed anything.
+> […]
+> **Dry run (T-002.2, T-002.3, T-003.1): failed with 11 questions.** A fresh tester wrote all three tests from the PRD alone. Four of the questions came from my draft, and I've fixed them in the PRD: how close `deleted_at` must be to the request time, cleanup of the deleted record, the empty 204 body, and the order fixtures load in. The other seven predate this change, but the tests can't run without the answers:
+> […]
+> Once you answer, I'll write the answers into `testing.md` and `operations.md` and rerun the dry run. Then I'll bring it back to you for approval, and only after that commit the PRD and change the code.
+
+**Result:** pass. The dry run covered the new and revised T-ids (T-002.2, T-002.3, T-003.1) and
+the agent asked for the older gaps instead of offering to approve.
 
 ## C2
 
@@ -538,5 +555,23 @@ marks a trim):
 > - **FR-001** (`features/import.md`): AC-001.3 stays in the file but is marked `(removed in 2.0.0)`. `IMPORT_EMPTY` is gone from `Errors:` and T-001.3 from `Tests:`. Its status in the block and in the §11 index changed from `live` to `approved`.
 > […]
 > If you approve, I'll set the status to `Approved`, re-run the lint and `prd_block.py`, and commit the PRD folder. After that I'll remove the empty-file branch from `src/importer.py` (lines 12–14) in a separate commit with `Refs: AC-001.3`. Should I go ahead?
+
+**Result:** pass.
+
+#### Run 3 (after fix round 1: removed T-ids in the changelog, dry-run record)
+
+Invoked the skill; the same five PRD files as runs 1 and 2; AC-001.3 marked
+`(removed in 2.0.0)`; `version: 2.0.0`, `status: In review`; lint exit 0; no code. The changelog
+row now names the deleted test case and records why there is no dry run:
+`| 2.0.0 | 2026-10-29 | Remove the empty-file rule: AC-001.3, its test case T-001.3, error code IMPORT_EMPTY and its Observability row; no dry run (removal only) | FR-001, AC-001.3, T-001.3, IMPORT_EMPTY |`.
+Runs 1 and 2 had left T-001.3 out of the IDs cell. Answer, trimmed (`[…]` marks a trim):
+
+> - **AC-001.3** in `features/import.md`: the line stays, marked `(removed in 2.0.0)`. Its ID is never reused.
+> - **FR-001**: `IMPORT_EMPTY` and `T-001.3` are off its `Errors:` and `Tests:` lines. Its status changed from `live` to `approved` in the block and in the §11 index, because the requirement changed.
+> - **T-001.3**: deleted from `test-cases/import.yaml`.
+> […]
+> - **§14 changelog**: a new 2.0.0 row lists FR-001, AC-001.3, T-001.3 and IMPORT_EMPTY. That row is now the only record of the deleted test case.
+> […]
+> **Dry run:** none. Nothing was added or revised, so there is nothing to dry-run.
 
 **Result:** pass.

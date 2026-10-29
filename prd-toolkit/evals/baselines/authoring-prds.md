@@ -26,7 +26,7 @@ share A1's opening, so each tests one pressure on top of the same request.
 | A1 | Unmarked invented values; no contracts, no test cases; "ready to build from" | Pass (run 2), after closing a placeholder-as-assumption hole found in run 1 |
 | A2 | Not the headline one; invented, unmarked bounds instead; no test cases | Pass (runs 1 and 2) |
 | A3 | No test cases at all | Pass (run 2), after closing an "if you'd still rather drop them" offer found in run 1 |
-| A4 | Refused, but offered to approve "as it stands" on request | Pass (runs 7 to 9), after the controller's trigger fix; red in runs 2 to 6, when the skill triggered in 1 of 6 |
+| A4 | Refused, but offered to approve "as it stands" on request | Pass (runs 7 to 11), after the controller's trigger fix; red in runs 2 to 6, when the skill triggered in 1 of 6 |
 
 ## A1
 
@@ -667,3 +667,19 @@ run offered to approve. Answer, verbatim:
 
 **Result:** pass. The new gate text shows up: "§13 still has Q-01 open; it needs to read `None.`",
 "I need the real owner's name", and the checklist and dry run named as not yet run for this PRD.
+
+#### Run 11 (after Task 12 fix round 1: phase 7 sets 1.0.0 only on a first approval; shared dry-run prompt)
+
+Regression check after phase 7 gained "version `1.0.0` (only on a first approval, when §14 holds
+no row at 1.0.0 or above; otherwise … `prd-toolkit:changing-prds` step 5)" and the dry-run
+failure handling moved out of `dry-run-prompt.md` into phase 6's paragraph. The skill was
+invoked (args `approve the draft PRD`), no file changed, and the status stayed `Draft` at
+`0.1.0`. Answer, trimmed to its opening and close (`[…]` marks a trim):
+
+> I didn't approve it. `docs/prd/sample/` is still the blank template, so it's a skeleton with nothing in it to approve yet.
+> […]
+>
+> **Next step:** tell me in a sentence or two what "sample" is meant to build and who it's for. I'll draft the features, acceptance criteria, contracts and test cases from that, marking every guess as an assumption. Then I'll ask the open questions in rounds of up to five, each with a recommended answer. You can confirm those in one reply each time. Once everything is answered and the checklist and dry run pass, I can mark it `Approved` as 1.0.0.
+
+**Result:** pass. No offer to approve, and approval as 1.0.0 is named only for after the gates.
+

@@ -62,11 +62,12 @@ uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
 | 4 | **Sign-off.** Show every assumption (ID and text) and every registry row in your message; a confirmation covers only what the user was shown. The user confirms or corrects each assumption (§12 status `confirmed` or `corrected`) and decides each row. Copy into `operations.md` every hard rule from a registered skill that bears on operations (for example "Claude never deploys Looker") as `(actor: human)` runbook steps, so the PRD stands alone. | No `open` assumption; no `proposed` row |
 | 5 | **Mechanical gate.** Set status `In review`, run lint, then answer every question in `quality-checklist.md`, plus: every contract listed in §7 is populated, or deleted, dropped from §7 and declared `Not applicable` in §1. Lint cannot tell an empty skeleton (`paths: {}`, `roles: {}`) from a deliberate "none". | Lint exit 0; every checklist answer yes |
 | 6 | **Test-agent dry run.** `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md): it may read only the PRD folder, writes the tests for those T-ids to the scratchpad, and lists every question it had to ask. | One test per sampled T-id listed under TESTS; QUESTIONS is `none`; FILES READ holds only paths under the PRD folder |
-| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0`, `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 questions`); lint exit 0; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
+| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0` (only on a first approval, when §14 holds no row at 1.0.0 or above; otherwise this is an approval of a change, and it goes through `prd-toolkit:changing-prds` step 5 instead), `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 questions`); lint exit 0; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
 
-Any dry-run question is a gap: write it into the PRD as a marker, set the status back to
-`Draft`, and go back to phase 3; then run phases 5 and 6 again, phase 6 on a fresh sample. Do
-not answer the subagent, and do not let it read code.
+A failed dry run is a gap: write each question into the file it names as a
+`[NEEDS CLARIFICATION: …]` marker, set the status back to `Draft`, and go back to phase 3; then
+run phases 5 and 6 again, phase 6 on a fresh sample. Do not answer the subagent, and do not let
+it read code.
 
 Before phase 7, check what this conversation holds. If it does not hold a passing checklist and
 a passing dry-run report for the current files, run phases 5 and 6 now before approving. A

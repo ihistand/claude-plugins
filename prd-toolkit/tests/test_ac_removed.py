@@ -6,7 +6,7 @@ from conftest import edit, fired, lint
 from prdlint.model import load
 
 AC3 = "- AC-001.3 If the import file is empty"
-AC3_REMOVED = "- AC-001.3 (removed in 1.1.0) If the import file is empty"
+AC3_REMOVED = "- AC-001.3 (removed in 2.0.0) If the import file is empty"
 TESTS_001 = "Tests: T-001.1 [integration], T-001.2 [integration], T-001.3 [unit], T-001.4 [acceptance]"
 
 
@@ -43,7 +43,7 @@ def test_removed_ac_that_is_not_ears_lints_clean(prd):
         prd,
         "features/import.md",
         "- AC-001.3 If the import file is empty, the importer shall finish with status `empty`,\n  log `IMPORT_EMPTY` and insert no rows.",
-        "- AC-001.3 (removed in 1.1.0) Empty files finish fast with status `empty` and log `IMPORT_EMPTY`.",
+        "- AC-001.3 (removed in 2.0.0) Empty files finish fast with status `empty` and log `IMPORT_EMPTY`.",
     )
     _drop_t001_3(prd)
     assert lint(prd) == []
@@ -60,6 +60,6 @@ def test_removed_nfr_ac_continuation_skips_vague_word(prd):
         prd,
         "nfr.md",
         "under 50 requests/s.\n",
-        "under 50 requests/s.\n- AC-004.2 (removed in 1.1.0) The API shall stay\n  fast and robust.\n",
+        "under 50 requests/s.\n- AC-004.2 (removed in 2.0.0) The API shall stay\n  fast and robust.\n",
     )
     assert lint(prd) == []

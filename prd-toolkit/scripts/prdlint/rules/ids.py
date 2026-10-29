@@ -206,8 +206,12 @@ def index_consistent(prd: Prd):
 @rule("fr-has-ac")
 def fr_has_ac(prd: Prd):
     for b in prd.blocks:
-        if b.kind in ("FR", "NFR") and b.status != "removed" and not b.acs:
+        if b.kind not in ("FR", "NFR") or b.status == "removed":
+            continue
+        if not b.acs:
             yield Finding(b.file, b.line, "fr-has-ac", f"{b.id} has no acceptance criteria")
+        elif all(a.removed for a in b.acs):
+            yield Finding(b.file, b.line, "fr-has-ac", f"{b.id} has no live acceptance criteria; remove the requirement instead")
 
 
 @rule("ac-ears")
