@@ -32,3 +32,14 @@ class Case:
     rule: str
     name: str
     mutate: Callable[[Path], None]
+
+
+def lint(root: Path) -> list:
+    """Run every registered rule against the PRD at `root`."""
+    from prdlint import model, registry
+
+    return registry.run(model.load(root))
+
+
+def fired(findings) -> set[str]:
+    return {f.rule for f in findings}
