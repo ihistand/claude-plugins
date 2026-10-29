@@ -80,7 +80,8 @@ prd-toolkit/
 │   ├── prd-tester.md                  # restricted to PRD, tests and harness config
 │   └── prd-deployer.md
 ├── commands/                          # /prd-new /prd-adopt /prd-change /prd-status /prd-error
-├── scripts/                           # prd_lint.py, prd_trace.py, prd_drift.py, prd_status.py
+├── scripts/                           # prd_lint.py, prd_trace.py, prd_drift.py, prd_status.py,
+│                                      # prd_block.py (the managed CLAUDE.md block)
 ├── templates/                         # PRD folder skeleton, CLAUDE.md block, git hooks, CI jobs
 ├── references/                        # ears.md, clarify-categories.md, quality-checklist.md,
 │                                      # contract-types.md, test-levels.md
@@ -123,9 +124,10 @@ docs/prd/<project>/
 
 `<project>` is a lowercase slug; `docs/prd/` is the default root. `features/` says what the
 system does, `contracts/` describes its interfaces, and `test-cases/` says how each behaviour
-is checked; the tests themselves live in the repo's own test directories and cite their T-ids. A file whose subject does not
-exist (no UI, no HTTP API) is omitted, and `prd.md` lists it as `Not applicable: <reason>` so
-omission is visible.
+is checked; the tests themselves live in the repo's own test directories and cite their T-ids.
+A file whose subject does not exist (no UI, no HTTP API) is omitted, and `prd.md` lists it as
+`Not applicable: <reason>` so omission is visible. The exact syntax lint parses is
+`references/prd-format.md`.
 
 ### 3.1 `prd.md`
 
@@ -165,8 +167,11 @@ sql-dialect: <sqlglot dialect, when schema.sql exists>
 | `AC-nnn.n` | acceptance criterion under its FR or NFR |
 | `T-nnn.n` | test under its AC, tagged with a level |
 | `E-nnn` | error ledger entry |
+| `A-nn` | assumption, marked `[ASSUMPTION A-nn: …]` and indexed in `prd.md` §12 |
 
-IDs are never reused. A removed requirement keeps its ID with status `removed`.
+IDs are never reused. A removed requirement keeps its ID with status `removed`. FRs and NFRs
+draw from one number sequence, so `AC-012.1` has exactly one parent. T-ids are numbered per
+requirement (`T-012.n`), and each test case names the AC it checks.
 
 ```
 ### FR-012 Reject a duplicate order import
@@ -198,18 +203,19 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 **Standards registry.** Each row binds an object glob to a linter the user chose; the toolkit
 enforces that every row runs, not what the rules are.
 
-| Object (glob) | Linter command | Rules live in | Applies to |
-|---|---|---|---|
-| `definitions/**/*.sqlx` | `dataform-sqlx-lint` ([acuantia/dataform-sqlx-lint](https://github.com/acuantia/dataform-sqlx-lint)) | project lint config | code |
-| `**/*.sql` | `sqlfluff lint` | `.sqlfluff` | code, `schema.sql` |
-| `contracts/openapi.yaml` | `spectral lint` | `.spectral.yaml` | contract |
+| Object (glob) | Linter command | Rules live in | Applies to | Decision |
+|---|---|---|---|---|
+| `definitions/**/*.sqlx` | `dataform-sqlx-lint` ([acuantia/dataform-sqlx-lint](https://github.com/acuantia/dataform-sqlx-lint)) | project lint config | code | enforced |
+| `**/*.sql` | `sqlfluff lint` | `.sqlfluff` | code, `schema.sql` | enforced |
+| `contracts/openapi.yaml` | `spectral lint` | `.spectral.yaml` | contract | proposed |
 
-(Rows are examples; each project declares its own.)
+(Rows are examples; each project declares its own. Decision is `enforced`, `declined` or
+`proposed`; `proposed` is undecided.)
 
 **Skills registry.** Authoring and adoption read the installed plugins and skills
 (`claude plugin list`, the skills listing) and propose rows matching the project's objects and
-activities. The user marks each `required`, `recommended` or `declined`; declined rows stay so
-they are not proposed again. For the Looker repo the proposal would include
+activities. Each row's Decision is `proposed` until the user marks it `required`, `recommended` or
+`declined`; declined rows stay so they are not proposed again. For the Looker repo the proposal would include
 `acuantia-looker:acuantia-looker` for `**/*.lkml` and dashboards, `acuantia-looker:annotate` for
 commits, `acuantia-dataform:schema-change-protocol` for upstream table changes, and
 `superpowers:systematic-debugging` and `superpowers:writing-plans` for their activities.
@@ -250,7 +256,7 @@ looking for test code does not mistake a test spec for a test.
 T-012.3:
   ac: AC-012.3
   level: unit                             # a level defined in testing.md
-  target: importer.import_file            # contracts/events.md#order-import
+  target: code:importer.import_file       # <kind>:<name>
   environment: local
   identity: none                          # or a test identity from permissions.yaml
   preconditions: [orders/one_existing]    # contracts/fixtures/, plus any dependency mock
@@ -264,7 +270,10 @@ T-012.3:
     leaks: none                           # nothing classified in logs or error bodies
 ```
 
-An error-path case lists its codes under `expect.errors` with the input that triggers them. An
+A `target` is `<kind>:<name>`, with kind `op` (an `operationId`), `table`, `event`, `job`,
+`component`, `page`, `code` (a unit's function, unit level only) or a custom type from
+`prd.md` §7; lint resolves `op`, `table`, `event` and `job` against the contracts. An
+error-path case lists its codes under `expect.errors` with the input that triggers them. An
 acceptance case adds `steps:`, a list of plain-language actions for the people who sign off,
 and `signoff:` naming the business owner. The FR block's `Tests:` line stays as the index; lint
 fails when it and the test-case file disagree. `prd_status.py` generates the FR → T matrix from
