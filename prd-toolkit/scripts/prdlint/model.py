@@ -172,7 +172,7 @@ def _names(table) -> dict[str, int]:
 
 
 def load(prd_dir: Path) -> Prd:
-    prd_dir = Path(prd_dir)
+    prd_dir = Path(prd_dir).resolve()
     if not (prd_dir / "prd.md").is_file():
         raise NotAPrd(f"{prd_dir}: no prd.md")
     findings: list[Finding] = []

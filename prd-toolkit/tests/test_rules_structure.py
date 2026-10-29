@@ -85,3 +85,18 @@ def test_not_applicable_satisfies_sections(prd):
 def test_vague_word_with_number_is_clean(prd):
     edit(prd, "nfr.md", "- AC-004.1 The API", "- AC-004.1 fast: The API")
     assert "vague-word" not in fired(lint(prd))
+
+
+def test_frontmatter_accepts_relative_dot_path(prd, monkeypatch):
+    from prdlint import model, registry
+
+    monkeypatch.chdir(prd)
+    findings = registry.run(model.load(__import__("pathlib").Path(".")), only={"frontmatter"})
+    assert findings == []
+
+
+def test_vague_word_ignores_inline_code_and_fences(prd):
+    edit(prd, "nfr.md", "- AC-004.1 The API", "- AC-004.9 Cookies use `--secure` flag\n- AC-004.1 The API")
+    _append("nfr.md", "")(prd)
+    edit(prd, "nfr.md", "Traces: UJ-01; FR-002", "```\nbe fast and secure\n```\nTraces: UJ-01; FR-002")
+    assert "vague-word" not in fired(lint(prd))

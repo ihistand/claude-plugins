@@ -156,7 +156,8 @@ def vague_word(prd: Prd):
 
     for b in prd.blocks:
         if b.kind == "NFR":
-            items = [(n, t) for n, t in b.lines]
+            stripped = strip_code("\n".join(t for _, t in b.lines)).split("\n")
+            items = [(n, t) for (n, _), t in zip(b.lines, stripped)]
         else:
             items = [(a.line, a.text) for a in b.acs]
         for n, t in items:
