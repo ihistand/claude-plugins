@@ -1,0 +1,6 @@
+# Format: references/prd-format.md, "Contract YAML shapes".
+tables: {}
+masking:
+  logs: "[NEEDS CLARIFICATION: what is never written to logs]"
+  errors: "[NEEDS CLARIFICATION: what error bodies may carry]"
+  fixtures: "[NEEDS CLARIFICATION: how fixtures avoid real personal data]"

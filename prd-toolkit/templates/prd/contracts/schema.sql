@@ -1,0 +1,1 @@
+-- Format: references/contract-types.md, "schema". [NEEDS CLARIFICATION: first table; COMMENT ON every table and column]

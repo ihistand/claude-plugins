@@ -1,0 +1,36 @@
+"""The PRD folder template lints clean as a Draft and still carries every unknown."""
+import shutil
+from pathlib import Path
+
+from conftest import edit, fired, lint
+
+TEMPLATE = Path(__file__).parent.parent / "templates/prd"
+
+
+def fill(dst, **kw):
+    """Copy TEMPLATE to dst and replace each {{slot}} in every file; sql_dialect defaults to postgres."""
+    kw.setdefault("sql_dialect", "postgres")
+    shutil.copytree(TEMPLATE, dst)
+    for path in Path(dst).rglob("*"):
+        if path.is_file() and path.name != ".gitkeep":
+            text = path.read_text()
+            for key, value in kw.items():
+                text = text.replace("{{" + key + "}}", value)
+            path.write_text(text)
+    return Path(dst)
+
+
+def test_template_lints_clean_as_draft(tmp_path):
+    d = fill(tmp_path / "docs/prd/sample", project="sample", owner="Sample Owner", date="2026-10-29")
+    assert [str(f) for f in lint(d)] == []
+
+
+def test_template_carries_markers(tmp_path):
+    d = fill(tmp_path / "docs/prd/sample", project="sample", owner="Sample Owner", date="2026-10-29")
+    edit(d, "prd.md", "status: Draft", "status: Approved")
+    assert {"markers-open", "open-questions-empty"} <= fired(lint(d))
+
+
+def test_unfilled_template_fails_frontmatter(tmp_path):
+    shutil.copytree(TEMPLATE, tmp_path / "x")
+    assert "frontmatter" in fired(lint(tmp_path / "x"))
