@@ -1,5 +1,6 @@
 """Load a PRD folder into a Prd model. Parsing only; rules live elsewhere."""
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -234,3 +235,14 @@ def load(prd_dir: Path) -> Prd:
         testing.signoffs = so.rows if so else []
 
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings)
+
+
+def repo_root(path: Path) -> Path:
+    """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True, text=True, timeout=10, check=True
+        ).stdout.strip()
+        return Path(out) if out else path
+    except (OSError, subprocess.SubprocessError):
+        return path
