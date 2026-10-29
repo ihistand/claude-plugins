@@ -1,0 +1,228 @@
+"""ID and requirement rules: formats, uniqueness, removal, the index, EARS and NFR bounds."""
+import re
+from collections import defaultdict
+from collections.abc import Iterator
+
+from ..findings import Finding
+from ..model import Prd, ReqBlock
+from ..registry import rule
+from .structure import prose
+
+ID_PATTERNS: dict[str, re.Pattern] = {
+    "UJ": re.compile(r"UJ-\d{2}"),
+    "FR": re.compile(r"FR-\d{3}"),
+    "NFR": re.compile(r"NFR-\d{3}"),
+    "AC": re.compile(r"AC-\d{3}\.\d+"),
+    "T": re.compile(r"T-\d{3}\.\d+"),
+    "E": re.compile(r"E-\d{3}"),
+    "A": re.compile(r"A-\d{2}"),
+}
+# requirement statuses; structure.STATUSES holds the PRD's own (Draft, In review, Approved)
+REQ_STATUSES = ("as-built", "approved", "built", "verified", "live", "removed")
+
+_TOKEN = re.compile(r"\b(UJ|FR|NFR|AC|T|E|A)-[0-9][0-9.]*\b")
+_REQ_ID = re.compile(r"\b(?:UJ-\d+|FR-\d+|NFR-\d+|AC-\d+\.\d+)\b")
+_E_HEADING = re.compile(r"^### (E-\d+)\b")
+_UNIT = re.compile(r"\d+(\.\d+)?\s*(ms|s|seconds?|minutes?|min|h|hours?|days?|%|KB|MB|GB|TB|requests?/s|req/s|rps|rows|users|errors?)\b")
+_EARS_HEAD = re.compile(r"^(When|While|If|Where)\b")
+_EARS_THE = re.compile(r"^The \S.*? shall\b")
+
+
+def defined_ids(prd: Prd) -> dict[str, list[tuple[str, int]]]:
+    """Every definition of every ID: block headings, ACs, test-case keys, E- headings, A- rows."""
+    out: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for b in prd.blocks:
+        out[b.id].append((b.file, b.line))
+        for ac in b.acs:
+            out[ac.id].append((b.file, ac.line))
+    for tc in prd.test_cases:
+        out[tc.id].append((tc.file, tc.line))
+    if "errors.md" in prd.docs:
+        for n, line in enumerate(prd.docs["errors.md"].split("\n"), 1):
+            m = _E_HEADING.match(line)
+            if m:
+                out[m.group(1)].append(("errors.md", n))
+    for r in prd.assumptions:
+        if r.cells:
+            out[r.cells[0].strip("`")].append(("prd.md", r.line))
+    return dict(out)
+
+
+def _yaml_strings(node, line: int) -> Iterator[tuple[int, str]]:
+    """Every key and scalar string of a loaded YAML tree, with its line."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            kl = getattr(node, "key_lines", {}).get(k, line)
+            if isinstance(k, str):
+                yield kl, k
+            yield from _yaml_strings(v, kl)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            yield from _yaml_strings(v, line)
+    elif isinstance(node, str):
+        yield line, node
+
+
+@rule("id-format")
+def id_format(prd: Prd):
+    def check(file: str, n: int, text: str):
+        for m in _TOKEN.finditer(text):
+            if not ID_PATTERNS[m.group(1)].fullmatch(m.group(0)):
+                yield Finding(file, n, "id-format", f"'{m.group(0)}' does not match the {m.group(1)} id format {ID_PATTERNS[m.group(1)].pattern}")
+
+    for rel, n, text in prose(prd):
+        yield from check(rel, n, text)
+    sources = list(prd.yaml.items()) + [(tc.file, {tc.id: tc.data}) for tc in prd.test_cases]
+    for rel, data in sources:
+        for n, text in _yaml_strings(data, 1):
+            yield from check(rel, n, text)
+
+
+@rule("id-unique")
+def id_unique(prd: Prd):
+    # duplicate keys within one test-case file are reported by the loader under this rule
+    ids = defined_ids(prd)
+    for key, places in ids.items():
+        for file, n in places[1:]:
+            yield Finding(file, n, "id-unique", f"{key} is already defined at {places[0][0]}:{places[0][1]}")
+    by_number: dict[str, dict[str, tuple[str, int]]] = defaultdict(dict)
+    for b in prd.blocks:
+        if b.kind in ("FR", "NFR"):
+            by_number[b.id.split("-")[1]].setdefault(b.kind, (b.file, b.line))
+    for number, kinds in by_number.items():
+        if len(kinds) > 1:
+            file, n = kinds["NFR"]
+            yield Finding(file, n, "id-unique", f"FR-{number} and NFR-{number} share a number; FR and NFR use one sequence")
+
+
+def _removed(prd: Prd) -> tuple[set[str], list[Finding]]:
+    """IDs removed in both the index and the block, and findings for the ones that disagree."""
+    block = {b.id: b for b in prd.blocks}
+    removed: set[str] = set()
+    findings: list[Finding] = []
+    for row in prd.index:
+        b = block.get(row.id)
+        if not b:
+            continue
+        in_index, in_block = row.status == "removed", b.status == "removed"
+        if in_index and in_block:
+            removed.add(row.id)
+        elif in_index != in_block:
+            findings.append(Finding("prd.md", row.line, "id-removed-reused", f"{row.id} is '{row.status}' in the index but '{b.status}' in {b.file}:{b.line}; both must say removed or neither"))
+    return removed, findings
+
+
+def _traces(b: ReqBlock) -> Iterator[tuple[int, str]]:
+    on = False
+    for n, text in b.lines:
+        if text.startswith("Traces:"):
+            on = True
+            yield n, text
+        elif on and text.startswith("  ") and text.strip():
+            yield n, text
+        else:
+            on = False
+
+
+def _walk_prd_ids(node) -> Iterator[tuple[int, str]]:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "x-prd-ids" and isinstance(v, list):
+                kl = getattr(node, "key_lines", {}).get(k, 1)
+                for item in v:
+                    yield kl, str(item)
+            else:
+                yield from _walk_prd_ids(v)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            yield from _walk_prd_ids(v)
+
+
+@rule("id-removed-reused")
+def id_removed_reused(prd: Prd):
+    removed, findings = _removed(prd)
+    yield from findings
+
+    def gone(token: str) -> str | None:
+        """The removed requirement a cited ID belongs to, if any."""
+        m = re.fullmatch(r"AC-(\d+)\.\d+", token)
+        if m:
+            return next((p for p in (f"FR-{m.group(1)}", f"NFR-{m.group(1)}") if p in removed), None)
+        return token if token in removed else None
+
+    for tc in prd.test_cases:
+        ac = str(tc.data.get("ac", ""))
+        parent = gone(ac)
+        if parent:
+            yield Finding(tc.file, tc.data.key_lines.get("ac", tc.line), "id-removed-reused", f"test case {tc.id} cites {ac} of removed {parent}")
+    for rel, data in prd.yaml.items():
+        for n, item in _walk_prd_ids(data):
+            parent = gone(item)
+            if parent:
+                yield Finding(rel, n, "id-removed-reused", f"x-prd-ids cites {item} of removed {parent}")
+    for b in prd.blocks:
+        if b.id in removed:
+            continue
+        for n, text in _traces(b):
+            for token in _REQ_ID.findall(text):
+                parent = gone(token)
+                if parent:
+                    yield Finding(b.file, n, "id-removed-reused", f"{b.id} Traces cites {token} of removed {parent}")
+
+
+@rule("index-consistent")
+def index_consistent(prd: Prd):
+    block = {b.id: b for b in prd.blocks}
+    rows = {r.id: r for r in prd.index}
+    for b in prd.blocks:
+        if b.id not in rows:
+            yield Finding(b.file, b.line, "index-consistent", f"{b.id} has no row in the section 11 index")
+    for r in prd.index:
+        b = block.get(r.id)
+        if not b:
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id} is in the index but has no block")
+            continue
+        if r.title != b.title:
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id}: index title '{r.title}' differs from block title '{b.title}'")
+        if r.file != b.file:
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id}: index file '{r.file}' differs from block file '{b.file}'")
+        bad = False
+        if r.status not in REQ_STATUSES:
+            bad = True
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id}: unknown index status '{r.status}'")
+        if b.status not in REQ_STATUSES:
+            bad = True
+            yield Finding(b.file, b.line, "index-consistent", f"{b.id}: unknown status '{b.status}'")
+        if r.status == "live" and not r.since:
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id} is live but the index has no Since")
+        if b.status == "live" and not b.since:
+            yield Finding(b.file, b.line, "index-consistent", f"{b.id} is live but its Status line has no '(since X.Y.Z)'")
+        # a removed/other mismatch is id-removed-reused's to report
+        if not bad and r.status != b.status and "removed" not in (r.status, b.status):
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id}: index status '{r.status}' differs from block status '{b.status}'")
+
+
+@rule("fr-has-ac")
+def fr_has_ac(prd: Prd):
+    for b in prd.blocks:
+        if b.kind in ("FR", "NFR") and b.status != "removed" and not b.acs:
+            yield Finding(b.file, b.line, "fr-has-ac", f"{b.id} has no acceptance criteria")
+
+
+@rule("ac-ears")
+def ac_ears(prd: Prd):
+    for b in prd.blocks:
+        for ac in b.acs:
+            if not (_EARS_HEAD.match(ac.text) or _EARS_THE.match(ac.text)):
+                yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must start with When, While, If, Where or 'The <thing> shall'")
+            elif not re.search(r"\bshall\b", ac.text):
+                yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must contain 'shall'")
+
+
+@rule("nfr-bound")
+def nfr_bound(prd: Prd):
+    for b in prd.blocks:
+        if b.kind == "NFR" and b.status != "removed":
+            text = _REQ_ID.sub("", "\n".join(t for _, t in b.lines))
+            if not _UNIT.search(text):
+                yield Finding(b.file, b.line, "nfr-bound", f"{b.id} states no measurable bound (a number with a unit such as ms, %, requests/s)")
