@@ -82,6 +82,13 @@ def test_unknown_table_prefix_is_not_checked(prd):
     assert "schema-refs" not in fired(lint(prd))
 
 
+def test_file_names_that_look_like_table_columns_are_not_checked(prd):
+    _edit("features/import.md", "`orders.order_key` UNIQUE", "`orders.csv` and `customers.sql` UNIQUE")(prd)
+    assert "schema-refs" not in fired(lint(prd))
+    _edit("features/import.md", "`customers.sql` UNIQUE", "`orders.order_kee` UNIQUE")(prd)
+    assert "schema-refs" in fired(lint(prd))
+
+
 def test_schema_refs_ignores_fenced_blocks(prd):
     _append("features/import.md", "\n```\n`orders.order_kee`\n```")(prd)
     assert "schema-refs" not in fired(lint(prd))

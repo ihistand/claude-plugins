@@ -464,6 +464,7 @@ def contracts_valid(prd: Prd):
 
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _SPAN = re.compile(r"(`+)(.+?)\1")
+_FILE_EXTENSIONS = {"csv", "tsv", "sql", "yaml", "yml", "json", "md", "txt", "lkml"}
 _QUALIFIED = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)")
 
 
@@ -488,7 +489,7 @@ def schema_refs(prd: Prd):
             continue
         for m in _SPAN.finditer(originals[rel][n - 1]):
             q = _QUALIFIED.fullmatch(m.group(2).strip())
-            if q and q.group(1) in tables_ and q.group(2) not in tables_[q.group(1)]:
+            if q and q.group(2) not in _FILE_EXTENSIONS and q.group(1) in tables_ and q.group(2) not in tables_[q.group(1)]:
                 yield Finding(rel, n, "schema-refs", f"`{q.group(0)}`: table {q.group(1)} has no column {q.group(2)}")
 
 
