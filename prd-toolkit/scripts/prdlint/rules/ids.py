@@ -23,7 +23,7 @@ REQ_STATUSES = ("as-built", "approved", "built", "verified", "live", "removed")
 _TOKEN = re.compile(r"\b(UJ|FR|NFR|AC|T|E|A)-[0-9][0-9.]*\b")
 _REQ_ID = re.compile(r"\b(?:UJ-\d+|FR-\d+|NFR-\d+|AC-\d+\.\d+)\b")
 _E_HEADING = re.compile(r"^### (E-\d+)\b")
-_UNIT = re.compile(r"\d+(\.\d+)?\s*(ms|s|seconds?|minutes?|min|h|hours?|days?|%|KB|MB|GB|TB|requests?/s|req/s|rps|rows|users|errors?)\b")
+_UNIT = re.compile(r"\d+(\.\d+)?\s*(?:(?:ms|s|sec|seconds?|minutes?|min|h|hrs?|hours?|days?|KB|MB|GB|TB|requests?/s|req/s|requests?/min|req/min|rps|rows|users|errors?)\b|%)")
 _EARS_HEAD = re.compile(r"^(When|While|If|Where)\b")
 _EARS_THE = re.compile(r"^The \S.*? shall\b")
 

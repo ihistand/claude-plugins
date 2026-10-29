@@ -39,7 +39,7 @@ CASES: list[Case] = [
     Case("id-format", "heading FR-0001", _edit("features/import.md", "### FR-001 Import", "### FR-0001 Import")),
     Case("id-format", "bad AC in a YAML value", _edit("test-cases/import.yaml", "ac: AC-001.3", "ac: AC-1.3")),
     Case("id-unique", "duplicate AC line", _edit("features/import.md", "- AC-001.3 If the import file", "- AC-001.2 When a row repeats, the importer shall skip it.\n- AC-001.3 If the import file")),
-    Case("id-unique", "FR-004 shares NFR-004's number", _append("features/api.md", "\n### FR-004 Extra\nStatus: approved\nAcceptance (EARS):\n- AC-004.1 When asked, the API shall answer.\nErrors: -\nTests: -")),
+    Case("id-unique", "FR-004 shares NFR-004's number", _append("features/api.md", "\n### FR-004 Extra\nStatus: approved\nAcceptance (EARS):\n- AC-004.7 When asked, the API shall answer.\nErrors: -\nTests: -")),
     Case("id-unique", "T-002.1 repeated in another file", _append("test-cases/import.yaml", "\nT-002.1:\n  ac: AC-002.1")),
     Case("id-unique", "E-001 heading twice", _append("errors.md", "\n### E-001 Again\nRecurrence of: -")),
     Case("id-unique", "A-01 row twice", _edit("prd.md", "| A-01 | Reps see only their own orders | confirmed |", "| A-01 | Reps see only their own orders | confirmed |\n| A-01 | Another | open |")),
@@ -87,3 +87,15 @@ def test_the_shall_form_without_a_leading_word_is_ear(prd):
 def test_clean_fixture_fires_none_of_the_id_rules(prd):
     ids = {"id-format", "id-unique", "id-removed-reused", "index-consistent", "fr-has-ac", "ac-ears", "nfr-bound"}
     assert not ids & fired(lint(prd))
+
+
+def test_shared_number_is_reported_by_its_own_branch(prd):
+    _append("features/api.md", "\n### FR-004 Extra\nStatus: approved\nAcceptance (EARS):\n- AC-004.7 When asked, the API shall answer.\nErrors: -\nTests: -")(prd)
+    messages = [f.message for f in lint(prd) if f.rule == "id-unique"]
+    assert any("FR-004 and NFR-004 share a number" in m for m in messages)
+
+
+@pytest.mark.parametrize("bound", ["reach 99.9% availability", "reach 99.9 % of requests", "sustain 600 req/min"])
+def test_nfr_bound_accepts_percent_and_per_minute(prd, bound):
+    edit(prd, "nfr.md", "answer getOrder within 300 ms at p95 under 50 requests/s.", f"{bound}.")
+    assert "nfr-bound" not in fired(lint(prd))
