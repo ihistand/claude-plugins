@@ -1,6 +1,6 @@
 ---
 name: changing-prds
-description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement - or when /prd-change runs, or when an agent hits something the PRD does not say; the PRD changes first, with new IDs and a version bump, before any code
+description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement - or when /prd-change runs, or when asked to change code and let the PRD follow, or when an agent hits something the PRD does not say; the PRD changes first, with new IDs and a version bump, before any code
 ---
 
 # Changing PRDs

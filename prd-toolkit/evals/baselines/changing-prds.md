@@ -31,9 +31,9 @@ so the next free number is 5.
 
 | ID | Baseline failure | With skill (final SKILL.md) |
 |---|---|---|
-| C1 | Minor bump (1.1.0) for a changed status code, citing §9; no PRD edit | Pass (runs 1 and 2): 2.0.0, changelog row, `ORDER_DELETED` 410 in `errors.yaml`, a 410 response in `openapi.yaml`, new and revised test cases, lint exit 0. Run 1 offered to handle failed-dry-run gaps "as a separate change"; closed in the refactor, gone in run 2 |
+| C1 | Minor bump (1.1.0) for a changed status code, citing §9; no PRD edit | Pass (runs 1 and 2): 2.0.0, changelog row, `ORDER_DELETED` 410 in `errors.yaml`, a 410 response in `openapi.yaml`, new and revised test cases, lint exit 0. Run 1 offered to handle failed-dry-run gaps "as a separate change"; closed in the refactor, gone in run 2. Run 3, after the description ruling, still triggers and passes |
 | C2 | Not the headline one (it chose FR-005), but offered to reuse FR-003 "if you still want" it | Pass (runs 1 and 2): FR-005, 2.1.0, no offer to reuse, lint exit 0 |
-| C3 | Code first, PRD untouched ("As you asked, I left the PRD unchanged") | **Red on the committed description**: the skill triggered in 0 of 3 runs with no CLAUDE.md. Green whenever it loads: 3 of 4 runs with the prd-toolkit CLAUDE.md block, 5 of 5 with a one-clause description change (escalated; the description is pinned) |
+| C3 | Code first, PRD untouched ("As you asked, I left the PRD unchanged") | Pass (runs 4 to 6) after the controller ruling added `, or when asked to change code and let the PRD follow,` to the description: invoked 3 of 3 with no CLAUDE.md, PRD edited, 1.1.0, lint exit 0, no code. Red on the original pinned description (runs 1 to 3: invoked 0 of 3) |
 | C4 | Deleted AC-001.3 and T-001.3; minor bump; code edited in the same pass | Pass (runs 1 and 2): AC-001.3 marked `(removed in 2.0.0)`, T-001.3 deleted, 2.0.0 with a changelog row, no code, lint exit 0 |
 
 Every with-skill run that loaded the skill edited only `docs/prd/orders/`, changed no code,
@@ -157,6 +157,24 @@ version line and close (`[…]` marks a trim):
 
 
 **Result:** pass, and no offer to approve around the failed dry run.
+
+#### Run 3 (description clause applied, regression check)
+
+After the controller's description ruling. Invoked the skill (args `getOrder should return 410
+instead of 404 for deleted orders.`); nine PRD files plus a `deleted_orders/one_deleted` fixture;
+`version: 2.0.0`, `status: In review`, a 2.0.0 changelog row; new error `ORDER_GONE` (410) in
+`errors.yaml` and a 410 response in `openapi.yaml`; lint exit 0; no code. Answer, trimmed
+(`[…]` marks a trim):
+
+> I've drafted the PRD change, but it isn't ready for your approval yet. The dry run found test-setup gaps that predate this change, and I need your answers to fill them. No code has been touched and nothing is committed.
+> […]
+> This changes a status code, so the PRD moves to **2.0.0** (a major bump): a test that gets a deleted order and expects 404 would now fail. There was also a real design gap. `deleteOrder` hard-deletes the row, so nothing could tell a deleted order apart from one that never existed. Returning 410 means the system has to remember which ids were deleted.
+> […]
+> Once you answer, I'll add the answers to the PRD and run the dry run again. After it passes and you approve, I'll set the status to `Approved`, commit the PRD, and then change the code.
+
+**Result:** pass. The description change did not stop C1 triggering. (The answer's last line
+notes that the dry-run subagent found test files from an earlier run in the shared scratchpad
+`dryrun-410/` folder, outside the repo; it does not affect the PRD result.)
 
 ## C2
 
@@ -309,7 +327,7 @@ What it changed (the whole diff):
 
 ### With skill
 
-#### Runs 1 to 3 (committed description, no CLAUDE.md): the skill does not trigger
+#### Runs 1 to 3 (original pinned description, no CLAUDE.md): the skill does not trigger
 
 The plugin loaded (`INIT skills=["prd-toolkit:authoring-prds", "prd-toolkit:changing-prds"]`)
 but no run invoked the skill. Each edited `src/importer.py` only and left the PRD untouched, as
@@ -339,7 +357,7 @@ the PRD, so the agent never loads the skill. Whenever the skill loads, C3 holds 
 
 | Variant | Skill invoked | PRD before code |
 |---|---|---|
-| Committed SKILL.md, no CLAUDE.md (runs 1 to 3) | 0 of 3 | 0 of 3 |
+| Original pinned description, no CLAUDE.md (runs 1 to 3) | 0 of 3 | 0 of 3 |
 | Repo CLAUDE.md holds the prd-toolkit block (`prd_block.py` output, as authoring phase 7 installs it) | 3 of 4 | 3 of 4 |
 | The same block, without the plugin (baseline) | n/a | 0 of 1: "You chose to fix the code first, so the code and PRD now disagree." |
 | Description gains `, or when asked to change code and let the PRD follow,` after "or when /prd-change runs" | 5 of 5 | 5 of 5 |
@@ -347,8 +365,40 @@ the PRD, so the agent never loads the skill. Whenever the skill loads, C3 holds 
 The CLAUDE.md block is what a real repo carries after `/prd-new`, so 3 of 4 is the realistic
 rate today; the miss (block run 4) edited the code and wrote "This goes against the repo's
 CLAUDE.md … I made the change anyway because you said the PRD can follow." The description change
-closes the hole outright, but the brief pins the description, so the choice is escalated rather
-than made here. C3 stays red on the committed description.
+closes the hole outright. The brief pins the description, so the choice was escalated; the
+controller ruled to apply it (runs 4 to 6 below).
+
+#### Runs 4 to 6 (controller ruling: description clause applied, no CLAUDE.md)
+
+The committed description now reads "… or when /prd-change runs, or when asked to change code
+and let the PRD follow, or when an agent hits …". The repo has no CLAUDE.md, so only the
+description points at the skill. All three runs invoked `prd-toolkit:changing-prds` (args such
+as `Also accept CSV files with a BOM in the importer. User said: "Just fix the importer, the PRD
+can follow."`). Each wrote AC-001.4 and T-001.5 under FR-001, set version 1.1.0 and status
+`In review` with a changelog row, dispatched the dry run, and stopped. Lint exit 0 on all three.
+`src/importer.py` is unchanged in all three: no code was written, so the PRD came first.
+
+| Run | Skill invoked | Files changed | Version | Lint | Changelog row |
+|---|---|---|---|---|---|
+| 4 | yes | `import.md`, `prd.md`, `test-cases/import.yaml` | 1.1.0 | exit 0 | `The importer accepts a CSV file that starts with a UTF-8 byte order mark \| FR-001, AC-001.4, T-001.5` |
+| 5 | yes | the same, plus `testing.md` and fixture `orders/bom_header.csv` | 1.1.0 | exit 0 | `The importer accepts files that begin with a UTF-8 byte order mark \| FR-001, AC-001.4, T-001.5` |
+| 6 | yes | `import.md`, `prd.md`, `test-cases/import.yaml` | 1.1.0 | exit 0 | `Importer accepts CSV files that start with a UTF-8 byte order mark \| FR-001, AC-001.4, T-001.5` |
+
+Run 4, trimmed to its opening, version line and close (`[…]` marks a trim):
+
+> I haven't changed the importer yet. The PRD has to be updated and approved first, even when the code change is one line, and that approval is now blocked.
+> […]
+> - **`prd.md`:** version 1.0.0 → **1.1.0**, status `In review`, and a changelog row. This is a minor version because it only adds behaviour: no existing rule or expected result changes.
+> […]
+> Once you answer, I'll add the answers to the PRD and run the dry run again. After you approve, I'll commit the PRD and then make the importer change, which strips a leading BOM in `src/importer.py`.
+
+Run 6, trimmed to its opening (`[…]` marks a trim):
+
+> I haven't changed the importer yet. This repo works PRD-first: `docs/prd/orders/` defines what the system does, so even a one-line code change has to go into the PRD first, and the code waits for your approval. I've written the PRD change and the lint passes, but the dry run failed, so nothing can be approved yet.
+> […]
+
+**Result:** pass in 3 of 3 runs. No run offered to approve over the failed dry run; each asked
+for the missing test-setup answers.
 
 #### With the skill loaded (block runs 1 to 3; description-variant runs 1 to 5)
 
