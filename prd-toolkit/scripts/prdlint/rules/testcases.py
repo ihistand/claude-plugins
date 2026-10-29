@@ -15,8 +15,8 @@ from .contracts import event_names, operation_ids, schema_tables
 TARGET_KINDS = {"op", "table", "event", "job", "component", "page", "code"}
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
-_PHONE = re.compile(r"\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}")
-_SSN = re.compile(r"\d{3}-\d{2}-\d{4}")
+_PHONE = re.compile(r"(?<!\d)\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}(?!\d)")  # not inside a longer digit run
+_SSN = re.compile(r"(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)")
 _SYNTHETIC_DOMAINS = {"example.com", "example.org", "example.net"}
 _SYNTHETIC_SUFFIXES = (".test", ".example", ".invalid")
 _AC_NUMBER = re.compile(r"AC-(\d+)\.\d+")
@@ -230,7 +230,9 @@ def test_refs(prd: Prd):
         codes = _expect(tc).get("errors")
         if isinstance(errors_yaml, dict) and isinstance(codes, list):
             for code in codes:
-                if code not in errors_yaml:
+                if not isinstance(code, str):
+                    yield bad("expect", f"expect.errors item {code!r} must be an error code string")
+                elif code not in errors_yaml:
                     yield bad("expect", f"error code {code} is not in contracts/errors.yaml")
 
         env = d.get("environment")
@@ -262,7 +264,10 @@ def deny_tested(prd: Prd):
         if not isinstance(cell, dict):
             continue
         line = getattr(cell, "key_lines", {}).get("deny") or getattr(ops, "key_lines", {}).get(op, 1)
-        for role in cell.get("deny") or []:
+        deny = cell.get("deny")
+        for role in deny if isinstance(deny, list) else []:
+            if not isinstance(role, str):
+                continue  # contracts-valid reports the shape
             ident = (roles.get(role) or {}).get("identity") if isinstance(roles.get(role), dict) else None
             if not ident:
                 yield Finding("contracts/permissions.yaml", line, "deny-tested", f"deny cell ({op}, {role}): role '{role}' has no test identity")
@@ -319,8 +324,8 @@ def classified_fixtures(prd: Prd):
         text = path.read_text(errors="replace")
         suffix = path.suffix.lower()
         if suffix == ".csv":
-            table = path.parent.name if path.parent != base else None
-            cols = pii.get(table or "", set())
+            table = path.parent.name if path.parent != base else path.stem
+            cols = pii.get(table, set())
             reader = csv.reader(io.StringIO(text))
             header = next(reader, [])
             for row in reader:

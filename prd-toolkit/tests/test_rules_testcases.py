@@ -161,3 +161,25 @@ def test_non_mapping_case_is_reported_once_by_the_loader(prd):
 def test_clean_fixture_fires_none_of_the_testcase_rules(prd):
     rules = {"ac-has-test", "test-cases-consistent", "test-level", "sufficiency", "test-refs", "deny-tested", "classified-fixtures"}
     assert not rules & fired(lint(prd))
+
+
+@pytest.mark.parametrize("bad", ["[{code: ORDER_NOT_FOUND}]", "[[ORDER_NOT_FOUND]]"])
+def test_non_string_error_code_is_a_finding_not_a_crash(prd, bad):
+    _edit("test-cases/api.yaml", "errors: [ORDER_NOT_FOUND]", f"errors: {bad}")(prd)
+    assert any(f.rule == "test-refs" and "expect.errors item" in f.message for f in lint(prd))
+
+
+def test_non_string_deny_role_does_not_crash(prd):
+    _edit("contracts/permissions.yaml", "deny: [rep]", "deny: [[rep]]")(prd)
+    lint(prd)
+
+
+def test_flat_csv_fixture_uses_its_stem_as_the_table(prd):
+    _write("contracts/fixtures/customers.csv", "id,email,name\n1,jane@gmail.com,Jane\n")(prd)
+    assert "classified-fixtures" in fired(lint(prd))
+
+
+@pytest.mark.parametrize("value", ["550e8400-e29b-41d4-a716-446655440000", "ORD-20261029123456"])
+def test_long_digit_runs_are_not_pii(prd, value):
+    _edit("test-cases/api.yaml", "  input:\n    id: 999\n", f"  input:\n    id: 999\n    ref: {value}\n")(prd)
+    assert "classified-fixtures" not in fired(lint(prd))
