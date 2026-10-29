@@ -1,0 +1,15 @@
+T-004.1:
+  ac: AC-004.1
+  level: system
+  target: op:getOrder
+  environment: staging
+  identity: test-rep
+  preconditions: [customers/two_customers, orders/one_existing]
+  input:
+    id: 1
+    load: 50 requests/s for 60 s
+  expect:
+    output: {status: 200, p95_ms_max: 300}
+    effects: []
+    errors: []
+    leaks: none

@@ -1,0 +1,13 @@
+tables:
+  customers:
+    retention: 7 years after the last order
+    deletion: anonymize email and name within 30 days of a request
+    columns: {id: internal, email: pii, name: pii}
+  orders:
+    retention: 7 years
+    deletion: hard delete by the deleteOrder operation
+    columns: {id: internal, order_key: internal, customer_id: internal, status: internal, sales_rep_name: internal}
+masking:
+  logs: customer email and name never logged; log the customer id instead
+  errors: error bodies carry a code and a fixed message only
+  fixtures: synthetic values only; emails use the example.com domain
