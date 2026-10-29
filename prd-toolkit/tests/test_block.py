@@ -64,3 +64,11 @@ def test_markers_inside_code_fence_are_not_the_block(prd, tmp_path):
     t = cm.read_text()
     assert t.startswith(doc) and t.count("prd-toolkit:start") == 2
     assert t[len(doc):].lstrip("\n").startswith("<!-- prd-toolkit:start -->\n## Product")
+
+def test_unclosed_fence_converges(prd, tmp_path):
+    cm = tmp_path / "CLAUDE.md"; cm.write_text("# D\n\n```\nunclosed example\n")
+    assert main([str(prd), "--claude-md", str(cm)]) == 0
+    assert main([str(prd), "--claude-md", str(cm), "--check"]) == 0
+    for _ in range(2):
+        assert main([str(prd), "--claude-md", str(cm)]) == 0
+    assert cm.read_text().count("prd-toolkit:start") == 1
