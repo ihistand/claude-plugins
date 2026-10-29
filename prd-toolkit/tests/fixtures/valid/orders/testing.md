@@ -13,11 +13,18 @@
 
 ## Environments
 
-| Environment | Purpose | Access |
+| Environment | Purpose | Access | Base URL | Database | Logs |
+|---|---|---|---|---|---|
+| local | Developer machine, throwaway database | Developer | http://localhost:8080 | `orders_local` on localhost:5432 | the uvicorn console |
+| ci | Pipeline run, fresh database per job | CI service account | http://localhost:8080 | `orders_ci`, created per job | the job log |
+| staging | Production-shaped, synthetic data only | Team, test identities | https://orders-staging.example.com | `orders_staging` | `./logs.sh staging` |
+
+## Leak checks
+
+| Sink | Read from | Scanned for |
 |---|---|---|
-| local | Developer machine, throwaway database | Developer |
-| ci | Pipeline run, fresh database per job | CI service account |
-| staging | Production-shaped, synthetic data only | Team, test identities |
+| application logs | the Logs column of the case's environment | `customers.email`, `customers.name` (pii) |
+| error bodies | every response body of a case with `expect.errors` | `customers.email`, `customers.name` (pii) |
 
 ## Fixtures
 

@@ -15,9 +15,16 @@
 
 ## Environments
 
-| Environment | Purpose | Access |
+| Environment | Purpose | Access | Base URL | Database | Logs |
+|---|---|---|---|---|---|
+| [NEEDS CLARIFICATION: first environment] | [NEEDS CLARIFICATION: purpose] | [NEEDS CLARIFICATION: who may use it] | [NEEDS CLARIFICATION: base URL a test calls, or none] | [NEEDS CLARIFICATION: database or connection a test uses, never a password] | [NEEDS CLARIFICATION: where this environment's logs are read] |
+
+## Leak checks
+
+| Sink | Read from | Scanned for |
 |---|---|---|
-| [NEEDS CLARIFICATION: first environment] | [NEEDS CLARIFICATION: purpose] | [NEEDS CLARIFICATION: who may use it] |
+| application logs | [NEEDS CLARIFICATION: how a test reads the logs] | [NEEDS CLARIFICATION: classified columns from contracts/data-classification.yaml that must never appear] |
+| error bodies | [NEEDS CLARIFICATION: which responses or outputs carry error bodies] | [NEEDS CLARIFICATION: classified columns that must never appear] |
 
 ## Fixtures
 

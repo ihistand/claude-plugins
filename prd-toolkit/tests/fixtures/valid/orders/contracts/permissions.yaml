@@ -1,6 +1,6 @@
 roles:
-  admin: {identity: test-admin}
-  rep: {identity: test-rep}
+  admin: {identity: test-admin, secret: ORDERS_TEST_ADMIN_TOKEN}
+  rep: {identity: test-rep, secret: ORDERS_TEST_REP_TOKEN}
 operations:
   getOrder: {allow: [admin, rep], deny: []}
   deleteOrder: {allow: [admin], deny: [rep]}

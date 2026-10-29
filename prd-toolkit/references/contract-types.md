@@ -174,7 +174,8 @@ ORDER_NOT_FOUND:
 
 ## permissions
 
-`contracts/permissions.yaml`. A role by operation matrix, row rules and a test identity per role.
+`contracts/permissions.yaml`. A role by operation matrix, row rules, and a test identity and its
+secret per role.
 
 Lint-checked:
 - `roles` maps each role to a mapping with a non-empty `identity`.
@@ -186,14 +187,16 @@ Lint-checked:
   `expect.errors` (the code the denial returns, such as `FORBIDDEN`).
 
 Required, not machine-checked:
+- Each role's `secret` names the secret that holds its test identity's credential (a token or
+  password), as listed in `operations.md` Secrets. It is a name, never a value.
 - `predicate` reads as a condition on a named user attribute (`orders.sales_rep_name = user.sales_rep_name`).
 - Every allow cell has a test too. Lint enforces the deny cells only.
 
 ```yaml
 # file: contracts/permissions.yaml
 roles:
-  admin: {identity: test-admin}
-  rep: {identity: test-rep}
+  admin: {identity: test-admin, secret: ORDERS_TEST_ADMIN_TOKEN}
+  rep: {identity: test-rep, secret: ORDERS_TEST_REP_TOKEN}
 operations:
   getOrder: {allow: [admin, rep], deny: []}
   deleteOrder: {allow: [admin], deny: [rep]}

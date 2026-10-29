@@ -8,7 +8,7 @@ sql-dialect: {{sql_dialect}}
 ---
 
 <!-- Format: references/prd-format.md, "prd.md sections". -->
-<!-- Approval and every status change go through the prd-toolkit:authoring-prds skill (phase 7 gates). -->
+<!-- The first approval goes through the prd-toolkit:authoring-prds skill (phase 7 gates); every later change and approval goes through prd-toolkit:changing-prds (step 5). -->
 
 # {{project}}
 
@@ -69,7 +69,7 @@ Out of scope: [NEEDS CLARIFICATION: what this PRD deliberately excludes]
 | dependencies | `contracts/dependencies/*.yaml` | built-in |
 | fixtures | `contracts/fixtures/**` | built-in |
 
-[NEEDS CLARIFICATION: for each contract listed above, populate its file, or delete the file, drop its row here and add a section 1 line in the form: - Not applicable: (the file path in backticks) — (the reason)]
+[NEEDS CLARIFICATION: for each contract listed above, populate its file, or delete the file, drop its row here and add a section 1 line in the form: - Not applicable: (the file path in backticks) — (the reason). contracts/errors.yaml is mandatory: always populate it, never delete it]
 
 ## 8. Adoption map
 

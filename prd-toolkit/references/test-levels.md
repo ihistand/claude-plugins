@@ -33,4 +33,5 @@ Rules:
 - Acceptance carries `steps` (a non-empty list of plain-language actions) and `signoff` (the business owner). Lint rule `sufficiency` fails without them.
 - A system case names an environment other than `local`. This is required, not machine-checked: lint accepts any environment from `testing.md`.
 - Tests never call production third parties. Use `mock:<service>`.
-- `expect.leaks: none` means nothing classified appears in logs or error bodies. Keep it on every case.
+- `expect.leaks: none` means no classified column named in `testing.md` Leak checks appears in
+  any sink that table lists (logs and error bodies at least). Keep it on every case.

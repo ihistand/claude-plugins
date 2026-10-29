@@ -45,3 +45,30 @@ def test_examples_can_fail(prd):
     name, text = next(e for e in examples() if e[0] == "contracts/errors.yaml")
     (prd / name).write_text(text.replace("  metric: orders_not_found_total\n", ""))
     assert any(f.rule == "contracts-valid" for f in lint(prd))
+
+
+ENV_HEADER = "| Environment | Purpose | Access | Base URL | Database | Logs |"
+LEAK_HEADER = "| Sink | Read from | Scanned for |"
+FIXTURE = Path(__file__).parent / "fixtures/valid/orders"
+TEMPLATE = REF.parent / "templates/prd"
+
+
+def test_harness_facts_have_a_home():
+    """Base URL, database, logs, a secret per role and the meaning of `leaks: none` (spec 4.1, element 2)."""
+    fmt = (REF / "prd-format.md").read_text(encoding="utf-8")
+    assert ENV_HEADER in fmt and "## Leak checks" in fmt and LEAK_HEADER in fmt
+    assert "roles: {<r>: {identity, secret}}" in fmt
+    for root in (TEMPLATE, FIXTURE):
+        text = (root / "testing.md").read_text(encoding="utf-8")
+        assert ENV_HEADER in text and "\n## Leak checks\n" in text and LEAK_HEADER in text, root
+    perms = dict(e for e in examples())["contracts/permissions.yaml"]
+    assert "secret:" in perms and "secret" in (TEMPLATE / "contracts/permissions.yaml").read_text(encoding="utf-8")
+
+
+def test_fixture_roles_name_a_secret_and_environments_parse(prd):
+    from prdlint import model
+
+    p = model.load(prd)
+    roles = p.yaml["contracts/permissions.yaml"]["roles"]
+    assert all(isinstance(r.get("secret"), str) and r["secret"] for r in roles.values())
+    assert set(p.testing.environments) == {"local", "ci", "staging"}

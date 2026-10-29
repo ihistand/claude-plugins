@@ -11,7 +11,7 @@ The PRD at `{{prd_path}}` (version {{version}}) is the authority for how this sy
   state), stop and raise a change request with `/prd-change`. Do not guess, and do not read
   the code to fill the gap.
 - Cite the IDs a commit implements in its message: `Refs: FR-012`.
-- Lint the PRD after every edit: `uv run --script <prd-toolkit>/scripts/prd_lint.py {{prd_path}}`.
+- Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`.
 
 Required skills (skills registry):
 {{required_skills}}

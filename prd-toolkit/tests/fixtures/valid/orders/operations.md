@@ -17,3 +17,5 @@
 ## Secrets
 
 - GEOCODER_API_KEY: Secret Manager, mounted as an environment variable by `deploy.sh`.
+- ORDERS_TEST_ADMIN_TOKEN, ORDERS_TEST_REP_TOKEN: Secret Manager, staging only; the bearer tokens
+  of the test-admin and test-rep identities.

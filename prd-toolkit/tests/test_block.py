@@ -83,3 +83,10 @@ def test_closed_fence_protected_when_later_fence_unclosed(prd, tmp_path):
         assert main([str(prd), "--claude-md", str(cm)]) == 0
     t = cm.read_text()
     assert t.startswith(doc) and t.count("prd-toolkit:start") == 2 and t.count("prd-toolkit:end") == 2
+
+
+def test_block_routes_lint_through_the_skills(prd, tmp_path):
+    cm = tmp_path / "CLAUDE.md"; assert main([str(prd), "--claude-md", str(cm)]) == 0
+    t = cm.read_text(encoding="utf-8")
+    assert "Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`." in t
+    assert "<prd-toolkit>" not in t and "prd_lint.py" not in t

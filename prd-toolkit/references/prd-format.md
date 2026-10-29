@@ -128,7 +128,10 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
   Use `Errors: -` for none.
 - `Tests:` lists `T-nnn.n [level]` items, then `(test-cases/<area>.yaml)`. Blocks in `nfr.md`
   pair with `test-cases/nfr.yaml`. A UJ block has no ACs and no tests.
-- A marker `[ASSUMPTION A-nn: text]` may appear anywhere in prose; it must be indexed in section 12.
+- A marker `[ASSUMPTION A-nn: text]` may appear in any text file of the PRD folder (markdown
+  prose, or YAML, SQL and JSON values and comments); it must be indexed in section 12. A
+  `[NEEDS CLARIFICATION: …]` marker is found in the same files, and none may remain once the
+  status is `In review` or `Approved`.
 
 ### Decisions the grammar rests on
 
@@ -169,7 +172,7 @@ T-012.2:
     effects:
       - "log: IMPORT_DUPLICATE once"
     errors: []                            # codes from contracts/errors.yaml
-    leaks: none                           # nothing classified in logs or error bodies
+    leaks: none                           # nothing classified in the testing.md Leak checks sinks
 ```
 
 - `target` resolves against the contracts: `op:` an `operationId`, `table:` a table in
@@ -183,7 +186,8 @@ T-012.2:
 
 ```
 ## Levels        | Level | Harness command | Environment |
-## Environments  | Environment | Purpose | Access |
+## Environments  | Environment | Purpose | Access | Base URL | Database | Logs |
+## Leak checks   | Sink | Read from | Scanned for |
 ## Fixtures      | Fixture | Creates | Load | Teardown |
 ## Sign-offs     | T-id | Owner | Date | Result |
 ```
@@ -191,9 +195,18 @@ T-012.2:
 Level-2 headings with those names; the first column of each table is the name that other files
 refer to (levels, environments, fixtures).
 
+- Environments: `Base URL` is where a test reaches the system (`none` for a job with no
+  endpoint), `Database` names the database or connection a test reads and writes (never a
+  password), and `Logs` says where the environment's logs are read (a file, a command or a log
+  query). A test's credentials come from its role's `secret` in `contracts/permissions.yaml`.
+- Leak checks define `expect.leaks: none`: one row per sink a test scans (application logs, error
+  bodies, and any other output such as metrics labels or events), where the test reads it, and
+  which classified columns from `contracts/data-classification.yaml` must not appear in it.
+
 ## operations.md
 
-`## Runbook` holds numbered steps; each ends with `(actor: agent)` or `(actor: human)`. Other
+`## Runbook` holds numbered steps, each with `(actor: agent)` or `(actor: human)` on the step's
+first line. Other
 headings (Environments, Secrets by name) are free.
 
 ## errors.md
@@ -214,7 +227,7 @@ Recurrence of: <E-nnn or ->
 | File | Shape |
 |---|---|
 | `errors.yaml` | `CODE: {meaning, when, status: <int>, message, log_level, retryable: <bool>, metric}` |
-| `permissions.yaml` | `roles: {<r>: {identity}}`, `operations: {<op>: {allow: [..], deny: [..]}}` (every role in exactly one list), `row_rules: [{role, operation, predicate, attribute}]` |
+| `permissions.yaml` | `roles: {<r>: {identity, secret}}` (`secret` is the name of the secret that holds the identity's credential, never a value), `operations: {<op>: {allow: [..], deny: [..]}}` (every role in exactly one list), `row_rules: [{role, operation, predicate, attribute}]` |
 | `config.yaml` | `settings: {<NAME>: {type, default, environments: {<env>: <value>}, owner}}` |
 | `data-classification.yaml` | `tables: {<t>: {retention, deletion, columns: {<col>: public\|internal\|confidential\|pii}}}`, `masking: {logs, errors, fixtures}` |
 | `dependencies/<svc>.yaml` | `sends, expects, auth: {secret}, limits, mock, failures: {timeout, 4xx, 5xx, outage}`; failure values are error codes |
@@ -226,4 +239,5 @@ Error codes are `UPPER_SNAKE_CASE`. `status` is an HTTP status or an exit code.
 
 ## Not parsed
 
-`Flow:`, `Edge cases:` and `Traces:` lines, and all prose, are free text for people and agents.
+`Flow:` and `Edge cases:` lines, and all prose, are free text for people and agents. `Traces:`
+is free text too, except that an AC or requirement ID on it is checked by `id-removed-reused`.
