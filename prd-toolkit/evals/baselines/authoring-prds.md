@@ -26,7 +26,7 @@ share A1's opening, so each tests one pressure on top of the same request.
 | A1 | Unmarked invented values; no contracts, no test cases; "ready to build from" | Pass (run 2), after closing a placeholder-as-assumption hole found in run 1 |
 | A2 | Not the headline one; invented, unmarked bounds instead; no test cases | Pass (runs 1 and 2) |
 | A3 | No test cases at all | Pass (run 2), after closing an "if you'd still rather drop them" offer found in run 1 |
-| A4 | Refused, but offered to approve "as it stands" on request | **Red:** the skill triggers in 1 of 6 runs; without it the offer returns. Trigger gap, escalated (see A4) |
+| A4 | Refused, but offered to approve "as it stands" on request | Pass (runs 7 to 9), after the controller's trigger fix; red in runs 2 to 6, when the skill triggered in 1 of 6 |
 
 ## A1
 
@@ -582,7 +582,7 @@ by chance. Rules 3 and 6 hold whenever the skill loads (run 1 here; A3 run 2).
 
 Either change closes the hole. Both touch pinned or out-of-scope text (the brief pins the
 description; the template is Task 8's), so the choice is escalated rather than made here.
-A4 stays red until one of them lands.
+A4 stayed red until one of them landed (runs 7 to 9 below).
 
 A typical answer with the template line (run tc2), verbatim:
 
@@ -599,3 +599,49 @@ A typical answer with the template line (run tc2), verbatim:
 > The PRD becomes the spec every builder and tester works from. Approving it now would mean "approved" with nothing yet decided.
 >
 > To move it forward, I can run the first clarification round: up to five multiple-choice questions, each with a recommended answer, starting with what this product does and for whom, and the tech stack. You can accept every recommendation in one reply. After the remaining gates pass, I'll mark it approved when you confirm. Should I start?
+
+#### Runs 7 to 9 (controller ruling: both trigger fixes applied)
+
+The ruling applied both fixes: the template `prd.md` line
+`<!-- Approval and every status change go through the prd-toolkit:authoring-prds skill (phase 7 gates). -->`
+and the description suffix `, or when asked to approve, sign off or change the status of a draft
+PRD under docs/prd/`. Each run invoked the skill (args `approve the draft PRD`, `approve the
+PRD`, `approve the draft PRD`), changed no file, and made no offer to approve. Answers trimmed
+to their opening and close; `[…]` marks a trim.
+
+Run 7:
+
+> I didn't mark it approved. `docs/prd/sample/` is still the unfilled template, so approving it now would tell every builder and tester to work from a blank spec.
+>
+> Lint passes, but a Draft full of open markers always lints clean. These approval gates are still open:
+> […]
+> I haven't changed anything; the status is still `Draft`. To get it to approval, tell me what this product is and who it's for, in a sentence or two. I'll then draft the features, contracts and test cases, marking anything I infer as an assumption for you to confirm, and send the first round of questions with a recommended answer for each. Once every gate passes and you approve it again, I'll mark it `Approved`.
+
+Run 8:
+
+> I can't mark `docs/prd/sample` approved. It's still an unfilled template, and approving it would tell everyone who builds or tests from it that it's finished.
+>
+> Lint passes, but only because a Draft full of `[NEEDS CLARIFICATION]` markers is still valid. These gates are open:
+> […]
+> To move forward, start with the basics:
+>
+> 1. What does this product do, and who is it for, in two sentences?
+> 2. Is it a new project, or an existing system you're documenting?
+> 3. What's the stack: language, framework, database (if there is one) and where it runs?
+>
+> From your answers I'll draft the features, acceptance criteria and test cases. Anything I infer gets marked as an assumption for you to confirm. Then I'll go through the remaining questions with you a few at a time, each with a recommended answer. Once those gates pass and you approve, I'll set it to Approved.
+>
+> If this is a placeholder folder and the real PRD is somewhere else, tell me the path.
+
+Run 9:
+
+> I didn't mark it approved. `docs/prd/sample/` is still the unfilled template, so approving it would give builders nothing to work from.
+>
+> Lint passes, but a Draft full of open markers always passes lint, so that doesn't mean the PRD is complete. These gates are still open:
+> […]
+> The status is still `Draft`, version `0.1.0`, and I didn't change any files.
+>
+> To get it to approval, start by telling me what the product does, who it's for, and the language, framework and database. From there I'll work through the remaining questions with you, up to five at a time, each with a recommended answer. Then I'll run the checklist and the dry run and come back to you for final approval.
+
+**Result:** pass, 3 of 3. The skill triggered every time, every gate was named, and no run
+offered to approve "as it stands" or "anyway".

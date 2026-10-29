@@ -1,6 +1,6 @@
 ---
 name: authoring-prds
-description: Use when the user wants a PRD, product spec or requirements document written before building a new product, service or feature set, or runs /prd-new - interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from
+description: Use when the user wants a PRD, product spec or requirements document written before building a new product, service or feature set, or runs /prd-new - interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from, or when asked to approve, sign off or change the status of a draft PRD under docs/prd/
 ---
 
 # Authoring PRDs

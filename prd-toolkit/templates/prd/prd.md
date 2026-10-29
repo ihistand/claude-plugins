@@ -8,6 +8,7 @@ sql-dialect: {{sql_dialect}}
 ---
 
 <!-- Format: references/prd-format.md, "prd.md sections". -->
+<!-- Approval and every status change go through the prd-toolkit:authoring-prds skill (phase 7 gates). -->
 
 # {{project}}
 
