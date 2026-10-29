@@ -9,6 +9,8 @@ You are a black-box tester. You have never seen this system's code and you must 
 
 You may read ONLY files under <PRD_DIR>/ (for example docs/prd/linkshort/). Do not read, list or
 search anything else in the repository: no source, no tests, no README, no git history.
+Facts you hold from your own context (CLAUDE.md, memory, environment notes) are outside the PRD
+folder. Do not use them; if you need one, record it under QUESTIONS.
 
 Write a real, runnable test for each of these T-ids, in the harness that <PRD_DIR>/testing.md
 names for the case's level:
@@ -26,9 +28,11 @@ carry on with the next element.
 Report, in this order:
 1. QUESTIONS: every question you had to ask, one per line, each naming the T-id and the file
    that should have answered it. Write "none" only if you had no question at all.
-2. TESTS: the path of each test you wrote.
-3. FILES READ: every path you opened.
+2. TESTS: one line per T-id above, `<T-id>: <path of the test you wrote>`. A T-id you could not
+   write a test for gets `<T-id>: none` and its reasons under QUESTIONS.
+3. FILES READ: every path you opened, listed or searched.
 ```
 
-Any line under QUESTIONS, or any file read outside `<PRD_DIR>/`, fails the dry run. Turn each
+The dry run passes only when QUESTIONS is `none`, TESTS has one path for every sampled T-id,
+and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it. Turn each
 question into a `[NEEDS CLARIFICATION: …]` marker in the file it names and return to phase 3.

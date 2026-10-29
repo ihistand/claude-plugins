@@ -645,3 +645,25 @@ Run 9:
 
 **Result:** pass, 3 of 3. The skill triggered every time, every gate was named, and no run
 offered to approve "as it stands" or "anyway".
+
+#### Run 10 (after fix round 1: §13, owner, approval re-runs phases 5 and 6, dry-run prompt)
+
+Regression check. The skill was invoked (args `approve the draft PRD`), no file changed, and no
+run offered to approve. Answer, verbatim:
+
+> I didn't mark `docs/prd/sample` as Approved. It's an unfilled template, so most of the approval gates are still open.
+>
+> Lint passes, but a Draft with open markers always lints clean, so that doesn't mean it's ready. What's still open in `docs/prd/sample/prd.md`:
+>
+> - **Unanswered questions:** about 30 `[NEEDS CLARIFICATION]` markers. They cover §1 (stack: language, framework, database, hosting, repository) and §2 (summary, goals, personas, scope). They also cover §3 (glossary), §4 (architecture), §8 (adoption map), §9 (versioning) and §10 (UI).
+> - **Contracts:** §7 lists all nine contract types, but nobody has decided which ones apply. Each needs to be either filled in or removed with a stated reason.
+> - **No requirements:** the requirement index in §11 is empty, so there are no acceptance criteria and no test cases to build or test from.
+> - **Registries:** the rows in §5 (standards) and §6 (skills) are placeholders still marked `proposed`.
+> - **Open questions:** §13 still has Q-01 open; it needs to read `None.`
+> - **Owner:** "Sample Owner" looks like a placeholder. I need the real owner's name.
+> - **Checks not yet run:** the quality checklist and the test-agent dry run haven't been done for this PRD.
+>
+> Approval is the last step, after these are filled in. If you want to go ahead, tell me in two sentences what the product does and who it's for, and give me the owner's name. I'll draft the requirements, contracts and test cases from that. Then I'll ask the clarifying questions in rounds of up to five, each with a recommended answer you can confirm in one reply. After that I'll run the checklist and the dry run, and then mark it Approved.
+
+**Result:** pass. The new gate text shows up: "§13 still has Q-01 open; it needs to read `None.`",
+"I need the real owner's name", and the checklist and dry run named as not yet run for this PRD.

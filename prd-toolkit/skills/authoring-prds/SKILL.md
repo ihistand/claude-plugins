@@ -58,15 +58,20 @@ uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
 |---|---|---|
 | 1 | **Context.** Read the repo, its README, CLAUDE.md, AGENTS.md and docs. Look up facts the user does not uniquely hold (subagents may). Propose registry rows, Decision `proposed`: standards rows from detected linter configs (`.sqlfluff`, `.pre-commit-config.yaml`, `[tool.*]` sections in `pyproject.toml`, lint scripts in `package.json`); skills rows from this session's skills listing that match the project's objects and activities, always including `superpowers:writing-plans` for planning. | A short note to the user of what was found |
 | 2 | **Draft.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/prd` to `docs/prd/<slug>/` and fill it (below). Gaps become `[NEEDS CLARIFICATION: q]`, inferences `[ASSUMPTION A-nn: …]`. Write features, contracts and test cases, not only prose. | Draft on disk; lint exits 0 |
-| 3 | **Clarify rounds** per `clarify-categories.md`: score all twelve categories; at most five multiple-choice questions per round, each with a recommended answer, ranked by impact × uncertainty; write each answer in immediately. Rounds are uncapped. | Zero `NEEDS CLARIFICATION` markers; every category Clear |
+| 3 | **Clarify rounds** per `clarify-categories.md`: score all twelve categories; at most five multiple-choice questions per round, each with a recommended answer, ranked by impact × uncertainty; write each answer in immediately. Rounds are uncapped. | Zero `NEEDS CLARIFICATION` markers; §13 reads `None.`; every category Clear |
 | 4 | **Sign-off.** Show every assumption (ID and text) and every registry row in your message; a confirmation covers only what the user was shown. The user confirms or corrects each assumption (§12 status `confirmed` or `corrected`) and decides each row. Copy into `operations.md` every hard rule from a registered skill that bears on operations (for example "Claude never deploys Looker") as `(actor: human)` runbook steps, so the PRD stands alone. | No `open` assumption; no `proposed` row |
 | 5 | **Mechanical gate.** Set status `In review`, run lint, then answer every question in `quality-checklist.md`, plus: every contract listed in §7 is populated, or deleted, dropped from §7 and declared `Not applicable` in §1. Lint cannot tell an empty skeleton (`paths: {}`, `roles: {}`) from a deliberate "none". | Lint exit 0; every checklist answer yes |
-| 6 | **Test-agent dry run.** `prd_lint.py docs/prd/<slug> --sample-tids 5` picks the T-ids. Dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md): it may read only the PRD folder, writes the tests for those T-ids to the scratchpad, and lists every question it had to ask. | Five tests written, zero questions |
-| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0`, `updated` today, a §14 changelog row; lint exit 0; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
+| 6 | **Test-agent dry run.** `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md): it may read only the PRD folder, writes the tests for those T-ids to the scratchpad, and lists every question it had to ask. | One test per sampled T-id listed under TESTS; QUESTIONS is `none`; FILES READ holds only paths under the PRD folder |
+| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0`, `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 questions`); lint exit 0; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
 
 Any dry-run question is a gap: write it into the PRD as a marker, set the status back to
 `Draft`, and go back to phase 3; then run phases 5 and 6 again, phase 6 on a fresh sample. Do
 not answer the subagent, and do not let it read code.
+
+Before phase 7, check what this conversation holds. If it does not hold a passing checklist and
+a passing dry-run report for the current files, run phases 5 and 6 now before approving. A
+status of `In review` and a clean lint are not evidence that either ran; a new session starts
+with neither.
 
 In phase 7, if lint fails after you set `Approved`, put the status and version back, report each
 finding, and return to the phase it belongs to. Never commit an `Approved` PRD that fails lint.
@@ -77,7 +82,8 @@ finding, and return to the phase it belongs to. Never commit an `Approved` PRD t
   `^[a-z][a-z0-9-]*$`. If `docs/prd/<slug>/` exists, stop: that is a change, not a new PRD.
 - **Copy:** `mkdir -p docs/prd && cp -R "${CLAUDE_PLUGIN_ROOT}/templates/prd" docs/prd/<slug>`.
 - **Fill all four slots in every file** except `.gitkeep`: `{{project}}` the slug,
-  `{{owner}}` the owner the user named (else `git config user.name` plus an assumption),
+  `{{owner}}` the owner the user named, else `[NEEDS CLARIFICATION: who owns this product]`
+  (never `git config user.name`: the owner is a value only the user knows),
   `{{date}}` today as `YYYY-MM-DD`, `{{sql_dialect}}` the database's sqlglot dialect
   (`postgres`, `mysql`, `bigquery`, `sqlite`, `tsql`, …).
 - **No database:** delete `contracts/schema.sql`, drop its §7 row, drop the `sql-dialect:` line
@@ -96,7 +102,7 @@ finding, and return to the phase it belongs to. Never commit an `Approved` PRD t
 | "Skip the questions, use sensible defaults" | Draft the folder. Every default is an `[ASSUMPTION A-nn]`, indexed `open`. Then show the assumptions and round-1 questions, each with your recommended answer, so the user can confirm them in one reply. Status stays Draft. |
 | "Make it fast and secure" | NFR blocks with a number and unit each; security as ACs with a denied role and an error code; unknown numbers asked with a recommendation. |
 | "Leave the test cases to QA" | Write the test cases anyway. They are the spec QA tests from; QA still writes the test code. Do not offer to remove them. |
-| "Looks fine, mark it approved" | Run lint and list the open gates (markers, open assumptions, `proposed` rows, checklist, dry run). Approve only when all pass. |
+| "Looks fine, mark it approved" | Run lint and list the open gates (markers, §13 not `None.`, open assumptions, `proposed` rows, checklist, dry run). Run phases 5 and 6 here if this conversation holds no passing result for the current files. Approve only when all pass. |
 
 ## WRONG vs CORRECT
 
