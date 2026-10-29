@@ -1,2 +1,4 @@
 # Format: references/prd-format.md, "Contract YAML shapes".
+# Required content per setting: NAME, `type`, `default`, `environments` (a value per environment),
+# and `owner` (who may change it).
 settings: {}

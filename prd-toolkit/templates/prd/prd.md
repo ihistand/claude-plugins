@@ -68,6 +68,8 @@ Out of scope: [NEEDS CLARIFICATION: what this PRD deliberately excludes]
 | dependencies | `contracts/dependencies/*.yaml` | built-in |
 | fixtures | `contracts/fixtures/**` | built-in |
 
+[NEEDS CLARIFICATION: for each contract listed above, populate its file, or delete the file, drop its row here and add a section 1 line in the form: - Not applicable: (the file path in backticks) — (the reason)]
+
 ## 8. Adoption map
 
 [NEEDS CLARIFICATION: new project, or an existing system to adopt? Replace this line with `Not applicable: new project`, or an Area/State table]

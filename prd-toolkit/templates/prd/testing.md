@@ -23,6 +23,7 @@
 
 | Fixture | Creates | Load | Teardown |
 |---|---|---|---|
+| [NEEDS CLARIFICATION: first fixture name, a path under contracts/fixtures/ without extension] | [NEEDS CLARIFICATION: what it creates] | [NEEDS CLARIFICATION: load command] | [NEEDS CLARIFICATION: teardown command] |
 
 ## Sign-offs
 

@@ -1,3 +1,8 @@
 # Format: references/prd-format.md, "Contract YAML shapes".
+# Required content:
+#  - a test identity per role (`identity`), so every role can be exercised
+#  - every role in exactly one of allow or deny for each operation
+#  - row-level rules (`row_rules`) name the attribute they filter on (`predicate`, `attribute`)
+#  - every deny cell needs a test case
 roles: {}
 operations: {}

@@ -1,2 +1,23 @@
 # Format: references/prd-format.md, "Test cases". One entry per T-id.
+# Every case needs all seven sufficiency elements. Example (copy, then delete the `#`):
+#
+# T-012.2:
+#   ac: AC-012.2                          # one AC of the parent requirement
+#   level: unit                           # a level defined in testing.md
+#   target: code:importer.import_file     # <kind>:<name>; kind is op, table, event, job, component, page, code or a custom type
+#   environment: local                    # an environment from testing.md
+#   identity: none                        # or a test identity from permissions.yaml
+#   preconditions: [orders/one_existing]  # fixture names, or mock:<service>
+#   input:
+#     file: orders/dup_key_in_file.csv    # relative to contracts/fixtures/; or inline values
+#   expect:
+#     output: {status: ok, inserted: 1, skipped: 1}
+#     effects:
+#       - "log: IMPORT_DUPLICATE once"
+#     errors: []                          # codes from contracts/errors.yaml
+#     leaks: none                         # nothing classified in logs or error bodies
+#
+# An acceptance case (level: acceptance) also adds:
+#   steps: [plain-language action, ...]
+#   signoff: the business owner
 {}
