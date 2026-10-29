@@ -181,7 +181,9 @@ Lint-checked:
 - `operations` maps each operation to `{allow: [...], deny: [...]}`, both lists.
 - Every role appears in exactly one of `allow` and `deny`. No unknown roles.
 - `row_rules`, if present, is a list of mappings with `role`, `operation`, `predicate` and `attribute`.
-- The test-case rule `deny-tested` requires a test for every deny cell.
+- The test-case rule `deny-tested` requires a test for every deny cell: a test case with
+  `target: op:<operation>`, `identity:` set to the denied role's test identity, and a non-empty
+  `expect.errors` (the code the denial returns, such as `FORBIDDEN`).
 
 Required, not machine-checked:
 - `predicate` reads as a condition on a named user attribute (`orders.sales_rep_name = user.sales_rep_name`).

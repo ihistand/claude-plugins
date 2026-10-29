@@ -1,0 +1,12 @@
+{
+  "name": "prd-toolkit",
+  "version": "0.1.0",
+  "description": "The living PRD: a folder of requirements, contracts and test cases in the repo that agents build, test and deploy from, with a lint that gates it.",
+  "author": {
+    "name": "Ivan Histand",
+    "email": "ihistand@rotoplas.com",
+    "url": "https://github.com/ihistand"
+  },
+  "skills": "./skills",
+  "commands": "./commands"
+}

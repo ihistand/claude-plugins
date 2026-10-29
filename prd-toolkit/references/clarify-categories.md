@@ -26,11 +26,14 @@ Give every category one score:
 
 | Score | Meaning |
 |---|---|
-| Clear | The PRD answers it with specifics; a tester needs to ask nothing |
-| Partial | Some answers exist, or an `[ASSUMPTION A-nn: …]` stands in for a fact |
+| Clear | The PRD answers it with specifics, or an `[ASSUMPTION A-nn: …]` stands in for each fact still unknown; a tester needs to ask nothing |
+| Partial | Some answers exist, but a gap remains that is neither answered nor covered by an assumption |
 | Missing | Nothing, or only a `[NEEDS CLARIFICATION: …]` marker |
 
-Exit phase 3 when no marker remains and every category is Clear.
+Exit phase 3 when no `[NEEDS CLARIFICATION]` marker remains and every category is Clear. A
+category whose remaining gaps are all covered by `[ASSUMPTION A-nn: …]` markers counts as Clear
+for this gate. Phase 4 then confirms or corrects every assumption with the user, so none reaches
+approval unconfirmed.
 
 ## A round
 

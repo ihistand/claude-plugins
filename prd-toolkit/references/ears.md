@@ -34,6 +34,9 @@ Every `- AC-nnn.n` item must:
 
 The rule does not check that the response is observable or measurable. Judge that with the
 quality checklist ([quality-checklist.md](quality-checklist.md)). The `vague-word` rule separately
-rejects words such as "fast" or "user-friendly" in an AC. Write the number: "within 200 ms".
+rejects words such as "fast", "secure" or "user-friendly" in an AC or an NFR line, but only
+when that line has no number; digits inside IDs such as `AC-004.1` do not count. A number on the
+line silences the rule, so "fast, within 200 ms" passes lint; the checklist still asks whether
+the bound is one a test can fail. Write the number: "within 200 ms".
 
 See [prd-format.md](prd-format.md) for where ACs sit in a requirement block.
