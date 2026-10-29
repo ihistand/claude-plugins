@@ -74,6 +74,10 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 
 ## The five steps
 
+0. **Check the PRD was ever approved.** If `prd.md` §14 holds no row at 1.0.0 or above, the PRD
+   has never been approved: it is a draft, not a change. Stop and continue it with
+   `prd-toolkit:authoring-prds`, which resumes at its first open gate. Never version a clarify
+   answer, and never approve a 0.x PRD through step 5; its first approval is authoring phase 7.
 1. **Restate the change** in one sentence, then list everything it touches: FR, NFR and AC IDs,
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
    fixtures, Observability rows. Grep the PRD folder for each ID and code. For a design choice
@@ -89,8 +93,12 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
    test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 questions`,
-   `no dry run (removal only)` or `no dry run (wording only)`.
-4. **Lint and dry run.** Lint must exit 0. Then dry-run the new and revised T-ids only: dispatch
+   `no dry run (removal only)`, `no dry run (unit only)` or `no dry run (wording only)`.
+4. **Lint and dry run.** Lint must exit 0. Then dry-run the new and revised T-ids only, never a
+   `level: unit` one: unit cases read code, stay with the builder and are never sampled, as in
+   authoring phase 6, where exit 1 from `--sample-tids` fails the gate. An empty slot is not a
+   dry run and never passes; when every new and revised T-id is unit, record
+   `no dry run (unit only)` instead of dispatching. Dispatch
    a fresh general-purpose subagent with
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md`, those T-ids in its slot. It
    passes on the terms that file states. Anything else fails it, and every question is a gap:
@@ -123,6 +131,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 - Asking the user to pick the ID, the version level or anything else a rule here decides.
 - "Approve this change and treat the older gaps as a separate change." Any offer to approve
   over a failed dry run.
+- A version bump, a changelog row or an approval on a PRD whose §14 has no row at 1.0.0 or
+  above. A never-approved draft goes back to `prd-toolkit:authoring-prds`.
+- A dry-run slot holding a unit T-id, or no T-id at all.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
@@ -137,9 +148,11 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 | "Deleting the dead AC keeps the PRD clean." | It erases the ID, and the next agent may reuse it. Mark it removed; the record stays. |
 | "Reusing the free number is tidier." | Changelog rows, commits and tickets already cite it. A reused ID silently changes their meaning. |
 | "I'll fix the code while the PRD waits for approval." | Approval can change the PRD. Code written first encodes the unapproved version. |
+| "It is still a draft, so a quick approval here is fine." | A draft's first approval needs authoring phases 4 to 6: sign-off, the checklist and a full dry run. Step 5 checks only a change. |
 | "The dry-run questions are old gaps, not mine." | The tester still cannot test the changed T-ids. Ask for the answers; the change waits for them. |
 
 ## Related skills
 
-- **prd-toolkit:authoring-prds** writes a new PRD; its `dry-run-prompt.md` is the step 4 prompt.
+- **prd-toolkit:authoring-prds** writes a new PRD and resumes a never-approved draft (step 0);
+  its `dry-run-prompt.md` is the step 4 prompt.
 - **superpowers:writing-plans** turns the approved, changed IDs into tasks.

@@ -27,11 +27,14 @@ install hint and exits 2.
 ## Lint CLI
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
+uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>   # inside Claude Code
 uv run --script prd-toolkit/scripts/prd_lint.py --list-rules
 uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 ```
 
+- `${CLAUDE_PLUGIN_ROOT}` is set only inside Claude Code skills and commands. From a shell, use
+  the plugin's install path (its `installPath` in `~/.claude/plugins/installed_plugins.json`)
+  or a checkout of this repo, as the other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
 - `--list-rules` prints the 27 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring

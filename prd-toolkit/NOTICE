@@ -6,7 +6,8 @@ copied from Taskmaster (Commons Clause) or spec-workflow-mcp (GPL-3.0). The
 design spec, docs/superpowers/specs/2026-10-29-prd-toolkit-design.md section 1
 ("Prior art and what is borrowed"), lists what was taken and what was declined.
 
-Each copyright line below is copied from that project's own LICENSE file.
+Each copyright line below is copied from that project's own LICENSE file,
+except Anthropic's, which is marked inferred where it stands.
 
 ------------------------------------------------------------------------------
 GitHub Spec Kit (https://github.com/github/spec-kit) - MIT License
@@ -46,7 +47,7 @@ Adapted: ask only what only the user knows; subagents look facts up.
 Anthropic `doc-coauthoring` skill
 (https://github.com/anthropics/skills, skills/doc-coauthoring) - Apache License 2.0
 
-Copyright Anthropic, PBC
+Copyright Anthropic, PBC (inferred: anthropics/skills has no LICENSE file to copy it from)
 
 Adapted: reader testing by a fresh, context-free agent, here the test-agent
 dry run. The anthropics/skills repository states that many of its skills are

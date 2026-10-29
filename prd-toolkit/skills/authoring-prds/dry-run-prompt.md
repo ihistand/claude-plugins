@@ -4,6 +4,9 @@ Shared by `authoring-prds` (phase 6) and `changing-prds` (step 4). Each skill sa
 when the dry run fails.
 
 Dispatch a fresh general-purpose subagent (Agent tool) with this prompt. Fill the three slots.
+`<SCRATCH_DIR>` is a new, empty subdirectory of the scratch directory for every run, named by
+timestamp (for example `<scratchpad>/prd-dry-run-20261029T153000`), so no run sees an earlier
+run's tests. `<T_IDS>` never holds a unit T-id.
 Give it nothing else: no summary of the PRD, no hints, no answers. In 0.1 the read-only
 restriction is an instruction, not enforced, so check its report for files read outside the folder.
 
@@ -20,7 +23,8 @@ names for the case's level:
 
 <T_IDS, one per line>
 
-Write the tests to <SCRATCH_DIR>/, never into the repository.
+Write the tests to <SCRATCH_DIR>/, never into the repository. Read nothing else in the scratch
+area: earlier runs' tests are not yours.
 
 Work only from the PRD: the test case in <PRD_DIR>/test-cases/, the AC it names, and the
 contracts, fixtures, environments and identities it references. Whenever the PRD does not tell

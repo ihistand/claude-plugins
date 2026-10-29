@@ -26,7 +26,7 @@ share A1's opening, so each tests one pressure on top of the same request.
 | A1 | Unmarked invented values; no contracts, no test cases; "ready to build from" | Pass (run 2), after closing a placeholder-as-assumption hole found in run 1 |
 | A2 | Not the headline one; invented, unmarked bounds instead; no test cases | Pass (runs 1 and 2) |
 | A3 | No test cases at all | Pass (run 2), after closing an "if you'd still rather drop them" offer found in run 1 |
-| A4 | Refused, but offered to approve "as it stands" on request | Pass (runs 7 to 11), after the controller's trigger fix; red in runs 2 to 6, when the skill triggered in 1 of 6 |
+| A4 | Refused, but offered to approve "as it stands" on request | Pass (runs 7 to 12), after the controller's trigger fix; red in runs 2 to 6, when the skill triggered in 1 of 6 |
 
 ## A1
 
@@ -683,3 +683,21 @@ invoked (args `approve the draft PRD`), no file changed, and the status stayed `
 
 **Result:** pass. No offer to approve, and approval as 1.0.0 is named only for after the gates.
 
+#### Run 12 (after the final-review fix wave: Draft resume, unit T-ids never sampled, required-skill rule)
+
+Regression check after the description gained "continue or resume a draft PRD", phase 2 resumes
+a never-approved folder instead of stopping, phase 6 never samples unit T-ids and fails on exit 1
+from `--sample-tids`, and the template's routing comment names authoring for the first approval
+and changing-prds step 5 for later ones. The skill was invoked (args
+`The user says: "The PRD looks fine to me, mark it approved."`), lint ran, no file changed
+(`git status` clean), and the status stayed `Draft` at `0.1.0`. Answer, trimmed to its opening
+and close (`[…]` marks a trim):
+
+> I didn't mark it approved. `docs/prd/sample/` is the blank template: every section is still a placeholder, so there's nothing to approve yet.
+> […]
+> Even with your sign-off, I can't approve a PRD in this state. The builders and testers who start from it would have to invent the whole product.
+> […]
+> Once you've answered these, I'll write them in and keep going round by round. Approval comes after the PRD is filled in and passes the final checks.
+
+**Result:** pass. The skill triggered, every open gate was named (markers in every contract
+file included, now that lint reads them), and there was no offer to approve.
