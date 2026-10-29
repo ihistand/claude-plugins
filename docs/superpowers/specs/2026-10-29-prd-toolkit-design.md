@@ -102,6 +102,7 @@ docs/prd/<project>/
 ├── prd.md               index: metadata, stack, goals, glossary, architecture, registries,
 │                        adoption map, versioning, ID registry, changelog
 ├── features/<area>.md   FR blocks: numbered flow, EARS criteria, edge cases, T-ids
+├── test-cases/<area>.yaml  one entry per T-id: the seven sufficiency elements (section 4.2)
 ├── contracts/
 │   ├── openapi.yaml                 HTTP API
 │   ├── schema.sql                   database DDL
@@ -114,12 +115,15 @@ docs/prd/<project>/
 │   ├── fixtures/                    named test datasets
 │   └── <custom>                     stack-specific types declared in prd.md
 ├── nfr.md               NFR-nnn with numbers; observability (log fields, metrics, alerts)
-├── testing.md           test levels, harness commands, environments, FR → T matrix
+├── testing.md           test levels, harness commands, environments, fixture load and
+│                        teardown, acceptance sign-offs
 ├── operations.md        environments, URLs, deploy and rollback runbook, secrets by name
 └── errors.md            the EDD ledger (E-nnn)
 ```
 
-`<project>` is a lowercase slug; `docs/prd/` is the default root. A file whose subject does not
+`<project>` is a lowercase slug; `docs/prd/` is the default root. `features/` says what the
+system does, `contracts/` describes its interfaces, and `test-cases/` says how each behaviour
+is checked; the tests themselves live in the repo's own test directories and cite their T-ids. A file whose subject does not
 exist (no UI, no HTTP API) is omitted, and `prd.md` lists it as `Not applicable: <reason>` so
 omission is visible.
 
@@ -176,7 +180,7 @@ Acceptance (EARS):
   insert no rows.
 Errors: IMPORT_DUPLICATE, IMPORT_EMPTY (contracts/errors.yaml)
 Edge cases: the same key twice in one file → AC-012.3
-Tests: T-012.1 [integration], T-012.2 [integration], T-012.3 [unit]
+Tests: T-012.1 [integration], T-012.2 [integration], T-012.3 [unit]  (test-cases/import.yaml)
 Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 ```
 
@@ -220,8 +224,8 @@ on operations are copied into `operations.md` so the PRD stands alone (Looker de
 
 ### 4.1 The sufficiency rule
 
-For every T-id the PRD gives the test agent seven things; if any is missing the T-id is
-incomplete and lint fails it:
+For every T-id its test case (section 4.2) gives the test agent seven things, inline or by
+reference into `contracts/`; if any is missing the T-id is incomplete and lint fails it:
 
 1. **Target:** the endpoint, table, job, component or page.
 2. **Environment and auth:** which environment, which test identity, which secret by name.
@@ -232,7 +236,41 @@ incomplete and lint fails it:
    classified leaked to logs or error bodies.
 7. **Expected errors:** catalogue codes, each with the input that triggers it.
 
-### 4.2 Required content per contract type
+### 4.2 Test cases
+
+Each area has `test-cases/<area>.yaml`, next to `features/<area>.md`, with one entry per T-id.
+It is YAML because the seven elements are data: lint checks every field is present and every
+reference resolves, so sufficiency is a schema check rather than an agent's judgement. It is
+split by area so a tester loads one feature file and one test-case file, and parallel changes
+do not conflict. It sits outside `contracts/` because contracts describe the system and test
+cases describe checks against it. The folder is `test-cases/`, not `tests/`, so an agent
+looking for test code does not mistake a test spec for a test.
+
+```yaml
+T-012.3:
+  ac: AC-012.3
+  level: unit                             # a level defined in testing.md
+  target: importer.import_file            # contracts/events.md#order-import
+  environment: local
+  identity: none                          # or a test identity from permissions.yaml
+  preconditions: [orders/one_existing]    # contracts/fixtures/, plus any dependency mock
+  input:
+    file: orders/dup_key_in_file.csv      # a fixture file, or an inline value
+  expect:
+    output: {status: ok, inserted: 1, skipped: 1}
+    effects:
+      - import_log: 1 row, kind = duplicate
+    errors: []                            # codes from contracts/errors.yaml
+    leaks: none                           # nothing classified in logs or error bodies
+```
+
+An error-path case lists its codes under `expect.errors` with the input that triggers them. An
+acceptance case adds `steps:`, a list of plain-language actions for the people who sign off,
+and `signoff:` naming the business owner. The FR block's `Tests:` line stays as the index; lint
+fails when it and the test-case file disagree. `prd_status.py` generates the FR → T matrix from
+the test cases, so nobody maintains it by hand.
+
+### 4.3 Required content per contract type
 
 | Contract | Required per item |
 |---|---|
@@ -283,7 +321,7 @@ error codes. An error the system cannot surface is an error EDD cannot catch.
 ### 5.3 Changing (`/prd-change`, `changing-prds`)
 
 1. Restate the change; list the FRs, ACs, NFRs and contract items it touches.
-2. Edit the PRD: new IDs for new behaviour, revised ACs, contracts, fixtures. Affected
+2. Edit the PRD: new IDs for new behaviour, revised ACs, contracts, fixtures, test cases. Affected
    requirements go to `approved`.
 3. Bump the version: **major** when existing behaviour changes or is removed, **minor** when
    behaviour is added, **patch** for wording only. Add a changelog row.
@@ -303,7 +341,7 @@ independently: they pass only when the code matches the contract.
 | Component / UI | component contracts | tester | no | CI |
 | System | FRs and NFRs in a production-like environment | tester | no | staging |
 | End-to-end | user journeys (UJ-nn) | tester | no | staging; smoke subset on production |
-| Acceptance | EARS criteria and Definition of Done; UAT sign-off by a named business owner | tester writes scripts; people sign | no | staging; sign-off recorded in `testing.md` |
+| Acceptance | EARS criteria and Definition of Done; UAT sign-off by the owner named in the test case | tester writes scripts from `steps:`; people sign | no | staging; sign-off recorded in `testing.md` |
 
 The builder runs every matching standards-registry linter and invokes every required
 registered skill before committing; each behaviour commit cites its IDs. Requirements move to
@@ -343,7 +381,7 @@ Detect ──► Diagnose ──► Fix ──► Improve
 Detected: 2026-11-04, production log (IMPORT_DUPLICATE not raised), prd-error #48
 Classification: spec gap
 Diagnosis: AC-012.1 assumed sequential uploads; concurrent uploads race the lookup
-Resolution: AC-012.4 + T-012.4 [integration] added in 1.5.0; unique index already enforced
+Resolution: AC-012.4 + T-012.4 [integration] and its test case added in 1.5.0; unique index already enforced
 Recurrence of: -
 ```
 
@@ -376,7 +414,8 @@ A recurring error gets a new entry pointing to the earlier one, so repeat failur
    by an agent-scoped PreToolUse hook if the platform supports one, otherwise by instruction
    plus the dry run (open item).
 5. **`/prd-status`** prints requirement counts by status, the adoption map, open `E-nnn`
-   entries, the PRD version per environment, and what is specified but unbuilt.
+   entries, the PRD version per environment, what is specified but unbuilt, and the FR → T
+   matrix generated from `test-cases/`.
 
 ### 7.1 `prd_lint.py` rules
 
@@ -390,12 +429,14 @@ Exit 0 when clean; otherwise every violation as `<file>:<line>: <rule>: <message
 | `index-consistent` | the requirement index and the feature files disagree on an ID, title or status |
 | `fr-has-ac` / `ac-has-test` | an FR or NFR has no AC; an AC has no T |
 | `ac-ears` | an AC does not start with When / While / If / Where / The system shall |
-| `test-level` | a T-id has no level, or a level not defined in `testing.md` |
-| `sufficiency` | a T-id cannot be resolved to all seven elements of section 4.1 |
+| `test-cases-consistent` | a T-id on an FR block's `Tests:` line has no test-case entry, an entry has no `Tests:` line citing it, or the two disagree on its level |
+| `test-level` | a test case has no level, or a level not defined in `testing.md` |
+| `sufficiency` | a test case is missing any of the seven elements of section 4.1 (schema check on `test-cases/*.yaml`) |
+| `test-refs` | a test case references a fixture, error code, `operationId`, event, table, role or test identity that does not exist in `contracts/`, or an `ac:` that is not its parent AC |
 | `nfr-bound` | an NFR has no number with a unit |
 | `deny-tested` | a deny cell in `permissions.yaml` has no T-id |
 | `error-codes` | an error code is cited but absent from `errors.yaml`, or catalogued but never cited |
-| `classified-fixtures` | a fixture holds a value matching a PII pattern in a column classified PII |
+| `classified-fixtures` | a fixture or a test case's inline input holds a value matching a PII pattern in a column classified PII |
 | `markers-open` | a `[NEEDS CLARIFICATION` remains while status is `In review` or `Approved` |
 | `assumption-indexed` | an `[ASSUMPTION` has no index row, or a row is `open` at approval |
 | `placeholder` / `vague-word` | TBD, TODO, `???` or `<...>` outside code blocks; fast, secure, scalable, robust, intuitive, seamless, user-friendly in an AC or NFR without a number on the same line |
@@ -436,7 +477,7 @@ Each milestone gets its own implementation plan and release.
 
 | Release | Delivers | Proven by |
 |---|---|---|
-| 0.1 | PRD folder format and templates, `prd_lint.py`, standards and skills registries, `authoring-prds`, `changing-prds`, the CLAUDE.md block | Authoring a small sample project from scratch |
+| 0.1 | PRD folder format and templates (test cases included), `prd_lint.py`, standards and skills registries, `authoring-prds`, `changing-prds`, the CLAUDE.md block | Authoring a small sample project from scratch |
 | 0.2 | `adopting-prds`, `testing-from-prds`, `prd_trace.py`, the dry run, `prd-tester` | Adopting one Looker area (the sales rep KPI family), its characterization tests passing against looker.acuantia.com through the API |
 | 0.3 | `building-from-prds`, `deploying-from-prds`, git hooks, CI templates, `prd_drift.py`, `/prd-status`, `prd-builder`, `prd-deployer` | One Looker change made end to end through the workflow |
 | 0.4 | `handling-errors`, `errors.md`, nightly drift and smoke, `prd-error` issues, `/prd-error` | A real Looker error taken through Detect, Diagnose, Fix and Improve |
