@@ -48,3 +48,19 @@ def test_adopted_areas_from_rows(prd, tmp_path):
     edit(prd, "prd.md", "Not applicable: new project.", "| Area | State |\n|---|---|\n| billing | adopted |\n| search | extracted |\n| auth | adopted |")
     cm = tmp_path / "CLAUDE.md"; main([str(prd), "--claude-md", str(cm)])
     assert "Adopted areas: billing, auth\n" in cm.read_text()
+
+def test_symlinked_claude_md_survives(prd, tmp_path):
+    real = tmp_path / "real.md"; real.write_text("# Agents\n")
+    cm = tmp_path / "CLAUDE.md"; cm.symlink_to(real)
+    assert main([str(prd), "--claude-md", str(cm)]) == 0
+    assert cm.is_symlink() and "prd-toolkit:start" in real.read_text()
+    assert real.read_text().startswith("# Agents\n")
+
+def test_markers_inside_code_fence_are_not_the_block(prd, tmp_path):
+    cm = tmp_path / "CLAUDE.md"
+    doc = "# Docs\n\n```\n<!-- prd-toolkit:start -->\nexample\n<!-- prd-toolkit:end -->\n```\n"
+    cm.write_text(doc)
+    assert main([str(prd), "--claude-md", str(cm)]) == 0
+    t = cm.read_text()
+    assert t.startswith(doc) and t.count("prd-toolkit:start") == 2
+    assert t[len(doc):].lstrip("\n").startswith("<!-- prd-toolkit:start -->\n## Product")

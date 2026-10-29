@@ -76,8 +76,20 @@ def render_block(prd: model.Prd, prd_rel: str) -> str:
 
 
 def _find_block(lines: list[str]) -> tuple[int, int] | None:
-    starts = [i for i, ln in enumerate(lines) if ln.strip() == START]
-    ends = [i for i, ln in enumerate(lines) if ln.strip() == END]
+    starts, ends, fence = [], [], None
+    for i, ln in enumerate(lines):
+        t = ln.strip()
+        if fence:
+            if t.startswith(fence) and t.strip(fence[0]) == "":
+                fence = None
+            continue
+        if t.startswith("```") or t.startswith("~~~"):
+            fence = t[0] * (len(t) - len(t.lstrip(t[0])))
+            continue
+        if t == START:
+            starts.append(i)
+        elif t == END:
+            ends.append(i)
     if not starts and not ends:
         return None
     if len(starts) > 1 or len(ends) > 1:
@@ -103,6 +115,7 @@ def _merged(claude_md: Path, block: str) -> tuple[str, str]:
 
 
 def apply_block(claude_md: Path, block: str) -> bool:
+    claude_md = claude_md.resolve()  # write through a symlink, never replace it
     current, new = _merged(claude_md, block)
     if new == current:
         return False
