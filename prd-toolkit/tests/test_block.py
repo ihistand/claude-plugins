@@ -72,3 +72,14 @@ def test_unclosed_fence_converges(prd, tmp_path):
     for _ in range(2):
         assert main([str(prd), "--claude-md", str(cm)]) == 0
     assert cm.read_text().count("prd-toolkit:start") == 1
+
+def test_closed_fence_protected_when_later_fence_unclosed(prd, tmp_path):
+    cm = tmp_path / "CLAUDE.md"
+    doc = "# D\n\n```\n<!-- prd-toolkit:start -->\nexample\n<!-- prd-toolkit:end -->\n```\n\ntext\n\n```\nunclosed\n"
+    cm.write_text(doc)
+    assert main([str(prd), "--claude-md", str(cm)]) == 0
+    assert main([str(prd), "--claude-md", str(cm), "--check"]) == 0
+    for _ in range(2):
+        assert main([str(prd), "--claude-md", str(cm)]) == 0
+    t = cm.read_text()
+    assert t.startswith(doc) and t.count("prd-toolkit:start") == 2 and t.count("prd-toolkit:end") == 2

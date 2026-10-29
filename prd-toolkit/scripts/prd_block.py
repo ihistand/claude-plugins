@@ -75,28 +75,27 @@ def render_block(prd: model.Prd, prd_rel: str) -> str:
     return text.rstrip("\n")
 
 
-def _scan(lines: list[str], track_fences: bool) -> tuple[list[int], list[int], bool]:
-    starts, ends, fence = [], [], None
-    for i, ln in enumerate(lines):
-        t = ln.strip()
-        if fence:
-            if t.startswith(fence) and t.strip(fence[0]) == "":
-                fence = None
-            continue
-        if track_fences and (t.startswith("```") or t.startswith("~~~")):
+def _closed_fences(lines: list[str]) -> set[int]:
+    """Indexes of lines inside a closed fence (openers and closers included). An opener with no closer protects nothing."""
+    inside: set[int] = set()
+    i = 0
+    while i < len(lines):
+        t = lines[i].strip()
+        if t.startswith("```") or t.startswith("~~~"):
             fence = t[0] * (len(t) - len(t.lstrip(t[0])))
-            continue
-        if t == START:
-            starts.append(i)
-        elif t == END:
-            ends.append(i)
-    return starts, ends, fence is not None
+            j = next((k for k in range(i + 1, len(lines))
+                      if lines[k].strip().startswith(fence) and lines[k].strip().strip(fence[0]) == ""), None)
+            if j is not None:
+                inside.update(range(i, j + 1))
+                i = j
+        i += 1
+    return inside
 
 
 def _find_block(lines: list[str]) -> tuple[int, int] | None:
-    starts, ends, unclosed = _scan(lines, True)
-    if unclosed:  # an unclosed fence is not trusted as a fence
-        starts, ends, _ = _scan(lines, False)
+    skip = _closed_fences(lines)
+    starts = [i for i, ln in enumerate(lines) if i not in skip and ln.strip() == START]
+    ends = [i for i, ln in enumerate(lines) if i not in skip and ln.strip() == END]
     if not starts and not ends:
         return None
     if len(starts) > 1 or len(ends) > 1:
