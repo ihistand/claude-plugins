@@ -147,6 +147,21 @@ _VAGUE = re.compile(r"\b(fast|secure|scalable|robust|intuitive|seamless|user-fri
 _ID = re.compile(r"\b(?:AC|FR|NFR|UJ|T)-\d+(?:\.\d+)?\b")
 
 
+def _removed_ac_lines(b) -> set[int]:
+    """Line numbers of a block's removed ACs, continuation lines included."""
+    out: set[int] = set()
+    starts = {a.line for a in b.acs if a.removed}
+    on = False
+    for n, text in b.lines:
+        if n in starts:
+            on = True
+        elif not (on and text.startswith("  ") and text.strip()):
+            on = False
+        if on:
+            out.add(n)
+    return out
+
+
 @rule("vague-word")
 def vague_word(prd: Prd):
     def check(file, n, text):
@@ -157,9 +172,10 @@ def vague_word(prd: Prd):
     for b in prd.blocks:
         if b.kind == "NFR":
             stripped = strip_code("\n".join(t for _, t in b.lines)).split("\n")
-            items = [(n, t) for (n, _), t in zip(b.lines, stripped)]
+            retired = _removed_ac_lines(b)
+            items = [(n, t) for (n, _), t in zip(b.lines, stripped) if n not in retired]
         else:
-            items = [(a.line, a.text) for a in b.acs]
+            items = [(a.line, a.text) for a in b.acs if not a.removed]
         for n, t in items:
             f = check(b.file, n, t)
             if f:

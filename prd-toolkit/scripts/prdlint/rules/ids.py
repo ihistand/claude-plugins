@@ -142,32 +142,33 @@ def _walk_prd_ids(node) -> Iterator[tuple[int, str]]:
 def id_removed_reused(prd: Prd):
     removed, findings = _removed(prd)
     yield from findings
+    removed_acs = {a.id for b in prd.blocks for a in b.acs if a.removed}
 
     def gone(token: str) -> str | None:
-        """The removed requirement a cited ID belongs to, if any."""
+        """How a cited ID is removed ("removed AC-001.3", "AC-003.1 of removed FR-003"), or None."""
+        if token in removed or token in removed_acs:
+            return f"removed {token}"
         m = re.fullmatch(r"AC-(\d+)\.\d+", token)
-        if m:
-            return next((p for p in (f"FR-{m.group(1)}", f"NFR-{m.group(1)}") if p in removed), None)
-        return token if token in removed else None
+        parent = m and next((p for p in (f"FR-{m.group(1)}", f"NFR-{m.group(1)}") if p in removed), None)
+        return f"{token} of removed {parent}" if parent else None
 
     for tc in prd.test_cases:
-        ac = str(tc.data.get("ac", ""))
-        parent = gone(ac)
-        if parent:
-            yield Finding(tc.file, tc.data.key_lines.get("ac", tc.line), "id-removed-reused", f"test case {tc.id} cites {ac} of removed {parent}")
+        why = gone(str(tc.data.get("ac", "")))
+        if why:
+            yield Finding(tc.file, tc.data.key_lines.get("ac", tc.line), "id-removed-reused", f"test case {tc.id} cites {why}")
     for rel, data in prd.yaml.items():
         for n, item in _walk_prd_ids(data):
-            parent = gone(item)
-            if parent:
-                yield Finding(rel, n, "id-removed-reused", f"x-prd-ids cites {item} of removed {parent}")
+            why = gone(item)
+            if why:
+                yield Finding(rel, n, "id-removed-reused", f"x-prd-ids cites {why}")
     for b in prd.blocks:
         if b.id in removed:
             continue
         for n, text in _traces(b):
             for token in _REQ_ID.findall(text):
-                parent = gone(token)
-                if parent:
-                    yield Finding(b.file, n, "id-removed-reused", f"{b.id} Traces cites {token} of removed {parent}")
+                why = gone(token)
+                if why:
+                    yield Finding(b.file, n, "id-removed-reused", f"{b.id} Traces cites {why}")
 
 
 @rule("index-consistent")
@@ -212,7 +213,7 @@ def fr_has_ac(prd: Prd):
 @rule("ac-ears")
 def ac_ears(prd: Prd):
     for b in prd.blocks:
-        for ac in b.acs:
+        for ac in (a for a in b.acs if not a.removed):
             if not (_EARS_HEAD.match(ac.text) or _EARS_THE.match(ac.text)):
                 yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must start with When, While, If, Where or 'The <thing> shall'")
             elif not re.search(r"\bshall\b", ac.text):

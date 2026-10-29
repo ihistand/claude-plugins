@@ -45,6 +45,7 @@ CASES: list[Case] = [
     Case("id-unique", "A-01 row twice", _edit("prd.md", "| A-01 | Reps see only their own orders | confirmed |", "| A-01 | Reps see only their own orders | confirmed |\n| A-01 | Another | open |")),
     Case("id-removed-reused", "index removed, block live", _edit("prd.md", FR3_ROW, FR3_ROW_REMOVED)),
     Case("id-removed-reused", "removed in both, T-003.x kept", _both(_edit("prd.md", FR3_ROW, FR3_ROW_REMOVED), _edit("features/api.md", FR3_STATUS, FR3_STATUS_REMOVED))),
+    Case("id-removed-reused", "test case cites a removed AC", _edit("features/import.md", "- AC-001.3 If the import file", "- AC-001.3 (removed in 1.1.0) If the import file")),
     Case("index-consistent", "FR-002 index status built", _edit("prd.md", "| FR-002 | Get an order | live |", "| FR-002 | Get an order | built |")),
     Case("index-consistent", "UJ-01 index row deleted", _edit("prd.md", "| UJ-01 | Rep looks up an order | live | features/api.md | 1.0.0 |\n", "")),
     Case("index-consistent", "unknown status shipped", _edit("features/import.md", "Status: live (since 1.0.0)", "Status: shipped")),

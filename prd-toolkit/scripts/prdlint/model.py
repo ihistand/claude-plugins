@@ -17,8 +17,9 @@ class NotAPrd(Exception):
 @dataclass
 class Ac:
     id: str
-    text: str
+    text: str  # the criterion, without any "(removed in X.Y.Z)" prefix
     line: int
+    removed: bool = False  # written "- AC-nnn.n (removed in X.Y.Z) <original text>"
 
 
 @dataclass
@@ -85,6 +86,7 @@ _HEADING = re.compile(r"^#{1,3}\s")
 _BLOCK = re.compile(r"^### ((?:UJ-\d+)|(?:FR-\d+)|(?:NFR-\d+))\s+(.*?)\s*$")
 _STATUS = re.compile(r"^Status:\s*(.*?)\s*(?:\(since\s+([^)]*)\))?\s*$")
 _AC = re.compile(r"^- (AC-\d+\.\d+)\s+(.*)$")
+_AC_REMOVED = re.compile(r"^\(removed in \d+\.\d+\.\d+\)\s*")
 _TEST = re.compile(r"(T-\d+\.\d+)\s*\[([^\]]+)\]")
 _NA = re.compile(r"^\s*[-*]\s*Not applicable:\s*`([^`]+)`\s+[—–-]+\s+(.*?)\s*$")
 _FIELD = re.compile(r"^(Status|Flow|Acceptance \(EARS\)|Errors|Edge cases|Tests|Traces):")
@@ -115,7 +117,8 @@ def _parse_block(m: re.Match, rel: str, n: int, body: list[tuple[int, str]]) -> 
     for ln, text in body:
         am = _AC.match(text)
         if am:
-            cur = Ac(am.group(1), am.group(2).strip(), ln)
+            ac_text, n_removed = _AC_REMOVED.subn("", am.group(2).strip(), count=1)
+            cur = Ac(am.group(1), ac_text, ln, removed=bool(n_removed))
             b.acs.append(cur)
         elif cur and text.startswith("  ") and text.strip():
             cur.text += " " + text.strip()

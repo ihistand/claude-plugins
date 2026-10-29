@@ -115,6 +115,11 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
   followed by `(since X.Y.Z)`. `live` always carries `since`.
 - `Acceptance (EARS):` lists `- AC-nnn.n <text>` items. `nnn` equals the parent's number. The
   text starts with When, While, If, Where or "The <thing> shall"; extra lines are indented.
+- A removed AC keeps its line, with `(removed in X.Y.Z)` between the ID and its original
+  text: `- AC-001.3 (removed in 1.1.0) If the import file is empty, …`. Its test cases are
+  deleted, and its T-ids leave the `Tests:` line. `ac-ears`, `ac-has-test` and `vague-word` skip
+  it; a test case whose `ac:` cites it, or an `x-prd-ids` or `Traces:` entry that does, is an
+  `id-removed-reused` violation.
 - `Errors:` is a comma-separated list of catalogue codes, then an optional parenthetical.
   Use `Errors: -` for none.
 - `Tests:` lists `T-nnn.n [level]` items, then `(test-cases/<area>.yaml)`. Blocks in `nfr.md`
@@ -131,6 +136,10 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 4. A test case `target` is `<kind>:<name>`, kind one of `op`, `table`, `event`, `job`,
    `component`, `page`, `code` or a custom type named in section 7.
 5. Registry rows carry a `Decision` column (values above).
+6. IDs are never reused. The next free FR or NFR number is the highest FR or NFR number in
+   the PRD, removed ones included, plus 1. The next free AC number in a block is the highest
+   AC number in that block, removed ones included, plus 1. A removed requirement keeps its
+   block and index row with status `removed`; a removed AC keeps its line, marked as above.
 
 ## Test cases
 

@@ -101,7 +101,7 @@ def ac_has_test(prd: Prd):
         if b.status == "removed":
             continue
         for ac in b.acs:
-            if ac.id not in covered:
+            if not ac.removed and ac.id not in covered:
                 yield Finding(b.file, ac.line, "ac-has-test", f"{ac.id} has no test case whose ac: is {ac.id}")
 
 
