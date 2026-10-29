@@ -30,7 +30,7 @@ def schema_tables(prd: Prd) -> dict[str, set[str]]:
         return {}
     dialect = prd.frontmatter.get("sql-dialect") or None
     try:
-        statements = sqlglot.parse(path.read_text(), read=dialect)
+        statements = sqlglot.parse(path.read_text(encoding="utf-8"), read=dialect)
     except Exception:  # sqlglot raises ParseError, TokenError or ValueError (unknown dialect)
         return {}
     tables: dict[str, set[str]] = {}
@@ -456,7 +456,7 @@ def contracts_valid(prd: Prd):
         yield from _check_events("contracts/events.md", prd.docs["contracts/events.md"])
     schema = prd.root / "contracts/schema.sql"
     if schema.is_file():
-        yield from _check_schema(prd, "contracts/schema.sql", schema.read_text())
+        yield from _check_schema(prd, "contracts/schema.sql", schema.read_text(encoding="utf-8"))
     yield from _check_custom(prd)
 
 

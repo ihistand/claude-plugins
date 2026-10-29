@@ -51,7 +51,7 @@ def load_yaml(path: Path, rel: str) -> tuple[Any, list[Finding]]:
     in_cases = rel.startswith("test-cases/")
     dup_rule = "id-unique" if in_cases else "contracts-valid"
     bad_rule = "sufficiency" if in_cases else "contracts-valid"
-    loader = _Loader(path.read_text())
+    loader = _Loader(path.read_text(encoding="utf-8"))
     try:
         data = loader.get_single_data()
     except yaml.YAMLError as e:

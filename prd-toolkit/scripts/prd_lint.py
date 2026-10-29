@@ -62,7 +62,11 @@ def main(argv: list[str]) -> int:
         return 2
 
     if args.sample_tids is not None:
-        tids = [t.id for t in prd.test_cases]
+        # unit cases stay with the builder (they read code); only the other levels are dry-run
+        tids = [t.id for t in prd.test_cases if str(t.data.get("level", "")).strip() != "unit"]
+        if not tids:
+            print("prd_lint: no non-unit T-ids to sample", file=sys.stderr)
+            return 1
         for tid in random.sample(tids, min(args.sample_tids, len(tids))):
             print(tid)
         return 0
@@ -82,4 +86,6 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # PRDs carry em dashes; never crash in a C locale
+        _stream.reconfigure(encoding="utf-8")
     sys.exit(main(sys.argv[1:]))

@@ -63,7 +63,7 @@ def _adopted_areas(prd: model.Prd) -> str:
 
 
 def render_block(prd: model.Prd, prd_rel: str) -> str:
-    text = TEMPLATE.read_text()
+    text = TEMPLATE.read_text(encoding="utf-8")
     slots = {
         "prd_path": prd_rel,
         "version": prd.frontmatter.get("version", "unknown").strip(),
@@ -178,4 +178,6 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # PRDs carry em dashes; never crash in a C locale
+        _stream.reconfigure(encoding="utf-8")
     sys.exit(main(sys.argv[1:]))

@@ -34,3 +34,16 @@ def test_template_carries_markers(tmp_path):
 def test_unfilled_template_fails_frontmatter(tmp_path):
     shutil.copytree(TEMPLATE, tmp_path / "x")
     assert "frontmatter" in fired(lint(tmp_path / "x"))
+
+
+def test_approved_template_flags_markers_outside_markdown(tmp_path):
+    d = fill(tmp_path / "docs/prd/sample", project="sample", owner="Sample Owner", date="2026-10-29")
+    edit(d, "prd.md", "status: Draft", "status: Approved")
+    files = {f.file for f in lint(d) if f.rule == "markers-open"}
+    assert {"contracts/data-classification.yaml", "contracts/openapi.yaml", "contracts/schema.sql"} <= files
+
+
+def test_fill_leaves_no_slot(tmp_path):
+    d = fill(tmp_path / "docs/prd/sample", project="sample", owner="Sample Owner", date="2026-10-29")
+    left = [p.relative_to(d).as_posix() for p in d.rglob("*") if p.is_file() and "{{" in p.read_text(encoding="utf-8")]
+    assert left == []

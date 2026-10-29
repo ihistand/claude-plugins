@@ -44,8 +44,15 @@ CASES: list[Case] = [
     Case("placeholder", "TODO in yaml scalar", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: code:TODO")),
     Case("vague-word", "fast in AC", _edit("features/import.md", "log `IMPORT_DUPLICATE` once for it.", "log `IMPORT_DUPLICATE` once for it and shall be fast.")),
     Case("markers-open", "marker in approved", _append("nfr.md", "[NEEDS CLARIFICATION: retention?]")),
+    Case("markers-open", "marker in yaml value", _edit("contracts/openapi.yaml", "title: Orders API", 'title: "[NEEDS CLARIFICATION: API title]"')),
+    Case("markers-open", "marker in yaml comment", _append("contracts/data-classification.yaml", "# [NEEDS CLARIFICATION: retention for logs]")),
+    Case("markers-open", "marker in sql comment", _append("contracts/schema.sql", "-- [NEEDS CLARIFICATION]")),
+    Case("placeholder", "slot in frontmatter", _edit("prd.md", "owner: Sample Owner", "owner: {{owner}}")),
+    Case("placeholder", "slot in heading", _edit("prd.md", "# Orders service", "# {{project}}")),
+    Case("placeholder", "slot in yaml scalar", _edit("contracts/openapi.yaml", "title: Orders API", 'title: "{{project}} API"')),
     Case("assumption-indexed", "row open while approved", _edit("prd.md", "| confirmed |", "| open |")),
     Case("assumption-indexed", "marker without row", _append("nfr.md", "[ASSUMPTION A-09: x]")),
+    Case("assumption-indexed", "yaml marker without row", _append("contracts/config.yaml", "# [ASSUMPTION A-09: batch size fits memory]")),
     Case("assumption-indexed", "marker without id", _append("nfr.md", "[ASSUMPTION: x]")),
     Case("assumption-indexed", "bad row status", _edit("prd.md", "| confirmed |", "| maybe |")),
     Case("open-questions-empty", "question while approved", _edit("prd.md", "## 13. Open questions\n\nNone.", "## 13. Open questions\n\n- Q-01 Who owns refunds?")),
@@ -100,3 +107,21 @@ def test_vague_word_ignores_inline_code_and_fences(prd):
     _append("nfr.md", "")(prd)
     edit(prd, "nfr.md", "Traces: UJ-01; FR-002", "```\nbe fast and secure\n```\nTraces: UJ-01; FR-002")
     assert "vague-word" not in fired(lint(prd))
+
+
+def test_markers_in_contracts_report_their_file(prd):
+    edit(prd, "contracts/openapi.yaml", "title: Orders API", 'title: "[NEEDS CLARIFICATION: API title]"')
+    edit(prd, "contracts/schema.sql", "CREATE TABLE customers (", "-- [NEEDS CLARIFICATION: owner of customers]\nCREATE TABLE customers (")
+    hits = {(f.file, f.line) for f in lint(prd) if f.rule == "markers-open"}
+    assert hits == {("contracts/openapi.yaml", 3), ("contracts/schema.sql", 1)}
+
+
+def test_yaml_assumption_with_a_row_is_clean(prd):
+    (prd / "contracts/config.yaml").write_text((prd / "contracts/config.yaml").read_text() + "# [ASSUMPTION A-01: reps see only their own orders]\n")
+    assert "assumption-indexed" not in fired(lint(prd))
+
+
+def test_binary_and_gitkeep_files_are_not_scanned(prd):
+    (prd / "contracts/fixtures/.gitkeep").write_text("[NEEDS CLARIFICATION: ignored]")
+    (prd / "contracts/fixtures/blob.bin").write_bytes(b"\x00\xff[NEEDS CLARIFICATION\x00")
+    assert "markers-open" not in fired(lint(prd))

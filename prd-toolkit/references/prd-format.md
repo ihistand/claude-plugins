@@ -87,7 +87,11 @@ Cells keep backticks; a `|` inside backticks does not split a cell. Section 7 bu
 the validator `built-in`; a custom type gives a validator command that exits 0 when its files
 are valid. Registry Decision values (decision 5): standards `enforced`, `declined` or
 `proposed`; skills `required`, `recommended`, `declined` or `proposed`. `proposed` means the row
-is undecided, and an undecided row blocks approval. Adoption states: `not started`,
+is undecided, and an undecided row blocks approval. A `required` skill must be installed: a
+`plugin:skill` row needs the plugin in `~/.claude/plugins/installed_plugins.json` and, when that
+file records an `installPath`, `<installPath>/skills/<skill>/SKILL.md`; a bare skill needs
+`.claude/skills/<skill>/SKILL.md` in the home directory or the repo. A skill built into Claude
+Code (`code-review`, `security-review`, `simplify`, `init`) can only be `recommended`. Adoption states: `not started`,
 `extracted`, `confirmed`, `adopted`. Assumption status: `open`, `confirmed`, `corrected`.
 
 ## Requirement blocks

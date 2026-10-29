@@ -180,7 +180,7 @@ def load(prd_dir: Path) -> Prd:
     if not (prd_dir / "prd.md").is_file():
         raise NotAPrd(f"{prd_dir}: no prd.md")
     findings: list[Finding] = []
-    docs = {p.relative_to(prd_dir).as_posix(): p.read_text() for p in sorted(prd_dir.rglob("*.md"))}
+    docs = {p.relative_to(prd_dir).as_posix(): p.read_text(encoding="utf-8") for p in sorted(prd_dir.rglob("*.md"))}
     fm, fm_line = frontmatter(docs["prd.md"])
     secs = sections(docs["prd.md"])
 

@@ -88,3 +88,41 @@ def test_repo_root_finds_git_toplevel(tmp_path):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "a/b").mkdir(parents=True)
     assert model.repo_root(tmp_path / "a/b").resolve() == tmp_path.resolve()
+
+
+def _plugins(tmp_path, monkeypatch, entry):
+    f = tmp_path / "p.json"
+    f.write_text(json.dumps({"version": 2, "plugins": {"foo@market": [entry]}}))
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(f))
+
+
+def test_install_path_without_the_skill_is_not_installed(tmp_path, monkeypatch):
+    install = tmp_path / "cache/foo/1.0.0"
+    (install / "skills/other").mkdir(parents=True)
+    (install / "skills/other/SKILL.md").write_text("x")
+    _plugins(tmp_path, monkeypatch, {"scope": "user", "installPath": str(install)})
+    assert not installed_skill("foo:bar", tmp_path)
+    assert installed_skill("foo:other", tmp_path)
+
+
+def test_install_path_with_the_skill_is_installed(tmp_path, monkeypatch):
+    install = tmp_path / "cache/foo/1.0.0"
+    (install / "skills/bar").mkdir(parents=True)
+    (install / "skills/bar/SKILL.md").write_text("x")
+    _plugins(tmp_path, monkeypatch, {"scope": "user", "installPath": str(install)})
+    assert installed_skill("foo:bar", tmp_path)
+
+
+def test_no_install_path_falls_back_to_plugin_presence(tmp_path, monkeypatch):
+    _plugins(tmp_path, monkeypatch, {"scope": "user"})
+    assert installed_skill("foo:anything", tmp_path)
+
+
+def test_missing_skill_message_suggests_recommended(prd, tmp_path, monkeypatch):
+    install = tmp_path / "cache/superpowers/6.0.0"
+    install.mkdir(parents=True)
+    f = tmp_path / "p.json"
+    f.write_text(json.dumps({"plugins": {"superpowers@superpowers-marketplace": [{"installPath": str(install)}]}}))
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(f))
+    msgs = [f.message for f in lint(prd) if f.rule == "registries"]
+    assert len(msgs) == 1 and "superpowers:writing-plans" in msgs[0] and "recommended" in msgs[0]

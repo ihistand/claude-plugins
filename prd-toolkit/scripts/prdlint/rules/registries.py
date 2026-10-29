@@ -17,16 +17,26 @@ SKILLS_DECISIONS = {"required", "recommended", "declined", "proposed"}
 
 
 def installed_skill(skill: str, repo_root: Path) -> bool:
-    """`plugin:skill` is installed when a `plugin@...` key is in the plugins file; a bare skill when its SKILL.md exists."""
+    """A bare skill is installed when its SKILL.md exists under ~/.claude/skills or <repo>/.claude/skills.
+
+    `plugin:skill` needs a `plugin@...` key in the plugins file. When an install of that plugin records an
+    `installPath`, `<installPath>/skills/<skill>/SKILL.md` must also exist; without one, plugin presence is enough."""
     if ":" in skill:
-        plugin = skill.split(":", 1)[0]
+        plugin, name = skill.split(":", 1)
         path = Path(os.environ.get("PRD_PLUGINS_FILE") or Path.home() / ".claude/plugins/installed_plugins.json")
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return False
         plugins = data.get("plugins", data) if isinstance(data, dict) else {}
-        return isinstance(plugins, dict) and any(str(k).startswith(plugin + "@") for k in plugins)
+        if not isinstance(plugins, dict):
+            return False
+        entries = [v for k, v in plugins.items() if str(k).startswith(plugin + "@")]
+        if not entries:
+            return False
+        installs = [i for v in entries for i in (v if isinstance(v, list) else [v])]
+        paths = [i["installPath"] for i in installs if isinstance(i, dict) and isinstance(i.get("installPath"), str)]
+        return not paths or any((Path(p) / "skills" / name / "SKILL.md").is_file() for p in paths)
     return any((base / ".claude/skills" / skill / "SKILL.md").is_file() for base in (Path.home(), repo_root))
 
 
@@ -75,7 +85,7 @@ def registries(prd: Prd) -> Iterator[Finding]:
         if decision == "required":
             root = root or repo_root(prd.root)
             if not installed_skill(skill, root):
-                yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed")
+                yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed; if it is built into Claude Code, mark the row 'recommended'")
 
 
 _STEP = re.compile(r"^\s*\d+[.)]\s")

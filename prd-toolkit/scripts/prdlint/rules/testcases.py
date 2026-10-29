@@ -321,7 +321,7 @@ def classified_fixtures(prd: Prd):
         if not path.is_file():
             continue
         rel = path.relative_to(prd.root).as_posix()
-        text = path.read_text(errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
         suffix = path.suffix.lower()
         if suffix == ".csv":
             table = path.parent.name if path.parent != base else path.stem

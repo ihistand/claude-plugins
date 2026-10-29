@@ -29,6 +29,54 @@ def test_sample_tids(prd, capsys):
     assert len(set(capsys.readouterr().out.split())) == 3
 
 
+def _levels(prd):
+    from prdlint import model
+
+    return {t.id: t.data.get("level") for t in model.load(prd).test_cases}
+
+
+def test_sample_tids_never_picks_unit(prd, capsys):
+    levels = _levels(prd)
+    assert "unit" in levels.values(), "the fixture needs a unit case for this test to mean anything"
+    assert main(["--sample-tids", "99", str(prd)]) == 0
+    picked = capsys.readouterr().out.split()
+    assert sorted(picked) == sorted(t for t, lv in levels.items() if lv != "unit")
+
+
+def test_sample_tids_with_only_unit_cases_exits_1(prd, capsys):
+    import re
+
+    for p in (prd / "test-cases").glob("*.yaml"):
+        p.write_text(re.sub(r"level: \w+", "level: unit", p.read_text(encoding="utf-8")), encoding="utf-8")
+    assert set(_levels(prd).values()) == {"unit"}
+    assert main(["--sample-tids", "3", str(prd)]) == 1
+    out = capsys.readouterr()
+    assert out.out == "" and "prd_lint: no non-unit T-ids to sample" in out.err
+
+
+def _lint_in_c_locale(prd):
+    """Run the CLI in a C locale with UTF-8 mode off, where open() without an encoding is ASCII."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).parent.parent / "scripts/prd_lint.py"
+    env = {**os.environ, "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"}
+    return subprocess.run([sys.executable, str(script), str(prd)], env=env, capture_output=True, encoding="utf-8")
+
+
+def test_lint_runs_under_a_c_locale(prd):
+    r = _lint_in_c_locale(prd)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_lint_prints_non_ascii_findings_under_a_c_locale(prd):
+    (prd / "contracts/config.yaml").unlink()
+    r = _lint_in_c_locale(prd)
+    assert r.returncode == 1 and "— reason" in r.stdout and r.stderr == ""
+
+
 def test_unexpected_load_error_exits_2_without_traceback(prd, capsys, monkeypatch):
     def boom(_):
         raise OSError("disk gone")
