@@ -6,7 +6,9 @@
 > a 0.2-format PRD (one area, two requirements, one open bug) in a scratch repo, outside this
 > repo and never pushed. 0.3 refused it, the hand migration cleared the refusals, the packs met
 > the size rule, and a headless `changing-prds` session fixed the open bug. No toolkit code or
-> text was changed during the run.
+> text was changed during the run. The gaps were then fixed (see "Gaps found and fixed") and
+> step 5 was run again on a fresh build: its pack calls were right, and one read outside the
+> pack remains (see "Re-run of step 5").
 >
 > **Scope.** This is a small-PRD proof. Pack sizes on a large real area are not measured here.
 
@@ -97,15 +99,15 @@ orientation, when it looked for the known-failing marker and the E-001 mentions 
 
 | # | Gap | What the pack lacked | Disposition |
 |---|---|---|---|
-| 1 | Read of `features/notes.md` head | The format of a features file when the change touches only the test case and the error entry | controller to decide |
-| 2 | `grep E-001\|known` across the area's PRD files | A list of every place `E-001` and `known-failing` appear, so a fix can edit them without searching | controller to decide |
+| 1 | Read of `features/notes.md` head | The format of a features file when the change touches only the test case and the error entry | G1; the re-run still read the file (see Re-run of step 5) |
+| 2 | `grep E-001\|known` across the area's PRD files | A list of every place `E-001` and `known-failing` appear, so a fix can edit them without searching | fixed: G1 |
 
 Other findings, neither a read gap:
 
 | # | Finding | Disposition |
 |---|---|---|
-| 3 | The skill's pack call in the session ended `\| head -40; echo "prd-context-exit=$?"`, which reports `head`'s status. A STALE pack (exit 1) would show as 0 | controller to decide |
-| 4 | The code fix changed a cited line, and the skill did not re-point `FR-002`'s `Source:` to the new sha, so the PRD is stale after a clean change | controller to decide |
+| 3 | The skill's pack call in the session ended `\| head -40; echo "prd-context-exit=$?"`, which reports `head`'s status. A STALE pack (exit 1) would show as 0 | fixed: G2 |
+| 4 | The code fix changed a cited line, and the skill did not re-point `FR-002`'s `Source:` to the new sha, so the PRD is stale after a clean change | fixed: G3 |
 
 Harness deviations, so the run can be repeated:
 
@@ -114,11 +116,93 @@ Harness deviations, so the run can be repeated:
 - Placing the prompt after the variadic `--allowedTools` makes `claude -p` read no prompt and exit 1
   ("Input must be provided"); the prompt went first on the command line.
 
+## Gaps found and fixed
+
+Gaps 1 and 2 had one cause: `E-001` (0.2 format) has no `Touches:` line, so the decide pack only
+counted it, and the session searched the PRD for it. Findings 3 and 4 became G2 and G3.
+
+| # | Gap | Fix | Commit |
+|---|---|---|---|
+| G1 | A bug fix could not reach its entry through the pack (gaps 1 and 2) | `prd_context.py --req` takes an `E-nnn`: the whole entry goes into Known defects, and Requirements gets every block its `Touches:` line names plus the parent block of each case `known-failing` on it (the owner of its `ac:`, else the T-id's number). An unknown `E-nnn` is exit 2. changing-prds step 1, `/prd-context` and spec section 3 say so | `a6afefb` (code), `dc81809` (text) |
+| G2 | The pack was piped through `head`, which hid its exit (finding 3) | changing-prds step 1, `/prd-context` and adopting step 3: never pipe, filter or truncate the pack's output | `dc81809` |
+| G3 | No `Source:` refresh after the code commit (finding 4) | changing-prds step 5: after the code commit, run the implement pack again, rewrite each STALE `Source:` of a changed block at the new sha and commit the PRD, with no version bump and no section 14 row. The managed block carries a short clause (rendered worst case 1,481 of 1,536 bytes) | `dc81809` |
+
+Each fix is pinned in `tests/test_context.py` or `tests/test_context_routing.py`. The suite is
+552 tests; `change-uses-context-pack`, `changing-major-bump` and `changing-new-id-not-reused` stay
+at 1.00 with the plugin (3 runs each).
+
+## Re-run of step 5
+
+A fresh build (steps 1 to 3 with the corrected commands below) gave the same outputs: lint exit 1
+and three exit-2 refusals with the migration message, then after migration lint, trace and block
+exit 0, and `prd.md` 3,284 to 3,238 bytes. The headless command, flags and prompt were the same.
+The run took 75 seconds and 18 turns, exit 0.
+
+The `--req E-001` decide pack is 2,379 bytes (ratio 0.62 to `prd.md` plus `features/notes.md`). It
+holds `FR-002` (reached through `T-002.1`'s `known-failing`) and the whole `E-001` entry, and
+counts 0 entries with no requirement.
+
+`prd_context.py` runs:
+
+| Call | Arguments | `prd-context-exit=` |
+|---|---|---|
+| 2 | `docs/prd/notes --area notes --req E-001` (decide), unfiltered | 0 |
+
+Reads of PRD files by the session:
+
+| Call | Tool and path | Classification |
+|---|---|---|
+| 2 | Bash, `prd_context.py` (the pack) | pack |
+| 3 | Bash, `ls -R`; `cat` of `errors.md`, `test-cases/notes.yaml` and `prd.md` | allowed: files the change edited (all three edited in call 5) |
+| 4 | Bash, `cat docs/prd/notes/features/notes.md` | **read outside the pack**: not edited, not a closing pointer; the pack already held the whole `FR-002` block |
+| 21 | Bash, `grep` of `root\|conftest\|tests/` in `testing.md` | **read outside the pack**: quotes to dismiss two dry-run questions, which the dismissal rule requires |
+
+The tester's own reads (Glob, then Read of `test-cases/notes.yaml`, `testing.md` and
+`features/notes.md`) are its job and are not counted. Call 4 also grepped the format reference and
+read `src/notes/app.py`, neither a PRD file.
+
+Outcome: the PRD edits were the same as the first run's (1.0.2, `E-001` resolved, `known-failing`
+removed, a section 14 row, status In review, lint exit 0). This time `prd-tester` raised three
+questions. The session dismissed two with exact quotes from `testing.md` and could not dismiss the
+third (AC-002.1 does not say what `search_notes` returns when no note matches), so the dry run
+failed and the session stopped before approval, as the skill requires. Nothing was committed and
+the code was not changed. Its final message planned the step 5 refresh ("then refresh FR-002's
+`Source:` line").
+
+| Check | Result |
+|---|---|
+| Pack ran before the first PRD edit | Yes: call 2, `--req E-001`; first edit call 5 |
+| Unfiltered pack calls | Yes: the one call has no pipe; its exit is the script's |
+| Reads outside the pack | 2: `features/notes.md` (call 4) and the `testing.md` quotes (call 21) |
+| Sources current at the end | Yes, trivially: no code commit, and the implement pack exits 0. The G3 refresh did not run |
+
+Verdict: G1 and G2 hold. The run is not a pass: two reads outside the pack remain, and G3 was not
+exercised because the dry run stopped the change.
+
+## Corrected brief commands
+
+Step 1's export, which the plan file now carries:
+
+```
+git archive main prd-toolkit/evals/scaffolds prd-toolkit/tests/legacy.py prd-toolkit/tests/fixtures/legacy | tar -x -C <scratchpad>/proof-0.3/src
+```
+
+Step 5's headless form, prompt first:
+
+```
+claude -p "/prd-change fix E-001: search_notes must find notes containing the term regardless of letter case, so \"milk\" finds \"Buy Milk\". I approve the PRD change and the version bump you propose, and the code fix once the PRD is approved. Do not ask me questions." --plugin-dir <worktree>/prd-toolkit --model sonnet --output-format stream-json --verbose --allowedTools Read Glob Grep Write Edit Bash Agent Skill "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" > <scratchpad>/proof-0.3/fix-e001.jsonl
+```
+
 ## Later
 
 1. **Pack sizes on a large real area.** The ratios above come from a PRD of two requirements. The
    decide and implement packs must be measured on a large real area at the first real adoption,
    against the same rule (single-FR `decide` pack under 20,000 bytes and smaller than the PRD's
    files).
-2. **Dispositions for gaps 1 to 4**, once the controller has chosen: a test on this branch, or a
-   later release.
+2. **The re-run's two reads outside the pack**, for the controller to decide: the whole-file
+   read of `features/notes.md` (the pack held the block it needed), and the `testing.md` quotes a
+   dry-run dismissal needs, which the pack does not carry.
+3. **G3 in a live session.** The re-run stopped at a failed dry run, so the step 5 refresh is
+   proven only by its pin. A run that reaches the code commit confirms it.
+4. **The fixture's no-match gap.** AC-002.1 does not say what `search_notes` returns when no note
+   matches; a tester may ask, and the change then cannot be approved.

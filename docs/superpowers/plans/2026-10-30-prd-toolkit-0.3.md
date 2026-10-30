@@ -500,8 +500,8 @@ Runs now. The original target, the Looker PRD adopted in 0.2, was a process test
 - Outside this repo: the scratch repo `<scratchpad>/proof-0.3/notes`
 
 - [ ] **Step 1: Build a 0.2-format adopted PRD.**
-  - Export `main`'s eval scaffold and its helper. `main` holds the 0.2 format, in which the adoption map is a table in §8:
-    `git archive main prd-toolkit/evals/scaffolds prd-toolkit/tests/legacy.py | tar -x -C <scratchpad>/proof-0.3/src`
+  - Export `main`'s eval scaffold, its helper and the helper's fixture, which the scaffold copies from. `main` holds the 0.2 format, in which the adoption map is a table in §8:
+    `git archive main prd-toolkit/evals/scaffolds prd-toolkit/tests/legacy.py prd-toolkit/tests/fixtures/legacy | tar -x -C <scratchpad>/proof-0.3/src`
   - Run `python3 -B <scratchpad>/proof-0.3/src/prd-toolkit/evals/scaffolds/notes_repo.py <scratchpad>/proof-0.3/notes export-confirmed`.
   - In the scratch repo, run `git switch -c proof HEAD~1`. The PRD is now Approved at 1.0.0, with the `notes` area adopted, characterization tests, a known-failing `T-002.1` on open `E-001`, and `Source:` lines at real shas.
   - Check that §8 holds the table and that `adoption.md` is absent.
@@ -523,6 +523,8 @@ Runs now. The original target, the Looker PRD adopted in 0.2, was a process test
   - Then edit a cited source line without committing it. The `implement` pack must exit 1 with `STALE: uncommitted changes`. Commit the edit; the pack must then exit 1 with `STALE: changed since <sha>`. Revert both.
 - [ ] **Step 5: One real change.**
   - **The change:** fix `E-001` through changing-prds with 0.3 loaded. Run `claude --plugin-dir /Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.3/prd-toolkit` in the scratch repo, then `/prd-change fix E-001`.
+  - **Headless form**, when Ivan authorizes it. The prompt goes first: after the variadic `--allowedTools`, `claude -p` reads no prompt and exits 1. No permission-bypass flag, no settings edits:
+    `claude -p "/prd-change fix E-001: search_notes must find notes containing the term regardless of letter case, so \"milk\" finds \"Buy Milk\". I approve the PRD change and the version bump you propose, and the code fix once the PRD is approved. Do not ask me questions." --plugin-dir /Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.3/prd-toolkit --model sonnet --output-format stream-json --verbose --allowedTools Read Glob Grep Write Edit Bash Agent Skill "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" > <scratchpad>/proof-0.3/fix-e001.jsonl`
   - **From the session transcript, check:**
     - the pack ran before the first PRD edit;
     - list every read of a PRD file (Read, or Bash `cat`, `head`, `sed`, `grep`) that was neither the pack, one of the pack's closing-line pointers, a file the change edited, nor step 0's check of §14;
