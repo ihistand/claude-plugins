@@ -32,7 +32,7 @@ working. It is not an obstacle to route around.
 
 | | Dry run | Suite |
 |---|---|---|
-| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | adoption step 4; building (0.3); new or changed T-ids |
+| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | adoption step 4; building (0.4); new or changed T-ids |
 | Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
 | Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
 | Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, then RESULTS |

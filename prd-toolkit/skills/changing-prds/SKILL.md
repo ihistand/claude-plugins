@@ -43,7 +43,7 @@ the gap as the change.
 5. **Everything that describes the behaviour moves with it**: ACs, test-case expectations,
    `errors.yaml`, `openapi.yaml`, permissions, schema, fixtures, Observability rows. A stale test
    case is a wrong spec.
-6. **Read whole PRD files only to edit them.** Work from the `prd_context.py` pack. Open another
+6. **Read whole PRD files only to edit them, except step 0's check of §14.** Work from the `prd_context.py` pack. Open another
    PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
    file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
    is opening it. Another area's files come from the pack, never from a read; the area's own test cases are opened only to revise them in step 2.
@@ -88,7 +88,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
    fixtures, Observability rows. Then, as your first look at the PRD, run the pack for the area and the IDs the change touches, one command per Bash call:
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
-   Pass only the UJ, FR and NFR IDs: map an AC, test case or error code to its requirement.
+   If you do not know the area, run the repo pack first (no `--area`); if you do not know the
+   IDs, run the area pack (`--area` only) and list the touched IDs from it. Each is its own Bash
+   call, with the same `prd-context-exit=` gate. Pass only the UJ, FR and NFR IDs: map an AC, test case or error code to its requirement.
    A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix uses the `--req`
    IDs on its entry's `Touches:` line. The `prd-context-exit=` value must be `0` or `1`; `2` is a
    usage error, so fix the command. Work from the pack; read no whole PRD file yet. For a design choice
@@ -99,7 +101,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `approved` in the block and the index. Revise every test case whose AC changed and write one,
    with all seven elements, for every new AC. Revise `errors.yaml` (new code or changed
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
-   step 1 listed. Set the PRD status to `In review`.
+   step 1 listed. If a block the change touches has a `Source:` line, run the pack again with
+   `--for implement` (its own Bash call, the same gate), re-read each region it marks STALE, and
+   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. Set the PRD status to `In review`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted

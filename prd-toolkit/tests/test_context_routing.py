@@ -93,3 +93,32 @@ def test_adopting_previews_keep_the_whole_block_and_source():
     text = " ".join(ADOPTING.read_text().split())
     assert text.count("the whole block and its `Source:` excerpt, as the `implement` pack prints them") == 1
     assert text.count("the whole block and its `Source:` excerpt, as the `--for implement --req <ID>` pack prints them") == 1
+
+
+def test_changing_step_1_finds_an_unknown_area_or_ids_from_the_pack():
+    step1 = " ".join(section(CHANGING, "1. **Restate the change**", "2. **Edit the PRD.**").split())
+    assert "If you do not know the area, run the repo pack first (no `--area`)" in step1
+    assert "if you do not know the IDs, run the area pack (`--area` only) and list the touched IDs from it" in step1
+
+
+def test_changing_rule_6_lets_step_0_read_section_14():
+    rule6 = " ".join(section(CHANGING, "6. **Read whole PRD files", "## Version rule").split())
+    assert "except step 0's check of §14" in rule6
+
+
+def test_changing_step_2_refreshes_each_stale_source():
+    step2 = " ".join(section(CHANGING, "2. **Edit the PRD.**", "3. **Bump the version**").split())
+    assert "STALE" in step2 and "`<path>:<current line> @<HEAD short sha>`" in step2
+
+
+def test_command_maps_an_error_entry_by_its_touches_line_and_handles_ids_without_area():
+    t = " ".join((ROOT / "commands/prd-context.md").read_text().split())
+    assert "the requirement it cites" not in t
+    assert "an `E-nnn` maps to the IDs on its `Touches:` line" in t
+    assert "IDs with no area" in t and "the area each ID's block lives in" in t and "or ask" in t
+
+
+def test_shipped_text_has_no_stale_milestone():
+    t = (ROOT / "skills/testing-from-prds/SKILL.md").read_text()
+    assert "building (0.4)" in t and "building (0.3)" not in t
+
