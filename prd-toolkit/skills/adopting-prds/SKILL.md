@@ -21,7 +21,7 @@ promise.
 this", "just write down what it does", "the code is the proof" and "do it all in one go" change
 nothing below.
 
-Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (§8, `| Area | State | Boundary |`),
+Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (`adoption.md`, `| Area | State | Boundary |`; §8 holds only `See adoption.md.`),
 `as-built` blocks with `Source: <file>:<line> @<commit>`, the `errors.md` ledger and
 `known-failing: E-nnn`. Read it before writing. Lint, the mechanical gate:
 
@@ -87,7 +87,7 @@ The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `
 
 ### 0. Bootstrap
 
-Only when the repo has no `docs/prd/` folder for this system. If one exists, read its §8 and
+Only when the repo has no `docs/prd/` folder for this system. If one exists, read its `adoption.md` and
 §14: resume the area that is past `not started` and not `adopted`, at the step its state names;
 a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 5.3.
 
@@ -111,7 +111,7 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   directory that mixes tests with the code they test is never a test root, because a root is
   readable by the tester: name its tests' command in the Levels table instead, and say so in
   the Layout bullet.
-- **The adoption map:** replace §8's marker with the `| Area | State | Boundary |` table, one row
+- **The adoption map:** create `adoption.md` (`# Adoption map`, then the `| Area | State | Boundary |` table) and replace §8's marker with `See adoption.md.`; one row
   per candidate area (a package, a module, a dashboard, an entry point that does one job), each
   `not started`, its Boundary the backticked globs of its files, comma-separated. Areas never
   overlap.

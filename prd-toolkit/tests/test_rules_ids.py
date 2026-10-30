@@ -29,7 +29,12 @@ FR2_HEAD = "### FR-002 Get an order\nStatus: live (since 1.0.0)"
 
 def _adoption(*rows):
     body = "\n".join(["| Area | State | Boundary |", "|---|---|---|", *rows])
-    return _edit("prd.md", ADOPT_OLD, f"## 8. Adoption map\n\n{body}")
+
+    def mutate(root):
+        _edit("prd.md", ADOPT_OLD, "## 8. Adoption map\n\nSee adoption.md.")(root)
+        (root / "adoption.md").write_text(f"# Adoption map\n\n{body}\n")
+
+    return mutate
 
 
 def _as_built(root):

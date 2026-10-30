@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from ..deps import require
 from ..findings import Finding
 from ..markdown import strip_code, tables
-from ..model import ADOPTION_STATES, Prd
+from ..model import ADOPTION_FILE, ADOPTION_STATES, Prd
 from ..registry import rule
 
 SECTION_TITLES = [
@@ -149,15 +149,34 @@ def sections(prd: Prd):
 
 def _adoption_findings(prd: Prd) -> Iterator[Finding]:
     s8 = next((s for s in prd.sections if s.number == 8), None)
-    ts = tables(s8.body) if s8 else []
+    if s8:
+        body = "\n".join(t for _, t in s8.body).strip()
+        norm = body.removesuffix(".").strip()
+        has_file = ADOPTION_FILE in prd.docs
+        if tables(s8.body):
+            yield Finding("prd.md", s8.line, "sections", f'section 8: the adoption map moved to {ADOPTION_FILE} in prd-toolkit 0.3; move the table there and leave "See {ADOPTION_FILE}."')
+        elif "NEEDS CLARIFICATION" in body:
+            pass  # a draft marker; markers-open reports it
+        elif norm == f"See {ADOPTION_FILE}":
+            if not has_file:
+                yield Finding("prd.md", s8.line, "sections", f'section 8 points at {ADOPTION_FILE} but {ADOPTION_FILE} does not exist')
+        elif norm == "Not applicable: new project":
+            if has_file:
+                yield Finding("prd.md", s8.line, "sections", f'section 8 says "Not applicable: new project" but {ADOPTION_FILE} exists')
+        else:
+            yield Finding("prd.md", s8.line, "sections", f'section 8 body must be "See {ADOPTION_FILE}." or "Not applicable: new project."')
+    if ADOPTION_FILE not in prd.docs:
+        return
+    ts = tables([(n, line) for n, line in enumerate(prd.docs[ADOPTION_FILE].split("\n"), 1)])
     if not ts:
+        yield Finding(ADOPTION_FILE, 1, "sections", f"{ADOPTION_FILE} holds no '| Area | State | Boundary |' table")
         return
     header = [c.strip().strip("`") for c in ts[0].header]
     if header != ["Area", "State", "Boundary"]:
-        yield Finding("prd.md", s8.line, "sections", f"section 8 table header must be '| Area | State | Boundary |', not '| {' | '.join(header)} |'")
+        yield Finding(ADOPTION_FILE, 1, "sections", f"{ADOPTION_FILE} table header must be '| Area | State | Boundary |', not '| {' | '.join(header)} |'")
     for row in prd.adoption or []:
         if row.state not in ADOPTION_STATES:
-            yield Finding("prd.md", row.line, "sections", f"adoption state '{row.state}' for {row.area} must be one of {', '.join(ADOPTION_STATES)}")
+            yield Finding(ADOPTION_FILE, row.line, "sections", f"adoption state '{row.state}' for {row.area} must be one of {', '.join(ADOPTION_STATES)}")
 
 
 def _harness_findings(prd: Prd) -> Iterator[Finding]:

@@ -45,7 +45,8 @@ def test_check_missing_file_is_stale(prd, tmp_path):
     assert main([str(prd), "--claude-md", str(tmp_path / "CLAUDE.md"), "--check"]) == 1
 
 def test_adopted_areas_from_rows(prd, tmp_path):
-    edit(prd, "prd.md", "Not applicable: new project.", "| Area | State |\n|---|---|\n| billing | adopted |\n| search | extracted |\n| auth | adopted |")
+    edit(prd, "prd.md", "Not applicable: new project.", "See adoption.md.")
+    (prd / "adoption.md").write_text("# Adoption map\n\n| Area | State |\n|---|---|\n| billing | adopted |\n| search | extracted |\n| auth | adopted |\n")
     cm = tmp_path / "CLAUDE.md"; main([str(prd), "--claude-md", str(cm)])
     assert "Adopted areas: billing, auth\n" in cm.read_text()
 

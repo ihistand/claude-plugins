@@ -19,8 +19,10 @@ def build(tmp_path: Path, adoption: str | None = ADOPTED, features: dict[str, st
     repo = make_legacy_repo(tmp_path / "legacy")
     prd = repo / "docs/prd/notes"
     (prd / "features").mkdir(parents=True)
-    section = "Not applicable: new project." if adoption is None else HEADER + adoption + "\n"
-    (prd / "prd.md").write_text(f"# Notes\n\n## 8. Adoption map\n\n{section}\n## 9. Versioning\n", encoding="utf-8")
+    section = "Not applicable: new project." if adoption is None else "See adoption.md."
+    (prd / "prd.md").write_text(f"# Notes\n\n## 8. Adoption map\n\n{section}\n\n## 9. Versioning\n", encoding="utf-8")
+    if adoption is not None:
+        (prd / "adoption.md").write_text("# Adoption map\n\n" + HEADER + adoption + "\n", encoding="utf-8")
     (prd / "testing.md").write_text(f"# Testing\n\n## Harness\n- **Layout.** Test roots: {roots}.\n", encoding="utf-8")
     for name, text in (features or {"notes": block("FR-001", "live", ["T-001.1"])}).items():
         (prd / (name if name.endswith(".md") else f"features/{name}.md")).write_text(f"# {name}\n\n{text}", encoding="utf-8")

@@ -49,7 +49,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 `/prd-adopt [area]` runs the `adopting-prds` skill. It bootstraps `docs/prd/<slug>/` (first run
 only), then takes one area at a time, an area being `features/<area>.md` plus
 `test-cases/<area>.yaml`, bounded by the file globs in its Boundary cell. Progress is the adoption
-map in section 8 of `prd.md`, and each area moves forward one state at a time:
+map in `adoption.md`, and each area moves forward one state at a time:
 
 `not started` → `extracted` → `confirmed` → `adopted`
 

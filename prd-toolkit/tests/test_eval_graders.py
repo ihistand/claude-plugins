@@ -45,10 +45,10 @@ def test_real_unknowns_pass():
     assert pattern().search("- AC-001.1 ... [ASSUMPTION A-02: a code is 7 characters]")
 
 
-def test_the_adoption_map_marker_names_the_exact_table():
+def test_the_adoption_map_marker_names_the_two_bodies():
     text = TEMPLATE.read_text(encoding="utf-8")
     marker = text.split("## 8. Adoption map\n", 1)[1].split("\n## ", 1)[0]
-    assert "or the `| Area | State | Boundary |` table]" in marker and "Area/State" not in marker
+    assert "See adoption.md." in marker and "Not applicable: new project" in marker
 
 
 GLOB_GRADER = ROOT / "evals/tester-stays-out-of-src/graders/dry-run-no-test-root-glob.md"

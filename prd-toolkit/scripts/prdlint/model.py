@@ -58,6 +58,7 @@ class TestCase:
     data: LineDict
 
 
+ADOPTION_FILE = "adoption.md"
 ADOPTION_STATES = ("not started", "extracted", "confirmed", "adopted")
 
 
@@ -107,7 +108,7 @@ class Prd:
     not_applicable: dict[str, tuple[str, int]]
     assumptions: list[Row]
     load_findings: list[Finding]
-    adoption: list[AdoptionRow] | None = None  # None when section 8 has no table (Not applicable)
+    adoption: list[AdoptionRow] | None = None  # None exactly when adoption.md is absent
     errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
 
 
@@ -211,13 +212,13 @@ def _names(table) -> dict[str, int]:
     return {r.cells[0].strip("`"): r.line for r in table.rows} if table else {}
 
 
-def _adoption(secs: list[Section]) -> list[AdoptionRow] | None:
-    s8 = next((s for s in secs if s.number == 8), None)
-    ts = tables(s8.body) if s8 else []
-    if not ts:
+def _adoption(docs: dict[str, str]) -> list[AdoptionRow] | None:
+    """Rows of the first table in adoption.md; None when the file is absent, [] when it has no table."""
+    if ADOPTION_FILE not in docs:
         return None
+    ts = tables([(n, line) for n, line in enumerate(docs[ADOPTION_FILE].split("\n"), 1)])
     rows = []
-    for r in ts[0].rows:
+    for r in ts[0].rows if ts else []:
         c = r.cells + [""] * 3
         rows.append(AdoptionRow(c[0].strip("`"), c[1].strip("`"), _BACKTICKED.findall(c[2]), r.line))
     return rows
@@ -324,7 +325,7 @@ def load(prd_dir: Path) -> Prd:
         testing.harness = _harness(hs.body) if hs else Harness()
 
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
-               adoption=_adoption(secs), errors_ledger=_errors_ledger(docs.get("errors.md", "")))
+               adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")))
 
 
 def repo_root(path: Path) -> Path:

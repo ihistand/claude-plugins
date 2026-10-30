@@ -9,10 +9,7 @@ TESTING = "testing.md"
 
 
 def _set_adoption(prd, *rows):
-    text = (prd / "prd.md").read_text()
-    new = "| Area | State | Boundary |\n|---|---|---|\n" + "\n".join(rows) + "\n"
-    assert text.count("Not applicable: new project.\n") == 1
-    (prd / "prd.md").write_text(text.replace("Not applicable: new project.\n", new))
+    (prd / "adoption.md").write_text("# Adoption map\n\n| Area | State | Boundary |\n|---|---|---|\n" + "\n".join(rows) + "\n")
 
 
 def _append_errors(prd, text):
@@ -44,8 +41,7 @@ def test_adoption_rows_parse_boundary_globs(prd):
 
 
 def test_adoption_row_without_boundary_cell(prd):
-    text = (prd / "prd.md").read_text()
-    (prd / "prd.md").write_text(text.replace("Not applicable: new project.\n", "| Area | State |\n|---|---|\n| import | extracted |\n"))
+    (prd / "adoption.md").write_text("# Adoption map\n\n| Area | State |\n|---|---|\n| import | extracted |\n")
     row = load(prd).adoption[0]
     assert (row.area, row.state, row.boundary) == ("import", "extracted", [])
 

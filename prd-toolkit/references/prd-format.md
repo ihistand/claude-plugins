@@ -8,6 +8,7 @@ A PRD is a folder, `docs/prd/<project>/`, where `<project>` is a lowercase slug.
 
 ```
 prd.md                   index (14 sections)
+adoption.md              the adoption map                      optional: present for an adopted project
 features/<area>.md       UJ and FR blocks                      mandatory, at least one .md
 nfr.md                   NFR blocks and ## Observability       mandatory
 test-cases/<area>.yaml   one entry per T-id                    mandatory
@@ -30,6 +31,22 @@ A file that does not exist is listed in section 1 of `prd.md`, one line each:
 ```
 
 (The separator is an em dash, `—`.) Mandatory files are never listed as not applicable.
+
+## Tasks
+
+A repo has one PRD, `docs/prd/<project>/`. A sub-project of the repo (a dashboard, a service,
+a feature family) is an **area** of that PRD, never a PRD of its own. A task is one unit of
+work against the PRD:
+
+| Task | Edits in the PRD | Context pack |
+|---|---|---|
+| New sub-project | a new area: `features/<area>.md`, `test-cases/<area>.yaml`, a row in `adoption.md` when the project is adopted | `/prd-context` without an area |
+| Addition | new FR or UJ blocks in an existing area | `decide`, then `implement` |
+| Update | changed blocks and a version bump | `decide`, then `implement` |
+| Bug fix | the `E-nnn` entry resolved; its `known-failing` case passes | `decide`, then `implement`, for the IDs the entry touches |
+
+Every task adds a §14 row. The PRD always describes the system as it is now; git history and
+§14 record how it got there.
 
 ## prd.md frontmatter
 
@@ -78,7 +95,7 @@ Tables (the header row is parsed; column names and order are fixed):
 | 5 Standards | `\| Object (glob) \| Linter command \| Rules live in \| Applies to \| Decision \|` |
 | 6 Skills | `\| Object or activity \| Skill \| Decision \|` |
 | 7 Contract types | `\| Type \| Files (glob) \| Validator \|` |
-| 8 Adoption map | `\| Area \| State \| Boundary \|` (omit when `Not applicable: new project`); `sections` checks the header and that each state is one of the four below; `index-consistent` checks that an area past `not started` has its `features/<area>.md` |
+| 8 Adoption map | the body is `See adoption.md.` or `Not applicable: new project.`; the table `\| Area \| State \| Boundary \|` lives in `adoption.md`; `sections` checks the body, the header and that each state is one of the four below; `index-consistent` checks that an area past `not started` has its `features/<area>.md` |
 | 11 Requirement index | `\| ID \| Title \| Status \| File \| Since \|` (UJ, FR and NFR only) |
 | 12 Assumptions | `\| ID \| Assumption \| Status \|` |
 | 14 Changelog | `\| Version \| Date \| Change \| IDs \|` |
@@ -96,6 +113,8 @@ Code (`code-review`, `security-review`, `simplify`, `init`) can only be `recomme
 globs (`features/import.md`, `src/importer/**`), comma-separated; the loader reads each
 backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, or `awaiting <who>`
 (a named person, for example `awaiting Sam Rivera`; a bare `awaiting` is a violation).
+
+Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch.
 
 ## Requirement blocks
 
