@@ -499,29 +499,29 @@ Runs now. The original target, the Looker PRD adopted in 0.2, was a process test
 - Create: `docs/superpowers/plans/2026-10-30-prd-toolkit-0.3-acceptance.md`
 - Outside this repo: the scratch repo `<scratchpad>/proof-0.3/notes`
 
-- [ ] **Step 1: Build a 0.2-format adopted PRD.**
+- [x] **Step 1: Build a 0.2-format adopted PRD.**
   - Export `main`'s eval scaffold, its helper and the helper's fixture, which the scaffold copies from. `main` holds the 0.2 format, in which the adoption map is a table in §8:
     `git archive main prd-toolkit/evals/scaffolds prd-toolkit/tests/legacy.py prd-toolkit/tests/fixtures/legacy | tar -x -C <scratchpad>/proof-0.3/src`
   - Run `python3 -B <scratchpad>/proof-0.3/src/prd-toolkit/evals/scaffolds/notes_repo.py <scratchpad>/proof-0.3/notes export-confirmed`.
   - In the scratch repo, run `git switch -c proof HEAD~1`. The PRD is now Approved at 1.0.0, with the `notes` area adopted, characterization tests, a known-failing `T-002.1` on open `E-001`, and `Source:` lines at real shas.
   - Check that §8 holds the table and that `adoption.md` is absent.
-- [ ] **Step 2: Refusals.** With 0.3's scripts:
+- [x] **Step 2: Refusals.** With 0.3's scripts:
   - `prd_lint.py` reports `section 8: the adoption map moved to adoption.md in prd-toolkit 0.3; …`.
   - `prd_trace.py`, `prd_block.py --check` and `prd_context.py --area notes` each exit 2 with that message and print nothing on stdout.
   - Record the four outputs.
-- [ ] **Step 3: Migrate** by hand, as the message says:
+- [x] **Step 3: Migrate** by hand, as the message says:
   - Move the table into `adoption.md`.
   - Change §8 to `See adoption.md.`.
   - Set the version to 1.0.1 and update `updated`.
   - Add the §14 row `format: adoption map moved to adoption.md (prd-toolkit 0.3)`.
 
   Then check: the `prd-lint-exit=` value is `0`, `prd_trace.py` exits 0, and `prd_block.py` refreshes the block. Record `prd.md`'s bytes before and after. Commit in the scratch repo.
-- [ ] **Step 4: Measure and stale-check.**
+- [x] **Step 4: Measure and stale-check.**
   - Record the size lines of the repo pack and of three packs for `notes`: `decide` for the whole area, `decide --req FR-001`, and `implement --req FR-001`. The implement pack must exit 0 with current sources.
   - Compare each with `prd.md` plus `features/notes.md`.
   - **Pass:** the single-FR `decide` pack is under 20,000 bytes and smaller than `prd.md` plus the features file. Record the ratio.
   - Then edit a cited source line without committing it. The `implement` pack must exit 1 with `STALE: uncommitted changes`. Commit the edit; the pack must then exit 1 with `STALE: changed since <sha>`. Revert both.
-- [ ] **Step 5: One real change.**
+- [x] **Step 5: One real change.**
   - **The change:** fix `E-001` through changing-prds with 0.3 loaded. Run `claude --plugin-dir /Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.3/prd-toolkit` in the scratch repo, then `/prd-change fix E-001`.
   - **Headless form**, when Ivan authorizes it. The prompt goes first: after the variadic `--allowedTools`, `claude -p` reads no prompt and exits 1. No permission-bypass flag, no settings edits:
     `claude -p "/prd-change fix E-001: search_notes must find notes containing the term regardless of letter case, so \"milk\" finds \"Buy Milk\". I approve the PRD change and the version bump you propose, and the code fix once the PRD is approved. Do not ask me questions." --plugin-dir /Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.3/prd-toolkit --model sonnet --output-format stream-json --verbose --allowedTools Read Glob Grep Write Edit Bash Agent Skill "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" > <scratchpad>/proof-0.3/fix-e001.jsonl`
@@ -531,7 +531,7 @@ Runs now. The original target, the Looker PRD adopted in 0.2, was a process test
     - whether each touched STALE `Source:` was refreshed.
   - **Pass:** no such read.
   - Each extra read is a **pack gap**: fix it with a test on this branch, or list it as a later item.
-- [ ] **Step 6: Write the acceptance note.**
+- [x] **Step 6: Write the acceptance note.**
   - Record the outputs, the numbers, the gaps and their dispositions.
   - Say that this is a small-PRD proof, and that pack sizes at the scale of a large real area are confirmed at the first real adoption, which is a later item.
   - The note names no hosts, users, platform objects or people. Grep it for the organization's name before committing.

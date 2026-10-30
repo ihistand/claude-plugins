@@ -2,13 +2,13 @@
 
 > **Date:** 2026-10-30
 > **Plan:** `2026-10-30-prd-toolkit-0.3.md`, Task 8
-> **Result:** pass on a small PRD, with 2 pack gaps and 2 other findings listed below. The run used
-> a 0.2-format PRD (one area, two requirements, one open bug) in a scratch repo, outside this
-> repo and never pushed. 0.3 refused it, the hand migration cleared the refusals, the packs met
-> the size rule, and a headless `changing-prds` session fixed the open bug. No toolkit code or
-> text was changed during the run. The gaps were then fixed (see "Gaps found and fixed") and
-> step 5 was run again on a fresh build: its pack calls were right, and one read outside the
-> pack remains (see "Re-run of step 5").
+> **Result:** the refusals, the migration, the pack sizes and the stale checks pass. The bug fix
+> landed in run 1. The focus rule passed except for one recurring read of a features file, recorded
+> as a known limitation (see "Dispositions of the re-run"). The run used a 0.2-format PRD (one area,
+> two requirements, one open bug) in a scratch repo, outside this repo and never pushed. 0.3
+> refused it, the hand migration cleared the refusals, the packs met the size rule, and a headless
+> `changing-prds` session fixed the open bug. No toolkit code or text was changed during the run.
+> The gaps were then fixed (see "Gaps found and fixed") and step 5 was run again on a fresh build.
 >
 > **Scope.** This is a small-PRD proof. Pack sizes on a large real area are not measured here.
 
@@ -179,6 +179,17 @@ the code was not changed. Its final message planned the step 5 refresh ("then re
 Verdict: G1 and G2 hold. The run is not a pass: two reads outside the pack remain, and G3 was not
 exercised because the dry run stopped the change.
 
+## Dispositions of the re-run
+
+- **The `testing.md` read in call 21 was allowed.** It is a quote for a dry-run dismissal, which the
+  dismissal rule requires. Rule 6 now carves it out: `7a91d19`.
+- **The whole-file `cat` of `features/notes.md` in call 4 is a known limitation.** It happened in
+  both runs. Rule 6 is enforced by text alone for the caller, and the text did not prevent it.
+  See Later, item 5.
+- **G3 is covered by its pin only.** The re-run stopped before the code commit, because the tester
+  found a real PRD gap: AC-002.1 does not say what a search with no match returns, and the gap rule
+  correctly stopped the change. See Later, item 6.
+
 ## Corrected brief commands
 
 Step 1's export, which the plan file now carries:
@@ -199,10 +210,14 @@ claude -p "/prd-change fix E-001: search_notes must find notes containing the te
    decide and implement packs must be measured on a large real area at the first real adoption,
    against the same rule (single-FR `decide` pack under 20,000 bytes and smaller than the PRD's
    files).
-2. **The re-run's two reads outside the pack**, for the controller to decide: the whole-file
-   read of `features/notes.md` (the pack held the block it needed), and the `testing.md` quotes a
-   dry-run dismissal needs, which the pack does not carry.
+2. **The re-run's two reads outside the pack.** Decided: see "Dispositions of the re-run" and
+   items 5 and 6.
 3. **G3 in a live session.** The re-run stopped at a failed dry run, so the step 5 refresh is
    proven only by its pin. A run that reaches the code commit confirms it.
 4. **The fixture's no-match gap.** AC-002.1 does not say what `search_notes` returns when no note
    matches; a tester may ask, and the change then cannot be approved.
+5. **A caller-side guard hook.** Like the tester's, it blocks whole PRD-file reads outside rule 6's
+   exceptions. Today rule 6 binds the caller by text alone, and the re-run read `features/notes.md`
+   whole despite it.
+6. **An eval that reaches the code commit.** Its scaffold has `Source:` lines, and its change goes
+   through to the code commit, so the step 5 `Source:` refresh runs in a live session.
