@@ -43,7 +43,7 @@ the gap as the change.
 5. **Everything that describes the behaviour moves with it**: ACs, test-case expectations,
    `errors.yaml`, `openapi.yaml`, permissions, schema, fixtures, Observability rows. A stale test
    case is a wrong spec.
-6. **Read whole PRD files only to edit them, except step 0's check of §14.** Work from the `prd_context.py` pack. Open another
+6. **Read whole PRD files only to edit them, except step 0's check of §14, or reading a PRD line to quote it verbatim when dismissing a dry-run question, as step 4 requires.** Work from the `prd_context.py` pack. Open another
    PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
    file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
    is opening it. Another area's files come from the pack, never from a read; the area's own test cases are opened only to revise them in step 2.

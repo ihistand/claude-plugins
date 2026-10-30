@@ -108,6 +108,11 @@ def test_changing_rule_6_lets_step_0_read_section_14():
     assert "except step 0's check of §14" in rule6
 
 
+def test_changing_rule_6_lets_a_dismissal_quote_a_prd_line():
+    rule6 = " ".join(section(CHANGING, "6. **Read whole PRD files", "## Version rule").split())
+    assert "or reading a PRD line to quote it verbatim when dismissing a dry-run question, as step 4 requires" in rule6
+
+
 def test_changing_step_2_refreshes_each_stale_source():
     step2 = " ".join(section(CHANGING, "2. **Edit the PRD.**", "3. **Bump the version**").split())
     assert "STALE" in step2 and "`<path>:<current line> @<HEAD short sha>`" in step2
