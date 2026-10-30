@@ -1,12 +1,13 @@
 """Context packs: the slice of a PRD one task needs, and nothing else."""
 import json
 import re
+import subprocess
 from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
 from .deps import require
-from .markdown import Row, tables
+from .markdown import Row, sections, tables
 from .model import ADOPTION_FILE, Prd, ReqBlock, _field_lines
 from .rules.contracts import _custom_types
 
@@ -21,6 +22,7 @@ _UJ = re.compile(r"(?<![\w-])UJ-\d+(?![\w-])")
 _ASSUMPTION = re.compile(r"\[ASSUMPTION\b(?: (A-\d+):)?")
 _TYPED = re.compile(r"(?<![\w-])([A-Za-z][\w-]*):([^\s`'\",;()\[\]]+)")  # <type>:<name>
 _FEATURE = re.compile(r"features/([^/]+)\.md")
+_SOURCE_REF = re.compile(r"(?P<path>[^\s@]+):(?P<line>\d+)\s+@(?P<sha>[0-9a-fA-F]{4,40})")
 
 
 @dataclass
@@ -230,6 +232,75 @@ def _header(prd: Prd, area: str | None, mode: str, display: str, body: list[Item
     return Item("Header", None, "prd.md", None, "\n".join(lines + [size]))
 
 
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
+    """A git call in `root`; None when git cannot run or times out."""
+    try:
+        return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _stale_reason(root: Path, path: str, sha: str, target: Path) -> str | None:
+    ok = _git(root, "cat-file", "-e", f"{sha}^{{commit}}")
+    if ok is None or ok.returncode != 0:
+        return f"unknown commit {sha}"
+    if not target.is_file():
+        return "file missing"
+    log = _git(root, "log", "--format=%H", f"{sha}..HEAD", "--", path)
+    if log is None or log.returncode != 0:
+        return f"cannot compare with {sha}"
+    return f"changed since {sha}" if log.stdout.strip() else None
+
+
+def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, context: int) -> Item:
+    target = (root / path).resolve()
+    if not target.is_relative_to(root.resolve()):
+        target = root / "<outside repository>"
+    reason = _stale_reason(root, path, sha, target)
+    shown: list[str] = []
+    if target.is_file():
+        rows = target.read_bytes().decode("utf-8", errors="replace").split("\n")
+        rows = [r.rstrip("\r") for r in (rows[:-1] if rows and rows[-1] == "" else rows)]
+        if reason is None and line > len(rows):
+            reason = f"line {line} is past the end ({len(rows)} lines)"
+        lo, hi = max(1, line - context), min(len(rows), line + context)
+        shown = [f"{n:>5}  {rows[n - 1]}" for n in range(lo, hi + 1)]
+    head = [f"### {path}:{line} @{sha}"]
+    if reason:
+        head.append(f"STALE: {reason}; the cited line may have moved")
+    return Item("Code", block.id, path, line, "\n".join(head + shown), stale=bool(reason))
+
+
+def _code(blocks: list[ReqBlock], area: str, root: Path, context: int) -> list[Item]:
+    items, seen = [], set()
+    for b in blocks:
+        for m in _SOURCE_REF.finditer(b.source or ""):
+            ref = (m["path"], int(m["line"]), m["sha"])
+            if ref not in seen:
+                seen.add(ref)
+                items.append(_excerpt(root, b, *ref[:2], ref[2], context))
+    return items or [_none("Code", f"features/{area}.md")]
+
+
+def _levels(prd: Prd) -> list[Item]:
+    if "testing.md" not in prd.docs:
+        return [_none("Levels", "testing.md")]
+    sec = next((s for s in sections(prd.docs["testing.md"]) if s.title.strip().lower() == "levels"), None)
+    ts = tables(sec.body) if sec else []
+    if not ts or not ts[0].rows:
+        return [_none("Levels", "testing.md")]
+    lines = _lines(prd, "testing.md")
+    first = ts[0].rows[0].line
+    text = "\n".join(lines[first - 3 : first - 1] + [lines[r.line - 1] for r in ts[0].rows])
+    return [Item("Levels", None, "testing.md", first - 2, text)]
+
+
+def _in_git_work_tree(path: Path) -> bool:
+    r = _git(path, "rev-parse", "--is-inside-work-tree")
+    return r is not None and r.returncode == 0 and r.stdout.strip() == "true"
+
+
 def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "decide",
                context: int = 20, repo_root: Path | None = None, display: str = "") -> list[Item]:
     """The pack's items, in part order. Raises ContextError for every exit-2 condition."""
@@ -248,14 +319,17 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
     if area not in known:
         raise ContextError(f"unknown area '{area}'; areas: {', '.join(known) or 'none'}")
 
+    if mode == "implement" and not _in_git_work_tree(prd.root):
+        raise ContextError("--for implement needs the PRD inside a git work tree")
     blocks = _select(prd, area, req)
     texts = [_block_text(prd, b, area) for b in blocks]
     text = "\n".join(texts)
     ids = {b.id for b in blocks}
     requirements = [Item("Requirements", b.id, b.file, b.line, t) for b, t in zip(blocks, texts)]
     patterns = [_word(i) for i in sorted(ids | {ac.id for b in blocks for ac in b.acs})] + [_word(area)]
+    implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd)) if mode == "implement" else []
     body = (_stack(prd) + _glossary(prd, text) + (requirements or [_none("Requirements", f"features/{area}.md")])
-            + _cited(prd, area, blocks, text) + _defects(prd, ids) + _questions(prd, patterns) + _history(prd, area))
+            + implement + _cited(prd, area, blocks, text) + _defects(prd, ids) + _questions(prd, patterns) + _history(prd, area))
     return [_header(prd, area, mode, display, body)] + body
 
 
