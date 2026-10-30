@@ -90,10 +90,13 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
    If you do not know the area, run the repo pack first (no `--area`); if you do not know the
    IDs, run the area pack (`--area` only) and list the touched IDs from it. Each is its own Bash
-   call, with the same `prd-context-exit=` gate. Pass only the UJ, FR and NFR IDs: map an AC, test case or error code to its requirement.
-   A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix uses the `--req`
-   IDs on its entry's `Touches:` line. The `prd-context-exit=` value must be `0` or `1`; `2` is a
-   usage error, so fix the command. Work from the pack; read no whole PRD file yet. For a design choice
+   call, with the same `prd-context-exit=` gate. Pass only the UJ, FR and NFR IDs, and a bug fix's `E-nnn`: map an AC, test case or error code to its requirement.
+   A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix runs the pack with
+   its entry's ID, `--req E-nnn`: the pack then holds the entry, the blocks its `Touches:` line
+   names and the parent block of each test case `known-failing` on it. The `prd-context-exit=`
+   value must be `0` or `1`; `2` is a usage error, so fix the command. Never pipe, filter or
+   truncate the pack's output (no `| head`, no `| grep`): `prd-context-exit=` then reports the
+   filter's status, not the pack's. Work from the pack; read no whole PRD file yet. For a design choice
    the request leaves open, pick the recommendation the PRD or repo supports and carry it to
    step 5 as a decision the user confirms. A value only the user knows (a name, URL, limit):
    ask, and stop until answered.
@@ -138,6 +141,10 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
    to its requirement): write the code from `/prd-context <area> <changed IDs> implement`.
+   After the code commit, run the implement pack again (its own Bash call, the same gate), then
+   rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit
+   the PRD. A `Source:` refresh is provenance, not behaviour: it takes no version bump and no
+   §14 row.
 
 ## Red Flags - STOP
 

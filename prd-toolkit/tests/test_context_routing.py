@@ -12,7 +12,8 @@ CHANGING = ROOT / "skills/changing-prds/SKILL.md"
 
 BULLET = ("To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD\n"
           "  files only to edit them. Before writing code for an approved change, run `/prd-context <area>\n"
-          "  <IDs> implement`. Code implements the PRD; it never defines behaviour the PRD lacks.")
+          "  <IDs> implement`; after the code commit, run it again and refresh each STALE `Source:`. Code\n"
+          "  implements the PRD; it never defines behaviour the PRD lacks.")
 
 
 def section(path: Path, start: str, end: str) -> str:
@@ -86,7 +87,8 @@ def test_changing_pack_ids_are_requirement_ids():
 def test_changing_step_1_new_subproject_and_bug_fix():
     step1 = " ".join(section(CHANGING, "1. **Restate the change**", "2. **Edit the PRD.**").split())
     assert "A new sub-project has no area yet: leave out `--area` and `--req`" in step1
-    assert "`Touches:`" in step1 and "bug fix" in step1
+    assert "A bug fix runs the pack with its entry's ID, `--req E-nnn`" in step1
+    assert "on its entry's `Touches:` line" not in step1
 
 
 def test_adopting_previews_keep_the_whole_block_and_source():
@@ -114,7 +116,8 @@ def test_changing_step_2_refreshes_each_stale_source():
 def test_command_maps_an_error_entry_by_its_touches_line_and_handles_ids_without_area():
     t = " ".join((ROOT / "commands/prd-context.md").read_text().split())
     assert "the requirement it cites" not in t
-    assert "an `E-nnn` maps to the IDs on its `Touches:` line" in t
+    assert "an `E-nnn` maps to the IDs on its `Touches:` line" not in t
+    assert "Pass only UJ, FR, NFR and E IDs" in t and "an `E-nnn` passes as it is" in t
     assert "IDs with no area" in t and "the area each ID's block lives in" in t and "or ask" in t
 
 
@@ -127,3 +130,22 @@ def test_readme_links_every_spec():
     t = (ROOT / "README.md").read_text()
     for spec in ("2026-10-29-prd-toolkit-design.md", "2026-10-29-prd-toolkit-0.2-design.md", "2026-10-30-prd-toolkit-0.3-design.md"):
         assert f"(../docs/superpowers/specs/{spec})" in t and (ROOT.parent / "docs/superpowers/specs" / spec).is_file()
+
+
+NO_FILTER = "Never pipe, filter or truncate the pack's output (no `| head`, no `| grep`)"
+
+
+def test_pack_output_is_never_filtered():
+    step1 = " ".join(section(CHANGING, "1. **Restate the change**", "2. **Edit the PRD.**").split())
+    command = " ".join((ROOT / "commands/prd-context.md").read_text().split())
+    how = " ".join(section(ADOPTING, "**How to ask.**", "**The checklist file.**").split())
+    for text in (step1, command, how):
+        assert NO_FILTER in text and "the filter's status" in text
+
+
+def test_changing_step_5_refreshes_sources_after_the_code_commit():
+    step5 = " ".join(section(CHANGING, "5. **Approval, then commit.**", "## Red Flags").split())
+    after = step5[step5.index("/prd-context <area> <changed IDs> implement"):]
+    assert "After the code commit, run the implement pack again" in after
+    assert "rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit the PRD" in after
+    assert "provenance, not behaviour" in after and "no version bump and no §14 row" in after

@@ -79,9 +79,13 @@ conventions: a `uv run --script` header, the shared `prdlint` model and parsers,
 
 **Selection.**
 - With `--area` and no `--req`: every UJ and FR block in `features/<area>.md`.
-- With `--req`: only those blocks (UJ, FR or NFR IDs), plus every UJ their `Traces:` lines
-  name. An ID outside the area is allowed and is labelled `(area: <other>)`. A removed block is
-  included with its removed marker, never silently dropped.
+- With `--req`: only those blocks (UJ, FR, NFR or E IDs), plus every UJ their `Traces:` lines
+  name. An `E-nnn` selects its whole `errors.md` entry into Known defects and, as
+  Requirements, every block its `Touches:` line names plus the parent block of each test case
+  with `known-failing: E-nnn` (the owner of the case's `ac:`, else the T-id's number:
+  `T-002.1` → `FR-002`); an unknown `E-nnn` is exit 2. An ID outside the area is allowed and
+  is labelled `(area: <other>)`. A removed block is included with its removed marker, never
+  silently dropped.
 - Without `--area`: the **repo pack**: the header, §1, §4, and one line per area (slug, state,
   Boundary) from `adoption.md`, or the list of `features/*.md` slugs for a project with no
   adoption map. `--req` is not allowed here.
@@ -96,7 +100,8 @@ conventions: a `uv run --script` header, the shared `prdlint` model and parsers,
    `contracts/errors.yaml` entry; each `<type>:<name>` item with its contract entry, resolved
    exactly as lint's `contracts-valid` resolves it; each `[ASSUMPTION A-nn …]` marker in a
    selected block with its §12 row.
-6. **Known defects**: the open `errors.md` entries whose `Touches:` names a selected ID, whole.
+6. **Known defects**: each entry `--req` names, and the open `errors.md` entries whose
+   `Touches:` names a selected ID, whole.
    A closing line counts the open entries with no `Touches:`: `2 open errors.md entries name no
    requirement`.
 7. **Open questions**: the §13 items that contain a selected ID, one of their AC IDs, or the
@@ -178,11 +183,15 @@ repo pack. It exists because the managed CLAUDE.md block cannot name the script'
 
 **changing-prds.**
 - Step 1 (Restate) runs `/prd-context <area> <IDs>` for the IDs the change touches, or with no
-  area for a new sub-project, or with the `Touches:` IDs for a bug fix. A new non-negotiable
+  area for a new sub-project, or with the entry's `E-nnn` for a bug fix. A new non-negotiable
   rule: **read whole PRD files only to edit them**. Work from the pack; open another PRD file
   only for what the pack's closing lines say it left out.
 - Step 5's hand-off, after approval: "write the code from `/prd-context <area> <changed IDs>
-  implement`".
+  implement`". After the code commit, the implement pack runs again and each STALE `Source:`
+  of a changed block is rewritten at the new sha; that refresh is provenance, so it takes no
+  version bump and no §14 row.
+- The pack's output is never piped, filtered or truncated: `prd-context-exit=` would report
+  the filter's status.
 
 **adopting-prds step 3.** Each AskUserQuestion preview and each checklist item is the
 `implement` pack for that one requirement (`--req FR-nnn`): the block and its fresh,
@@ -192,7 +201,8 @@ staleness-checked `Source:` excerpt.
 
 > To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
 > files only to edit them. Before writing code for an approved change, run `/prd-context <area>
-> <IDs> implement`. Code implements the PRD; it never defines behaviour the PRD lacks.
+> <IDs> implement`; after the code commit, run it again and refresh each STALE `Source:`. Code
+> implements the PRD; it never defines behaviour the PRD lacks.
 
 The other lines stay. The rendered block stays under 1,536 bytes.
 

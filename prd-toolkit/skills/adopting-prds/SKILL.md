@@ -186,7 +186,7 @@ leave the area `extracted`.
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
 per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
 `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --for implement --req <ID>; echo "prd-context-exit=$?"`.
-The `prd-context-exit=` value must be `0` or `1`; `1` marks STALE regions, which the preview shows as they are. The
+The `prd-context-exit=` value must be `0` or `1`; `1` marks STALE regions, which the preview shows as they are. Never pipe, filter or truncate the pack's output (no `| head`, no `| grep`): `prd-context-exit=` then reports the filter's status, not the pack's. The
 options:
 
 - **Confirm**: confirmed.
