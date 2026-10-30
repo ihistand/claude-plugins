@@ -27,3 +27,19 @@ def test_helper_internals_are_harness_choices_not_questions():
 def test_pass_terms_review_harness_choices():
     after = PROMPT.read_text(encoding="utf-8").split("```")[-1]
     assert "HARNESS CHOICES" in after and "contradicts" in after
+
+
+SKILLS = Path(__file__).parent.parent / "skills"
+
+
+def test_pass_terms_allow_dismissal_only_by_exact_quote():
+    # found in the 0.1 acceptance run: six dry runs, real gaps fell to 2, yet a model tester
+    # re-asked 5-7 answered questions every run, so "QUESTIONS is none" could never pass
+    after = PROMPT.read_text(encoding="utf-8").split("```")[-1]
+    assert "DISMISSED" in after and "exact" in after and "quote" in after
+
+
+def test_both_skills_flag_a_dismissal_without_a_quote():
+    for skill in ("authoring-prds", "changing-prds"):
+        text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "dismissed without an exact quote" in text, skill

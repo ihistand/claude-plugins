@@ -50,8 +50,16 @@ Report, in this order:
 4. FILES READ: every path you opened, listed or searched.
 ```
 
-The dry run passes only when QUESTIONS is `none`, TESTS has one path for every T-id in the
-slot, and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it. Read
+Before judging, triage QUESTIONS. A question the PRD already answers may be dismissed, but only
+with an exact quote: the file, and the line copied verbatim, that answers it. A question about a
+helper's own internals may be dismissed by naming the HARNESS CHOICES rule above. List every
+dismissal under DISMISSED in the run record, one per line: the question, then the quote or the
+rule. A paraphrase, a "the PRD implies", or a quote that answers only part of the question is
+not a dismissal: that question stays. Never dismiss a question by changing the PRD; a fix is a
+gap, fixed and dry-run again.
+
+The dry run passes only when every question is dismissed, TESTS has one path for every T-id in
+the slot, and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it. Read
 HARNESS CHOICES too: a choice that contradicts testing.md, or one that changes what a test
 asserts, is a question in disguise and fails the run. The rest are the tester's to make; the
 builder's harness may make them differently without changing any test case.

@@ -92,7 +92,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
-   test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 questions`,
+   test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 open questions, 1 dismissed by quote`,
    `no dry run (removal only)`, `no dry run (unit only)` or `no dry run (wording only)`.
 4. **Lint and dry run.** Lint must exit 0. Then dry-run the new and revised T-ids only, never a
    `level: unit` one: unit cases read code, stay with the builder and are never sampled, as in
@@ -134,6 +134,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 - A version bump, a changelog row or an approval on a PRD whose §14 has no row at 1.0.0 or
   above. A never-approved draft goes back to `prd-toolkit:authoring-prds`.
 - A dry-run slot holding a unit T-id, or no T-id at all.
+- A dry-run question dismissed without an exact quote of the PRD line that answers it.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
