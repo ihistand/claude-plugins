@@ -491,19 +491,49 @@ def test_command_maps_arguments():
 
 ---
 
-### Task 8: Proof on the Looker PRD (interactive)
+### Task 8: Proof on a small adopted PRD
 
-**Starts only when** the 0.2 PR has merged and Ivan has approved the first adopted area of the Looker PRD. Ivan drives it in his own session. The controller gives him the pastes and records the results.
+Runs now. The original target, the Looker PRD adopted in 0.2, was a process test that will not be adopted, so the proof uses a small real one. The controller runs steps 1–4 and 6. Step 5 is a real changing-prds session: Ivan drives it, or he authorizes a headless run whose prompt carries his approval, as the evals do. All of it happens in a scratch repo under the session scratchpad, which is never committed here and never pushed.
 
 **Files:**
 - Create: `docs/superpowers/plans/2026-10-30-prd-toolkit-0.3-acceptance.md`
-- Outside this repo (Ivan's session, his branch): the Looker PRD folder
+- Outside this repo: the scratch repo `<scratchpad>/proof-0.3/notes`
 
-- [ ] **Step 1: Rebase.** Run `git rebase main` on `feat/prd-toolkit-0.3` after the 0.2 merge. Rerun the suite.
-- [ ] **Step 2: Migrate.** In the Looker PRD, move the §8 table to `adoption.md`, write `See adoption.md.`, bump the patch version and add the §14 row `format: adoption map moved to adoption.md (prd-toolkit 0.3)`. The `prd-lint-exit=` value must be `0`. Record `prd.md` bytes before and after. Committing and pushing on that repo need Ivan's go-ahead.
-- [ ] **Step 3: Measure.** Record the size lines of three packs for the adopted area: `decide` for the whole area, `decide --req <one FR>` and `implement --req <one FR>`. Compare them with `prd.md` plus the area's features file. Pass: the single-FR `decide` pack is under 20,000 bytes.
-- [ ] **Step 4: One real change.** Ivan picks one small change, for example one of the area's open `E-nnn` fixes. He runs it through changing-prds with 0.3 loaded. From the transcript, list every Read of a PRD file that was neither the pack nor a file the change edited. Pass: none. Each one found is a pack gap: fix it with a test on this branch, or list it as a later item.
-- [ ] **Step 5: Write the acceptance note.** Record the numbers, the gaps and their dispositions. It names no hosts, users, platform objects or people. Grep it for the organization's name before committing. Commit: `docs(prd-toolkit): 0.3 acceptance`.
+- [ ] **Step 1: Build a 0.2-format adopted PRD.**
+  - Export `main`'s eval scaffold and its helper. `main` holds the 0.2 format, in which the adoption map is a table in §8:
+    `git archive main prd-toolkit/evals/scaffolds prd-toolkit/tests/legacy.py | tar -x -C <scratchpad>/proof-0.3/src`
+  - Run `python3 -B <scratchpad>/proof-0.3/src/prd-toolkit/evals/scaffolds/notes_repo.py <scratchpad>/proof-0.3/notes export-confirmed`.
+  - In the scratch repo, run `git switch -c proof HEAD~1`. The PRD is now Approved at 1.0.0, with the `notes` area adopted, characterization tests, a known-failing `T-002.1` on open `E-001`, and `Source:` lines at real shas.
+  - Check that §8 holds the table and that `adoption.md` is absent.
+- [ ] **Step 2: Refusals.** With 0.3's scripts:
+  - `prd_lint.py` reports `section 8: the adoption map moved to adoption.md in prd-toolkit 0.3; …`.
+  - `prd_trace.py`, `prd_block.py --check` and `prd_context.py --area notes` each exit 2 with that message and print nothing on stdout.
+  - Record the four outputs.
+- [ ] **Step 3: Migrate** by hand, as the message says:
+  - Move the table into `adoption.md`.
+  - Change §8 to `See adoption.md.`.
+  - Set the version to 1.0.1 and update `updated`.
+  - Add the §14 row `format: adoption map moved to adoption.md (prd-toolkit 0.3)`.
+
+  Then check: the `prd-lint-exit=` value is `0`, `prd_trace.py` exits 0, and `prd_block.py` refreshes the block. Record `prd.md`'s bytes before and after. Commit in the scratch repo.
+- [ ] **Step 4: Measure and stale-check.**
+  - Record the size lines of the repo pack and of three packs for `notes`: `decide` for the whole area, `decide --req FR-001`, and `implement --req FR-001`. The implement pack must exit 0 with current sources.
+  - Compare each with `prd.md` plus `features/notes.md`.
+  - **Pass:** the single-FR `decide` pack is under 20,000 bytes and smaller than `prd.md` plus the features file. Record the ratio.
+  - Then edit a cited source line without committing it. The `implement` pack must exit 1 with `STALE: uncommitted changes`. Commit the edit; the pack must then exit 1 with `STALE: changed since <sha>`. Revert both.
+- [ ] **Step 5: One real change.**
+  - **The change:** fix `E-001` through changing-prds with 0.3 loaded. Run `claude --plugin-dir /Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.3/prd-toolkit` in the scratch repo, then `/prd-change fix E-001`.
+  - **From the session transcript, check:**
+    - the pack ran before the first PRD edit;
+    - list every read of a PRD file (Read, or Bash `cat`, `head`, `sed`, `grep`) that was neither the pack, one of the pack's closing-line pointers, a file the change edited, nor step 0's check of §14;
+    - whether each touched STALE `Source:` was refreshed.
+  - **Pass:** no such read.
+  - Each extra read is a **pack gap**: fix it with a test on this branch, or list it as a later item.
+- [ ] **Step 6: Write the acceptance note.**
+  - Record the outputs, the numbers, the gaps and their dispositions.
+  - Say that this is a small-PRD proof, and that pack sizes at the scale of a large real area are confirmed at the first real adoption, which is a later item.
+  - The note names no hosts, users, platform objects or people. Grep it for the organization's name before committing.
+  - Commit: `docs(prd-toolkit): 0.3 acceptance`.
 
 ---
 

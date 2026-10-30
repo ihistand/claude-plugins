@@ -21,8 +21,8 @@ writes code, the code lines they were read from. Nothing else.
 - `Touches:` as an optional, linted field of `errors.md` entries;
 - skill and managed-block wording that routes every task through the pack.
 
-It is **proven by** migrating the Looker PRD adopted in 0.2 and making one real change to it
-through the pack (section 8).
+It is **proven by** migrating a small adopted PRD from the 0.2 format and making one real change
+to it through the pack (section 8).
 
 ### Decisions
 
@@ -239,20 +239,25 @@ and are recorded in `BASELINE.md`.
 **Verify.** `uv run --directory prd-toolkit pytest -q`, `cd web && npm test`, and `claude plugin
 validate ./prd-toolkit`.
 
-## 8. Proof: the Looker PRD
+## 8. Proof: a small adopted PRD
 
-On the PRD adopted in 0.2, after its first area is approved:
-1. Migrate §8 to `adoption.md` (a patch bump). Record `prd.md`'s size before and after; §8 was
-   18,433 of 34,725 bytes.
-2. Record the sizes of three packs for the adopted area: `decide` for the whole area, `decide`
-   for one FR, and `implement` for one FR. Compare them with `prd.md` plus the area's features
-   file. **Pass: the single-FR `decide` pack is under 20,000 bytes.**
-3. Make one real, small change through changing-prds with the pack. **Pass: the session reads
-   no PRD file beyond the pack and the files it edits.** Each extra read it needed is a **pack
-   gap**, either fixed with a test or listed as a later item.
+The PRD adopted in 0.2 was a process test and will not be adopted, so the proof uses the eval
+scaffold's notes project in its 0.2 format: one adopted area, real code, `Source:` lines at real
+commits, and a known-failing case on an open `E-nnn`.
+1. Lint and the three consumers name the migration and refuse an unmigrated PRD.
+2. Migrate §8 to `adoption.md` (a patch bump); lint and trace then exit 0.
+3. Record the sizes of the repo pack and of three packs for the area: `decide` for the whole
+   area, `decide` for one FR, and `implement` for one FR. Compare them with `prd.md` plus the
+   area's features file. **Pass: the single-FR `decide` pack is under 20,000 bytes and smaller
+   than `prd.md` plus the features file.** An uncommitted and then a committed edit to a cited
+   line each make the `implement` pack stale.
+4. Make one real, small change through changing-prds with the pack (fix the open `E-nnn`).
+   **Pass: the session reads no PRD file beyond the pack and the files it edits.** Each extra
+   read it needed is a **pack gap**, either fixed with a test or listed as a later item.
 
-The acceptance note, `docs/superpowers/plans/2026-10-30-prd-toolkit-0.3-acceptance.md`, records
-the numbers and the gaps. It names no hosts, users, platform objects or people.
+Pack sizes at the scale of a large real area are confirmed at the first real adoption. The
+acceptance note, `docs/superpowers/plans/2026-10-30-prd-toolkit-0.3-acceptance.md`, records the
+numbers and the gaps. It names no hosts, users, platform objects or people.
 
 ## 9. Out of scope for 0.3
 
