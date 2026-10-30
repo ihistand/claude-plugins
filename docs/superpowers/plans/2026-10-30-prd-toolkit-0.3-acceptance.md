@@ -3,8 +3,9 @@
 > **Date:** 2026-10-30
 > **Plan:** `2026-10-30-prd-toolkit-0.3.md`, Task 8
 > **Result:** the refusals, the migration, the pack sizes and the stale checks pass. The bug fix
-> landed in run 1. The focus rule passed except for one recurring read of a features file, recorded
-> as a known limitation (see "Dispositions of the re-run"). The run used a 0.2-format PRD (one area,
+> landed in run 1. The focus rule failed in both runs: once on reads the fixes then closed, and once
+> on a recurring features-file read that is recorded as a known limitation (see "Dispositions of the
+> re-run"). The run used a 0.2-format PRD (one area,
 > two requirements, one open bug) in a scratch repo, outside this repo and never pushed. 0.3
 > refused it, the hand migration cleared the refusals, the packs met the size rule, and a headless
 > `changing-prds` session fixed the open bug. No toolkit code or text was changed during the run.
@@ -99,7 +100,7 @@ orientation, when it looked for the known-failing marker and the E-001 mentions 
 
 | # | Gap | What the pack lacked | Disposition |
 |---|---|---|---|
-| 1 | Read of `features/notes.md` head | The format of a features file when the change touches only the test case and the error entry | G1; the re-run still read the file (see Re-run of step 5) |
+| 1 | Read of `features/notes.md` head | The format of a features file when the change touches only the test case and the error entry | not fixed; known limitation (see Later) |
 | 2 | `grep E-001\|known` across the area's PRD files | A list of every place `E-001` and `known-failing` appear, so a fix can edit them without searching | fixed: G1 |
 
 Other findings, neither a read gap:

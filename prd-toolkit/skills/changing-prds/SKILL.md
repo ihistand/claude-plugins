@@ -144,7 +144,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    After the code commit, run the implement pack again (its own Bash call, the same gate), then
    rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit
    the PRD. A `Source:` refresh is provenance, not behaviour: it takes no version bump and no
-   §14 row.
+   §14 row, and the status stays Approved with no re-approval.
 
 ## Red Flags - STOP
 

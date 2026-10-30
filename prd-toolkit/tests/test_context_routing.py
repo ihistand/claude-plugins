@@ -154,3 +154,4 @@ def test_changing_step_5_refreshes_sources_after_the_code_commit():
     assert "After the code commit, run the implement pack again" in after
     assert "rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit the PRD" in after
     assert "provenance, not behaviour" in after and "no version bump and no §14 row" in after
+    assert "the status stays Approved with no re-approval" in after
