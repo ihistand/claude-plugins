@@ -95,3 +95,27 @@ def test_req_pack_holds_the_whole_block_and_each_code_excerpt(repo):
     code, out, _ = pack(prd, "--area", "import", "--for", "implement", "--req", "FR-001")
     assert code == 0 and "FR-001" in out and "Source: src/importer.py:30" in out
     assert "src/legacy.bin:3" in out and "line 30" in parts(out)["Code"]
+
+
+def test_uncommitted_edit_is_stale_exit_1(repo):
+    root, prd, sha = repo
+    (root / "src/importer.py").write_text("edited\n" * 60)
+    code, out, _ = pack(prd, "--area", "import", "--for", "implement")
+    assert code == 1 and "STALE: uncommitted changes; the cited line may have moved" in out
+
+
+def test_committed_change_wins_over_uncommitted(repo):
+    root, prd, sha = repo
+    (root / "src/importer.py").write_text("changed\n" * 60)
+    commit(root, "change")
+    (root / "src/importer.py").write_text("edited\n" * 60)
+    out = pack(prd, "--area", "import", "--for", "implement")[1]
+    assert f"STALE: changed since {sha}" in out and "uncommitted changes" not in out
+
+
+def test_malformed_source_is_a_stale_code_item(repo):
+    _, prd, sha = repo
+    edit(prd, "features/import.md", f"Source: src/importer.py:30 @{sha}\n  src/legacy.bin:3 @{sha}", "Source: `src/importer.py:30`")
+    code, out, _ = pack(prd, "--area", "import", "--for", "implement")
+    assert code == 1 and "STALE: Source not in <path>:<line> @<sha> form" in parts(out)["Code"]
+    assert "None." not in parts(out)["Code"]

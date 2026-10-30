@@ -91,3 +91,11 @@ def test_block_routes_lint_through_the_skills(prd, tmp_path):
     t = cm.read_text(encoding="utf-8")
     assert "Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`." in t
     assert "<prd-toolkit>" not in t and "prd_lint.py" not in t
+
+
+def test_unmigrated_02_prd_exits_2_and_writes_nothing(prd, tmp_path, capsys):
+    edit(prd, "prd.md", "Not applicable: new project.", "| Area | State | Boundary |\n|---|---|---|\n| billing | adopted | `src/**` |")
+    cm = tmp_path / "CLAUDE.md"
+    assert main([str(prd), "--claude-md", str(cm)]) == 2 and not cm.exists()
+    assert main([str(prd), "--claude-md", str(cm), "--check"]) == 2
+    assert "section 8: the adoption map moved to adoption.md in prd-toolkit 0.3" in capsys.readouterr().err

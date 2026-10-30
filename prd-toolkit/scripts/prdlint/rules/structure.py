@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from ..deps import require
 from ..findings import Finding
 from ..markdown import strip_code, tables
-from ..model import ADOPTION_FILE, ADOPTION_STATES, Prd
+from ..model import ADOPTION_FILE, ADOPTION_STATES, UNMIGRATED, Prd
 from ..registry import rule
 
 SECTION_TITLES = [
@@ -154,7 +154,7 @@ def _adoption_findings(prd: Prd) -> Iterator[Finding]:
         norm = body.removesuffix(".").strip()
         has_file = ADOPTION_FILE in prd.docs
         if tables(s8.body):
-            yield Finding("prd.md", s8.line, "sections", f'section 8: the adoption map moved to {ADOPTION_FILE} in prd-toolkit 0.3; move the table there and leave "See {ADOPTION_FILE}."')
+            yield Finding("prd.md", s8.line, "sections", UNMIGRATED)
         elif "NEEDS CLARIFICATION" in body:
             pass  # a draft marker; markers-open reports it
         elif norm == f"See {ADOPTION_FILE}":

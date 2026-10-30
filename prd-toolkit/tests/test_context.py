@@ -1,11 +1,13 @@
 """prd_context.py: the decide pack and the repo pack."""
 import json
 import re
+from itertools import groupby
 
 import pytest
 
 from conftest import edit
 from context_fixture import pack, parts
+from prdlint.context import Item, render_text
 
 
 def test_area_pack_holds_the_area_and_what_it_cites(ctx):
@@ -75,7 +77,19 @@ def test_json_matches_text_and_runs_are_identical(ctx):
     _, text, _ = pack(ctx, "--area", "api")
     _, js, _ = pack(ctx, "--area", "api", "--json")
     items = json.loads(js)
-    assert {i["part"] for i in items} == set(parts(text)) and all(set(i) == {"part", "id", "file", "line", "text", "stale"} for i in items)
+    assert all(set(i) == {"part", "id", "file", "line", "text", "stale"} for i in items)
+    # the same items in the same order: the JSON re-renders to the text pack byte for byte
+    assert render_text([Item(**i) for i in items]) == text
+    pairs = [(i["part"], i["id"]) for i in items]
+    assert pairs == [("Header", None), ("Stack", None), ("Stack", None), ("Glossary", None),
+                     ("Requirements", "UJ-01"), ("Requirements", "FR-002"), ("Requirements", "FR-003"),
+                     ("Cited", "NFR-004"), ("Cited", "ORDER_NOT_FOUND"), ("Cited", "FORBIDDEN"), ("Cited", "A-01"),
+                     ("Known defects", "E-003"), ("Known defects", None),
+                     ("Open questions", None), ("Open questions", None), ("History", None)]
+    for part, ids in groupby(pairs, key=lambda p: p[0]):  # each part's IDs appear in its text, in order
+        body = parts(text)[part]
+        at = [body.index(i) for _, i in ids if i]
+        assert at == sorted(at)
     assert pack(ctx, "--area", "api")[1] == text
 
 
@@ -103,3 +117,18 @@ def test_area_without_features_file_has_no_requirements(ctx):
     (ctx / "adoption.md").write_text((ctx / "adoption.md").read_text() + "| billing | not started | `src/billing/**` |\n")
     code, out, _ = pack(ctx, "--area", "billing")
     assert code == 0 and "### FR-" not in parts(out)["Requirements"] and "Area: billing (not started; Boundary: src/billing/**)" in out
+
+
+@pytest.mark.parametrize("args", [[], ["--area", "import"]])
+def test_unmigrated_02_prd_exits_2_with_the_migration_message(ctx, args):
+    (ctx / "adoption.md").unlink()
+    edit(ctx, "prd.md", "See adoption.md.", "| Area | State | Boundary |\n|---|---|---|\n| import | adopted | `src/import/**` |")
+    code, out, err = pack(ctx, *args)
+    assert code == 2 and out == "" and "section 8: the adoption map moved to adoption.md in prd-toolkit 0.3" in err
+
+
+@pytest.mark.parametrize("tid, owner", [("AC-001.1", "FR-001"), ("T-001.1", "FR-001"), ("E-002", "FR-001")])
+def test_req_with_a_sub_id_hints_the_requirement(ctx, tid, owner):
+    code, out, err = pack(ctx, "--area", "import", "--req", tid)
+    assert code == 2 and out == "" and f"no requirement block defines {tid}" in err
+    assert f"pass the requirement ID ({owner}), not {tid}" in err

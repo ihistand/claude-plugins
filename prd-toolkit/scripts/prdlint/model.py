@@ -59,6 +59,8 @@ class TestCase:
 
 
 ADOPTION_FILE = "adoption.md"
+UNMIGRATED = (f'section 8: the adoption map moved to {ADOPTION_FILE} in prd-toolkit 0.3; '
+              f'move the table there and leave "See {ADOPTION_FILE}."')
 ADOPTION_STATES = ("not started", "extracted", "confirmed", "adopted")
 
 
@@ -111,6 +113,7 @@ class Prd:
     assumptions: list[Row]
     load_findings: list[Finding]
     adoption: list[AdoptionRow] | None = None  # None exactly when adoption.md is absent
+    adoption_unmigrated: bool = False  # a 0.2 PRD: §8 still holds the table and adoption.md is absent
     errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
 
 
@@ -336,8 +339,10 @@ def load(prd_dir: Path) -> Prd:
         hs = next((x for x in tsecs if x.title.strip().lower() == "harness"), None)
         testing.harness = _harness(hs.body) if hs else Harness()
 
+    s8 = sec(8)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
-               adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")))
+               adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
+               adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
 
 
 def repo_root(path: Path) -> Path:

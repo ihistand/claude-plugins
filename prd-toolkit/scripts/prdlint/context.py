@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .deps import require
 from .markdown import Row, sections, tables
-from .model import ADOPTION_FILE, Prd, ReqBlock, _field_lines
+from .model import ADOPTION_FILE, UNMIGRATED, Prd, ReqBlock, _field_lines
 from .rules.contracts import _custom_types
 
 yaml = require("yaml", "pyyaml")
@@ -22,6 +22,7 @@ _UJ = re.compile(r"(?<![\w-])UJ-\d+(?![\w-])")
 _ASSUMPTION = re.compile(r"\[ASSUMPTION\b(?: (A-\d+):)?")
 _TYPED = re.compile(r"(?<![\w-])([A-Za-z][\w-]*):([^\s`'\",;()\[\]]+)")  # <type>:<name>
 _FEATURE = re.compile(r"features/([^/]+)\.md")
+_SUB_ID = re.compile(r"(?:AC|T)-\d+\.\d+|E-\d+")
 _SOURCE_REF = re.compile(r"(?P<path>[^\s@]+):(?P<line>\d+)\s+@(?P<sha>[0-9a-fA-F]{4,40})")
 
 
@@ -92,6 +93,16 @@ def _areas_known(prd: Prd) -> list[str]:
     return known + [m.group(1) for rel in prd.docs if (m := _FEATURE.fullmatch(rel)) and m.group(1) not in known]
 
 
+def _sub_id_hint(prd: Prd, sid: str) -> str:
+    """For an AC, T or E ID passed to --req: name the requirement it belongs to."""
+    if sid.startswith("E-"):
+        e = prd.errors_ledger.get(sid)
+        owners = list(dict.fromkeys(t for t, _ in e.touches)) if e else []
+    else:
+        owners = [b.id for b in prd.blocks if any(a.id == sid for a in b.acs) or any(t == sid for t, _, _ in b.tests)]
+    return f"pass the requirement ID ({', '.join(owners) or 'UJ-, FR- or NFR-nnn'}), not {sid}"
+
+
 def _select(prd: Prd, area: str, req: list[str] | None) -> list[ReqBlock]:
     if req is None:
         return [b for b in prd.blocks if b.file == f"features/{area}.md" and b.kind in ("UJ", "FR")]
@@ -100,7 +111,8 @@ def _select(prd: Prd, area: str, req: list[str] | None) -> list[ReqBlock]:
         by_id.setdefault(b.id, b)
     unknown = [i for i in req if i not in by_id]
     if unknown:
-        raise ContextError(f"no requirement block defines {', '.join(unknown)}")
+        hints = [_sub_id_hint(prd, i) for i in unknown if _SUB_ID.fullmatch(i)]
+        raise ContextError(f"no requirement block defines {', '.join(unknown)}" + "".join(f"; {h}" for h in hints))
     wanted = set(req)
     for i in req:
         for _, text in _field_lines(by_id[i].lines, "Traces"):
@@ -250,7 +262,12 @@ def _stale_reason(root: Path, path: str, sha: str, target: Path) -> str | None:
     log = _git(root, "log", "--format=%H", f"{sha}..HEAD", "--", path)
     if log is None or log.returncode != 0:
         return f"cannot compare with {sha}"
-    return f"changed since {sha}" if log.stdout.strip() else None
+    if log.stdout.strip():
+        return f"changed since {sha}"
+    diff = _git(root, "diff", "--quiet", "HEAD", "--", path)
+    if diff is None or diff.returncode not in (0, 1):
+        return f"cannot compare with {sha}"
+    return "uncommitted changes" if diff.returncode else None
 
 
 def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, context: int) -> Item:
@@ -275,6 +292,10 @@ def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, contex
 def _code(blocks: list[ReqBlock], area: str, root: Path, context: int) -> list[Item]:
     items, seen = [], set()
     for b in blocks:
+        if b.source and not _SOURCE_REF.search(b.source):
+            line = _field_lines(b.lines, "Source")[0][0]
+            items.append(Item("Code", b.id, b.file, line,
+                              f"### {b.id} Source: {b.source}\nSTALE: Source not in <path>:<line> @<sha> form", stale=True))
         for m in _SOURCE_REF.finditer(b.source or ""):
             ref = (m["path"], int(m["line"]), m["sha"])
             if ref not in seen:
@@ -304,6 +325,8 @@ def _in_git_work_tree(path: Path) -> bool:
 def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "decide",
                context: int = 20, repo_root: Path | None = None, display: str = "") -> list[Item]:
     """The pack's items, in part order. Raises ContextError for every exit-2 condition."""
+    if prd.adoption_unmigrated:
+        raise ContextError(f"{prd.root.as_posix()}/prd.md: {UNMIGRATED}")
     if mode not in MODES:
         raise ContextError(f"--for must be one of {', '.join(MODES)}")
     if req is not None and not req:

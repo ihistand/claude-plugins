@@ -47,6 +47,9 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_trace: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if prd.adoption_unmigrated:
+        print(f"prd_trace: {prd.root.as_posix()}/prd.md: {model.UNMIGRATED}", file=sys.stderr)
+        return 2
     try:
         findings = trace.run_trace(prd, model.repo_root(prd.root), args.range)
     except trace.BadRange as e:

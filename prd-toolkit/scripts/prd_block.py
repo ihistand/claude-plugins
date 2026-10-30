@@ -144,6 +144,9 @@ def main(argv: list[str]) -> int:
         return 0 if e.code in (0, None) else 2
     try:
         prd = model.load(Path(args.prd_dir))
+        if prd.adoption_unmigrated:
+            print(f"prd_block: {prd.root.as_posix()}/prd.md: {model.UNMIGRATED}", file=sys.stderr)
+            return 2
         root = model.repo_root(prd.root)
         claude_md = Path(args.claude_md) if args.claude_md else root / "CLAUDE.md"
         try:
