@@ -88,3 +88,10 @@ def test_decide_ignores_staleness(repo):
     root, prd, _ = repo
     (root / "src/importer.py").write_text("x\n")
     assert pack(prd, "--area", "import")[0] == 0
+
+
+def test_req_pack_holds_the_whole_block_and_each_code_excerpt(repo):
+    _, prd, _ = repo
+    code, out, _ = pack(prd, "--area", "import", "--for", "implement", "--req", "FR-001")
+    assert code == 0 and "FR-001" in out and "Source: src/importer.py:30" in out
+    assert "src/legacy.bin:3" in out and "line 30" in parts(out)["Code"]

@@ -184,7 +184,7 @@ leave the area `extracted`.
 
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
-per call, one question per requirement, its header the ID. Its preview is the `implement` pack output for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
+per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
 `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --for implement --req <ID>; echo "prd-context-exit=$?"`.
 The `prd-context-exit=` value must be `0` or `1`; `1` marks STALE regions, which the preview shows as they are. The
 options:
@@ -204,7 +204,7 @@ question or the entry in the preview.
 **The checklist file.** When the AskUserQuestion tool is not available, or the user asks to work
 in an editor, write `.prd-confirm-<area>.md` at the repository top, never inside the PRD folder or a test root: its `Source:` excerpts are code, and the tester reads those folders. One
 section per item (each requirement, each §13 question of the area, each `E-nnn`): its ID, the
-same `--for implement --req <ID>` pack output for a requirement (the whole question for a §13 question or `E-nnn`), and a `Decision:` line the user fills in with
+whole block and its `Source:` excerpt, as the `--for implement --req <ID>` pack prints them (the whole question for a §13 question or `E-nnn`), and a `Decision:` line the user fills in with
 `confirm`, `correct: <behaviour>`, `bug: <intended behaviour>` or `ask: <who>`. When the user
 says the file is done, read it and apply each decision as above. A blank or unrecognised `Decision:` line is no answer: list those IDs and ask again. Delete the checklist file once every item is answered; it is never committed. A
 headless run writes the file, says where it is, and stops with the area `extracted`.

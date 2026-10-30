@@ -5,10 +5,12 @@ description: Print the focused context pack for one PRD task (prd-toolkit)
 Print the prd-toolkit context pack. Arguments: $ARGUMENTS
 
 1. Find the one `docs/prd/*/prd.md`. If there is more than one, ask which PRD.
-2. Map the arguments. The first argument that is neither an ID (`FR-005`, `NFR-002`) nor
-   `implement` is the area: pass it as `--area <area>`. Every ID argument goes into one
-   `--req <ID>[,<ID>…]`. The word `implement` becomes `--for implement`. With no area, the
-   pack is the repo pack: the stack and one line per area.
+2. Map the arguments. A token that starts with `UJ-`, `FR-`, `NFR-`, `AC-`, `T-` or `E-` is an
+   ID, never the area. The first argument that is neither an ID nor `implement` is the area: pass
+   it as `--area <area>`. Pass only UJ, FR and NFR IDs, together as one `--req <ID>[,<ID>…]`:
+   an AC or T id maps to its FR (`AC-005.2` and `T-005.1` map to `FR-005`), and an `E-nnn`
+   maps to the requirement it cites. The word `implement` becomes `--for implement`. With no
+   area, the pack is the repo pack: the stack and one line per area.
 3. Run the script in one Bash call, with the literal PRD folder:
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`
    Leave out the options the arguments did not give. `--req` and `--for implement` both need `--area`.

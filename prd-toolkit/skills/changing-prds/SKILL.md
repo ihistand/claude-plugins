@@ -86,6 +86,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
    fixtures, Observability rows. Then run the pack for the area and the IDs the change touches, one command per Bash call:
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
+   Pass only the UJ, FR and NFR IDs: map an AC, test case or error code to its requirement.
    A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix uses the `--req`
    IDs on its entry's `Touches:` line. The `prd-context-exit=` value must be `0` or `1`; `2` is a
    usage error, so fix the command. Work from the pack; read no whole PRD file yet. For a design choice
@@ -129,8 +130,8 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
-   behaviour commit cites its IDs (`Refs: FR-005`). Hand off: write the code from
-   `/prd-context <area> <changed IDs> implement`.
+   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
+   to its requirement): write the code from `/prd-context <area> <changed IDs> implement`.
 
 ## Red Flags - STOP
 
