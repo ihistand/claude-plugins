@@ -3,8 +3,9 @@
 
 The PRD at `{{prd_path}}` (version {{version}}) is the authority for how this system behaves.
 
-- Read the PRD, not the code, to learn what the system must do. Code implements the PRD; it
-  never defines behaviour the PRD lacks.
+- To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
+  files only to edit them. Before writing code for an approved change, run `/prd-context <area>
+  <IDs> implement`. Code implements the PRD; it never defines behaviour the PRD lacks.
 - Every behaviour change starts as a PRD change: run `/prd-change` (skill
   `prd-toolkit:changing-prds`) before touching code.
 - Gap rule: when the PRD does not say something you need (an error code, a URL, an empty

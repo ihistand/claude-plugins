@@ -238,7 +238,7 @@ def test_confirmation_asks_with_the_question_tool_a_few_at_a_time():
     """Typing every ID into one prompt is not a workable interface: ask through AskUserQuestion."""
     confirm = " ".join(step(SKILL.read_text(encoding="utf-8"), 3).split())
     assert "ask with the AskUserQuestion tool, at most four requirements per call" in confirm
-    assert "Its preview shows the whole block and its `Source:` excerpt" in confirm
+    assert "Its preview is the `implement` pack output for that one requirement" in confirm
     for option in ("**Confirm**", "**Correct**", "**It's a bug**", "**Someone else decides**"):
         assert option in confirm, option
     assert "Write each answer into the PRD as soon as it arrives" in confirm

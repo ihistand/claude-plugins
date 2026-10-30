@@ -43,6 +43,8 @@ the gap as the change.
 5. **Everything that describes the behaviour moves with it**: ACs, test-case expectations,
    `errors.yaml`, `openapi.yaml`, permissions, schema, fixtures, Observability rows. A stale test
    case is a wrong spec.
+6. **Read whole PRD files only to edit them.** Work from the `prd_context.py` pack. Open another
+   PRD file only for what the pack's closing lines name.
 
 ## Version rule
 
@@ -82,7 +84,11 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    answer, and never approve a 0.x PRD through step 5; its first approval is authoring phase 7.
 1. **Restate the change** in one sentence, then list everything it touches: FR, NFR and AC IDs,
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
-   fixtures, Observability rows. Grep the PRD folder for each ID and code. For a design choice
+   fixtures, Observability rows. Then run the pack for the area and the IDs the change touches, one command per Bash call:
+   `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
+   A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix uses the `--req`
+   IDs on its entry's `Touches:` line. The `prd-context-exit=` value must be `0` or `1`; `2` is a
+   usage error, so fix the command. Work from the pack; read no whole PRD file yet. For a design choice
    the request leaves open, pick the recommendation the PRD or repo supports and carry it to
    step 5 as a decision the user confirms. A value only the user knows (a name, URL, limit):
    ask, and stop until answered.
@@ -123,7 +129,8 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
-   behaviour commit cites its IDs (`Refs: FR-005`).
+   behaviour commit cites its IDs (`Refs: FR-005`). Hand off: write the code from
+   `/prd-context <area> <changed IDs> implement`.
 
 ## Red Flags - STOP
 
