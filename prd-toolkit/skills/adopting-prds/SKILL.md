@@ -145,7 +145,7 @@ Then write what it returns, yourself:
   §11 row each (status `as-built`, Since empty).
 - Its test cases into `test-cases/<area>.yaml`, all seven elements each, none at `level: unit`;
   its contract items into the contracts.
-- Each APPARENT BUGS entry into `errors.md` as `### E-nnn`, `Resolution: open`.
+- Each APPARENT BUGS entry into `errors.md` as `### E-nnn`, `Resolution: open`, with the extractor's `Touches:` line (requirement IDs, or `-`) copied in after `Classification:`.
 - Each QUESTION as a §13 bullet.
 - Check every `Source:` line before you write it: open the file at that line, at that commit,
   and see the behaviour there. A Source that does not show it is dropped, and the block with it.

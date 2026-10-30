@@ -75,6 +75,8 @@ class ErrorEntry:
     id: str
     line: int
     open: bool
+    touches: list[tuple[str, int]] = field(default_factory=list)  # (requirement ID, line) from `Touches:`
+    end: int = 0  # last line of the entry
 
 
 @dataclass
@@ -121,6 +123,8 @@ _TEST = re.compile(r"(T-\d+\.\d+)\s*\[([^\]]+)\]")
 _NA = re.compile(r"^\s*[-*]\s*Not applicable:\s*`([^`]+)`\s+[—–-]+\s+(.*?)\s*$")
 _ERROR_HEAD = re.compile(r"^### (E-\d+)\b")
 _RESOLUTION = re.compile(r"^Resolution:\s*(.*?)\s*$")
+_TOUCHES = re.compile(r"^Touches:\s*(.*?)\s*$")
+_TOUCH_ID = re.compile(r"\b(?:UJ|FR|NFR)-\d+\b")
 _SLOT = re.compile(r"^- \*\*([^*]+?)\.\*\*")
 _MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]*\]")
 _BACKTICKED = re.compile(r"`([^`]+)`")
@@ -228,8 +232,11 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
     """`### E-nnn` entries of errors.md; open unless a Resolution line carries a real value."""
     ledger: dict[str, ErrorEntry] = {}
     cur: ErrorEntry | None = None
+    last = len(text.rstrip("\n").split("\n")) if text.strip() else 0
     for n, (orig, st) in enumerate(zip(text.split("\n"), strip_code(text).split("\n")), 1):
         if _HEADING.match(st):
+            if cur:
+                cur.end = n - 1
             m = _ERROR_HEAD.match(orig) if _ERROR_HEAD.match(st) else None
             cur = ErrorEntry(m.group(1), n, True) if m else None
             if cur:
@@ -239,6 +246,11 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
         if rm:
             v = rm.group(1).lower()
             cur.open = v in ("", "-") or v.startswith("open")
+        tm = _TOUCHES.match(orig) if cur else None
+        if tm:
+            cur.touches.extend((i, n) for i in _TOUCH_ID.findall(tm.group(1)))
+    for e in ledger.values():
+        e.end = e.end or last
     return ledger
 
 

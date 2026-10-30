@@ -89,10 +89,11 @@ One `errors.md` entry each, numbered from E-<NEXT_E>:
   ### E-nnn <title>
   Detected: <today>, adoption extract of <AREA> (<file>:<line> @<COMMIT>)
   Classification: code bug
+  Touches: FR-nnn
   Diagnosis: what the code does, and the evidence that says it should do otherwise
   Resolution: open
   Recurrence of: -
-followed by a line `Touches: FR-nnn` naming the requirement it borders. "none" if there are none.
+The `Touches:` line names the requirement IDs the bug borders, comma-separated, or `-` if there are none. The bootstrap copies it into the entry.
 
 QUESTIONS
 One per line: what only the owner can say, naming the requirement it blocks. "none" if none.

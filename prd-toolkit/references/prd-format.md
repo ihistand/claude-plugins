@@ -283,10 +283,15 @@ One entry per error, newest last:
 ### E-001 <title>
 Detected: <date>, <source>
 Classification: code bug | spec gap | invalid requirement | environment | standard
+Touches: <requirement IDs or ->
 Diagnosis: <why>
 Resolution: <the AC, T-id and version that fixed it>
 Recurrence of: <E-nnn or ->
 ```
+
+`Touches:` is optional. It lists the requirement IDs (`UJ-nn`, `FR-nnn`, `NFR-nnn`) the error
+concerns, comma-separated, and `-` means none. `index-consistent` reports a `Touches:` ID that no
+block defines. The context pack's Known defects part reads it.
 
 An entry is **open** when it has no `Resolution:` line, or the value after `Resolution:` is
 empty, `-`, or starts with `open` (case-insensitive); otherwise it is resolved. Headings inside
