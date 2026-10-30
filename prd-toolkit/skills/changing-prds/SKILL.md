@@ -44,7 +44,9 @@ the gap as the change.
    `errors.yaml`, `openapi.yaml`, permissions, schema, fixtures, Observability rows. A stale test
    case is a wrong spec.
 6. **Read whole PRD files only to edit them.** Work from the `prd_context.py` pack. Open another
-   PRD file only for what the pack's closing lines name.
+   PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
+   file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
+   is opening it. Test cases and other areas' files come from the pack, not from a read.
 
 ## Version rule
 
@@ -84,7 +86,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    answer, and never approve a 0.x PRD through step 5; its first approval is authoring phase 7.
 1. **Restate the change** in one sentence, then list everything it touches: FR, NFR and AC IDs,
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
-   fixtures, Observability rows. Then run the pack for the area and the IDs the change touches, one command per Bash call:
+   fixtures, Observability rows. Then, as your first look at the PRD, run the pack for the area and the IDs the change touches, one command per Bash call:
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
    Pass only the UJ, FR and NFR IDs: map an AC, test case or error code to its requirement.
    A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix uses the `--req`

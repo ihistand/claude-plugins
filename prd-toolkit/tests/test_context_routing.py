@@ -43,6 +43,9 @@ def test_changing_step_1_runs_the_decide_pack():
     assert "scripts/prd_context.py" in step1 and 'echo "prd-context-exit=$?"' in step1
     assert "Read whole PRD files only to edit them" in CHANGING.read_text()
     assert "Grep the PRD folder for each ID" not in step1
+    assert "as your first look at the PRD, run the pack" in " ".join(step1.split())
+    rule6 = " ".join(section(CHANGING, "6. **Read whole PRD files", "## Version rule").split())
+    assert "Run the pack before you open any PRD file" in rule6 and "`cat`, `head`, `sed` or `grep`" in rule6
 
 
 def test_changing_step_5_hands_off_the_implement_pack():

@@ -1,5 +1,7 @@
 # authoring-prds: pressure scenarios and baselines
 
+> **Note (0.3):** the adoption map now lives in `adoption.md`; §8 of `prd.md` holds only a pointer. The transcripts below are historical and still mention §8 as the map.
+
 Each scenario runs in a fresh scratch git repo (a README and nothing else, except A4) through
 
 ```

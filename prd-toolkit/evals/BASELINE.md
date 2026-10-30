@@ -1,5 +1,44 @@
 # `prd-toolkit` eval baseline
 
+## 0.3 baseline (2026-10-30, `--runs 3`)
+
+Recorded **2026-10-30** on branch `feat/prd-toolkit-0.3` at `--runs 3`, model `sonnet`, on Claude Code
+2.1.314. `suite.plugins[].path` is the worktree's `prd-toolkit`. The manifest still says 0.2.0
+(the version bump is a later task). Only the five cases touched by the context pack and the
+move of the adoption map to `adoption.md` were run; the other three keep their 0.2 rows below.
+
+Command (from the repo root): the 0.2 command below, with `--case <name>` added, once per case
+(`--case` takes one glob). The cases ran at the same time, so each one's `--json` is its own file.
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `change-uses-context-pack` (new) | 1.00 | 0.67 | +0.33 | First run: with 0.33/0.67/0.67, and `ran-pack` failed 2/3 (the agent invoked the skill, then `cat` the PRD files through Bash and never ran `prd_context.py`). Skill fix (rule 6 and step 1 now say to run the pack as the first look at the PRD, and that `cat`, `head`, `sed` or `grep` of a PRD file is opening it; pinned in `tests/test_context_routing.py`) and a narrowed grader, then a re-run: 3/3 at 1.00. Without the plugin, `ran-pack` fails 3/3 (no pack script) and the other three pass, so Δ comes from the pack. |
+| `adoption-second-area-minor` | 1.00 | 0.53 | +0.47 | The two graders that read the map now read `adoption.md`. Without the plugin, `tester-dispatched` and `suite-mode` fail 3/3 and one run lacks the changelog row. |
+| `adopting-trigger` | 1.00 | 0.00 | +1.00 | Unchanged from 0.2. |
+| `changing-major-bump` | 1.00 | 0.00 | +1.00 | Unchanged from 0.2, run 3 times again with the pack in the skill. |
+| `changing-new-id-not-reused` | 1.00 | 0.00 | +1.00 | Unchanged from 0.2. |
+
+### Ruling: `no-test-cases-read` is narrowed to `test-cases/api.yaml`
+
+As first written the grader forbade any Read under `/test-cases/`. It failed 2 of 3 with-arm runs.
+In run 3 (trace `/private/tmp/e-eOLpqa`) every such Read came after the `prd-toolkit:prd-tester`
+dispatch of the dry run: the tester reads the area's `test-cases/import.yaml` to write its tests, and
+these graders see subagent calls. The area's own test cases are not a pack bypass, so the grader
+now forbids only the other area's `test-cases/api.yaml`. `no-other-area` (`features/api.md`) is
+unchanged and passed in every run, with and without the plugin.
+
+### Gate verdict (0.3, five cases run)
+
+- **Tier 1, every `skill-fired` passes in the with arm: PASS** (15/15 over the five cases, and the re-run of the new case 3/3).
+- **Tier 2, no triggering case at Δ ≤ 0: PASS.** Lowest Δ is `change-uses-context-pack` at +0.33.
+- `suite.plugins[].path` is the worktree: PASS.
+
+### The map in `adoption.md`
+
+The adoption map is `adoption.md` beside `prd.md`; §8 of `prd.md` only points to it. In this
+file, the 0.2 and 0.1 sections and the files in `baselines/` describe the older layout, with the
+map in §8, and stay as recorded.
+
 ## 0.2 baseline (2026-10-30, `--runs 3`)
 
 Recorded **2026-10-30** on branch `feat/prd-toolkit-0.2` at `--runs 3`, model `sonnet`, on Claude Code
