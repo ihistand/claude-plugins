@@ -66,7 +66,7 @@ All are on `feat/prd-toolkit`, each with a test that fails without it.
 
 ## For 0.1.1
 
-1. **Ship a Harness section in the template's `testing.md`** with slots for everything runs 1
+1. **Done on `feat/prd-toolkit`, folded into 0.1.0 because it is not yet released: ship a Harness section in the template's `testing.md`** with slots for everything runs 1
    to 11 asked for:
    - lifecycle and DB access
    - the environment switch (`TEST_ENV`)
@@ -79,7 +79,9 @@ All are on `feat/prd-toolkit`, each with a test that fails without it.
    - the leak rule: values, matching, flush wait, sinks, and the staging log read
    - tools on the runner
 
-   This would have removed most of runs 1 to 9.
+   This would have removed most of runs 1 to 9. It shipped as 15 marked slots. The slot names
+   are prose, so they must not collide with a PRD's banned synonyms: "HTTP client" became
+   "HTTP requests" after the orders fixture's glossary (which bans "client") flagged it.
 2. **Format `refs:` on test cases.** Cases that depend on prd.md content, such as a component
    contract or the skip-auth list, should cite it. The tester reads test-case files, not prd.md.
 3. **Template guidance for acceptance cases on persistent environments:** use fresh data per

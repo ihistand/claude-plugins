@@ -95,6 +95,9 @@ finding, and return to the phase it belongs to. Never commit an `Approved` PRD t
   the reason `[NEEDS CLARIFICATION: is there a database, and which?]`.
 - **Each optional contract** (openapi, events, permissions, config, classification,
   dependencies, fixtures): populate it, or delete it the same way with a reason.
+- **Harness first:** fill `testing.md` `## Harness` (lifecycle, environment switch, clients,
+  fixtures, assertions, leaks, …) before writing test cases. Every test case leans on those
+  conventions; a slot you cannot fill stays a `NEEDS CLARIFICATION` marker for phase 3.
 - **IDs:** FR and NFR share one number sequence; T-ids are per requirement (`T-004.1`).
 - Run lint. A Draft with open markers lints clean; a lint failure here is a grammar error. Fix it.
 

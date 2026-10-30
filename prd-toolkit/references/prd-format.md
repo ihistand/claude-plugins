@@ -186,6 +186,7 @@ T-012.2:
 
 ```
 ## Levels        | Level | Harness command | Environment |
+## Harness       - **<Slot>.** <convention>   (bullets, not a table)
 ## Environments  | Environment | Purpose | Access | Base URL | Database | Logs |
 ## Leak checks   | Sink | Read from | Scanned for |
 ## Fixtures      | Fixture | Creates | Load | Teardown |
@@ -199,6 +200,13 @@ refer to (levels, environments, fixtures).
   endpoint), `Database` names the database or connection a test reads and writes (never a
   password), and `Logs` says where the environment's logs are read (a file, a command or a log
   query). A test's credentials come from its role's `secret` in `contracts/permissions.yaml`.
+- Harness holds one bullet per convention a test relies on, in this order: Lifecycle,
+  Environment switch, Database access, Tools on the runner, Clean state, Persistent environments,
+  Layout, HTTP requests, Fixtures, Browser identity, Assertions, Waits, Effects, Leaks, Acceptance.
+  Each states the convention, not a helper's code; a helper's internals are the dry-run tester's
+  HARNESS CHOICES. A slot that does not apply reads `Not applicable: <reason>`. Lint does not
+  parse the section; its `[NEEDS CLARIFICATION]` markers block `In review` until every slot is
+  answered.
 - Leak checks define `expect.leaks: none`: one row per sink a test scans (application logs, error
   bodies, and any other output such as metrics labels or events), where the test reads it, and
   which classified columns from `contracts/data-classification.yaml` must not appear in it.

@@ -18,7 +18,7 @@ then ask about the weakest.
 9. Data classification: sensitivity, retention, deletion, masking.
 10. NFR bounds: latency, throughput, availability, size, each as a number with a unit.
 11. Terminology: glossary terms, banned synonyms, one word per concept.
-12. Done signals: how the owner knows each requirement is met; acceptance steps and who signs off.
+12. Done signals: how the owner knows each requirement is met; acceptance steps and who signs off; and the test harness conventions in `testing.md` `## Harness`, which every test case relies on.
 
 ## Scoring
 
