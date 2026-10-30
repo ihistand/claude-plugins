@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 
 from ..findings import Finding
-from ..model import Prd, ReqBlock
+from ..model import ADOPTION_STATES, IndexRow, Prd, ReqBlock
 from ..registry import rule
 from .structure import prose
 
@@ -174,8 +174,17 @@ def id_removed_reused(prd: Prd):
 @rule("index-consistent")
 def index_consistent(prd: Prd):
     block = {b.id: b for b in prd.blocks}
-    rows = {r.id: r for r in prd.index}
+    rows: dict[str, IndexRow] = {}
+    for r in prd.index:
+        if r.id in rows:
+            yield Finding("prd.md", r.line, "index-consistent", f"{r.id} appears twice in the section 11 index (first at prd.md:{rows[r.id].line})")
+        rows.setdefault(r.id, r)
+    for a in prd.adoption or []:
+        if a.state in ADOPTION_STATES and a.state != "not started" and f"features/{a.area}.md" not in prd.docs:
+            yield Finding("prd.md", a.line, "index-consistent", f"adoption area '{a.area}' is {a.state} but features/{a.area}.md does not exist")
     for b in prd.blocks:
+        if b.status == "as-built" and not b.source:
+            yield Finding(b.file, b.line, "index-consistent", f"{b.id} is as-built but has no 'Source: <file>:<line> @<commit>' line")
         if b.id not in rows:
             yield Finding(b.file, b.line, "index-consistent", f"{b.id} has no row in the section 11 index")
     for r in prd.index:

@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from ..deps import require
 from ..findings import Finding
 from ..markdown import strip_code, tables
-from ..model import Prd
+from ..model import ADOPTION_STATES, Prd
 from ..registry import rule
 
 SECTION_TITLES = [
@@ -25,6 +25,10 @@ OPTIONAL = {
     "contracts/dependencies/": ["contracts/dependencies/"],
     "contracts/fixtures/": ["contracts/fixtures/"],
 }
+# the slots of testing.md's `## Harness` section, in template order
+HARNESS_SLOTS = ["Lifecycle", "Environment switch", "Database access", "Tools on the runner",
+                 "Clean state", "Persistent environments", "Layout", "HTTP requests", "Fixtures",
+                 "Browser identity", "Assertions", "Waits", "Effects", "Leaks", "Acceptance"]
 STATUSES = ("Draft", "In review", "Approved")
 
 
@@ -139,6 +143,44 @@ def sections(prd: Prd):
             continue
         if not any(a in na or a.rstrip("/") in na for a in alts):
             yield Finding("prd.md", 1, "sections", f"'{slot}' is absent and section 1 has no 'Not applicable: `{slot}` — reason' line")
+    yield from _adoption_findings(prd)
+    yield from _harness_findings(prd)
+
+
+def _adoption_findings(prd: Prd) -> Iterator[Finding]:
+    s8 = next((s for s in prd.sections if s.number == 8), None)
+    ts = tables(s8.body) if s8 else []
+    if not ts:
+        return
+    header = [c.strip().strip("`") for c in ts[0].header]
+    if header != ["Area", "State", "Boundary"]:
+        yield Finding("prd.md", s8.line, "sections", f"section 8 table header must be '| Area | State | Boundary |', not '| {' | '.join(header)} |'")
+    for row in prd.adoption or []:
+        if row.state not in ADOPTION_STATES:
+            yield Finding("prd.md", row.line, "sections", f"adoption state '{row.state}' for {row.area} must be one of {', '.join(ADOPTION_STATES)}")
+
+
+def _harness_findings(prd: Prd) -> Iterator[Finding]:
+    if "testing.md" not in prd.docs:
+        return  # the mandatory-file check reports it
+    h = prd.testing.harness
+    if not h.slots:
+        yield Finding("testing.md", 1, "sections", "testing.md has no '## Harness' section with its slots")
+        return
+    names = [n for n, _ in h.slots]
+    for slot in HARNESS_SLOTS:
+        if slot not in names:
+            yield Finding("testing.md", h.slots[0][1], "sections", f"Harness slot '{slot}' is missing")
+    if [n for n in names if n in HARNESS_SLOTS] != [n for n in HARNESS_SLOTS if n in names]:
+        yield Finding("testing.md", h.slots[0][1], "sections", f"Harness slots are out of order; the order is {', '.join(HARNESS_SLOTS)}")
+    layout = next((n for name, n in h.slots if name == "Layout"), None)
+    if layout and h.test_roots is None:
+        yield Finding("testing.md", layout, "sections", "the Harness Layout slot has no 'Test roots:' text")
+    elif layout and h.test_roots == []:
+        text = prd.docs["testing.md"].split("\n")[h.test_roots_line - 1]
+        if "[NEEDS CLARIFICATION" not in text:  # an unfilled marker is markers-open's to report
+            # the guard would then block every write, and trace would fall back to tests/
+            yield Finding("testing.md", h.test_roots_line, "sections", "Test roots: lists no backticked directory")
 
 
 # only the template's own slots count; any other {{...}} (a Mustache message, say) is content
@@ -164,7 +206,7 @@ def placeholder(prd: Prd):
     for rel, n, text in prose(prd):
         m = _PLACEHOLDER.search(text)
         if m:
-            yield Finding(rel, n, "placeholder", f"placeholder '{m.group(0)}' in prose")
+            yield Finding(rel, n, "placeholder", f"placeholder '{m.group(0)}' in prose; if this is literal text, put it in backticks")
     sources = [(rel, data) for rel, data in prd.yaml.items()] + [(tc.file, tc.data) for tc in prd.test_cases]
     for rel, data in sources:
         for n, value in _scalars(data, 1):
@@ -223,6 +265,7 @@ def markers_open(prd: Prd):
 
 _MARKER = re.compile(r"\[ASSUMPTION\b(?: (A-\d+):)?")
 _ASSUMPTION_STATUS = ("open", "confirmed", "corrected")
+_AWAITING = re.compile(r"awaiting \S.*")  # intent only a named person can confirm; allowed while Approved
 
 
 @rule("assumption-indexed")
@@ -236,8 +279,8 @@ def assumption_indexed(prd: Prd):
                 yield Finding(rel, n, "assumption-indexed", f"{m.group(1)} has no row in section 12")
     for aid, r in rows.items():
         status = r.cells[2].strip("`") if len(r.cells) > 2 else ""
-        if status not in _ASSUMPTION_STATUS:
-            yield Finding("prd.md", r.line, "assumption-indexed", f"{aid}: status '{status}' must be open, confirmed or corrected")
+        if status not in _ASSUMPTION_STATUS and not _AWAITING.fullmatch(status):
+            yield Finding("prd.md", r.line, "assumption-indexed", f"{aid}: status '{status}' must be open, confirmed, corrected or awaiting <who>")
         elif status == "open" and _status(prd) == "Approved":
             yield Finding("prd.md", r.line, "assumption-indexed", f"{aid} is open while the PRD is Approved")
 

@@ -3,12 +3,20 @@
 Shared by `authoring-prds` (phase 6) and `changing-prds` (step 4). Each skill says what to do
 when the dry run fails.
 
-Dispatch a fresh general-purpose subagent (Agent tool) with this prompt. Fill the three slots.
-`<SCRATCH_DIR>` is a new, empty subdirectory of the scratch directory for every run, named by
-timestamp (for example `<scratchpad>/prd-dry-run-20261029T153000`), so no run sees an earlier
-run's tests. `<T_IDS>` never holds a unit T-id.
-Give it nothing else: no summary of the PRD, no hints, no answers. In 0.1 the read-only
-restriction is an instruction, not enforced, so check its report for files read outside the folder.
+**The prompt block below is the fallback.** Both skills dispatch the `prd-toolkit:prd-tester`
+agent, as `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says. Use this block
+with a fresh general-purpose subagent (Agent tool) only when `prd-tester` is not in the Agent
+tool's list. The triage and pass terms after the block apply to every dry-run report, from
+`prd-tester` or from this fallback, and so do dispatching.md's state check and cleanup step.
+
+For the fallback, fill the three slots.
+`<SCRATCH_DIR>` is the run's dry-run directory from dispatching.md step 1,
+`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`: new for every run, with every stale
+`.prd-dry-run-*` deleted first, so no run sees an earlier run's tests. `<T_IDS>` never holds a
+unit T-id.
+Give it nothing else: no summary of the PRD, no hints, no answers. A general-purpose agent runs
+outside the guard, so its read-only restriction is an instruction, not enforced: check its
+report for files read outside the folder, and record the run as unguarded.
 
 ```
 You are a black-box tester. You have never seen this system's code and you must not look for it.
@@ -23,8 +31,9 @@ names for the case's level. Each line names the file under <PRD_DIR>/ that holds
 
 <T_IDS, one per line, each with its test-case file, as --sample-tids prints them>
 
-Write the tests to <SCRATCH_DIR>/, never into the repository. Read nothing else in the scratch
-area: earlier runs' tests are not yours.
+Write the tests to <SCRATCH_DIR>/ and nowhere else in the repository. Do not list or read the
+rest of the test directory it sits in: those tests are not yours. Run nothing but
+`python -m py_compile` on the files you write.
 
 Work only from the PRD: the test case in <PRD_DIR>/test-cases/, the AC it names, every file and
 heading its `refs:` names, and the contracts, fixtures, environments and identities it
@@ -60,7 +69,8 @@ not a dismissal: that question stays. Never dismiss a question by changing the P
 gap, fixed and dry-run again.
 
 The dry run passes only when every question is dismissed, TESTS has one path for every T-id in
-the slot, and every path under FILES READ is inside `<PRD_DIR>/`. Anything else fails it. Read
-HARNESS CHOICES too: a choice that contradicts testing.md, or one that changes what a test
+the slot, every path under FILES READ is inside `<PRD_DIR>/` or the run's own `<SCRATCH_DIR>/`,
+and the integrity check found no changed path outside `<SCRATCH_DIR>/`. Anything else fails it.
+Read HARNESS CHOICES too: a choice that contradicts testing.md, or one that changes what a test
 asserts, is a question in disguise and fails the run. The rest are the tester's to make; the
 builder's harness may make them differently without changing any test case.

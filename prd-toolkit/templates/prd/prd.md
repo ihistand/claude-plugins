@@ -73,7 +73,7 @@ Out of scope: [NEEDS CLARIFICATION: what this PRD deliberately excludes]
 
 ## 8. Adoption map
 
-[NEEDS CLARIFICATION: new project, or an existing system to adopt? Replace this line with `Not applicable: new project`, or an Area/State table]
+[NEEDS CLARIFICATION: new project, or an existing system to adopt? Replace this line with `Not applicable: new project`, or the `| Area | State | Boundary |` table]
 
 ## 9. Versioning
 

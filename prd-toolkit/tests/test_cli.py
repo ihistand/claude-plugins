@@ -25,6 +25,14 @@ def test_not_a_prd_exits_2(tmp_path, capsys):
     assert main([str(tmp_path)]) == 2 and "no prd.md" in capsys.readouterr().err
 
 
+def test_an_uppercase_prd_md_is_not_a_prd(prd, capsys):
+    # on a case-insensitive filesystem PRD.md also "is" prd.md; only the exact name counts
+    (prd / "prd.md").rename(prd / "PRD.md")
+    assert main([str(prd)]) == 2
+    err = capsys.readouterr().err
+    assert "found PRD.md; the file name is lowercase prd.md" in err and "internal error" not in err
+
+
 def test_sample_tids(prd, capsys):
     assert main(["--sample-tids", "3", str(prd)]) == 0
     assert len({line.split()[0] for line in capsys.readouterr().out.splitlines()}) == 3

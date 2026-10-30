@@ -1,8 +1,8 @@
 ---
-type: tool_used
-tool: Write
-input_match: 'docs/prd/[a-z0-9-]+/prd\.md'
-min: 1
+type: regex
+target: files
+pattern: 'docs/prd/[a-z0-9-]+/prd\.md'
 ---
 
-The PRD is written as docs/prd/<slug>/prd.md, not as a single flat file.
+The PRD is written as docs/prd/<slug>/prd.md, not as a single flat file. The grader reads the
+paths the run created, whichever tool wrote them.
