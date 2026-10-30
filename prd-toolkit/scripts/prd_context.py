@@ -30,7 +30,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_context.py", description="Print the context pack a task needs from a PRD.")
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--area", help="the area slug (features/<area>.md); omit for the repo pack")
-    parser.add_argument("--req", metavar="ID[,ID...]", help="only these UJ, FR or NFR blocks, plus the UJs they trace")
+    parser.add_argument("--req", metavar="ID[,ID...]", help="only these UJ, FR or NFR blocks, plus the UJs they trace; an E-nnn adds its errors.md entry and the blocks it reaches")
     parser.add_argument("--for", dest="mode", choices=context.MODES, default="decide")
     parser.add_argument("--context", type=int, default=20, metavar="N", help="code lines either side of a Source line (implement)")
     parser.add_argument("--json", action="store_true", help="print the items as JSON")

@@ -127,8 +127,56 @@ def test_unmigrated_02_prd_exits_2_with_the_migration_message(ctx, args):
     assert code == 2 and out == "" and "section 8: the adoption map moved to adoption.md in prd-toolkit 0.3" in err
 
 
-@pytest.mark.parametrize("tid, owner", [("AC-001.1", "FR-001"), ("T-001.1", "FR-001"), ("E-002", "FR-001")])
+@pytest.mark.parametrize("tid, owner", [("AC-001.1", "FR-001"), ("T-001.1", "FR-001")])
 def test_req_with_a_sub_id_hints_the_requirement(ctx, tid, owner):
     code, out, err = pack(ctx, "--area", "import", "--req", tid)
     assert code == 2 and out == "" and f"no requirement block defines {tid}" in err
     assert f"pass the requirement ID ({owner}), not {tid}" in err
+
+
+def _known_failing(ctx, eid: str, case: str = "T-002.1:\n  ac: AC-002.1\n") -> None:
+    edit(ctx, "test-cases/api.yaml", case, case + f"  known-failing: {eid}\n")
+
+
+def test_req_error_entry_with_no_touches_selects_its_known_failing_cases_parent(ctx):
+    _known_failing(ctx, "E-004")
+    code, out, err = pack(ctx, "--area", "api", "--req", "E-004")
+    assert code == 0, err
+    p = parts(out)
+    assert "### FR-002" in p["Requirements"] and "### UJ-01" in p["Requirements"] and "### FR-003" not in p["Requirements"]
+    assert "### E-004 Logs carry no request id" in p["Known defects"] and "Resolution: open" in p["Known defects"]
+    assert "### E-003" in p["Known defects"]  # it touches the selected FR-002
+    assert "0 open errors.md entries name no requirement" in p["Known defects"]
+
+
+def test_req_error_entry_parent_from_the_t_id_number_without_an_ac(ctx):
+    edit(ctx, "test-cases/api.yaml", "T-002.1:\n  ac: AC-002.1\n", "T-002.1:\n  known-failing: E-004\n")
+    code, out, _ = pack(ctx, "--area", "api", "--req", "E-004")
+    assert code == 0 and "### FR-002" in parts(out)["Requirements"]
+
+
+def test_req_error_entry_selects_the_blocks_its_touches_line_names(ctx):
+    code, out, _ = pack(ctx, "--area", "import", "--req", "e-002")
+    p = parts(out)
+    assert code == 0 and "### FR-001" in p["Requirements"] and "### FR-002" not in out
+    assert "### E-002 Duplicate check ignores case" in p["Known defects"]
+    assert "1 open errors.md entries name no requirement" in p["Known defects"]
+
+
+def test_req_error_entry_mixes_with_requirement_ids(ctx):
+    _known_failing(ctx, "E-004")
+    code, out, _ = pack(ctx, "--area", "import", "--req", "E-004,FR-001")
+    p = parts(out)
+    assert code == 0 and "### FR-001" in p["Requirements"] and "### FR-002" in p["Requirements"]
+    assert "### E-004" in p["Known defects"] and "### E-002" in p["Known defects"]
+
+
+def test_req_unknown_error_entry_exits_2(ctx):
+    code, out, err = pack(ctx, "--area", "import", "--req", "E-009")
+    assert code == 2 and out == "" and "E-009" in err and "errors.md" in err
+    assert "pass the requirement ID" not in err
+
+
+def test_req_error_entry_needs_area(ctx):
+    code, out, err = pack(ctx, "--req", "E-002")
+    assert code == 2 and out == "" and "--req needs --area" in err

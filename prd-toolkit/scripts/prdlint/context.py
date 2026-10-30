@@ -22,7 +22,9 @@ _UJ = re.compile(r"(?<![\w-])UJ-\d+(?![\w-])")
 _ASSUMPTION = re.compile(r"\[ASSUMPTION\b(?: (A-\d+):)?")
 _TYPED = re.compile(r"(?<![\w-])([A-Za-z][\w-]*):([^\s`'\",;()\[\]]+)")  # <type>:<name>
 _FEATURE = re.compile(r"features/([^/]+)\.md")
-_SUB_ID = re.compile(r"(?:AC|T)-\d+\.\d+|E-\d+")
+_SUB_ID = re.compile(r"(?:AC|T)-\d+\.\d+")
+_ENTRY = re.compile(r"E-\d+")
+_T_NUMBER = re.compile(r"T-(\d+)\.\d+")
 _SOURCE_REF = re.compile(r"(?P<path>[^\s@]+):(?P<line>\d+)\s+@(?P<sha>[0-9a-fA-F]{4,40})")
 
 
@@ -94,30 +96,49 @@ def _areas_known(prd: Prd) -> list[str]:
 
 
 def _sub_id_hint(prd: Prd, sid: str) -> str:
-    """For an AC, T or E ID passed to --req: name the requirement it belongs to."""
-    if sid.startswith("E-"):
-        e = prd.errors_ledger.get(sid)
-        owners = list(dict.fromkeys(t for t, _ in e.touches)) if e else []
-    else:
-        owners = [b.id for b in prd.blocks if any(a.id == sid for a in b.acs) or any(t == sid for t, _, _ in b.tests)]
+    """For an AC or T ID passed to --req: name the requirement it belongs to."""
+    owners = [b.id for b in prd.blocks if any(a.id == sid for a in b.acs) or any(t == sid for t, _, _ in b.tests)]
     return f"pass the requirement ID ({', '.join(owners) or 'UJ-, FR- or NFR-nnn'}), not {sid}"
 
 
-def _select(prd: Prd, area: str, req: list[str] | None) -> list[ReqBlock]:
+def _entry_reqs(prd: Prd, eid: str) -> list[str]:
+    """The requirement IDs an errors.md entry reaches: its `Touches:` IDs, then the parent block
+    of each test case `known-failing` on it (the owner of its `ac:`, else the T-id's number)."""
+    ids = [t for t, _ in prd.errors_ledger[eid].touches]
+    for tc in prd.test_cases:
+        if not isinstance(tc.data, dict) or tc.data.get("known-failing") != eid:
+            continue
+        ac = str(tc.data.get("ac", ""))
+        owner = next((b.id for b in prd.blocks if any(a.id == ac for a in b.acs)), None)
+        if owner is None and (m := _T_NUMBER.fullmatch(tc.id)):
+            owner = next((b.id for b in prd.blocks if b.kind in ("FR", "NFR") and int(b.id.split("-")[1]) == int(m.group(1))), None)
+        if owner:
+            ids.append(owner)
+    return list(dict.fromkeys(ids))
+
+
+def _select(prd: Prd, area: str, req: list[str] | None) -> tuple[list[ReqBlock], set[str]]:
+    """The selected blocks, and the errors.md entries --req named."""
     if req is None:
-        return [b for b in prd.blocks if b.file == f"features/{area}.md" and b.kind in ("UJ", "FR")]
+        return [b for b in prd.blocks if b.file == f"features/{area}.md" and b.kind in ("UJ", "FR")], set()
     by_id = {}
     for b in prd.blocks:
         by_id.setdefault(b.id, b)
-    unknown = [i for i in req if i not in by_id]
-    if unknown:
-        hints = [_sub_id_hint(prd, i) for i in unknown if _SUB_ID.fullmatch(i)]
-        raise ContextError(f"no requirement block defines {', '.join(unknown)}" + "".join(f"; {h}" for h in hints))
-    wanted = set(req)
-    for i in req:
+    entries = [i for i in req if _ENTRY.fullmatch(i)]
+    unknown = [i for i in req if i not in by_id and i not in entries]
+    problems = [f"no requirement block defines {', '.join(unknown)}"
+                + "".join(f"; {_sub_id_hint(prd, i)}" for i in unknown if _SUB_ID.fullmatch(i))] if unknown else []
+    missing = [i for i in entries if i not in prd.errors_ledger]
+    if missing:
+        problems.append(f"errors.md has no entry {', '.join(missing)}")
+    if problems:
+        raise ContextError("; ".join(problems))
+    roots = [i for i in req if i not in entries] + [r for e in entries for r in _entry_reqs(prd, e) if r in by_id]
+    wanted = set(roots)
+    for i in roots:
         for _, text in _field_lines(by_id[i].lines, "Traces"):
             wanted |= {u for u in _UJ.findall(text) if u in by_id}
-    return [b for b in by_id.values() if b.id in wanted]
+    return [b for b in by_id.values() if b.id in wanted], set(entries)
 
 
 def _stack(prd: Prd) -> list[Item]:
@@ -181,16 +202,15 @@ def _cited(prd: Prd, area: str, blocks: list[ReqBlock], text: str) -> list[Item]
     return items or [_none("Cited", "prd.md")]
 
 
-def _defects(prd: Prd, ids: set[str]) -> list[Item]:
+def _defects(prd: Prd, ids: set[str], entries: set[str]) -> list[Item]:
+    """Each entry --req named, whole, and each open entry whose `Touches:` names a selected ID."""
     items, loose = [], 0
     lines = _lines(prd, "errors.md") if "errors.md" in prd.docs else []
     for e in prd.errors_ledger.values():
-        if not e.open:
-            continue
-        if not e.touches:
-            loose += 1
-        elif any(t in ids for t, _ in e.touches):
+        if e.id in entries or (e.open and any(t in ids for t, _ in e.touches)):
             items.append(Item("Known defects", e.id, "errors.md", e.line, _trim(lines[e.line - 1 : e.end])))
+        elif e.open and not e.touches:
+            loose += 1
     return items + [Item("Known defects", None, "errors.md", None, f"{loose} open errors.md entries name no requirement")]
 
 
@@ -344,7 +364,7 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
 
     if mode == "implement" and not _in_git_work_tree(prd.root):
         raise ContextError("--for implement needs the PRD inside a git work tree")
-    blocks = _select(prd, area, req)
+    blocks, entries = _select(prd, area, req)
     texts = [_block_text(prd, b, area) for b in blocks]
     text = "\n".join(texts)
     ids = {b.id for b in blocks}
@@ -352,7 +372,7 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
     patterns = [_word(i) for i in sorted(ids | {ac.id for b in blocks for ac in b.acs})] + [_word(area)]
     implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd)) if mode == "implement" else []
     body = (_stack(prd) + _glossary(prd, text) + (requirements or [_none("Requirements", f"features/{area}.md")])
-            + implement + _cited(prd, area, blocks, text) + _defects(prd, ids) + _questions(prd, patterns) + _history(prd, area))
+            + implement + _cited(prd, area, blocks, text) + _defects(prd, ids, entries) + _questions(prd, patterns) + _history(prd, area))
     return [_header(prd, area, mode, display, body)] + body
 
 
