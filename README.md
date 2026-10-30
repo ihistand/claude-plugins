@@ -9,9 +9,9 @@ Claude Code plugins for data engineering (sqlanvil-toolkit), 3D printing workflo
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it.
 
 **Features:**
-- **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with a fresh agent, and approves it
+- **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with prd-tester, and approves it
 - **changing-prds skill** - Changes the PRD first, with new IDs and a version bump, before any code
-- **Slash commands**: `/prd-new` and `/prd-change`
+- **Slash commands**: `/prd-new`, `/prd-adopt` and `/prd-change`
 - **Lint CLI**: `prd_lint.py` checks 27 rules; `prd_block.py` writes the CLAUDE.md block
 
 **For full documentation:** See [prd-toolkit/README.md](./prd-toolkit/README.md)

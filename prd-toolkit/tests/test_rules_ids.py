@@ -22,6 +22,21 @@ def _both(*mutations):
     return mutate
 
 
+ADOPT_OLD = "## 8. Adoption map\n\nNot applicable: new project."
+FR2_ROW = "| FR-002 | Get an order | live | features/api.md | 1.0.0 |"
+FR2_HEAD = "### FR-002 Get an order\nStatus: live (since 1.0.0)"
+
+
+def _adoption(*rows):
+    body = "\n".join(["| Area | State | Boundary |", "|---|---|---|", *rows])
+    return _edit("prd.md", ADOPT_OLD, f"## 8. Adoption map\n\n{body}")
+
+
+def _as_built(root):
+    _edit("features/api.md", FR2_HEAD, FR2_HEAD.replace("live (since 1.0.0)", "as-built"))(root)
+    _edit("prd.md", FR2_ROW, FR2_ROW.replace("live", "as-built"))(root)
+
+
 FR3_ROW = "| FR-003 | Delete an order | live | features/api.md | 1.0.0 |"
 FR3_ROW_REMOVED = FR3_ROW.replace("live", "removed")
 FR3_STATUS = "### FR-003 Delete an order\nStatus: live (since 1.0.0)"
@@ -35,6 +50,9 @@ FR3_ACCEPTANCE = """Acceptance (EARS):
 FR2_STATUS = "### FR-002 Get an order\nStatus: live (since 1.0.0)"
 
 CASES: list[Case] = [
+    Case("index-consistent", "adoption row without a feature file", _adoption("| ghost | extracted | `src/ghost/**` |")),
+    Case("index-consistent", "as-built block without Source", _as_built),
+    Case("index-consistent", "duplicate index row", _edit("prd.md", FR2_ROW, FR2_ROW + "\n" + FR2_ROW)),
     Case("id-format", "FR-12 on a Traces line", _edit("features/api.md", "Traces: UJ-01; `orders.id`", "Traces: UJ-01; FR-12; `orders.id`")),
     Case("id-format", "heading FR-0001", _edit("features/import.md", "### FR-001 Import", "### FR-0001 Import")),
     Case("id-format", "bad AC in a YAML value", _edit("test-cases/import.yaml", "ac: AC-001.3", "ac: AC-1.3")),
@@ -101,3 +119,34 @@ def test_shared_number_is_reported_by_its_own_branch(prd):
 def test_nfr_bound_accepts_percent_and_per_minute(prd, bound):
     edit(prd, "nfr.md", "answer getOrder within 300 ms at p95 under 50 requests/s.", f"{bound}.")
     assert "nfr-bound" not in fired(lint(prd))
+
+
+def _index_messages(prd):
+    return [f.message for f in lint(prd) if f.rule == "index-consistent"]
+
+
+def test_new_index_findings_say_why(prd):
+    _adoption("| ghost | extracted | `src/ghost/**` |")(prd)
+    assert any("features/ghost.md" in m for m in _index_messages(prd))
+
+
+def test_as_built_without_source_says_so(prd):
+    _as_built(prd)
+    assert any("Source" in m for m in _index_messages(prd))
+
+
+def test_duplicate_index_row_says_so(prd):
+    _edit("prd.md", FR2_ROW, FR2_ROW + "\n" + FR2_ROW)(prd)
+    assert any("FR-002" in m and "twice" in m for m in _index_messages(prd))
+
+
+def test_as_built_with_source_is_clean(prd):
+    _as_built(prd)
+    _edit("features/api.md", FR2_HEAD.replace("live (since 1.0.0)", "as-built"),
+          FR2_HEAD.replace("live (since 1.0.0)", "as-built") + "\nSource: src/api.py:10 @abc1234")(prd)
+    assert "index-consistent" not in fired(lint(prd))
+
+
+def test_adopted_row_with_its_feature_file_is_clean(prd):
+    _adoption("| import | adopted | `features/import.md` |", "| later | not started | |")(prd)
+    assert "index-consistent" not in fired(lint(prd))

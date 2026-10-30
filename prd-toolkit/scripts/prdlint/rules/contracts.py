@@ -394,6 +394,18 @@ def _custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
             yield r.cells[0].strip("`").strip(), validator, files, r.line
 
 
+def custom_items(prd: Prd) -> dict[str, set[str]]:
+    """Each custom type name -> the top-level keys of its YAML files. A type none of whose files is a
+    YAML mapping is absent, so its `<type>:<name>` targets cannot be checked."""
+    out: dict[str, set[str]] = {}
+    for kind, _, files, _ in _custom_types(prd):
+        for f in files:
+            data = prd.yaml.get(f)
+            if isinstance(data, dict):
+                out.setdefault(kind, set()).update(str(k) for k in data)
+    return out
+
+
 def _validator_timeout() -> int:
     try:
         return int(os.environ.get("PRD_VALIDATOR_TIMEOUT", "120"))
@@ -404,10 +416,12 @@ def _validator_timeout() -> int:
 def _check_custom(prd: Prd) -> Iterator[Finding]:
     timeout = _validator_timeout()
     for kind, validator, files, line in _custom_types(prd):
-        if not files:
-            continue
         def bad(msg):
             return Finding("prd.md", line, "contracts-valid", f"custom type {kind}: {msg}")
+
+        if not files:
+            yield bad("glob matches no file")
+            continue
 
         try:
             argv = shlex.split(validator)

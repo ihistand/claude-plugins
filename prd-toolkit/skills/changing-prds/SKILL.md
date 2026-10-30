@@ -18,8 +18,10 @@ Grammar (blocks, removed IDs, test cases): `${CLAUDE_PLUGIN_ROOT}/references/prd
 Read it before editing. Lint, the mechanical gate:
 
 ```bash
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
+uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
 ```
+
+The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `2` usage or internal error. Ignore the Bash call's own success; the trailing echo always succeeds. Use this form every time you run lint.
 
 ## The gap rule
 
@@ -94,14 +96,20 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
    test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 open questions, 1 dismissed by quote`,
    `no dry run (removal only)`, `no dry run (unit only)` or `no dry run (wording only)`.
-4. **Lint and dry run.** Lint must exit 0. Then dry-run the new and revised T-ids only, never a
+4. **Lint and dry run.** The `prd-lint-exit=` value must be `0`. Then dry-run the new and revised T-ids only, never a
    `level: unit` one: unit cases read code, stay with the builder and are never sampled, as in
    authoring phase 6, where exit 1 from `--sample-tids` fails the gate. An empty slot is not a
    dry run and never passes; when every new and revised T-id is unit, record
    `no dry run (unit only)` instead of dispatching. Dispatch
-   a fresh general-purpose subagent with
-   `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md`, those T-ids in its slot. It
-   passes on the terms that file states. Anything else fails it, and every question is a gap:
+   the `prd-toolkit:prd-tester` agent, those T-ids in its prompt, as
+   `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says (dry-run directory, state
+   check, dispatch, judgment, cleanup). Only when `prd-tester` is not in the Agent tool's list,
+   dispatch a fresh general-purpose subagent with
+   `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md` instead. Either way it passes
+   on the terms that file states, and a state check that finds a changed path outside the
+   dry-run directory fails it: report the paths and restore nothing yourself. Then delete the
+   dry-run directory, pass or fail (dispatching.md's cleanup step).
+   Anything else fails it, and every question is a gap:
    fix the PRD and run it again. A gap that predates this change counts the same, because the
    changed T-ids cannot be tested without its answer: ask the user for it. A removal with no new
    or revised T-ids has no dry run; say so. If you cannot dispatch a subagent, report the dry
@@ -111,7 +119,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    step 4 now. `In review` and a clean lint are not evidence that it ran; a new session starts
    with neither. Then show the user the restatement, the changes by ID, the new version and why
    that level, the decisions from step 1, the lint result and the dry-run report. Wait for
-   explicit approval. Then: status `Approved`; lint exit 0; rerun
+   explicit approval. Then: status `Approved`; the `prd-lint-exit=` value is `0`; rerun
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
@@ -155,5 +163,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 ## Related skills
 
 - **prd-toolkit:authoring-prds** writes a new PRD and resumes a never-approved draft (step 0);
-  its `dry-run-prompt.md` is the step 4 prompt.
+  its `dry-run-prompt.md` holds the dry-run pass terms and the fallback prompt.
+- **prd-toolkit:testing-from-prds** is what `prd-tester` follows, and its `dispatching.md` is
+  step 4's dispatch.
 - **superpowers:writing-plans** turns the approved, changed IDs into tasks.

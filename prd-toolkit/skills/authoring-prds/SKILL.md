@@ -1,6 +1,6 @@
 ---
 name: authoring-prds
-description: Use when the user wants a PRD, product spec or requirements document written before building a new product, service or feature set, or runs /prd-new - interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from, or when asked to continue or resume a draft PRD, or to approve, sign off or change the status of a draft PRD under docs/prd/
+description: Use when the user wants a PRD, product spec or requirements document written before building a new product, service or feature set, or runs /prd-new - interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from (when the user says not to ask questions, writes that folder with every unknown marked), or when asked to continue or resume a draft PRD, or to approve, sign off or change the status of a draft PRD under docs/prd/
 ---
 
 # Authoring PRDs
@@ -24,11 +24,13 @@ Grammar and shapes live in the references; read them before writing, do not gues
 `contract-types.md`, `ears.md`, `clarify-categories.md`, `quality-checklist.md`,
 `test-levels.md` (same folder).
 
-Lint, the mechanical gate (exit 0 clean, 1 violations, 2 usage error):
+Lint, the mechanical gate:
 
 ```bash
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
+uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
 ```
+
+The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `2` usage or internal error. Ignore the Bash call's own success; the trailing echo always succeeds. Use this form every time you run lint.
 
 ## Non-negotiable rules
 
@@ -57,17 +59,19 @@ uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>
 | # | Phase | Gate |
 |---|---|---|
 | 1 | **Context.** Read the repo, its README, CLAUDE.md, AGENTS.md and docs. Look up facts the user does not uniquely hold (subagents may). Propose registry rows, Decision `proposed`: standards rows from detected linter configs (`.sqlfluff`, `.pre-commit-config.yaml`, `[tool.*]` sections in `pyproject.toml`, lint scripts in `package.json`); skills rows from this session's skills listing that match the project's objects and activities, always including `superpowers:writing-plans` for planning. A skills row may become `required` only for a plugin skill (`plugin:skill`) or one found under `.claude/skills/`, because lint checks it is installed; a skill built into Claude Code (`code-review`, `security-review`, `simplify`, `init`) may only be `recommended`. | A short note to the user of what was found |
-| 2 | **Draft.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/prd` to `docs/prd/<slug>/` and fill it (below). Gaps become `[NEEDS CLARIFICATION: q]`, inferences `[ASSUMPTION A-nn: …]`. Write features, contracts and test cases, not only prose. | Draft on disk; lint exits 0 |
+| 2 | **Draft.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/prd` to `docs/prd/<slug>/` with Read and Write and fill it (below). Gaps become `[NEEDS CLARIFICATION: q]`, inferences `[ASSUMPTION A-nn: …]`. Write features, contracts and test cases, not only prose. | Draft on disk; the `prd-lint-exit=` value is `0` |
 | 3 | **Clarify rounds** per `clarify-categories.md`: score all twelve categories; at most five multiple-choice questions per round, each with a recommended answer, ranked by impact × uncertainty; write each answer in immediately. Rounds are uncapped. | Zero `NEEDS CLARIFICATION` markers in any file, YAML and SQL comments included (delete each template hint once its slot is answered); §13 reads `None.`; every category Clear |
-| 4 | **Sign-off.** Show every assumption (ID and text) and every registry row in your message; a confirmation covers only what the user was shown. The user confirms or corrects each assumption (§12 status `confirmed` or `corrected`) and decides each row. Copy into `operations.md` every hard rule from a registered skill that bears on operations (for example "Claude never deploys Looker") as `(actor: human)` runbook steps, so the PRD stands alone. | No `open` assumption; no `proposed` row |
-| 5 | **Mechanical gate.** Set status `In review`, run lint, then answer every question in `quality-checklist.md`, plus: every contract listed in §7 is populated, or deleted, dropped from §7 and declared `Not applicable` in §1. Lint cannot tell an empty skeleton (`paths: {}`, `roles: {}`) from a deliberate "none". | Lint exit 0; every checklist answer yes |
-| 6 | **Test-agent dry run.** `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Unit T-ids are never sampled: unit cases read code and stay with the builder. Exit 1 from `--sample-tids` (no non-unit T-id) fails this gate; an empty dry run never passes. Dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md): it may read only the PRD folder, writes the tests for those T-ids to the scratchpad, and lists every question it had to ask. | One test per sampled T-id listed under TESTS; every question dismissed by an exact quote, per the prompt's triage; FILES READ holds only paths under the PRD folder |
-| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0` (only on a first approval, when §14 holds no row at 1.0.0 or above; otherwise this is an approval of a change, and it goes through `prd-toolkit:changing-prds` step 5 instead), `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 open questions, 4 dismissed by quote`); lint exit 0; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
+| 4 | **Sign-off.** Show every assumption (ID and text) and every registry row in your message; a confirmation covers only what the user was shown. The user confirms or corrects each assumption (§12 status `confirmed` or `corrected`), or names who will confirm intent only that person knows (`awaiting <who>`, which may stay through approval), and decides each row. Copy into `operations.md` every hard rule from a registered skill that bears on operations (for example "Claude never deploys Looker") as `(actor: human)` runbook steps, so the PRD stands alone. | No `open` assumption; no `proposed` row |
+| 5 | **Mechanical gate.** Set status `In review`, run lint, then answer every question in `quality-checklist.md`, plus: every contract listed in §7 is populated, or deleted, dropped from §7 and declared `Not applicable` in §1. Lint cannot tell an empty skeleton (`paths: {}`, `roles: {}`) from a deliberate "none". | The `prd-lint-exit=` value is `0`; every checklist answer yes |
+| 6 | **Test-agent dry run.** `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Unit T-ids are never sampled: unit cases read code and stay with the builder. Exit 1 from `--sample-tids` (no non-unit T-id) fails this gate; an empty dry run never passes. Dispatch the `prd-toolkit:prd-tester` agent as `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says (dry-run directory, state check, dispatch, judgment, cleanup): it writes the tests for those T-ids to the dry-run directory, `<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`, and lists every question it had to ask. Its guard allows reads in the PRD folder, the dry-run directory and the test roots, and writes only to the test roots and the scratch directory; the tester's own rule keeps a dry run to the PRD folder and its dry-run directory. Only when `prd-tester` is not in the Agent tool's list, dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md) instead. Either way, delete the dry-run directory after judging (dispatching.md's cleanup step), pass or fail. | One test per sampled T-id listed under TESTS; every question dismissed by an exact quote, per the triage in [dry-run-prompt.md](dry-run-prompt.md); FILES READ holds only paths under the PRD folder and the run's dry-run directory; the state check finds no change outside the dry-run directory |
+| 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0` (only on a first approval, when §14 holds no row at 1.0.0 or above; otherwise this is an approval of a change, and it goes through `prd-toolkit:changing-prds` step 5 instead), `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 open questions, 4 dismissed by quote`); the `prd-lint-exit=` value is `0`; then `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md; hand off to `superpowers:writing-plans`. | Explicit user approval |
 
 A failed dry run is a gap: write each question into the file it names as a
 `[NEEDS CLARIFICATION: …]` marker, set the status back to `Draft`, and go back to phase 3; then
 run phases 5 and 6 again, phase 6 on a fresh sample. Do not answer the subagent, and do not let
-it read code.
+it read code. A state check that finds a changed path outside the dry-run directory fails the dry
+run too: report the paths to the user and restore nothing yourself. Delete the dry-run directory
+either way (dispatching.md's cleanup step).
 
 Before phase 7, check what this conversation holds. If it does not hold a passing checklist and
 a passing dry-run report for the current files, run phases 5 and 6 now before approving. A
@@ -84,7 +88,11 @@ report each finding, and return to the phase it belongs to. Never commit an `App
   `^[a-z][a-z0-9-]*$`. If `docs/prd/<slug>/` exists, read its §14 first. A row at 1.0.0 or
   above means it has been approved: stop, that is a change for `prd-toolkit:changing-prds`.
   No such row means it is a draft: resume it (below). Never copy the template over it.
-- **Copy:** `mkdir -p docs/prd && cp -R "${CLAUDE_PLUGIN_ROOT}/templates/prd" docs/prd/<slug>`.
+- **Copy:** `mkdir -p docs/prd/<slug>`, then Read each file under
+  `${CLAUDE_PLUGIN_ROOT}/templates/prd/` and Write it to the same relative path under
+  `docs/prd/<slug>/` (Glob `**/*` in the template lists them; each `.gitkeep` sits beside a
+  README.md and may be skipped). Never copy with a shell command: a sandbox that denies the
+  plugin folder as a copy source blocks `cp`, and Read and Write are the granted tools.
 - **Fill all four slots in every file** except `.gitkeep`: `{{project}}` the slug,
   `{{owner}}` the owner the user named, else `[NEEDS CLARIFICATION: who owns this product]`
   (never `git config user.name`: the owner is a value only the user knows),
@@ -194,5 +202,7 @@ And A-03 sits in §12 as `open` until the user confirms or corrects it in phase 
 - **superpowers:brainstorming** decides *whether* to build and *what*. This skill writes the
   authority once that is settled.
 - **superpowers:writing-plans** takes the approved PRD and breaks it into tasks (phase 7 hand-off).
+- **prd-toolkit:testing-from-prds** is what `prd-tester` follows; its `dispatching.md` is
+  phase 6's dispatch.
 - **prd-toolkit:changing-prds** for any change once `docs/prd/<slug>/` has been approved
   (a §14 row at 1.0.0 or above). A never-approved draft resumes here.

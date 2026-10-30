@@ -36,6 +36,21 @@ describe('plugins data', () => {
     }
   })
 
+  it('prd-toolkit has 3 commands', () => {
+    const prd = plugins.find(p => p.id === 'prd-toolkit')
+    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change'])
+  })
+
+  it('prd-toolkit dry-runs with prd-tester and links both design specs', () => {
+    const prd = plugins.find(p => p.id === 'prd-toolkit')
+    const prdNew = prd.commands.find(c => c.name === '/prd-new')
+    expect(prdNew.workflow).toContain('prd-tester dry run')
+    expect(prdNew.workflow).not.toContain('fresh-agent')
+    const urls = prd.references.map(r => r.url)
+    expect(urls.some(u => u.endsWith('/2026-10-29-prd-toolkit-design.md'))).toBe(true)
+    expect(urls.some(u => u.endsWith('/2026-10-29-prd-toolkit-0.2-design.md'))).toBe(true)
+  })
+
   it('plugin ids match known routes', () => {
     const ids = plugins.map(p => p.id)
     expect(ids).toContain('sqlanvil-toolkit')

@@ -34,6 +34,7 @@ class ReqBlock:
     acs: list[Ac] = field(default_factory=list)
     tests: list[tuple[str, str, int]] = field(default_factory=list)  # (T-id, level, line)
     tests_file: str | None = None
+    source: str | None = None  # text after "Source:", the code location an as-built block was read from
     errors: list[tuple[str, int]] = field(default_factory=list)  # (code, line)
     lines: list[tuple[int, str]] = field(default_factory=list)  # body lines, heading excluded
 
@@ -57,12 +58,38 @@ class TestCase:
     data: LineDict
 
 
+ADOPTION_STATES = ("not started", "extracted", "confirmed", "adopted")
+
+
+@dataclass
+class AdoptionRow:
+    area: str
+    state: str
+    boundary: list[str]  # the backticked globs of the Boundary cell
+    line: int
+
+
+@dataclass
+class ErrorEntry:
+    id: str
+    line: int
+    open: bool
+
+
+@dataclass
+class Harness:
+    slots: list[tuple[str, int]] = field(default_factory=list)  # (slot name, line) in file order
+    test_roots: list[str] | None = None  # the backticked list right after "Test roots:"; None when the text is absent
+    test_roots_line: int = 0
+
+
 @dataclass
 class Testing:
     levels: dict[str, int] = field(default_factory=dict)
     environments: dict[str, int] = field(default_factory=dict)
     fixtures: dict[str, int] = field(default_factory=dict)
     signoffs: list[Row] = field(default_factory=list)
+    harness: Harness = field(default_factory=Harness)
 
 
 @dataclass
@@ -80,6 +107,8 @@ class Prd:
     not_applicable: dict[str, tuple[str, int]]
     assumptions: list[Row]
     load_findings: list[Finding]
+    adoption: list[AdoptionRow] | None = None  # None when section 8 has no table (Not applicable)
+    errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
 
 
 _HEADING = re.compile(r"^#{1,3}\s")
@@ -89,7 +118,12 @@ _AC = re.compile(r"^- (AC-\d+\.\d+)\s+(.*)$")
 _AC_REMOVED = re.compile(r"^\(removed in \d+\.\d+\.\d+\)\s*")
 _TEST = re.compile(r"(T-\d+\.\d+)\s*\[([^\]]+)\]")
 _NA = re.compile(r"^\s*[-*]\s*Not applicable:\s*`([^`]+)`\s+[—–-]+\s+(.*?)\s*$")
-_FIELD = re.compile(r"^(Status|Flow|Acceptance \(EARS\)|Errors|Edge cases|Tests|Traces):")
+_ERROR_HEAD = re.compile(r"^### (E-\d+)\b")
+_RESOLUTION = re.compile(r"^Resolution:\s*(.*?)\s*$")
+_SLOT = re.compile(r"^- \*\*([^*]+?)\.\*\*")
+_MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]*\]")
+_BACKTICKED = re.compile(r"`([^`]+)`")
+_ITEM_LIST = re.compile(r"\s*(`[^`]+`(?:\s*,\s*`[^`]+`)*)")  # a comma-separated run of backticked items
 
 
 def _field_lines(lines: list[tuple[int, str]], name: str) -> list[tuple[int, str]]:
@@ -131,6 +165,8 @@ def _parse_block(m: re.Match, rel: str, n: int, body: list[tuple[int, str]]) -> 
                 b.errors.append((code, ln))
         if paren:  # the parenthetical closes the code list
             break
+    sl = _field_lines(body, "Source")
+    b.source = " ".join(t for _, t in sl) or None
     tl = _field_lines(body, "Tests")
     for ln, text in tl:
         for tid, level in _TEST.findall(text):
@@ -175,10 +211,58 @@ def _names(table) -> dict[str, int]:
     return {r.cells[0].strip("`"): r.line for r in table.rows} if table else {}
 
 
+def _adoption(secs: list[Section]) -> list[AdoptionRow] | None:
+    s8 = next((s for s in secs if s.number == 8), None)
+    ts = tables(s8.body) if s8 else []
+    if not ts:
+        return None
+    rows = []
+    for r in ts[0].rows:
+        c = r.cells + [""] * 3
+        rows.append(AdoptionRow(c[0].strip("`"), c[1].strip("`"), _BACKTICKED.findall(c[2]), r.line))
+    return rows
+
+
+def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
+    """`### E-nnn` entries of errors.md; open unless a Resolution line carries a real value."""
+    ledger: dict[str, ErrorEntry] = {}
+    cur: ErrorEntry | None = None
+    for n, (orig, st) in enumerate(zip(text.split("\n"), strip_code(text).split("\n")), 1):
+        if _HEADING.match(st):
+            m = _ERROR_HEAD.match(orig) if _ERROR_HEAD.match(st) else None
+            cur = ErrorEntry(m.group(1), n, True) if m else None
+            if cur:
+                ledger.setdefault(cur.id, cur)
+            continue
+        rm = _RESOLUTION.match(orig) if cur else None
+        if rm:
+            v = rm.group(1).lower()
+            cur.open = v in ("", "-") or v.startswith("open")
+    return ledger
+
+
+def _harness(body: list[tuple[int, str]]) -> Harness:
+    h = Harness()
+    for n, text in body:
+        m = _SLOT.match(text)
+        if not m:
+            continue
+        h.slots.append((m.group(1), n))
+        if m.group(1) == "Layout" and "Test roots:" in text:
+            tail = _MARKER.sub("", text.split("Test roots:", 1)[1])
+            lst = _ITEM_LIST.match(tail)  # stops at the first text that is not another ", `item`"
+            h.test_roots, h.test_roots_line = (_BACKTICKED.findall(lst.group(1)) if lst else []), n
+    return h
+
+
 def load(prd_dir: Path) -> Prd:
     prd_dir = Path(prd_dir).resolve()
-    if not (prd_dir / "prd.md").is_file():
-        raise NotAPrd(f"{prd_dir}: no prd.md")
+    # the exact name: on a case-insensitive filesystem `prd.md` also "exists" as PRD.md
+    names = {p.name: p for p in prd_dir.iterdir()} if prd_dir.is_dir() else {}
+    if "prd.md" not in names or not names["prd.md"].is_file():
+        other = next((n for n in names if n.lower() == "prd.md"), None)
+        hint = f"; found {other}; the file name is lowercase prd.md" if other else ""
+        raise NotAPrd(f"{prd_dir}: no prd.md{hint}")
     findings: list[Finding] = []
     docs = {p.relative_to(prd_dir).as_posix(): p.read_text(encoding="utf-8") for p in sorted(prd_dir.rglob("*.md"))}
     fm, fm_line = frontmatter(docs["prd.md"])
@@ -236,8 +320,11 @@ def load(prd_dir: Path) -> Prd:
         testing.fixtures = _names(_table_under(tsecs, "Fixtures"))
         so = _table_under(tsecs, "Sign-offs")
         testing.signoffs = so.rows if so else []
+        hs = next((x for x in tsecs if x.title.strip().lower() == "harness"), None)
+        testing.harness = _harness(hs.body) if hs else Harness()
 
-    return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings)
+    return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
+               adoption=_adoption(secs), errors_ledger=_errors_ledger(docs.get("errors.md", "")))
 
 
 def repo_root(path: Path) -> Path:

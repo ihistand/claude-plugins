@@ -29,7 +29,7 @@ for example Browser identity when there is no UI.
 - **Tools on the runner.** [NEEDS CLARIFICATION: which command-line tools the runner has on PATH (database client, load tool, browser), and where the tests directory sits]
 - **Clean state.** [NEEDS CLARIFICATION: on which environments every test starts from empty tables, which tables, and who empties them]
 - **Persistent environments.** [NEEDS CLARIFICATION: on environments that keep data (staging), how fixtures get there (seeded once, idempotently) and what tests must never do there]
-- **Layout.** [NEEDS CLARIFICATION: where each level's tests live and how files are named, including non-Python scripts, and how a test cites its T-id]
+- **Layout.** [NEEDS CLARIFICATION: where each level's tests live and how files are named, including non-Python scripts, and how a test cites its T-id]. Test roots: [NEEDS CLARIFICATION: the test directories, each in backticks]
 - **HTTP requests.** [NEEDS CLARIFICATION: the HTTP library tests use, its base URL and default headers (Accept), and how a test acts as each identity]
 - **Fixtures.** [NEEDS CLARIFICATION: the fixture-loading helper, and how a case's preconditions are loaded before the test body; what Load paths are relative to]
 - **Browser identity.** [NEEDS CLARIFICATION: the browser-test plugin and base URL, and how a browser test acts as each identity; or Not applicable: no UI]

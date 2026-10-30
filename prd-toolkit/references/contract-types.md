@@ -321,8 +321,11 @@ A custom type is a row in `prd.md` §7 whose validator is not `built-in`:
 
 Lint-checked: the validator command runs with the matching files appended as arguments, from the
 PRD root. Exit 0 passes. Any other exit, a missing command or a run over `PRD_VALIDATOR_TIMEOUT`
-seconds (default 120) is a `contracts-valid` violation. A row whose glob matches no file is skipped.
-A custom type's name is also a legal `target` kind in test cases.
+seconds (default 120) is a `contracts-valid` violation. A row whose glob matches no file is a `contracts-valid` violation.
+A custom type's name is also a legal `target` kind in test cases, as `<type>:<name>`. Lint resolves
+`<name>` only when the type's files are YAML mappings, `.yaml` files under `contracts/`, and only top-level keys count:
+a field target therefore needs a flat key such as `view.field`, not a key nested under its view.
+A type with no such files is not resolved, and any `<name>` passes.
 
 Required, not machine-checked: the type defines a format, a validator that fails on a real defect
 (prove it can fail), and how each item supplies the seven sufficiency elements. Example: a Looker

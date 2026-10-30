@@ -50,9 +50,8 @@ def test_fill_leaves_no_slot(tmp_path):
 
 
 # The conventions every dry run asked for in the 0.1 acceptance run (link-shortener, runs 1-11).
-HARNESS_SLOTS = ["Lifecycle", "Environment switch", "Database access", "Tools on the runner",
-                 "Clean state", "Persistent environments", "Layout", "HTTP requests", "Fixtures",
-                 "Browser identity", "Assertions", "Waits", "Effects", "Leaks", "Acceptance"]
+# One list, owned by the sections rule, so the template test and the lint cannot drift.
+from prdlint.rules.structure import HARNESS_SLOTS  # noqa: E402
 
 
 def _harness(text: str) -> str:

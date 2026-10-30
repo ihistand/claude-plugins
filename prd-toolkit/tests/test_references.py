@@ -72,3 +72,24 @@ def test_fixture_roles_name_a_secret_and_environments_parse(prd):
     roles = p.yaml["contracts/permissions.yaml"]["roles"]
     assert all(isinstance(r.get("secret"), str) and r["secret"] for r in roles.values())
     assert set(p.testing.environments) == {"local", "ci", "staging"}
+
+
+def _flat(path: Path) -> str:
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_custom_type_rules_match_lint():
+    custom = _flat(REF / "contract-types.md").split("## custom", 1)[1].split("## Observability", 1)[0]
+    assert "A row whose glob matches no file is a `contracts-valid` violation." in custom
+    assert "is skipped" not in custom
+    assert "only top-level keys count" in custom and "`view.field`" in custom
+    assert "`.yaml` files under `contracts/`" in custom
+    fmt = _flat(REF / "prd-format.md")
+    assert "the type's `.yaml` files under `contracts/`" in fmt
+
+
+def test_prd_format_says_the_test_roots_list_sits_on_the_first_line():
+    fmt = _flat(REF / "prd-format.md")
+    assert ("`Test roots:` and its whole list sit on the Layout bullet's first line: a wrapped continuation "
+            "line is not read.") in fmt
+    assert "lists no backticked directory" in fmt

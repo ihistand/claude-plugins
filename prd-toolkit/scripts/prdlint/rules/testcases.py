@@ -10,7 +10,7 @@ from ..markdown import strip_code, tables
 from ..model import Prd, TestCase
 from ..registry import rule
 from ..yamlload import yaml
-from .contracts import event_names, operation_ids, schema_tables
+from .contracts import custom_items, event_names, operation_ids, schema_tables
 
 TARGET_KINDS = {"op", "table", "event", "job", "component", "page", "code"}
 
@@ -213,6 +213,7 @@ def test_refs(prd: Prd):
     if isinstance(perms, dict) and isinstance(perms.get("roles"), dict):
         identities |= {r["identity"] for r in perms["roles"].values() if isinstance(r, dict) and isinstance(r.get("identity"), str)}
     ops, tables_, events = operation_ids(prd), {t.lower() for t in schema_tables(prd)}, event_names(prd)
+    customs = custom_items(prd)
 
     for tc in _cases(prd):
         d = tc.data
@@ -267,6 +268,14 @@ def test_refs(prd: Prd):
         if isinstance(ident, str) and ident and ident not in identities:
             yield bad("identity", f"identity '{ident}' is neither none nor a test identity in contracts/permissions.yaml")
 
+        kf = d.get("known-failing")
+        if kf is not None:
+            entry = prd.errors_ledger.get(kf) if isinstance(kf, str) else None
+            if entry is None:
+                yield bad("known-failing", f"known-failing {kf!r} must be an E-nnn entry of errors.md")
+            elif not entry.open:
+                yield bad("known-failing", f"known-failing {kf} is resolved in errors.md; remove the line")
+
         target = d.get("target")
         if isinstance(target, str) and ":" in target:
             kind, _, name = target.partition(":")
@@ -276,6 +285,8 @@ def test_refs(prd: Prd):
                 yield bad("target", f"target {target}: no table '{name}' in contracts/schema.sql")
             elif kind in ("event", "job") and name not in events:
                 yield bad("target", f"target {target}: no '### {name}' heading in contracts/events.md and no such asyncapi channel or operation")
+            elif kind in customs and name not in customs[kind]:
+                yield bad("target", f"target {target}: '{name}' is not an item of the {kind} files (items: {', '.join(sorted(customs[kind]))})")
 
 
 @rule("deny-tested")

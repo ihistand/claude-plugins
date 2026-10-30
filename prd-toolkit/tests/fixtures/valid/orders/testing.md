@@ -19,7 +19,7 @@
 - **Tools on the runner.** The CI image has `psql`, `python3` and Chromium on PATH; `tests/` sits at the repository root.
 - **Clean state.** On `local` and `ci`, an autouse fixture in `tests/conftest.py` truncates `orders` and `customers` before every test.
 - **Persistent environments.** On `staging`, tests never truncate or load fixtures; the staging deploy job seeds every fixture once, idempotently.
-- **Layout.** `tests/<level>/test_<area>.py`, where the area is the feature file's name (`import`, `api`, `nfr`); each test's docstring cites its T-id, e.g. `@prd T-001.2`.
+- **Layout.** `tests/<level>/test_<area>.py`, where the area is the feature file's name (`import`, `api`, `nfr`); each test's docstring cites its T-id, e.g. `@prd T-001.2`. Test roots: `tests/`.
 - **HTTP requests.** `httpx` through a `client` fixture: the environment's Base URL, `Accept: application/json` by default, and the identity's token from its role's `secret` as a bearer header.
 - **Fixtures.** `load_fixture(name)` runs the fixture's Load command from the repository root; an autouse fixture loads a case's preconditions after the clean-state truncate.
 - **Browser identity.** Not applicable: the product has no UI.

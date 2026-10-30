@@ -78,7 +78,7 @@ Tables (the header row is parsed; column names and order are fixed):
 | 5 Standards | `\| Object (glob) \| Linter command \| Rules live in \| Applies to \| Decision \|` |
 | 6 Skills | `\| Object or activity \| Skill \| Decision \|` |
 | 7 Contract types | `\| Type \| Files (glob) \| Validator \|` |
-| 8 Adoption map | `\| Area \| State \|` (omit when `Not applicable: new project`) |
+| 8 Adoption map | `\| Area \| State \| Boundary \|` (omit when `Not applicable: new project`); `sections` checks the header and that each state is one of the four below; `index-consistent` checks that an area past `not started` has its `features/<area>.md` |
 | 11 Requirement index | `\| ID \| Title \| Status \| File \| Since \|` (UJ, FR and NFR only) |
 | 12 Assumptions | `\| ID \| Assumption \| Status \|` |
 | 14 Changelog | `\| Version \| Date \| Change \| IDs \|` |
@@ -92,7 +92,10 @@ is undecided, and an undecided row blocks approval. A `required` skill must be i
 file records an `installPath`, `<installPath>/skills/<skill>/SKILL.md`; a bare skill needs
 `.claude/skills/<skill>/SKILL.md` in the home directory or the repo. A skill built into Claude
 Code (`code-review`, `security-review`, `simplify`, `init`) can only be `recommended`. Adoption states: `not started`,
-`extracted`, `confirmed`, `adopted`. Assumption status: `open`, `confirmed`, `corrected`.
+`extracted`, `confirmed`, `adopted`. The Boundary cell lists the area's files as backticked
+globs (`features/import.md`, `src/importer/**`), comma-separated; the loader reads each
+backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, or `awaiting <who>`
+(a named person, for example `awaiting Sam Rivera`; a bare `awaiting` is a violation).
 
 ## Requirement blocks
 
@@ -115,6 +118,10 @@ Tests: T-012.1 [integration], T-012.2 [unit]  (test-cases/import.yaml)
 Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 ```
 
+An optional `Source: <path>:<line> @<sha>` field line (continuation lines allowed) records the
+code a block was read from when an existing system is adopted. An `as-built` block must have one
+(`index-consistent`).
+
 - `Status:` is `approved`, `built`, `verified`, `live`, `as-built` or `removed`, optionally
   followed by `(since X.Y.Z)`. `live` always carries `since`.
 - `Acceptance (EARS):` lists `- AC-nnn.n <text>` items. `nnn` equals the parent's number. The
@@ -133,6 +140,8 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
   `[NEEDS CLARIFICATION: …]` marker is found in the same files, and none may remain once the
   status is `In review` or `Approved`. Fixture data under `contracts/fixtures/`, other file
   types (custom-type files such as `.lkml`), and hidden or editor-backup files are not scanned.
+- Literal angle-bracket text in prose (for example `<the data_state>`) goes in a code span: the
+  `placeholder` rule flags bare `<name>` text as an unfilled template slot, and lint ignores code spans.
 
 ### Decisions the grammar rests on
 
@@ -140,7 +149,9 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
    and `NFR-004` is an `id-unique` violation.
 2. T-ids are numbered per requirement: `T-012.n` belongs to FR-012 or NFR-012, and its test
    case's `ac:` names one `AC-012.x` of that requirement.
-3. Assumptions carry IDs: `[ASSUMPTION A-nn: text]`, indexed by `A-nn` in section 12.
+3. Assumptions carry IDs: `[ASSUMPTION A-nn: text]`, indexed by `A-nn` in section 12. An `open`
+   assumption blocks approval. `awaiting <who>` is for intent only the named person can
+   confirm: the user has named that person, and the row is allowed while the PRD is Approved.
 4. A test case `target` is `<kind>:<name>`, kind one of `op`, `table`, `event`, `job`,
    `component`, `page`, `code` or a custom type named in section 7.
 5. Registry rows carry a `Decision` column (values above).
@@ -183,6 +194,13 @@ T-012.2:
 - An acceptance case adds `steps:` (plain-language actions) and `signoff:` (the business owner).
   Its rules (observable results only, fresh data on persistent environments, a step per
   expectation) are in [test-levels.md](test-levels.md).
+- `known-failing: E-nnn` (optional) marks a case that fails on purpose until the code is fixed. The
+  entry must be in `errors.md` and still open; a resolved or unknown entry is a `test-refs`
+  violation.
+- A custom contract type whose files are YAML mappings makes `<type>:<name>` resolvable: `<name>`
+  must be a top-level key of one of the type's `.yaml` files under `contracts/` (`test-refs`). A
+  type whose files are not YAML mappings there is not checked. A custom type whose glob matches no file is a `contracts-valid`
+  violation.
 - `refs:` (optional) lists what the case depends on outside its contracts: each entry is a path
   in the PRD folder, optionally followed by `#` and the exact text of a heading in that file
   (`prd.md#Component: MyLinksPage`, `testing.md#Harness`). The dry-run tester reads every entry.
@@ -203,6 +221,11 @@ T-012.2:
 Level-2 headings with those names; the first column of each table is the name that other files
 refer to (levels, environments, fixtures).
 
+- Levels: each `Harness command` is **one simple command** in backticks, such as
+  `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
+  first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or
+  `~`; one with an env-var prefix (`TEST_ENV=ci pytest`); and chains with `&&`, `||`, `;` or `|`. Put a setting such as
+  `TEST_ENV` in the Environment switch slot, set by the runner, not in the command.
 - Environments: `Base URL` is where a test reaches the system (`none` for a job with no
   endpoint), `Database` names the database or connection a test reads and writes (never a
   password), and `Logs` says where the environment's logs are read (a file, a command or a log
@@ -211,9 +234,18 @@ refer to (levels, environments, fixtures).
   Environment switch, Database access, Tools on the runner, Clean state, Persistent environments,
   Layout, HTTP requests, Fixtures, Browser identity, Assertions, Waits, Effects, Leaks, Acceptance.
   Each states the convention, not a helper's code; a helper's internals are the dry-run tester's
-  HARNESS CHOICES. A slot that does not apply reads `Not applicable: <reason>`. Lint does not
-  parse the section; its `[NEEDS CLARIFICATION]` markers block `In review` until every slot is
-  answered.
+  HARNESS CHOICES. A slot that does not apply reads `Not applicable: <reason>`. The Layout
+  bullet also ends with `Test roots: ` and the test directories, each in backticks (for example
+  `tests/`); the loader reads those as the roots the tester may write under. Anything inside a
+  `[NEEDS CLARIFICATION: …]` marker is ignored, so an unfilled template has no roots. The loader
+  reads only the comma-separated backticked list right after `Test roots:` and stops at the first
+  other text, so ``Test roots: `tests/` (not `src/`)`` gives `tests/` alone. `Test roots:` and its
+  whole list sit on the Layout bullet's first line: a wrapped continuation line is not read. The
+  `sections` rule checks that testing.md has a `## Harness` section, that every slot is present in
+  the order above, that the Layout bullet has `Test roots:`, and that the list is not empty (a
+  `Test roots:` that lists no backticked directory and holds no marker is a finding, because the
+  guard would then block every write); `[NEEDS CLARIFICATION]` markers block `In review` until
+  every slot is answered.
 - Leak checks define `expect.leaks: none`: one row per sink a test scans (application logs, error
   bodies, and any other output such as metrics labels or events), where the test reads it, and
   which classified columns from `contracts/data-classification.yaml` must not appear in it.
@@ -236,6 +268,10 @@ Diagnosis: <why>
 Resolution: <the AC, T-id and version that fixed it>
 Recurrence of: <E-nnn or ->
 ```
+
+An entry is **open** when it has no `Resolution:` line, or the value after `Resolution:` is
+empty, `-`, or starts with `open` (case-insensitive); otherwise it is resolved. Headings inside
+code fences are not entries.
 
 ## Contract YAML shapes
 

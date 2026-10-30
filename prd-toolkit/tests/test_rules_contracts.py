@@ -37,6 +37,7 @@ UNUSED = """UNUSED_CODE:
   metric: unused_total"""
 
 CASES: list[Case] = [
+    Case("contracts-valid", "custom glob matches no file", _edit("prd.md", "`contracts/custom/*.lkml`", "`contracts/custom/*.nope`")),
     Case("contracts-valid", "errors-missing-metric", _edit("contracts/errors.yaml", "  metric: orders_forbidden_total\n", "")),
     Case("contracts-valid", "errors-bad-code-name", _edit("contracts/errors.yaml", "FORBIDDEN:\n", "forbidden:\n")),
     Case("contracts-valid", "errors-status-not-int", _edit("contracts/errors.yaml", "status: 403", "status: forbidden")),
@@ -181,3 +182,9 @@ def test_malformed_asyncapi_never_crashes(prd, capsys, text):
     (prd / "contracts/asyncapi.yaml").write_text(text)
     main([str(prd)])
     assert "internal error" not in capsys.readouterr().err
+
+
+def test_custom_glob_without_a_file_says_so(prd):
+    _edit("prd.md", "`contracts/custom/*.lkml`", "`contracts/custom/*.nope`")(prd)
+    msgs = [f.message for f in lint(prd) if f.rule == "contracts-valid"]
+    assert any("lookml" in m and "glob matches no file" in m for m in msgs)

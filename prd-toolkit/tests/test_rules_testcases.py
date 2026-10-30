@@ -47,7 +47,26 @@ TESTS_002 = "Tests: T-002.1 [integration], T-002.2 [integration]  (test-cases/ap
 TESTS_003 = "Tests: T-003.1 [integration], T-003.2 [integration]  (test-cases/api.yaml)"
 CUSTOMERS_CSV = "contracts/fixtures/customers/two_customers.csv"
 
+LOOKER_ROW = "| looker | `contracts/looker/*.yaml` | `python3 -c \"import sys; sys.exit(0)\"` |"
+LOOKML_ROW = "| lookml | `contracts/custom/*.lkml` | `python3 -c \"import sys; sys.exit(0)\"` |"
+KPI_YAML = "orders_summary: {kind: explore, fields: [order_count]}\n"
+T1_TARGET = "target: code:importer.import_file"
+
+
+def _looker(root):
+    _edit("prd.md", LOOKML_ROW, LOOKML_ROW + "\n" + LOOKER_ROW)(root)
+    (root / "contracts/looker").mkdir()
+    (root / "contracts/looker/kpi.yaml").write_text(KPI_YAML)
+
+
+def _known_failing(eid):
+    return _edit("test-cases/import.yaml", T1_TARGET, f"known-failing: {eid}\n  {T1_TARGET}")
+
+
 CASES: list[Case] = [
+    Case("test-refs", "known-failing names no entry", _known_failing("E-099")),
+    Case("test-refs", "known-failing names a resolved entry", _known_failing("E-001")),
+    Case("test-refs", "custom target not among the YAML items", _both(_looker, _edit("test-cases/import.yaml", T1_TARGET, "target: looker:no_such_explore"))),
     Case("ac-has-test", "T-002.2 deleted", _both(_drop_case("test-cases/api.yaml", "T-002.2"), _edit("features/api.md", TESTS_002, "Tests: T-002.1 [integration]  (test-cases/api.yaml)"))),
     Case("test-cases-consistent", "level differs", _edit("features/api.md", "T-002.1 [integration]", "T-002.1 [unit]")),
     Case("test-cases-consistent", "Tests line cites an entry that is absent", _edit("features/api.md", TESTS_002, TESTS_002.replace("T-002.2 [integration]", "T-002.2 [integration], T-002.9 [unit]"))),
@@ -191,3 +210,46 @@ def test_long_digit_runs_are_not_pii(prd, value):
 def test_refs_matches_a_heading_at_any_level(prd):
     edit(prd, "test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "prd.md#7. Contract types", "nfr.md"]')
     assert "test-refs" not in fired(lint(prd))
+
+
+def _ref_messages(prd):
+    return [f.message for f in lint(prd) if f.rule == "test-refs"]
+
+
+def test_known_failing_messages_say_why(prd):
+    _known_failing("E-099")(prd)
+    assert any("E-099" in m and "errors.md" in m for m in _ref_messages(prd))
+    _edit("test-cases/import.yaml", "known-failing: E-099", "known-failing: E-001")(prd)
+    assert any("E-001" in m and "resolved" in m for m in _ref_messages(prd))
+
+
+def test_known_failing_on_an_open_entry_is_clean(prd):
+    _edit("errors.md", "Resolution: the importer returns status `empty` before reading rows; T-001.3 passes", "Resolution: open")(prd)
+    _known_failing("E-001")(prd)
+    assert "test-refs" not in fired(lint(prd))
+
+
+def test_custom_target_naming_a_yaml_item_is_clean(prd):
+    _looker(prd)
+    _edit("test-cases/import.yaml", T1_TARGET, "target: looker:orders_summary")(prd)
+    assert "test-refs" not in fired(lint(prd))
+
+
+def test_custom_target_outside_the_yaml_items_says_so(prd):
+    _looker(prd)
+    _edit("test-cases/import.yaml", T1_TARGET, "target: looker:no_such_explore")(prd)
+    assert any("no_such_explore" in m and "looker" in m for m in _ref_messages(prd))
+
+
+def test_custom_type_without_yaml_items_is_not_checked(prd):
+    _edit("test-cases/import.yaml", T1_TARGET, "target: lookml:anything")(prd)
+    assert "test-refs" not in fired(lint(prd))
+
+
+def test_custom_items_maps_types_to_top_level_keys(prd):
+    from prdlint import model
+    from prdlint.rules.contracts import custom_items
+
+    assert custom_items(model.load(prd)) == {}
+    _looker(prd)
+    assert custom_items(model.load(prd)) == {"looker": {"orders_summary"}}

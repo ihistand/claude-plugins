@@ -1,7 +1,7 @@
 {
   "name": "prd-toolkit",
-  "version": "0.1.0",
-  "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it. Includes /prd-new and /prd-change.",
+  "version": "0.2.0",
+  "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent that cannot read your code, and skills to author, adopt and change it. Includes /prd-new, /prd-adopt and /prd-change.",
   "author": {
     "name": "Ivan Histand",
     "email": "ihistand@rotoplas.com",

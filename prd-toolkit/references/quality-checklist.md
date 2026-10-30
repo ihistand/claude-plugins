@@ -32,7 +32,7 @@ judgement. Answer each with yes or no. A "no" is a gap: fix it, then re-run lint
 ## Scope and honesty
 
 - [ ] Is Out of scope explicit, so a builder knows what to refuse?
-- [ ] Does each assumption name who confirms it, and has the user confirmed it?
+- [ ] Does each assumption name who confirms it, and has the user confirmed or corrected it, or, on the user's word, set it `awaiting <who>` for intent only that person can confirm?
 - [ ] Does the glossary give one term per concept, with the banned synonyms listed?
 - [ ] Could a tester who has never seen the code write the tests from this folder alone?
 
