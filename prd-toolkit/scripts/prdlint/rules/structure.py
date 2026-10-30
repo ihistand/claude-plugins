@@ -35,14 +35,21 @@ def prose(prd: Prd) -> Iterator[tuple[str, int, str]]:
             yield rel, n, line
 
 
+_RAW_SUFFIXES = {".yaml", ".yml", ".sql", ".json"}
+
+
 def all_lines(prd: Prd) -> Iterator[tuple[str, int, str]]:
     """Every text line of every file under the PRD folder as (file, line, text).
 
-    Markdown comes from prose() (code blanked); every other file is read raw, so markers in YAML,
-    SQL and JSON values and comments count. `.gitkeep` and binary files (NUL byte or not UTF-8) are skipped."""
+    Markdown comes from prose() (code blanked); YAML, SQL and JSON files are read raw, so markers
+    in their values and comments count. Fixture data under contracts/fixtures/, other file types,
+    and hidden or editor-backup files (`.x.swp`, `x~`, `x.bak`) are skipped, as are binary files."""
     yield from prose(prd)
     for p in sorted(prd.root.rglob("*")):
-        if not p.is_file() or p.suffix == ".md" or p.name == ".gitkeep":
+        if not p.is_file() or p.suffix not in _RAW_SUFFIXES:
+            continue
+        rel_parts = p.relative_to(prd.root).parts
+        if rel_parts[:2] == ("contracts", "fixtures") or any(part.startswith(".") for part in rel_parts):
             continue
         try:
             raw = p.read_bytes()
@@ -134,8 +141,10 @@ def sections(prd: Prd):
             yield Finding("prd.md", 1, "sections", f"'{slot}' is absent and section 1 has no 'Not applicable: `{slot}` — reason' line")
 
 
-_PLACEHOLDER = re.compile(r"\b(?:TBD|TODO)\b|\?\?\?|\{\{\w+\}\}|<(?!https?://)[A-Za-z][^<>\n]*>")
-_SCALAR_PLACEHOLDER = re.compile(r"\b(?:TBD|TODO)\b|\?\?\?|\{\{\w+\}\}")
+# only the template's own slots count; any other {{...}} (a Mustache message, say) is content
+_SLOT = r"\{\{(?:project|owner|date|sql_dialect)\}\}"
+_PLACEHOLDER = re.compile(r"\b(?:TBD|TODO)\b|\?\?\?|" + _SLOT + r"|<(?!https?://)[A-Za-z][^<>\n]*>")
+_SCALAR_PLACEHOLDER = re.compile(r"\b(?:TBD|TODO)\b|\?\?\?|" + _SLOT)
 
 
 def _scalars(node, line: int) -> Iterator[tuple[int, str]]:
@@ -209,7 +218,7 @@ def markers_open(prd: Prd):
         return
     for rel, n, text in all_lines(prd):
         if "[NEEDS CLARIFICATION" in text:
-            yield Finding(rel, n, "markers-open", f"[NEEDS CLARIFICATION] left open while status is {_status(prd)}")
+            yield Finding(rel, n, "markers-open", f"[NEEDS CLARIFICATION] left open while status is {_status(prd)} (markers count in every text file, comments included; delete a template hint once its slot is answered)")
 
 
 _MARKER = re.compile(r"\[ASSUMPTION\b(?: (A-\d+):)?")

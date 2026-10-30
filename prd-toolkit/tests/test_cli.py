@@ -1,3 +1,4 @@
+from conftest import edit
 from prd_lint import main
 from prdlint.findings import Finding
 from prdlint.registry import RULES
@@ -105,3 +106,11 @@ def test_invalid_utf8_exits_2(prd, capsys):
 def test_negative_sample_tids_is_usage_error(prd, capsys):
     assert main(["--sample-tids", "-1", str(prd)]) == 2
     assert "Traceback" not in capsys.readouterr().err
+
+
+def test_non_ascii_validator_output_under_a_c_locale_is_a_finding(prd):
+    # parked minor from the final review: validator output was decoded with the locale
+    edit(prd, "prd.md", '`python3 -c "import sys; sys.exit(0)"`',
+         '`python3 -c "import sys; sys.stderr.buffer.write(chr(252).encode() + b\' bad\\\\n\'); sys.exit(1)"`')
+    r = _lint_in_c_locale(prd)
+    assert r.returncode == 1 and "contracts-valid" in r.stdout and "Traceback" not in r.stderr

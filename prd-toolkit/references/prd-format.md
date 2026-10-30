@@ -131,7 +131,8 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 - A marker `[ASSUMPTION A-nn: text]` may appear in any text file of the PRD folder (markdown
   prose, or YAML, SQL and JSON values and comments); it must be indexed in section 12. A
   `[NEEDS CLARIFICATION: …]` marker is found in the same files, and none may remain once the
-  status is `In review` or `Approved`.
+  status is `In review` or `Approved`. Fixture data under `contracts/fixtures/`, other file
+  types (custom-type files such as `.lkml`), and hidden or editor-backup files are not scanned.
 
 ### Decisions the grammar rests on
 

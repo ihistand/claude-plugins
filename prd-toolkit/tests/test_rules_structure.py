@@ -125,3 +125,26 @@ def test_binary_and_gitkeep_files_are_not_scanned(prd):
     (prd / "contracts/fixtures/.gitkeep").write_text("[NEEDS CLARIFICATION: ignored]")
     (prd / "contracts/fixtures/blob.bin").write_bytes(b"\x00\xff[NEEDS CLARIFICATION\x00")
     assert "markers-open" not in fired(lint(prd))
+
+
+# Parked minors from the final review.
+
+def test_mustache_in_a_yaml_value_is_not_a_placeholder(prd):
+    edit(prd, "contracts/errors.yaml", "message: Row skipped because the order already exists.",
+         "message: Row {{order_key}} skipped because the order already exists.")
+    assert "placeholder" not in fired(lint(prd))
+
+
+def test_an_unfilled_template_slot_is_still_a_placeholder(prd):
+    edit(prd, "contracts/errors.yaml", "message: Row skipped because the order already exists.",
+         "message: Row skipped for {{owner}}.")
+    assert "placeholder" in fired(lint(prd))
+
+
+def test_markers_in_fixture_data_and_backups_are_ignored(prd):
+    with open(prd / "contracts/fixtures/customers/two_customers.csv", "a", encoding="utf-8") as f:
+        f.write("# [NEEDS CLARIFICATION: not a real question]\n")
+    (prd / "prd.md~").write_text("[NEEDS CLARIFICATION: editor backup]\n[ASSUMPTION A-77: stale]\n", encoding="utf-8")
+    (prd / ".prd.md.swp").write_text("[NEEDS CLARIFICATION: swap file]\n", encoding="utf-8")
+    rules = fired(lint(prd))
+    assert "markers-open" not in rules and "assumption-indexed" not in rules

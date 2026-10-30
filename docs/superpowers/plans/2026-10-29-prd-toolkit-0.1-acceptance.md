@@ -90,10 +90,14 @@ All are on `feat/prd-toolkit`, each with a test that fails without it.
    and loaded a fixture onto staging. It now follows them.
 4. **Authoring phase 2 should write test cases against the harness section,** not before it.
    Most dry-run gaps were harness facts the draft never asked about.
-5. **The final review's parked minors** (ledger): hint markers in YAML/SQL comments need deleting
+5. **Done, folded into 0.1.0: the final review's parked minors** (ledger): hint markers in YAML/SQL comments need deleting
    once answered; Mustache `{{x}}` in YAML values fires `placeholder`; data files and editor
    backups get raw scans; phase 7 rollback should also remove the §14 1.0.0 row; validator
-   subprocess encoding.
+   subprocess encoding. All fixed: the markers-open message and the phase 3 gate say comments
+   count; only the four template slots are placeholders; the raw scan covers yaml/yml/sql/json
+   outside fixtures and skips hidden and backup files; the rollback removes the row; both
+   subprocess calls decode UTF-8. The plan's stale block-line quote was left as historical
+   record.
 6. **Lint for harness facts (0.2):** a rule that `testing.md`'s Harness slots are filled, so the
    dry run is not the first place a missing convention shows up.
 7. **Run the eval suite again** after fixes 1 to 3. They change both skills' gate text, though

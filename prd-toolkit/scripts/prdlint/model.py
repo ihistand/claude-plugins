@@ -244,7 +244,8 @@ def repo_root(path: Path) -> Path:
     """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True, text=True, timeout=10, check=True
+            ["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=10, check=True
         ).stdout.strip()
         return Path(out) if out else path
     except (OSError, subprocess.SubprocessError):

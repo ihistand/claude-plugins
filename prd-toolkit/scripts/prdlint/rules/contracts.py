@@ -417,7 +417,8 @@ def _check_custom(prd: Prd) -> Iterator[Finding]:
         if not argv:
             continue
         try:
-            done = subprocess.run(argv + files, cwd=prd.root, capture_output=True, text=True, timeout=timeout)
+            done = subprocess.run(argv + files, cwd=prd.root, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=timeout)
         except FileNotFoundError:
             yield bad(f"validator not found: {argv[0]}")
         except PermissionError:
