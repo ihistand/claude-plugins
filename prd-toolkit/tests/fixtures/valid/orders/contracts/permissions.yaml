@@ -1,0 +1,11 @@
+roles:
+  admin: {identity: test-admin, secret: ORDERS_TEST_ADMIN_TOKEN}
+  rep: {identity: test-rep, secret: ORDERS_TEST_REP_TOKEN}
+operations:
+  getOrder: {allow: [admin, rep], deny: []}
+  deleteOrder: {allow: [admin], deny: [rep]}
+row_rules:
+  - role: rep
+    operation: getOrder
+    predicate: "orders.sales_rep_name = user.sales_rep_name"
+    attribute: sales_rep_name

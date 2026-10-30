@@ -1,0 +1,71 @@
+T-001.1:
+  ac: AC-001.1
+  level: integration
+  refs: ["contracts/events.md#import_orders", "testing.md#Harness"]
+  target: job:import_orders
+  environment: ci
+  identity: none
+  preconditions: [customers/two_customers, mock:geocoder]
+  input:
+    rows:
+      - {order_key: K-3000, customer_id: 1, status: open, sales_rep_name: rep-a}
+  expect:
+    output: {status: ok, inserted: 1, skipped: 0}
+    effects:
+      - "orders: 1 row inserted, order_key = K-3000"
+    errors: []
+    leaks: none
+
+T-001.2:
+  ac: AC-001.2
+  level: integration
+  target: job:import_orders
+  environment: ci
+  identity: none
+  preconditions: [customers/two_customers, orders/one_existing, mock:geocoder]
+  input:
+    file: orders/dup_key_in_file.csv
+  expect:
+    output: {status: ok, inserted: 1, skipped: 1}
+    effects:
+      - "orders: 1 row inserted, order_key = K-2000"
+      - "log: IMPORT_DUPLICATE once, order_key = K-2000"
+    errors: [IMPORT_DUPLICATE]
+    leaks: none
+
+T-001.3:
+  ac: AC-001.3
+  level: unit
+  target: code:importer.import_file
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    content: ""
+  expect:
+    output: {status: empty, inserted: 0, skipped: 0}
+    effects:
+      - "orders: no rows written"
+      - "log: IMPORT_EMPTY once"
+    errors: [IMPORT_EMPTY]
+    leaks: none
+
+T-001.4:
+  ac: AC-001.1
+  level: acceptance
+  target: job:import_orders
+  environment: staging
+  identity: none
+  preconditions: [customers/two_customers, mock:geocoder]
+  input:
+    row: {order_key: "acc-YYYYMMDD-HHMM from the signer's clock (fresh every run)", customer_id: 1}
+  expect:
+    output: {import_status: "ok, 1 inserted, 0 skipped, as the import job reports it", order_page: "the new order shows status open"}
+    effects: []
+    errors: []
+    leaks: none
+  steps:
+    - Make an import file with one order whose order_key is acc- plus today's date and time, for customer 1.
+    - Upload it through the import job and check the job reports 1 inserted, 0 skipped.
+    - Open that order and check it shows status open.
+  signoff: Sample Owner

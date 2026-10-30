@@ -1,0 +1,67 @@
+T-002.1:
+  ac: AC-002.1
+  level: integration
+  target: op:getOrder
+  environment: ci
+  identity: test-rep
+  preconditions: [customers/two_customers, orders/one_existing]
+  input:
+    id: 1
+  expect:
+    output:
+      status: 200
+      body: {id: 1, order_key: K-1000, customer_id: 1, status: open}
+    effects: []
+    errors: []
+    leaks: none
+
+T-002.2:
+  ac: AC-002.2
+  level: integration
+  target: op:getOrder
+  environment: ci
+  identity: test-rep
+  preconditions: [customers/two_customers, orders/one_existing]
+  input:
+    id: 999
+  expect:
+    output:
+      status: 404
+      body: {code: ORDER_NOT_FOUND, message: Order not found}
+    effects: []
+    errors: [ORDER_NOT_FOUND]
+    leaks: none
+
+T-003.1:
+  ac: AC-003.1
+  level: integration
+  target: op:deleteOrder
+  environment: ci
+  identity: test-admin
+  preconditions: [customers/two_customers, orders/one_existing]
+  input:
+    id: 1
+  expect:
+    output: {status: 204}
+    effects:
+      - "orders: row id = 1 deleted"
+    errors: []
+    leaks: none
+
+T-003.2:
+  ac: AC-003.2
+  level: integration
+  target: op:deleteOrder
+  environment: ci
+  identity: test-rep
+  preconditions: [customers/two_customers, orders/one_existing]
+  input:
+    id: 1
+  expect:
+    output:
+      status: 403
+      body: {code: FORBIDDEN, message: You are not allowed to do this}
+    effects:
+      - "orders: row id = 1 unchanged"
+    errors: [FORBIDDEN]
+    leaks: none

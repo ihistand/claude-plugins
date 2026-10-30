@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: Orders API
+  version: 1.0.0
+  description: Look up and delete orders.
+servers:
+  - url: https://orders.example.com
+security:
+  - bearerAuth: []
+paths:
+  /orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Order id.
+        schema: {type: integer, format: int64, minimum: 1}
+    get:
+      operationId: getOrder
+      summary: Get an order
+      description: Roles admin and rep. A rep sees only own orders. Read-only, so safe to retry.
+      x-prd-ids: [FR-002, AC-002.1, AC-002.2, NFR-004]
+      x-error-codes: [ORDER_NOT_FOUND]
+      x-preconditions: [orders/one_existing, customers/two_customers]
+      x-effects: []
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Order"}
+              example: {id: 1, order_key: K-1000, customer_id: 1, status: open}
+        "404":
+          description: No such order. Error ORDER_NOT_FOUND.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+              example: {code: ORDER_NOT_FOUND, message: Order not found}
+    delete:
+      operationId: deleteOrder
+      summary: Delete an order
+      description: Role admin only.
+      x-prd-ids: [FR-003, AC-003.1, AC-003.2]
+      x-error-codes: [FORBIDDEN]
+      x-preconditions: [orders/one_existing, customers/two_customers]
+      x-effects: ["table:orders"]
+      responses:
+        "204":
+          description: The order is deleted.
+        "403":
+          description: The caller is not an admin. Error FORBIDDEN.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+              example: {code: FORBIDDEN, message: You are not allowed to do this}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  schemas:
+    Order:
+      type: object
+      required: [id, order_key, customer_id, status]
+      properties:
+        id: {type: integer, format: int64}
+        order_key: {type: string, minLength: 1}
+        customer_id: {type: integer, format: int64}
+        status: {type: string, enum: [open, shipped, cancelled]}
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}

@@ -1,8 +1,20 @@
 # Claude Code Plugins by Ivan Histand
 
-Claude Code plugins for data engineering (sqlanvil-toolkit) and 3D printing workflows (stl-generator-toolkit). The former dataform-toolkit plugin was retired 2026-09-15; its dataform-engineering-fundamentals skill now lives in the acuantia-gcp-dataform repo. The acuantia-dataform plugin moved to Acuantia's private team marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and was removed from here on 2026-09-20.
+Claude Code plugins for data engineering (sqlanvil-toolkit), 3D printing workflows (stl-generator-toolkit) and living product requirements (prd-toolkit). The former dataform-toolkit plugin was retired 2026-09-15; its dataform-engineering-fundamentals skill now lives in the acuantia-gcp-dataform repo. The acuantia-dataform plugin moved to Acuantia's private team marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and was removed from here on 2026-09-20.
 
 ## Available Plugins
+
+### prd-toolkit
+
+A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it.
+
+**Features:**
+- **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with a fresh agent, and approves it
+- **changing-prds skill** - Changes the PRD first, with new IDs and a version bump, before any code
+- **Slash commands**: `/prd-new` and `/prd-change`
+- **Lint CLI**: `prd_lint.py` checks 27 rules; `prd_block.py` writes the CLAUDE.md block
+
+**For full documentation:** See [prd-toolkit/README.md](./prd-toolkit/README.md)
 
 ### stl-generator-toolkit
 
@@ -38,6 +50,9 @@ Comprehensive toolkit for generating 3D printable STL files for woodworking jigs
 # Install stl-generator-toolkit
 /plugin install stl-generator-toolkit@ihistand
 
+# Install prd-toolkit
+/plugin install prd-toolkit@ihistand
+
 # Restart Claude Code for changes to take effect
 ```
 
@@ -66,6 +81,7 @@ This repository follows the Claude Code plugin development best practices:
 claude-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace definition
+├── prd-toolkit/                  # Living PRD: skills, lint scripts, templates
 ├── stl-generator-toolkit/        # 3D printing STL generator
 │   ├── .claude-plugin/
 │   │   └── plugin.json           # Plugin configuration

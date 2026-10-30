@@ -1,0 +1,10 @@
+# Format: references/prd-format.md, "Contract YAML shapes".
+# Required content:
+#  - per table: `retention`, `deletion`, and each column as public, internal, confidential or pii
+#  - `masking` for logs, errors and fixtures
+#  - fixtures hold synthetic PII only, never real personal data
+tables: {}
+masking:
+  logs: "[NEEDS CLARIFICATION: what is never written to logs]"
+  errors: "[NEEDS CLARIFICATION: what error bodies may carry]"
+  fixtures: "[NEEDS CLARIFICATION: how fixtures avoid real personal data]"

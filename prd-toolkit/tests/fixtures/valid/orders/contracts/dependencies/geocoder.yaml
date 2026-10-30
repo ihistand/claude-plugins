@@ -1,0 +1,15 @@
+sends:
+  description: One postal code per call.
+  example: {postal_code: "12345", country: US}
+expects:
+  description: A latitude and longitude, or a not-found flag.
+  example: {found: true, lat: 40.0, lon: -75.0}
+auth:
+  secret: GEOCODER_API_KEY
+limits: 50 requests/s, 100000 requests per day
+mock: tests/mocks/geocoder.py replays recorded answers; tests never call the live service
+failures:
+  timeout: GEOCODER_TIMEOUT
+  4xx: GEOCODER_TIMEOUT
+  5xx: GEOCODER_TIMEOUT
+  outage: GEOCODER_TIMEOUT

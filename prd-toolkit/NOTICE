@@ -1,0 +1,64 @@
+prd-toolkit
+Copyright (c) 2026 Ivan Histand
+
+prd-toolkit adapts ideas and some wording from the projects below. Nothing is
+copied from Taskmaster (Commons Clause) or spec-workflow-mcp (GPL-3.0). The
+design spec, docs/superpowers/specs/2026-10-29-prd-toolkit-design.md section 1
+("Prior art and what is borrowed"), lists what was taken and what was declined.
+
+Each copyright line below is copied from that project's own LICENSE file,
+except Anthropic's, which is marked inferred where it stands.
+
+------------------------------------------------------------------------------
+GitHub Spec Kit (https://github.com/github/spec-kit) - MIT License
+
+Copyright GitHub, Inc.
+
+Adapted: [NEEDS CLARIFICATION] markers; the clarify pass scoring categories
+Clear / Partial / Missing; multiple-choice questions with a recommended answer;
+the requirements-quality checklist; contracts and data model as separate files;
+the "constitution" idea, here the standards and skills registries.
+
+------------------------------------------------------------------------------
+cc-sdd (https://github.com/gotalab/cc-sdd) - MIT License
+
+Copyright (c) 2025 gotalab
+
+Adapted: EARS acceptance criteria; a mechanical gate before judgement checks;
+requirement IDs carried into tasks.
+
+------------------------------------------------------------------------------
+BMAD-METHOD (https://github.com/bmad-code-org/BMAD-METHOD) - MIT License
+
+Copyright (c) 2025 BMad Code, LLC
+
+Adapted: [ASSUMPTION] tags with an index for sign-off; a glossary with banned
+synonyms; "bounds, not adjectives" for non-functional requirements.
+
+------------------------------------------------------------------------------
+mattpocock/skills, the `grilling` skill
+(https://github.com/mattpocock/skills, skills/productivity/grilling) - MIT License
+
+Copyright (c) 2026 Matt Pocock
+
+Adapted: ask only what only the user knows; subagents look facts up.
+
+------------------------------------------------------------------------------
+Anthropic `doc-coauthoring` skill
+(https://github.com/anthropics/skills, skills/doc-coauthoring) - Apache License 2.0
+
+Copyright Anthropic, PBC (inferred: anthropics/skills has no LICENSE file to copy it from)
+
+Adapted: reader testing by a fresh, context-free agent, here the test-agent
+dry run. The anthropics/skills repository states that many of its skills are
+Apache 2.0; it carries no LICENSE file at its root or in this skill's folder
+and no copyright line of its own, so the holder is named without a year.
+
+------------------------------------------------------------------------------
+The MIT License permits use, copying, modification, merging, publication,
+distribution, sublicensing and sale, provided the copyright notice and the
+permission notice are included in all copies or substantial portions of the
+software. The software is provided "AS IS", without warranty of any kind. The
+full text is in each project's LICENSE file at the URL above.
+
+The Apache License 2.0 text is at https://www.apache.org/licenses/LICENSE-2.0.

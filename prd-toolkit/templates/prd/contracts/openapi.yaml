@@ -1,0 +1,8 @@
+# Format: references/contract-types.md, "openapi".
+# Required content per operation: `operationId`, `x-prd-ids` (FR ids), `x-error-codes`
+# (catalogue codes), `x-preconditions`, `x-effects`, and an `example` on every non-204 response.
+openapi: 3.1.0
+info:
+  title: "[NEEDS CLARIFICATION: API title]"
+  version: 0.1.0
+paths: {}

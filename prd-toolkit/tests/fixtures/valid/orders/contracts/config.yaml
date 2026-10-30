@@ -1,0 +1,6 @@
+settings:
+  IMPORT_BATCH_SIZE:
+    type: integer
+    default: 500
+    environments: {local: 10, ci: 10, staging: 500, production: 500}
+    owner: Sample Owner

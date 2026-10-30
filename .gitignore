@@ -1,3 +1,7 @@
 
 # Python bytecode
 __pycache__/
+
+# Python tooling
+.venv/
+prd-toolkit/evals/results/
