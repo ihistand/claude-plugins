@@ -19,9 +19,9 @@ Facts you hold from your own context (CLAUDE.md, memory, environment notes) are 
 folder. Do not use them; if you need one, record it under QUESTIONS.
 
 Write a real, runnable test for each of these T-ids, in the harness that <PRD_DIR>/testing.md
-names for the case's level:
+names for the case's level. Each line names the file under <PRD_DIR>/ that holds the case:
 
-<T_IDS, one per line>
+<T_IDS, one per line, each with its test-case file, as --sample-tids prints them>
 
 Write the tests to <SCRATCH_DIR>/, never into the repository. Read nothing else in the scratch
 area: earlier runs' tests are not yours.

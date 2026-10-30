@@ -26,7 +26,15 @@ def test_not_a_prd_exits_2(tmp_path, capsys):
 
 def test_sample_tids(prd, capsys):
     assert main(["--sample-tids", "3", str(prd)]) == 0
-    assert len(set(capsys.readouterr().out.split())) == 3
+    assert len({line.split()[0] for line in capsys.readouterr().out.splitlines()}) == 3
+
+
+def test_sample_tids_name_the_file_that_holds_each_case(prd, capsys):
+    # found in the 0.1 acceptance run: a tester never opened test-cases/nfr.yaml for T-003.1
+    assert main(["--sample-tids", "99", str(prd)]) == 0
+    for line in capsys.readouterr().out.splitlines():
+        tid, rel = line.split()
+        assert rel.startswith("test-cases/") and f"{tid}:" in (prd / rel).read_text(encoding="utf-8")
 
 
 def _levels(prd):
@@ -39,7 +47,7 @@ def test_sample_tids_never_picks_unit(prd, capsys):
     levels = _levels(prd)
     assert "unit" in levels.values(), "the fixture needs a unit case for this test to mean anything"
     assert main(["--sample-tids", "99", str(prd)]) == 0
-    picked = capsys.readouterr().out.split()
+    picked = [line.split()[0] for line in capsys.readouterr().out.splitlines()]
     assert sorted(picked) == sorted(t for t, lv in levels.items() if lv != "unit")
 
 

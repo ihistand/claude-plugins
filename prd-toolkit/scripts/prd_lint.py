@@ -63,12 +63,13 @@ def main(argv: list[str]) -> int:
 
     if args.sample_tids is not None:
         # unit cases stay with the builder (they read code); only the other levels are dry-run
-        tids = [t.id for t in prd.test_cases if str(t.data.get("level", "")).strip() != "unit"]
-        if not tids:
+        cases = [t for t in prd.test_cases if str(t.data.get("level", "")).strip() != "unit"]
+        if not cases:
             print("prd_lint: no non-unit T-ids to sample", file=sys.stderr)
             return 1
-        for tid in random.sample(tids, min(args.sample_tids, len(tids))):
-            print(tid)
+        # each line names the test-case file, so the tester opens the right one
+        for t in random.sample(cases, min(args.sample_tids, len(cases))):
+            print(f"{t.id} {t.file}")
         return 0
 
     try:

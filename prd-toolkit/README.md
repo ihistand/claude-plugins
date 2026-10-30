@@ -38,7 +38,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
 - `--list-rules` prints the 27 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
-  dry run, never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
+  dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 
 ## CLAUDE.md block
