@@ -122,3 +122,8 @@ def test_shipped_text_has_no_stale_milestone():
     t = (ROOT / "skills/testing-from-prds/SKILL.md").read_text()
     assert "building (0.4)" in t and "building (0.3)" not in t
 
+
+def test_readme_links_every_spec():
+    t = (ROOT / "README.md").read_text()
+    for spec in ("2026-10-29-prd-toolkit-design.md", "2026-10-29-prd-toolkit-0.2-design.md", "2026-10-30-prd-toolkit-0.3-design.md"):
+        assert f"(../docs/superpowers/specs/{spec})" in t and (ROOT.parent / "docs/superpowers/specs" / spec).is_file()
