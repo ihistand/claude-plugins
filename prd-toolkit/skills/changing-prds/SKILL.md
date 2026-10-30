@@ -46,7 +46,7 @@ the gap as the change.
 6. **Read whole PRD files only to edit them.** Work from the `prd_context.py` pack. Open another
    PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
    file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
-   is opening it. Test cases and other areas' files come from the pack, not from a read.
+   is opening it. Another area's files come from the pack, never from a read; the area's own test cases are opened only to revise them in step 2.
 
 ## Version rule
 

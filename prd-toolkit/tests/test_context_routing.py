@@ -46,6 +46,9 @@ def test_changing_step_1_runs_the_decide_pack():
     assert "as your first look at the PRD, run the pack" in " ".join(step1.split())
     rule6 = " ".join(section(CHANGING, "6. **Read whole PRD files", "## Version rule").split())
     assert "Run the pack before you open any PRD file" in rule6 and "`cat`, `head`, `sed` or `grep`" in rule6
+    assert "Test cases and other areas' files come from the pack" not in rule6
+    assert "Another area's files come from the pack, never from a read" in rule6
+    assert "the area's own test cases are opened only to revise them in step 2" in rule6
 
 
 def test_changing_step_5_hands_off_the_implement_pack():
