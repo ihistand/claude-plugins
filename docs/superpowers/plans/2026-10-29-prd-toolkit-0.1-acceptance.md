@@ -82,10 +82,12 @@ All are on `feat/prd-toolkit`, each with a test that fails without it.
    This would have removed most of runs 1 to 9. It shipped as 15 marked slots. The slot names
    are prose, so they must not collide with a PRD's banned synonyms: "HTTP client" became
    "HTTP requests" after the orders fixture's glossary (which bans "client") flagged it.
-2. **Format `refs:` on test cases.** Cases that depend on prd.md content, such as a component
+2. **Done, folded into 0.1.0: `refs:` on test cases.** Cases that depend on prd.md content, such as a component
    contract or the skip-auth list, should cite it. The tester reads test-case files, not prd.md.
-3. **Template guidance for acceptance cases on persistent environments:** use fresh data per
-   run, and assert only what the signer can see.
+3. **Done, folded into 0.1.0: guidance for acceptance cases on persistent environments:** use fresh data per
+   run, and assert only what the signer can see. Writing the rules showed that the `orders`
+   sample's own acceptance case T-001.4 broke all three: it asserted a DB row, reused `K-1000`,
+   and loaded a fixture onto staging. It now follows them.
 4. **Authoring phase 2 should write test cases against the harness section,** not before it.
    Most dry-run gaps were harness facts the draft never asked about.
 5. **The final review's parked minors** (ledger): hint markers in YAML/SQL comments need deleting

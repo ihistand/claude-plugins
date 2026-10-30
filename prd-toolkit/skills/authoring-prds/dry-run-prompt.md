@@ -26,8 +26,9 @@ names for the case's level. Each line names the file under <PRD_DIR>/ that holds
 Write the tests to <SCRATCH_DIR>/, never into the repository. Read nothing else in the scratch
 area: earlier runs' tests are not yours.
 
-Work only from the PRD: the test case in <PRD_DIR>/test-cases/, the AC it names, and the
-contracts, fixtures, environments and identities it references. Whenever the PRD does not tell
+Work only from the PRD: the test case in <PRD_DIR>/test-cases/, the AC it names, every file and
+heading its `refs:` names, and the contracts, fixtures, environments and identities it
+references. Whenever the PRD does not tell
 you something you need (a URL, a payload field, an error code, a fixture's contents, a harness
 command, an expected value), do not guess and do not look elsewhere: record the question and
 carry on with the next element.

@@ -31,6 +31,18 @@ Every case carries the sufficiency fields (`ac`, `level`, `target`, `environment
 Rules:
 
 - Acceptance carries `steps` (a non-empty list of plain-language actions) and `signoff` (the business owner). Lint rule `sufficiency` fails without them.
+- An acceptance case asserts only what the signer can observe: the page, the redirect, the email,
+  the downloaded file. Its `expect.effects` is `[]`; a database row the signer cannot see belongs
+  in an integration case. Required, not machine-checked.
+- On an environment that keeps its data (staging), an acceptance case creates fresh data on
+  every run, for example a key built from the signer's clock (`acc-YYYYMMDD-HHMM`). A fixed key
+  passes once and then fails, because the first run's data is still there, or retired.
+  Required, not machine-checked.
+- Every `expect` item of an acceptance case has a step that observes it, and `signoff` names a
+  person, not a team. Required, not machine-checked.
+- A case that depends on something outside its own contracts (a component contract in `prd.md`
+  section 10, an architecture fact, a Harness slot) cites it in `refs:`, so the tester opens it.
+  Lint rule `test-refs` checks every entry resolves; whether a case needs one is judgement.
 - A system case names an environment other than `local`. This is required, not machine-checked: lint accepts any environment from `testing.md`.
 - Tests never call production third parties. Use `mock:<service>`.
 - `expect.leaks: none` means no classified column named in `testing.md` Leak checks appears in

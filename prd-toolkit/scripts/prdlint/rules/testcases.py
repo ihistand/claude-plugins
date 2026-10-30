@@ -6,13 +6,31 @@ import re
 from collections.abc import Iterator
 
 from ..findings import Finding
-from ..markdown import tables
+from ..markdown import strip_code, tables
 from ..model import Prd, TestCase
 from ..registry import rule
 from ..yamlload import yaml
 from .contracts import event_names, operation_ids, schema_tables
 
 TARGET_KINDS = {"op", "table", "event", "job", "component", "page", "code"}
+
+_HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*$", re.M)
+
+
+def _ref_problem(prd: Prd, ref: object) -> str | None:
+    """Why a `refs:` entry does not resolve, or None. An entry is a PRD-folder path, optionally
+    followed by '#' and the exact text of a heading in that file."""
+    if not isinstance(ref, str) or not ref.strip():
+        return f"refs entry {ref!r} must be a path in the PRD folder, optionally with #heading"
+    path, _, heading = ref.partition("#")
+    target = (prd.root / path).resolve()
+    if not target.is_relative_to(prd.root) or not target.is_file():
+        return f"refs entry '{ref}': no file {path} in the PRD folder"
+    if heading:
+        headings = _HEADING.findall(strip_code(target.read_text(encoding="utf-8")))
+        if heading not in headings:
+            return f"refs entry '{ref}': {path} has no heading '{heading}'"
+    return None
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
 _PHONE = re.compile(r"(?<!\d)\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}(?!\d)")  # not inside a longer digit run
@@ -234,6 +252,13 @@ def test_refs(prd: Prd):
                     yield bad("expect", f"expect.errors item {code!r} must be an error code string")
                 elif code not in errors_yaml:
                     yield bad("expect", f"error code {code} is not in contracts/errors.yaml")
+
+        refs = d.get("refs")
+        if refs is not None:
+            for ref in refs if isinstance(refs, list) else [refs]:
+                problem = _ref_problem(prd, ref)
+                if problem:
+                    yield bad("refs", problem)
 
         env = d.get("environment")
         if isinstance(env, str) and env and env not in prd.testing.environments:

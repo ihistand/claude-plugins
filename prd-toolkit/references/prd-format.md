@@ -180,6 +180,12 @@ T-012.2:
 - A precondition is a fixture name (a path under `contracts/fixtures/` without the extension) or
   `mock:<service>` (a file in `contracts/dependencies/`).
 - An acceptance case adds `steps:` (plain-language actions) and `signoff:` (the business owner).
+  Its rules (observable results only, fresh data on persistent environments, a step per
+  expectation) are in [test-levels.md](test-levels.md).
+- `refs:` (optional) lists what the case depends on outside its contracts: each entry is a path
+  in the PRD folder, optionally followed by `#` and the exact text of a heading in that file
+  (`prd.md#Component: MyLinksPage`, `testing.md#Harness`). The dry-run tester reads every entry.
+  An entry whose file or heading does not exist is a `test-refs` violation.
 - A mapping key repeated in a file is an `id-unique` violation; the first value is kept.
 
 ## testing.md

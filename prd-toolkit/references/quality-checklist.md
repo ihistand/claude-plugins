@@ -20,12 +20,14 @@ judgement. Answer each with yes or no. A "no" is a gap: fix it, then re-run lint
 - [ ] Does every error have a user-facing message a person could act on, without reading logs?
 - [ ] Does every dependency have a mock, and does the PRD say tests never call production?
 - [ ] Does every allow cell in `permissions.yaml` have a test, as well as every deny cell?
+- [ ] Does every test case that depends on something outside its contracts (a component contract, an architecture fact, a Harness slot) cite it in `refs:`?
 
 ## Flows and people
 
 - [ ] Does every flow have its empty state and its failure state?
 - [ ] Do the personas in the Summary map to user journeys, and every journey to at least one FR?
 - [ ] Does each journey end in a result the persona can observe?
+- [ ] Does every acceptance case assert only what the signer can observe, create fresh data on every run where its environment keeps data, have a step that observes each `expect` item, and name a person in `signoff`?
 
 ## Scope and honesty
 

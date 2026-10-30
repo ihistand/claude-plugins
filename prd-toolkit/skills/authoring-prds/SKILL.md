@@ -98,6 +98,10 @@ finding, and return to the phase it belongs to. Never commit an `Approved` PRD t
 - **Harness first:** fill `testing.md` `## Harness` (lifecycle, environment switch, clients,
   fixtures, assertions, leaks, …) before writing test cases. Every test case leans on those
   conventions; a slot you cannot fill stays a `NEEDS CLARIFICATION` marker for phase 3.
+- **Refs and acceptance:** a test case that depends on something outside its contracts (a
+  component contract, an architecture fact, a Harness slot) cites it in `refs:`. An acceptance
+  case follows the acceptance rules in `test-levels.md`: observable results only, fresh data on
+  persistent environments, a step per expectation.
 - **IDs:** FR and NFR share one number sequence; T-ids are per requirement (`T-004.1`).
 - Run lint. A Draft with open markers lints clean; a lint failure here is a grammar error. Fix it.
 

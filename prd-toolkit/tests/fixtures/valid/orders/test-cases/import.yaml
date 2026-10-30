@@ -1,6 +1,7 @@
 T-001.1:
   ac: AC-001.1
   level: integration
+  refs: ["contracts/events.md#import_orders", "testing.md#Harness"]
   target: job:import_orders
   environment: ci
   identity: none
@@ -57,15 +58,14 @@ T-001.4:
   identity: none
   preconditions: [customers/two_customers, mock:geocoder]
   input:
-    file: orders/one_existing.csv
+    row: {order_key: "acc-YYYYMMDD-HHMM from the signer's clock (fresh every run)", customer_id: 1}
   expect:
-    output: {status: ok, inserted: 1, skipped: 0}
-    effects:
-      - "orders: 1 row inserted, order_key = K-1000"
+    output: {import_status: "ok, 1 inserted, 0 skipped, as the import job reports it", order_page: "the new order shows status open"}
+    effects: []
     errors: []
     leaks: none
   steps:
-    - Load the customers/two_customers fixture into staging.
-    - Upload orders/one_existing.csv through the import job.
-    - Open the order K-1000 and confirm it shows status open.
+    - Make an import file with one order whose order_key is acc- plus today's date and time, for customer 1.
+    - Upload it through the import job and check the job reports 1 inserted, 0 skipped.
+    - Open that order and check it shows status open.
   signoff: Sample Owner

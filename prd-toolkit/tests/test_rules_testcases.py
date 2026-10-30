@@ -57,7 +57,7 @@ CASES: list[Case] = [
     Case("test-level", "level missing", _edit("test-cases/import.yaml", "  ac: AC-001.3\n  level: unit\n", "  ac: AC-001.3\n")),
     Case("sufficiency", "leaks deleted", _edit("test-cases/import.yaml", "    errors: [IMPORT_DUPLICATE]\n    leaks: none\n", "    errors: [IMPORT_DUPLICATE]\n")),
     Case("sufficiency", "signoff deleted", _edit("test-cases/import.yaml", "  signoff: Sample Owner\n", "")),
-    Case("sufficiency", "steps not a list", _edit("test-cases/import.yaml", "  steps:\n    - Load the customers/two_customers fixture into staging.\n    - Upload orders/one_existing.csv through the import job.\n    - Open the order K-1000 and confirm it shows status open.\n", "  steps: Do it\n")),
+    Case("sufficiency", "steps not a list", _edit("test-cases/import.yaml", "  steps:\n    - Make an import file with one order whose order_key is acc- plus today's date and time, for customer 1.\n    - Upload it through the import job and check the job reports 1 inserted, 0 skipped.\n    - Open that order and check it shows status open.\n", "  steps: Do it\n")),
     Case("sufficiency", "target without a kind", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: importer")),
     Case("sufficiency", "target kind unknown", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: widget:importer")),
     Case("sufficiency", "input empty", _edit("test-cases/api.yaml", "  input:\n    id: 999\n", "  input: {}\n")),
@@ -69,6 +69,9 @@ CASES: list[Case] = [
         _edit("testing.md", "| customers/two_customers |", "| customers/ghost | Nothing | `x` | `y` |\n| customers/two_customers |"),
         _edit("test-cases/import.yaml", "preconditions: [customers/two_customers, mock:geocoder]\n  input:\n    rows:", "preconditions: [customers/ghost, mock:geocoder]\n  input:\n    rows:"),
     )),
+    Case("test-refs", "refs names a missing file", _edit("test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "contracts/nowhere.md"]')),
+    Case("test-refs", "refs names a missing heading", _edit("test-cases/import.yaml", '"contracts/events.md#import_orders"', '"contracts/events.md#export_orders"')),
+    Case("test-refs", "refs escapes the PRD folder", _edit("test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "../../README.md"]')),
     Case("test-refs", "identity unknown", _edit("test-cases/nfr.yaml", "identity: test-rep", "identity: test-nobody")),
     Case("test-refs", "op typo", _edit("test-cases/nfr.yaml", "target: op:getOrder", "target: op:getOrdr")),
     Case("test-refs", "table typo", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: table:order")),
@@ -183,3 +186,8 @@ def test_flat_csv_fixture_uses_its_stem_as_the_table(prd):
 def test_long_digit_runs_are_not_pii(prd, value):
     _edit("test-cases/api.yaml", "  input:\n    id: 999\n", f"  input:\n    id: 999\n    ref: {value}\n")(prd)
     assert "classified-fixtures" not in fired(lint(prd))
+
+
+def test_refs_matches_a_heading_at_any_level(prd):
+    edit(prd, "test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "prd.md#7. Contract types", "nfr.md"]')
+    assert "test-refs" not in fired(lint(prd))

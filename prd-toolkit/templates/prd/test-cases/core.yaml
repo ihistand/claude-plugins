@@ -4,6 +4,7 @@
 # T-012.2:
 #   ac: AC-012.2                          # one AC of the parent requirement
 #   level: unit                           # a level defined in testing.md
+#   refs: ["testing.md#Harness"]          # optional: files or file#heading the case depends on
 #   target: code:importer.import_file     # <kind>:<name>; kind is op, table, event, job, component, page, code or a custom type
 #   environment: local                    # an environment from testing.md
 #   identity: none                        # or a test identity from permissions.yaml
@@ -15,9 +16,11 @@
 #     effects:
 #       - "log: IMPORT_DUPLICATE once"
 #     errors: []                          # codes from contracts/errors.yaml
-#     leaks: none                         # nothing classified in logs or error bodies
+#     leaks: none                         # nothing classified in the testing.md Leak checks sinks
 #
-# An acceptance case (level: acceptance) also adds:
+# An acceptance case (level: acceptance) asserts only what the signer can see (expect.effects: []),
+# uses fresh data on every run where the environment keeps data (e.g. a code acc-YYYYMMDD-HHMM),
+# has a step that observes each expect item, and also adds:
 #   steps: [plain-language action, ...]
-#   signoff: the business owner
+#   signoff: the person who signs, by email
 {}
