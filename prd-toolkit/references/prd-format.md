@@ -114,6 +114,8 @@ globs (`features/import.md`, `src/importer/**`), comma-separated; the loader rea
 backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, or `awaiting <who>`
 (a named person, for example `awaiting Sam Rivera`; a bare `awaiting` is a violation).
 
+The Boundary is where the commit rule applies. With an `adoption.md`, it is the globs of the `adopted` rows. A project with no `adoption.md` (a new project) has no map, so its Boundary is every path outside the PRD folder and `.prd-toolkit/`. A commit that touches a Boundary path carries a `Refs:` trailer. The grammar: the line starts with `Refs:` (case-sensitive; `refs:` is not a trailer), and its value is either exactly `none (no behaviour change)` or comma-separated IDs (spaces around a comma are fine). Every `Refs:` line in the message counts, so two lines are two lists. An ID is `UJ-nn`, `FR-nnn` or `NFR-nnn` that a block defines and that is not `removed`, or `E-nnn` that `errors.md` records. Any other key (a ticket number, say) goes in its own trailer, not in `Refs:`.
+
 Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch. The 0.4 migration adds the Gate column to the Levels table in `testing.md`; record it as the §14 row `format: Levels Gate column (prd-toolkit 0.4)`, a patch bump.
 
 ## Requirement blocks

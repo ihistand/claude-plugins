@@ -79,11 +79,6 @@ def test_live_requirement_with_uncited_tid_fires_status_current(tmp_path):
     assert "FR-001" in next(x for x in f if x.rule == "status-current").message
 
 
-def test_built_requirement_does_not_fire_status_current(tmp_path):
-    prd = build(tmp_path, features={"notes": block("FR-001", "built", ["T-001.1", "T-001.2"])})
-    assert rules(trace_rules(prd)) == ["t-implemented"]
-
-
 def test_out_of_scope_area_is_ignored(tmp_path):
     feats = {"notes": block("FR-001", "live", ["T-001.1"]), "other": block("FR-002", "live", ["T-002.1"])}
     prd = build(tmp_path, adoption=ADOPTED + "\n| other | confirmed | `lib/**` |", features=feats)
@@ -174,9 +169,40 @@ def test_empty_refs_line_does_not_match_across_a_newline(tmp_path):
     assert rules(trace_rules(prd, "HEAD~1..HEAD")) == ["commit-refs"]
 
 
-def test_commit_refs_never_fires_for_a_new_project(tmp_path):
+def test_new_project_commit_with_valid_refs_is_clean(tmp_path):
     prd = build(tmp_path, adoption=None)
-    assert [x for x in trace_rules(prd, "HEAD") if x.rule == "commit-refs"] == []
+    assert [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"] == []
+
+
+def test_new_project_commit_touching_src_without_refs_fires(tmp_path):
+    prd = build(tmp_path, adoption=None)
+    repo = prd.parents[2]
+    (repo / "src/notes/app.py").write_text("# c\n" + (repo / "src/notes/app.py").read_text(), encoding="utf-8")
+    commit(repo, "Tidy", "src")
+    f = [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"]
+    assert len(f) == 1 and "touches src/notes/app.py inside the Boundary: no `Refs:` trailer" in f[0].message
+
+
+def test_new_project_commit_citing_a_removed_id_fires(tmp_path):
+    feats = {"notes": block("FR-001", "live", ["T-001.1"]) + block("FR-002", "removed", ["T-002.1"])}
+    prd = build(tmp_path, adoption=None, features=feats)
+    repo = prd.parents[2]
+    (repo / "src/notes/app.py").write_text("# c\n" + (repo / "src/notes/app.py").read_text(), encoding="utf-8")
+    commit(repo, "Tidy\n\nRefs: FR-002", "src")
+    f = [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"]
+    assert len(f) == 1 and "FR-002 is removed" in f[0].message
+
+
+def test_built_requirement_with_uncited_unit_test_fires_status_current(tmp_path):
+    prd = build(tmp_path, features={"notes": block("FR-001", "built", ["T-001.1", "T-001.2"])})
+    f = [x for x in trace_rules(prd) if x.rule == "status-current"]
+    assert len(f) == 1 and "FR-001 is built but T-001.2 has no citing test" in f[0].message
+
+
+def test_built_requirement_missing_only_a_non_unit_citation_is_not_flagged(tmp_path):
+    text = "### FR-001 A behaviour\nStatus: built (since 1.0.0)\nTests: T-001.1 [unit], T-001.2 [integration]  (test-cases/x.yaml)\n\n"
+    prd = build(tmp_path, features={"notes": text})
+    assert [x for x in trace_rules(prd) if x.rule == "status-current"] == []
 
 
 def test_a_leftover_dry_run_directory_does_not_count(tmp_path):
