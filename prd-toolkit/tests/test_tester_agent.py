@@ -296,3 +296,28 @@ def test_rule_reads_with_the_tools_not_bash_in_skill_and_agent():
     agent_rules = _flat(AGENT).split("keep to these rules:", 1)[1].split("The prompt gives the mode", 1)[0]
     assert RULE_TOOLS in skill_rules
     assert RULE_TOOLS in agent_rules
+
+
+def test_modes_table_has_write():
+    t = SKILL.read_text(encoding="utf-8")
+    assert "## The three modes" in t and "## The two modes" not in t
+    assert "| | Dry run | Write | Suite |" in t
+    assert "the build's tester cannot run its tests before the code exists" in t
+
+
+def test_dispatch_prompt_names_write():
+    assert "Mode: <dry run | write | suite>" in DISPATCHING.read_text(encoding="utf-8")
+
+
+def test_caller_fails_write_round_with_results():
+    assert "a `write` report that holds RESULTS fails the round" in DISPATCHING.read_text(encoding="utf-8")
+
+
+def test_agent_fallback_names_write():
+    assert "In write mode, write tests to the test roots and do not run them" in AGENT.read_text(encoding="utf-8")
+
+
+def test_skill_says_guard_does_not_know_write_mode():
+    t = " ".join(SKILL.read_text(encoding="utf-8").split())
+    assert "The guard does not know the mode" in t
+    assert "A suite after a write finds the tests written and runs them" in t

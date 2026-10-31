@@ -60,7 +60,7 @@ calling the API's SDK.
    and nothing else: no summary of the PRD, no hints, no answers.
 
    ```
-   Mode: <dry run | suite>
+   Mode: <dry run | write | suite>
    PRD: docs/prd/<slug>/
    Dry-run directory: <first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/   (dry run only)
    T-ids (one per line, each with its test-case file, as --sample-tids prints them):
@@ -68,6 +68,7 @@ calling the API's SDK.
    ```
 
    Dispatch with the Agent tool; under `claude --agent` the `skills:` preload does not load.
+   A write's T-ids are the new or changed non-unit T-ids the caller names, each with its test-case file.
    A dry run's T-ids are the ones `--sample-tids` printed. A suite's T-id list is every non-unit
    T-id in `test-cases/<area>.yaml`, which the caller reads; `--sample-tids` is for dry runs only.
 
@@ -87,11 +88,12 @@ calling the API's SDK.
    `git diff --name-only <tree-before SHA> <tree-after SHA>` with the two SHAs pasted in.
 
    A dry run's check exempts only the run's own `.prd-dry-run-<YYYYMMDDTHHMMSS>/`: any other
-   changed path, inside a test root or not, fails it. A suite's check exempts the test roots.
+   changed path, inside a test root or not, fails it. A write's and a suite's check exempt the test roots.
    Anything else changed (the PRD folder, source, config) **fails the run**, whatever the report
    says. Report the changed paths to the user and restore nothing automatically: the user decides
    what to keep.
-5. **Judge the report.** A dry run passes on the triage and pass terms in
+5. **Judge the report.** A `write` report has QUESTIONS, TESTS, HARNESS CHOICES and FILES READ; a `write` report that holds RESULTS fails the round, because the guard does not know the mode and the no-run rule is held by instruction alone. Check TESTS for one line per dispatched T-id.
+   A dry run passes on the triage and pass terms in
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md` (below its prompt block):
    every question dismissed by an exact quote, TESTS complete, FILES READ inside the PRD folder
    and the run's own dry-run directory, HARNESS CHOICES that change no assertion. A suite also

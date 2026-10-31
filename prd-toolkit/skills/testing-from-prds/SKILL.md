@@ -28,14 +28,20 @@ outside the scratchpad and the test roots, and every Bash command that is not a 
 command, `ls`, `mkdir` or `uv run python -m py_compile` on allowed paths. A block is the rule
 working. It is not an obstacle to route around.
 
-## The two modes
+## The three modes
 
-| | Dry run | Suite |
-|---|---|---|
-| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | adoption step 4; building (0.4); new or changed T-ids |
-| Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
-| Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
-| Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, then RESULTS |
+| | Dry run | Write | Suite |
+|---|---|---|---|
+| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | building (0.4): the tester's round while the builder writes the code | adoption step 4; building (0.4), after a write; new or changed T-ids |
+| Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
+| Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
+| Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, never RESULTS | the same four, then RESULTS |
+
+Write mode exists because the build's tester cannot run its tests before the code exists. It reads
+what a suite may read and writes to the test roots, and it does not run them. The guard does not
+know the mode: write mode's no-run rule, like the dry run's, is held by instruction, and the
+caller fails a `write` round whose report holds RESULTS. A suite after a write finds the tests
+written and runs them; it revises one only on a test-misread round, with the quote it was given.
 
 A dry run tests the PRD: can a stranger write every test from it alone? Running those tests
 against the system would test the code instead, and its output would leak the code's answers
@@ -47,6 +53,7 @@ into your report.
    dry-run directory; do not list or read the test roots. In a suite, you may also read the
    helpers testing.md names and the test files that cite one of your T-ids (for example
    `tests/conftest.py`, and a test whose docstring holds `@prd T-…`), plus the files you write.
+   A write reads what a suite reads.
    Never `src/`, other tests, README, CLAUDE.md, git history, memory or the environment. Not "a peek", not "only the signature",
    not by `cat`, `python -c`, `grep` or a test that prints the source. Always give Glob and Grep a
    `path` inside the PRD folder or your directory.
@@ -59,7 +66,7 @@ into your report.
    contents. Never fill it from the system: not from the code, and not by running the code and
    copying its output. Assert what the PRD gives, record the question, and carry on.
 4. **Never edit the code or the PRD.** You write test files only, in your dry-run directory
-   (dry run) or the test roots (suite). A failure goes back as a change request or an `E-nnn`
+   (dry run) or the test roots (write, suite). A failure goes back as a change request or an `E-nnn`
    candidate, never as a fix.
 5. **Run only the Levels harness commands**, exactly as testing.md writes them, plus `ls`,
    `mkdir` and `uv run python -m py_compile`. When the guard blocks a path you mistyped, use the
@@ -115,7 +122,7 @@ In this order:
 3. **HARNESS CHOICES**: every helper you wrote and each internal detail you chose for it, one per
    line. Write "none" if you wrote no helper.
 4. **FILES READ**: every path you opened, listed or searched, including the blocked ones.
-5. **RESULTS** (suite only): one line per dispatched T-id, in exactly one of three forms:
+5. **RESULTS** (suite only; a write report has none): one line per dispatched T-id, in exactly one of three forms:
    `<T-id>: pass`, `<T-id>: fail: <one line>` or `<T-id>: known-failing E-nnn`. The `fail` line
    says what the harness printed against what the PRD expects; `known-failing` is only for a
    test case that carries `known-failing: E-nnn` and fails as that entry describes. Anything else
