@@ -65,17 +65,19 @@ calling the API's SDK.
    Dry-run directory: <first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/   (dry run only)
    T-ids (one per line, each with its test-case file, as --sample-tids prints them):
    <T_IDS>
+   Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"   (suite only, optional, one line per affected T-id)
    ```
 
    Dispatch with the Agent tool; under `claude --agent` the `skills:` preload does not load.
    A write's T-ids are the new or changed non-unit T-ids the caller names, each with its test-case file.
+   A `Misread:` line makes the dispatch a test-misread round: the tester may change that one test, only so it
+   matches the quote. Add it only after you have checked the test against the PRD.
    A dry run's T-ids are the ones `--sample-tids` printed. A suite's T-id list is every non-unit
    T-id in `test-cases/<area>.yaml`, which the caller reads; `--sample-tids` is for dry runs only.
 
    Only when `prd-toolkit:prd-tester` is not in the Agent tool's list, a dry run falls back to
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md` with a general-purpose agent,
-   the same dry-run directory in its `<SCRATCH_DIR>` slot; record the run as unguarded. A suite
-   has no fallback: report it as not run.
+   the same dry-run directory in its `<SCRATCH_DIR>` slot; record the run as unguarded. A suite and a write have no fallback: report them as not run.
 4. **Check the state** after the tester returns: run the same five commands into `-after`
    files, each its own call (`git add -A` brings `<SNAP>/index` up to date), then each of these:
 

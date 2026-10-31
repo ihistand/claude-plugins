@@ -321,3 +321,43 @@ def test_skill_says_guard_does_not_know_write_mode():
     t = " ".join(SKILL.read_text(encoding="utf-8").split())
     assert "The guard does not know the mode" in t
     assert "A suite after a write finds the tests written and runs them" in t
+
+
+def _flat(path):
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_rule_five_runs_harness_only_in_a_suite():
+    t = _flat(SKILL)
+    assert "Run the Levels harness commands only in a suite" in t
+    assert "never in a dry run or a write" in t
+    assert 'Running a write\'s tests, even "just to check" while the code is partly there' in t
+    assert "A write never runs. The caller runs the suite after the code is merged" in t
+
+
+def test_agent_fallback_and_description_cover_write():
+    t = _flat(AGENT)
+    fm = frontmatter(AGENT)
+    assert "write" in fm["description"]
+    assert "A write reads what a suite reads, writes to the test roots, never runs the harness and never reports RESULTS" in t
+
+
+def test_misread_exception_is_defined_in_skill_dispatching_and_agent():
+    slot = 'Misread: <T-id>: "<verbatim quote of the test case\'s ac: line and the expect entry>"'
+    assert slot in _flat(DISPATCHING)
+    assert "`Misread:` line" in _flat(SKILL)
+    assert "except on a `Misread:` line" in _flat(SKILL)
+    assert "except on a `Misread:` line" in _flat(AGENT)
+
+
+def test_write_named_in_helper_placement_and_rationalization_and_dispatch_fallback():
+    t = _flat(SKILL)
+    assert "in a dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a suite, in the test roots" in t
+    assert "In a suite or a write, only your own files" in t
+    assert "A suite and a write have no fallback" in _flat(DISPATCHING)
+
+
+def test_write_reads_clause_sits_in_rule_one_scope_sentence():
+    t = _flat(SKILL)
+    assert "plus the files you write; a write reads the same." in t
+    assert "A write reads what a suite reads." not in t
