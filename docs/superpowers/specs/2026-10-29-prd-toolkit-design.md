@@ -494,6 +494,8 @@ Each milestone gets its own implementation plan and release.
 
 The 0.3 release was inserted ahead of the workflow milestones, which moved to 0.4 and 0.5; see `2026-10-30-prd-toolkit-0.3-design.md` §1.
 
+The 0.4 row then split: 0.4 is building, 0.5 deploying, 0.6 error handling, and a new 0.7 links PRDs across repositories. A generic hello-world project replaces the per-release proofs above; see `2026-10-31-prd-toolkit-0.4-design.md` §1.
+
 **Looker rollout.** `looker/` is a team repo; its PRD folder, hooks and CI jobs land through a
 merge request. Its contract types (explores, fields, dashboards, user attributes) are declared
 in `prd.md` with the Looker validator. Its runbook marks deploy steps `actor: human`, because
