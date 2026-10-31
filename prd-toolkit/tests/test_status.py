@@ -102,3 +102,21 @@ def test_json_matches_text_and_is_deterministic(prd_repo, cli):
 def test_usage_error_prints_nothing(tmp_path, cli):
     code, out, err = cli(tmp_path / "missing")
     assert code == 2 and out == "" and err
+
+
+def test_adoption_rows(prd_repo):
+    prd_dir = prd_repo / "docs/prd/orders"
+    (prd_dir / "adoption.md").write_text("# Adoption map\n\n| Area | State | Boundary |\n|---|---|---|\n"
+                                         "| api | adopted | `src/api/**` |\n| import | not started | |\n")
+    edit(prd_dir, "prd.md", "Not applicable: new project.", "See adoption.md.")
+    out = status.build_status(model.load(prd_dir), prd_repo)
+    assert [(i.id, i.text) for i in out if i.part == "Adoption map"] == [
+        ("api", "api | adopted | src/api/**"), ("import", "import | not started | -")]
+
+
+def test_unmigrated_prd_exits_2_with_nothing_on_stdout(prd_repo, cli):
+    prd_dir = prd_repo / "docs/prd/orders"
+    edit(prd_dir, "prd.md", "Not applicable: new project.",
+         "| Area | State | Boundary |\n|---|---|---|\n| import | adopted | `src/**` |")
+    code, out, err = cli(prd_dir)
+    assert code == 2 and out == "" and f"prd_status: {prd_dir.as_posix()}/prd.md: {model.UNMIGRATED}" in err

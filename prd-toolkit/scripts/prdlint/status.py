@@ -17,10 +17,6 @@ class StatusItem:
     text: str
 
 
-def _area(file: str) -> str:
-    return "nfr" if file == "nfr.md" else Path(file).stem
-
-
 def _titles(prd: Prd) -> dict[str, str]:
     """errors.md entry id -> the title on its heading line."""
     lines = prd.docs.get("errors.md", "").split("\n")
@@ -34,7 +30,7 @@ def _titles(prd: Prd) -> dict[str, str]:
 def _requirements(prd: Prd) -> list[StatusItem]:
     counts: dict[str, dict[str, int]] = {}
     for b in prd.blocks:
-        by = counts.setdefault(_area(b.file), {})
+        by = counts.setdefault(trace.area(b.file), {})
         status = b.status or "-"
         by[status] = by.get(status, 0) + 1
     order = sorted(counts, key=lambda a: (a == "nfr", list(counts).index(a)))

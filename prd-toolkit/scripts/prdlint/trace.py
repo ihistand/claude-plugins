@@ -58,7 +58,7 @@ def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
     return out
 
 
-def _area(file: str) -> str:
+def area(file: str) -> str:
     return "nfr" if file == "nfr.md" else Path(file).stem
 
 
@@ -181,7 +181,7 @@ def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]
         for tid, level, line in b.tests:
             if tid in cited:
                 continue
-            if scope is not None and _area(b.file) not in scope:
+            if scope is not None and area(b.file) not in scope:
                 continue
             findings.append(Finding(b.file, line, "t-implemented", f"{tid} ({b.id}) is cited by no test; add `@prd {tid}` to the test that proves it"))
             if b.status in ("verified", "live") or (b.status == "built" and level == "unit"):

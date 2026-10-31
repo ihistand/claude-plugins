@@ -39,6 +39,9 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         prd = model.load(Path(args.prd_dir))
+        if prd.adoption_unmigrated:
+            print(f"prd_status: {prd.root.as_posix()}/prd.md: {model.UNMIGRATED}", file=sys.stderr)
+            return 2
         items = status.build_status(prd, model.repo_root(prd.root), _display_root(prd.root))
     except model.NotAPrd as e:
         print(f"prd_status: {e}", file=sys.stderr)
