@@ -16,15 +16,30 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _show(root: Path, rev: str, path: str) -> str:
+    if _git(root, "cat-file", "-e", f"{rev}:{path}").returncode != 0:
+        return ""  # the path does not exist at that end (added or deleted): fine
     p = _git(root, "show", f"{rev}:{path}")
-    return p.stdout if p.returncode == 0 else ""  # absent at that end is fine
+    if p.returncode != 0:
+        raise RuntimeError(f"git show {rev}:{path} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
+    return p.stdout
+
+
+_RANGE = re.compile(r"^([^.\s][^\s]*?)\.\.([^.\s][^\s]*)$")
+
+
+def _resolve(root: Path, rng: str, rev: str) -> str:
+    p = _git(root, "rev-parse", "--verify", "--end-of-options", f"{rev}^{{commit}}")
+    if p.returncode != 0:
+        raise BadRange(f"bad range {rng}: {rev} is not a commit")
+    return p.stdout.strip()
 
 
 def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
-    if ".." not in rng:
+    m = _RANGE.match(rng)
+    if not m or "..." in rng:
         raise BadRange(f"bad range {rng}: expected <base>..<head>")
-    base, head = rng.split("..", 1)
-    proc = _git(repo_root, "diff", "--name-status", "-M", "-z", rng)
+    base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
+    proc = _git(repo_root, "diff", "--name-status", "-M", "-z", "--end-of-options", f"{base}..{head}")
     if proc.returncode != 0:
         raise BadRange(f"bad range {rng}: {(proc.stderr.strip().splitlines() or ['git diff failed'])[0]}")
     fields = proc.stdout.split("\0")
@@ -43,7 +58,7 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
             findings.append(f"{path}: the builder may not edit the PRD folder")
             continue
         cited: dict[str, None] = {}
-        for rev in (base or "HEAD", head or "HEAD"):
+        for rev in (base, head):
             for m in CITE.finditer(_show(repo_root, rev, path)):
                 cited[m.group(1)] = None
         # a T-id with no test case is treated as non-unit: a tester owns anything not proven unit
@@ -53,25 +68,35 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
     return findings
 
 
+_HEADING = re.compile(r"^#*\s*(?:\d+\.\s*)?(?:\*\*)?RESULTS\b")
+_RESULT_LINE = re.compile(r"^(?:[-*]\s+)?(T-\d{3}\.\d+)\b")
+
+
 def results_findings(report: str, tids: list[str]) -> list[str]:
-    lines = report.split("\n")
-    start = next((n for n, line in enumerate(lines) if "RESULTS" in line), None)
+    """The block starts at the first line beginning with a RESULTS heading; its result lines are the
+    contiguous run of T-id lines after it (blank lines allowed before the first); the first other
+    non-blank line ends it, and what follows is notes."""
+    lines = [line.strip() for line in report.split("\n")]
+    start = next((n for n, line in enumerate(lines) if _HEADING.match(line)), None)
     findings: list[str] = []
-    seen: set[str] = set()
+    counts: dict[str, int] = {}
     for line in lines[start + 1:] if start is not None else []:
-        line = line.strip()
-        if line.startswith("- "):
-            line = line[2:].strip()
-        m = _LINE_TID.match(line)
+        if not line:
+            continue  # blank lines do not end the run; the first non-T-id line does
+        m = _RESULT_LINE.match(line)
         if not m:
-            continue
+            break
         tid = m.group(1)
+        counts[tid] = counts.get(tid, 0) + 1
+        body = re.sub(r"^[-*]\s+", "", line)
         if tid not in tids:
             findings.append(f"{tid} was not dispatched")
-        elif not RESULT.match(line):
+        elif not RESULT.match(body):
             findings.append(f"{tid}: not one of pass, fail: <reason>, known-failing E-nnn")
-        seen.add(tid)
+    for tid, n in counts.items():
+        if n > 1 and tid in tids:
+            findings.append(f"{tid}: more than one RESULTS line")
     for tid in tids:
-        if tid not in seen:
+        if tid not in counts:
             findings.append(f"{tid} has no RESULTS line")
     return findings

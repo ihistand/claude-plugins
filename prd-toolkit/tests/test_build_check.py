@@ -131,3 +131,65 @@ def test_results_clean():
     ("RESULTS\nT-001.2: ok\nT-002.1: pass\n", "T-001.2: not one of pass, fail: <reason>, known-failing E-nnn")])
 def test_results_problems(report, needle):
     assert any(needle in f for f in buildcheck.results_findings(report, ["T-001.2", "T-002.1"]))
+
+
+TIDS = ["T-001.2", "T-002.1"]
+
+
+def test_tid_line_before_heading_is_ignored():
+    r = "T-001.2: pass\nT-002.1: pass\n\nRESULTS\nT-001.2: pass\n"
+    assert buildcheck.results_findings(r, TIDS) == ["T-002.1 has no RESULTS line"]
+
+
+def test_notes_after_prose_line_are_ignored_and_do_not_hide_a_missing_one():
+    r = "RESULTS\nT-001.2: pass\nNotes follow.\nT-002.1: pass\n"
+    assert buildcheck.results_findings(r, TIDS) == ["T-002.1 has no RESULTS line"]
+
+
+def test_see_results_below_does_not_start_the_block():
+    r = "Summary: see RESULTS below\nT-001.2: pass\n\n## RESULTS\n\nT-001.2: pass\nT-002.1: pass\n"
+    assert buildcheck.results_findings(r, TIDS) == []
+
+
+def test_duplicate_tid_line_is_a_finding():
+    r = "RESULTS\nT-001.2: pass\nT-001.2: fail: x\nT-002.1: pass\n"
+    assert "T-001.2: more than one RESULTS line" in buildcheck.results_findings(r, TIDS)
+
+
+@pytest.mark.parametrize("heading", ["RESULTS", "## RESULTS", "3. RESULTS", "**RESULTS**", "## 3. **RESULTS**"])
+def test_heading_forms_and_star_bullets(heading):
+    assert buildcheck.results_findings(f"{heading}\n* T-001.2: pass\n- T-002.1: pass\n", TIDS) == []
+
+
+def test_no_heading_reports_all_missing():
+    assert buildcheck.results_findings("T-001.2: pass\n", TIDS) == [f"{t} has no RESULTS line" for t in TIDS]
+
+
+def test_triple_dot_range_exits_2(repo):
+    code, out, err = run(repo, "docs/prd/orders", "--diff", "base...HEAD")
+    assert code == 2 and out == "" and err
+
+
+def test_deleted_tester_file_is_reported(repo):
+    git(repo, "rm", "-q", "tests/test_api.py")
+    commit(repo, "delete")
+    assert any("tests/test_api.py cites T-002.1" in f for f in diff(repo))
+
+
+def test_renamed_and_modified_tester_file_is_reported(repo):
+    git(repo, "mv", "tests/test_api.py", "tests/test_api2.py")
+    (repo / "tests/test_api2.py").write_text(f"# @prd {NONUNIT}\ndef test_a():\n    assert 1\n    assert 2\n")
+    commit(repo, "rename+modify")
+    assert any("tests/test_api" in f and "a tester's test" in f for f in diff(repo))
+
+
+def test_tester_file_with_space_is_reported(repo):
+    (repo / "tests/test api.py").write_text(f"# @prd {NONUNIT}\n")
+    commit(repo, "space")
+    assert any("tests/test api.py cites T-002.1" in f for f in diff(repo))
+
+
+def test_head_side_unreadable_rev_is_not_silently_absent(repo):
+    prd = model.load(repo / "docs/prd/orders")
+    with pytest.raises(Exception):
+        buildcheck.diff_findings(prd, repo, "base..deadbeef")
