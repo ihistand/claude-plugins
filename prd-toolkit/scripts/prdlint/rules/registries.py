@@ -81,6 +81,7 @@ def standards_rows(prd: Prd) -> list[StandardsRow]:
 @rule("registries")
 def registries(prd: Prd) -> Iterator[Finding]:
     approved = prd.frontmatter.get("status", "").strip() == "Approved"
+    ci = os.environ.get("PRD_LINT_CI") == "1"  # prd_lint.py --ci: skip the checks that depend on the machine
     for r in _registry_rows(prd, 5):
         cells = [c.strip() for c in r.cells] + [""] * 5
         decision = cells[4].strip("`").strip()
@@ -89,7 +90,7 @@ def registries(prd: Prd) -> Iterator[Finding]:
             continue
         if decision == "proposed" and approved:
             yield Finding("prd.md", r.line, "registries", "standards row is still 'proposed' but the PRD is Approved")
-        if decision == "enforced":
+        if decision == "enforced" and not ci:
             cmd = _command(cells[1])
             if cmd is None or shutil.which(cmd) is None:
                 yield Finding("prd.md", r.line, "registries", f"enforced linter command '{cmd or cells[1]}' is not on PATH")
@@ -102,7 +103,7 @@ def registries(prd: Prd) -> Iterator[Finding]:
             continue
         if decision == "proposed" and approved:
             yield Finding("prd.md", r.line, "registries", "skills row is still 'proposed' but the PRD is Approved")
-        if decision == "required":
+        if decision == "required" and not ci:
             root = root or repo_root(prd.root)
             if not installed_skill(skill, root):
                 yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed; if it is built into Claude Code, mark the row 'recommended'")

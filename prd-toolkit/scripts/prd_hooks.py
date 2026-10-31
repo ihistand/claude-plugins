@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""Vendor the toolkit into a repo and manage its git hooks: install | check | uninstall <prd-folder>. Exit 0 clean, 1 findings, 2 usage, dependency or internal error."""
+"""Vendor the toolkit into a repo and manage its git hooks: install | check | uninstall <prd-folder>; ci --gitlab|--github [--force] <prd-folder> writes the merge-gate CI include file. Exit 0 clean, 1 findings, 2 usage, dependency or internal error."""
 import argparse
 import sys
 from pathlib import Path
@@ -20,12 +20,22 @@ from prdlint import hooks, model  # noqa: E402
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_hooks.py", description="Vendor the PRD toolkit and install its git hooks.")
-    parser.add_argument("action", choices=("install", "check", "uninstall"))
+    parser.add_argument("action", choices=("install", "check", "uninstall", "ci"))
     parser.add_argument("prd_dir")
+    parser.add_argument("--gitlab", action="store_true")
+    parser.add_argument("--github", action="store_true")
+    parser.add_argument("--force", action="store_true")
     try:
         args = parser.parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else 2
+    if args.action == "ci":
+        if args.gitlab == args.github:
+            print("prd_hooks: ci needs exactly one of --gitlab or --github", file=sys.stderr)
+            return 2
+    elif args.gitlab or args.github or args.force:
+        print("prd_hooks: --gitlab, --github and --force belong to ci", file=sys.stderr)
+        return 2
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
@@ -39,6 +49,16 @@ def main(argv: list[str]) -> int:
         if args.action == "check" and not hooks.is_plugin():
             print("prd_hooks: run check from the plugin, not the vendored copy", file=sys.stderr)
             return 2
+        if args.action == "ci":
+            try:
+                prd_rel = prd.root.resolve().relative_to(root).as_posix()
+            except ValueError:
+                print(f"prd_hooks: {prd.root} is not inside the repository at {root}", file=sys.stderr)
+                return 2
+            code, out = hooks.write_ci(root, "gitlab" if args.gitlab else "github", hooks.ci_jobs(prd, prd_rel), args.force)
+            for line in out:
+                print(line)
+            return code
         if args.action == "install":
             try:
                 prd_rel = prd.root.resolve().relative_to(root).as_posix()

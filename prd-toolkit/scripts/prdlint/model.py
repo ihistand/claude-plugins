@@ -94,6 +94,7 @@ class Harness:
 class Testing:
     levels: dict[str, int] = field(default_factory=dict)
     gates: dict[str, str] = field(default_factory=dict)
+    commands: dict[str, str] = field(default_factory=dict)  # level -> first backticked span of its Harness command cell
     has_gate: bool = False
     levels_line: int = 0
     environments: dict[str, int] = field(default_factory=dict)
@@ -340,6 +341,10 @@ def load(prd_dir: Path) -> Prd:
         testing.levels = _names(lv)
         if lv:
             testing.levels_line = lv.line
+            for r in lv.rows:
+                cm = re.search(r"`([^`]*)`", r.cells[1]) if len(r.cells) > 1 else None
+                if cm and cm.group(1).strip():
+                    testing.commands[r.cells[0].strip("`")] = cm.group(1).strip()
             hdr = [h.strip().strip("`").lower() for h in lv.header]
             gi = hdr.index("gate", 3) if "gate" in hdr[3:] else -1
             testing.has_gate = gi >= 0
