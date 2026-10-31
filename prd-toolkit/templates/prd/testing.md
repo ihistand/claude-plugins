@@ -4,14 +4,14 @@
 
 ## Levels
 
-| Level | Harness command | Environment |
-|---|---|---|
-| unit | [NEEDS CLARIFICATION: unit harness command] | [NEEDS CLARIFICATION: environment] |
-| integration | [NEEDS CLARIFICATION: integration harness command] | [NEEDS CLARIFICATION: environment] |
-| component | [NEEDS CLARIFICATION: component harness command] | [NEEDS CLARIFICATION: environment] |
-| system | [NEEDS CLARIFICATION: system harness command] | [NEEDS CLARIFICATION: environment] |
-| e2e | [NEEDS CLARIFICATION: e2e harness command] | [NEEDS CLARIFICATION: environment] |
-| acceptance | [NEEDS CLARIFICATION: acceptance harness command] | [NEEDS CLARIFICATION: environment] |
+| Level | Harness command | Environment | Gate |
+|---|---|---|---|
+| unit | [NEEDS CLARIFICATION: unit harness command] | [NEEDS CLARIFICATION: environment] | build |
+| integration | [NEEDS CLARIFICATION: integration harness command] | [NEEDS CLARIFICATION: environment] | build |
+| component | [NEEDS CLARIFICATION: component harness command] | [NEEDS CLARIFICATION: environment] | build |
+| system | [NEEDS CLARIFICATION: system harness command] | [NEEDS CLARIFICATION: environment] | deploy |
+| e2e | [NEEDS CLARIFICATION: e2e harness command] | [NEEDS CLARIFICATION: environment] | deploy |
+| acceptance | [NEEDS CLARIFICATION: acceptance harness command] | [NEEDS CLARIFICATION: environment] | deploy |
 
 ## Harness
 

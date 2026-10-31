@@ -162,8 +162,8 @@ def notes_repo(tmp_path: Path) -> Path:
     prd.mkdir(parents=True)
     (prd / "prd.md").write_text("# notes\n", encoding="utf-8")
     (prd / "testing.md").write_text(
-        "# Testing\n\n## Levels\n\n| Level | Harness command | Environment |\n|---|---|---|\n"
-        "| integration | `uv run pytest tests` | local |\n\n## Harness\n\n"
+        "# Testing\n\n## Levels\n\n| Level | Harness command | Environment | Gate |\n|---|---|---|---|\n"
+        "| integration | `uv run pytest tests` | local | build |\n\n## Harness\n\n"
         "- **Layout.** `tests/test_<area>.py`. Test roots: `tests/`.\n", encoding="utf-8")
     return repo
 

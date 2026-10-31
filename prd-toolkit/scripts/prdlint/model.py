@@ -59,6 +59,8 @@ class TestCase:
 
 
 ADOPTION_FILE = "adoption.md"
+GATES = ("build", "deploy")
+GATE_MIGRATION = "testing.md Levels: add a Gate column (build or deploy), new in prd-toolkit 0.4"
 UNMIGRATED = (f'section 8: the adoption map moved to {ADOPTION_FILE} in prd-toolkit 0.3; '
               f'move the table there and leave "See {ADOPTION_FILE}."')
 ADOPTION_STATES = ("not started", "extracted", "confirmed", "adopted")
@@ -91,6 +93,9 @@ class Harness:
 @dataclass
 class Testing:
     levels: dict[str, int] = field(default_factory=dict)
+    gates: dict[str, str] = field(default_factory=dict)
+    has_gate: bool = False
+    levels_line: int = 0
     environments: dict[str, int] = field(default_factory=dict)
     fixtures: dict[str, int] = field(default_factory=dict)
     signoffs: list[Row] = field(default_factory=list)
@@ -331,7 +336,17 @@ def load(prd_dir: Path) -> Prd:
     testing = Testing()
     if "testing.md" in docs:
         tsecs = sections(docs["testing.md"])
-        testing.levels = _names(_table_under(tsecs, "Levels"))
+        lv = _table_under(tsecs, "Levels")
+        testing.levels = _names(lv)
+        if lv:
+            testing.levels_line = lv.line
+            hdr = [h.strip().strip("`").lower() for h in lv.header]
+            gi = hdr.index("gate", 3) if "gate" in hdr[3:] else -1
+            testing.has_gate = gi >= 0
+            if gi >= 0:
+                for r in lv.rows:
+                    cell = r.cells[gi] if gi < len(r.cells) else ""
+                    testing.gates[r.cells[0].strip("`")] = cell.strip().strip("`").strip()
         testing.environments = _names(_table_under(tsecs, "Environments"))
         testing.fixtures = _names(_table_under(tsecs, "Fixtures"))
         so = _table_under(tsecs, "Sign-offs")
@@ -343,6 +358,11 @@ def load(prd_dir: Path) -> Prd:
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
                adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
                adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
+
+
+def gate_of(prd: Prd, level: str) -> str | None:
+    """The Gate (build or deploy) of a Levels row; None for an unknown level, a missing column or a blank cell."""
+    return prd.testing.gates.get(level) or None
 
 
 def repo_root(path: Path) -> Path:

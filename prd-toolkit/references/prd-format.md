@@ -114,7 +114,7 @@ globs (`features/import.md`, `src/importer/**`), comma-separated; the loader rea
 backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, or `awaiting <who>`
 (a named person, for example `awaiting Sam Rivera`; a bare `awaiting` is a violation).
 
-Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch.
+Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch. The 0.4 migration adds the Gate column to the Levels table in `testing.md`; record it as the §14 row `format: Levels Gate column (prd-toolkit 0.4)`, a patch bump.
 
 ## Requirement blocks
 
@@ -229,7 +229,7 @@ T-012.2:
 ## testing.md
 
 ```
-## Levels        | Level | Harness command | Environment |
+## Levels        | Level | Harness command | Environment | Gate |
 ## Harness       - **<Slot>.** <convention>   (bullets, not a table)
 ## Environments  | Environment | Purpose | Access | Base URL | Database | Logs |
 ## Leak checks   | Sink | Read from | Scanned for |
@@ -240,6 +240,8 @@ T-012.2:
 Level-2 headings with those names; the first column of each table is the name that other files
 refer to (levels, environments, fixtures).
 
+- Levels: `Gate` is `build` (the level runs before deploy, on the code alone) or `deploy` (it needs the
+  deployed system); `test-level` reports a missing column once and any other value per row.
 - Levels: each `Harness command` is **one simple command** in backticks, such as
   `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
   first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or

@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterator
 
 from ..findings import Finding
+from .. import model
 from ..markdown import strip_code, tables
 from ..model import Prd, TestCase
 from ..registry import rule
@@ -150,6 +151,14 @@ def test_cases_consistent(prd: Prd):
 
 @rule("test-level")
 def test_level(prd: Prd):
+    t = prd.testing
+    if "testing.md" in prd.docs and t.levels_line:
+        if not t.has_gate:
+            yield Finding("testing.md", t.levels_line, "test-level", model.GATE_MIGRATION)
+        else:
+            for lvl, g in t.gates.items():
+                if g not in model.GATES:
+                    yield Finding("testing.md", t.levels[lvl], "test-level", f"level '{lvl}': Gate '{g}' is not one of {', '.join(model.GATES)}")
     for tc in _cases(prd):
         level = tc.data.get("level")
         if _blank(level):

@@ -2,14 +2,14 @@
 
 ## Levels
 
-| Level | Harness command | Environment |
-|---|---|---|
-| unit | `pytest tests/unit` | local |
-| integration | `pytest tests/integration` | ci |
-| component | `pytest tests/component` | ci |
-| system | `pytest tests/system` | staging |
-| e2e | `pytest tests/e2e` | staging |
-| acceptance | `python3 tools/acceptance_report.py` | staging |
+| Level | Harness command | Environment | Gate |
+|---|---|---|---|
+| unit | `pytest tests/unit` | local | build |
+| integration | `pytest tests/integration` | ci | build |
+| component | `pytest tests/component` | ci | build |
+| system | `pytest tests/system` | staging | deploy |
+| e2e | `pytest tests/e2e` | staging | deploy |
+| acceptance | `python3 tools/acceptance_report.py` | staging | deploy |
 
 ## Harness
 
