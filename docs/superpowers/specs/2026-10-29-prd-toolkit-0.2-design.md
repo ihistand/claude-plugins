@@ -61,7 +61,7 @@ unchanged.
 - **Dry run.** This is called by authoring phase 6 and changing step 4. It writes tests for the
   sampled T-ids into a fresh scratch subdirectory. Both skills dispatch `prd-tester`, and fall
   back to the 0.1 general-purpose prompt only when the agent is not installed.
-- **Suite.** This is called by adoption step 4, and by building in 0.3. It writes the area's
+- **Suite.** This is called by adoption step 4, and by building in 0.4. It writes the area's
   tests into the repo's test roots, runs them with the Levels harness commands, and adds a
   RESULTS section giving `pass`, `fail` or `known-failing E-nnn` per T-id. The tester never
   edits code or the PRD. Every failure is returned as a change request or an `E-nnn`

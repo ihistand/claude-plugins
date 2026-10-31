@@ -21,7 +21,7 @@ promise.
 this", "just write down what it does", "the code is the proof" and "do it all in one go" change
 nothing below.
 
-Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (§8, `| Area | State | Boundary |`),
+Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (`adoption.md`, `| Area | State | Boundary |`; §8 holds only `See adoption.md.`),
 `as-built` blocks with `Source: <file>:<line> @<commit>`, the `errors.md` ledger and
 `known-failing: E-nnn`. Read it before writing. Lint, the mechanical gate:
 
@@ -87,7 +87,7 @@ The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `
 
 ### 0. Bootstrap
 
-Only when the repo has no `docs/prd/` folder for this system. If one exists, read its §8 and
+Only when the repo has no `docs/prd/` folder for this system. If one exists, read its `adoption.md` and
 §14: resume the area that is past `not started` and not `adopted`, at the step its state names;
 a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 5.3.
 
@@ -111,7 +111,7 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   directory that mixes tests with the code they test is never a test root, because a root is
   readable by the tester: name its tests' command in the Levels table instead, and say so in
   the Layout bullet.
-- **The adoption map:** replace §8's marker with the `| Area | State | Boundary |` table, one row
+- **The adoption map:** create `adoption.md` (`# Adoption map`, then the `| Area | State | Boundary |` table) and replace §8's marker with `See adoption.md.`; one row
   per candidate area (a package, a module, a dashboard, an entry point that does one job), each
   `not started`, its Boundary the backticked globs of its files, comma-separated. Areas never
   overlap.
@@ -145,7 +145,7 @@ Then write what it returns, yourself:
   §11 row each (status `as-built`, Since empty).
 - Its test cases into `test-cases/<area>.yaml`, all seven elements each, none at `level: unit`;
   its contract items into the contracts.
-- Each APPARENT BUGS entry into `errors.md` as `### E-nnn`, `Resolution: open`.
+- Each APPARENT BUGS entry into `errors.md` as `### E-nnn`, `Resolution: open`, with the extractor's `Touches:` line (requirement IDs, or `-`) copied in after `Classification:`.
 - Each QUESTION as a §13 bullet.
 - Check every `Source:` line before you write it: open the file at that line, at that commit,
   and see the behaviour there. A Source that does not show it is dropped, and the block with it.
@@ -184,7 +184,9 @@ leave the area `extracted`.
 
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
-per call, one question per requirement, its header the ID. Its preview shows the whole block and its `Source:` excerpt, because a confirmation covers only what the user was shown. The
+per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
+`uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --for implement --req <ID>; echo "prd-context-exit=$?"`.
+The `prd-context-exit=` value must be `0` or `1`; `1` marks STALE regions, which the preview shows as they are. Never pipe, filter or truncate the pack's output (no `| head`, no `| grep`): `prd-context-exit=` then reports the filter's status, not the pack's. The
 options:
 
 - **Confirm**: confirmed.
@@ -202,7 +204,7 @@ question or the entry in the preview.
 **The checklist file.** When the AskUserQuestion tool is not available, or the user asks to work
 in an editor, write `.prd-confirm-<area>.md` at the repository top, never inside the PRD folder or a test root: its `Source:` excerpts are code, and the tester reads those folders. One
 section per item (each requirement, each §13 question of the area, each `E-nnn`): its ID, the
-whole block or question, its `Source:` excerpt, and a `Decision:` line the user fills in with
+whole block and its `Source:` excerpt, as the `--for implement --req <ID>` pack prints them (the whole question for a §13 question or `E-nnn`), and a `Decision:` line the user fills in with
 `confirm`, `correct: <behaviour>`, `bug: <intended behaviour>` or `ask: <who>`. When the user
 says the file is done, read it and apply each decision as above. A blank or unrecognised `Decision:` line is no answer: list those IDs and ask again. Delete the checklist file once every item is answered; it is never committed. A
 headless run writes the file, says where it is, and stops with the area `extracted`.

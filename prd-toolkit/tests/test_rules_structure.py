@@ -36,7 +36,12 @@ ADOPT_OLD = "## 8. Adoption map\n\nNot applicable: new project."
 
 def _adoption(table_rows, header="| Area | State | Boundary |"):
     body = "\n".join([header, "|---|---|---|", *table_rows])
-    return _edit("prd.md", ADOPT_OLD, f"## 8. Adoption map\n\n{body}")
+
+    def mutate(root):
+        _edit("prd.md", ADOPT_OLD, "## 8. Adoption map\n\nSee adoption.md.")(root)
+        (root / "adoption.md").write_text(f"# Adoption map\n\n{body}\n")
+
+    return mutate
 
 
 def _swap_lines(rel, first, second):

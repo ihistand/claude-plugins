@@ -58,6 +58,9 @@ class TestCase:
     data: LineDict
 
 
+ADOPTION_FILE = "adoption.md"
+UNMIGRATED = (f'section 8: the adoption map moved to {ADOPTION_FILE} in prd-toolkit 0.3; '
+              f'move the table there and leave "See {ADOPTION_FILE}."')
 ADOPTION_STATES = ("not started", "extracted", "confirmed", "adopted")
 
 
@@ -74,6 +77,8 @@ class ErrorEntry:
     id: str
     line: int
     open: bool
+    touches: list[tuple[str, int]] = field(default_factory=list)  # (requirement ID, line) from `Touches:`
+    end: int = 0  # last line of the entry
 
 
 @dataclass
@@ -107,7 +112,8 @@ class Prd:
     not_applicable: dict[str, tuple[str, int]]
     assumptions: list[Row]
     load_findings: list[Finding]
-    adoption: list[AdoptionRow] | None = None  # None when section 8 has no table (Not applicable)
+    adoption: list[AdoptionRow] | None = None  # None exactly when adoption.md is absent
+    adoption_unmigrated: bool = False  # a 0.2 PRD: §8 still holds the table and adoption.md is absent
     errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
 
 
@@ -120,6 +126,8 @@ _TEST = re.compile(r"(T-\d+\.\d+)\s*\[([^\]]+)\]")
 _NA = re.compile(r"^\s*[-*]\s*Not applicable:\s*`([^`]+)`\s+[—–-]+\s+(.*?)\s*$")
 _ERROR_HEAD = re.compile(r"^### (E-\d+)\b")
 _RESOLUTION = re.compile(r"^Resolution:\s*(.*?)\s*$")
+_TOUCHES = re.compile(r"^Touches:\s*(.*?)\s*$")
+_TOUCH_ID = re.compile(r"\b(?:UJ|FR|NFR)-\d+\b")
 _SLOT = re.compile(r"^- \*\*([^*]+?)\.\*\*")
 _MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]*\]")
 _BACKTICKED = re.compile(r"`([^`]+)`")
@@ -211,13 +219,13 @@ def _names(table) -> dict[str, int]:
     return {r.cells[0].strip("`"): r.line for r in table.rows} if table else {}
 
 
-def _adoption(secs: list[Section]) -> list[AdoptionRow] | None:
-    s8 = next((s for s in secs if s.number == 8), None)
-    ts = tables(s8.body) if s8 else []
-    if not ts:
+def _adoption(docs: dict[str, str]) -> list[AdoptionRow] | None:
+    """Rows of the first table in adoption.md; None when the file is absent, [] when it has no table."""
+    if ADOPTION_FILE not in docs:
         return None
+    ts = tables([(n, line) for n, line in enumerate(docs[ADOPTION_FILE].split("\n"), 1)])
     rows = []
-    for r in ts[0].rows:
+    for r in ts[0].rows if ts else []:
         c = r.cells + [""] * 3
         rows.append(AdoptionRow(c[0].strip("`"), c[1].strip("`"), _BACKTICKED.findall(c[2]), r.line))
     return rows
@@ -227,8 +235,11 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
     """`### E-nnn` entries of errors.md; open unless a Resolution line carries a real value."""
     ledger: dict[str, ErrorEntry] = {}
     cur: ErrorEntry | None = None
+    last = len(text.rstrip("\n").split("\n")) if text.strip() else 0
     for n, (orig, st) in enumerate(zip(text.split("\n"), strip_code(text).split("\n")), 1):
         if _HEADING.match(st):
+            if cur:
+                cur.end = n - 1
             m = _ERROR_HEAD.match(orig) if _ERROR_HEAD.match(st) else None
             cur = ErrorEntry(m.group(1), n, True) if m else None
             if cur:
@@ -238,6 +249,11 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
         if rm:
             v = rm.group(1).lower()
             cur.open = v in ("", "-") or v.startswith("open")
+        tm = _TOUCHES.match(orig) if cur else None
+        if tm:
+            cur.touches.extend((i, n) for i in _TOUCH_ID.findall(tm.group(1)))
+    for e in ledger.values():
+        e.end = e.end or last
     return ledger
 
 
@@ -323,8 +339,10 @@ def load(prd_dir: Path) -> Prd:
         hs = next((x for x in tsecs if x.title.strip().lower() == "harness"), None)
         testing.harness = _harness(hs.body) if hs else Harness()
 
+    s8 = sec(8)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
-               adoption=_adoption(secs), errors_ledger=_errors_ledger(docs.get("errors.md", "")))
+               adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
+               adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
 
 
 def repo_root(path: Path) -> Path:

@@ -59,6 +59,11 @@ def prd_files(sha_app: str) -> dict[str, str]:
         "| 0.1.0 | 2026-10-29 | notes area confirmed: FR-001 confirmed, FR-002 corrected (ignore case) | FR-001, FR-002, AC-002.1 |\n"
     )
     return {
+        "adoption.md": (
+            "# Adoption map\n\n| Area | State | Boundary |\n|---|---|---|\n"
+            "| notes | confirmed | `src/notes/app.py`, `tests/test_notes.py` |\n"
+            "| export | not started | `src/notes/export.py` |\n"
+        ),
         "prd.md": f"""---
 prd: notes
 version: 0.1.0
@@ -128,10 +133,7 @@ One module, `notes.app`, holds a dict `_NOTES` from id to text; `notes.export` r
 
 ## 8. Adoption map
 
-| Area | State | Boundary |
-|---|---|---|
-| notes | confirmed | `src/notes/app.py`, `tests/test_notes.py` |
-| export | not started | `src/notes/export.py` |
+See adoption.md.
 
 ## 9. Versioning
 
@@ -345,7 +347,7 @@ def adopted_files(sha_app: str) -> dict[str, str]:
     prd = files["prd.md"]
     prd = _sub(prd, "version: 0.1.0", "version: 1.0.0")
     prd = _sub(prd, "status: Draft", "status: Approved")
-    prd = _sub(prd, "| notes | confirmed |", "| notes | adopted |")
+    files["adoption.md"] = _sub(files["adoption.md"], "| notes | confirmed |", "| notes | adopted |")
     prd = prd.rstrip("\n") + (
         "\n| 1.0.0 | 2026-10-29 | Approved; notes area adopted; suite T-001.1 pass, T-002.1 known-failing"
         " E-001; dry run passed | FR-001, FR-002, T-001.1, T-002.1 |\n"
@@ -394,7 +396,7 @@ def export_confirmed_files(sha_app: str, sha_export: str) -> dict[str, str]:
     files = adopted_files(sha_app)
     prd = files["prd.md"]
     prd = _sub(prd, "status: Approved", "status: In review")
-    prd = _sub(prd, "| export | not started |", "| export | confirmed |")
+    files["adoption.md"] = _sub(files["adoption.md"], "| export | not started |", "| export | confirmed |")
     prd = _sub(prd, "| FR-002 | Search notes | approved | features/notes.md |  |\n",
                "| FR-002 | Search notes | approved | features/notes.md |  |\n"
                "| FR-003 | Export notes | live | features/export.md | 1.1.0 |\n")

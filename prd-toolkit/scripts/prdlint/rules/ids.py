@@ -181,7 +181,11 @@ def index_consistent(prd: Prd):
         rows.setdefault(r.id, r)
     for a in prd.adoption or []:
         if a.state in ADOPTION_STATES and a.state != "not started" and f"features/{a.area}.md" not in prd.docs:
-            yield Finding("prd.md", a.line, "index-consistent", f"adoption area '{a.area}' is {a.state} but features/{a.area}.md does not exist")
+            yield Finding("adoption.md", a.line, "index-consistent", f"adoption area '{a.area}' is {a.state} but features/{a.area}.md does not exist")
+    for e in prd.errors_ledger.values():
+        for req, n in e.touches:
+            if req not in block:
+                yield Finding("errors.md", n, "index-consistent", f"{e.id} Touches {req}, which no block defines")
     for b in prd.blocks:
         if b.status == "as-built" and not b.source:
             yield Finding(b.file, b.line, "index-consistent", f"{b.id} is as-built but has no 'Source: <file>:<line> @<commit>' line")

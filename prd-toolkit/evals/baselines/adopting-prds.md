@@ -1,5 +1,7 @@
 # adopting-prds: pressure scenarios and baselines
 
+> **Note (0.3):** the adoption map now lives in `adoption.md` beside `prd.md`; §8 of `prd.md` only points to it. The transcripts below are historical and show the 0.2 layout, with the map in §8.
+
 Each scenario runs in a fresh scratch repo built by `tests/legacy.py`'s `make_legacy_repo` (the
 notes service: `src/notes/app.py`, whose `search_notes` is case-sensitive and carries the comment
 `# apparent bug: case-sensitive`, `tests/test_notes.py`, three commits), plus:

@@ -43,6 +43,10 @@ the gap as the change.
 5. **Everything that describes the behaviour moves with it**: ACs, test-case expectations,
    `errors.yaml`, `openapi.yaml`, permissions, schema, fixtures, Observability rows. A stale test
    case is a wrong spec.
+6. **Read whole PRD files only to edit them, except step 0's check of §14, or reading a PRD line to quote it verbatim when dismissing a dry-run question, as step 4 requires.** Work from the `prd_context.py` pack. Open another
+   PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
+   file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
+   is opening it. Another area's files come from the pack, never from a read; the area's own test cases are opened only to revise them in step 2.
 
 ## Version rule
 
@@ -82,7 +86,17 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    answer, and never approve a 0.x PRD through step 5; its first approval is authoring phase 7.
 1. **Restate the change** in one sentence, then list everything it touches: FR, NFR and AC IDs,
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
-   fixtures, Observability rows. Grep the PRD folder for each ID and code. For a design choice
+   fixtures, Observability rows. Then, as your first look at the PRD, run the pack for the area and the IDs the change touches, one command per Bash call:
+   `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
+   If you do not know the area, run the repo pack first (no `--area`); if you do not know the
+   IDs, run the area pack (`--area` only) and list the touched IDs from it. Each is its own Bash
+   call, with the same `prd-context-exit=` gate. Pass only the UJ, FR and NFR IDs, and a bug fix's `E-nnn`: map an AC, test case or error code to its requirement.
+   A new sub-project has no area yet: leave out `--area` and `--req`. A bug fix runs the pack with
+   its entry's ID, `--req E-nnn`: the pack then holds the entry, the blocks its `Touches:` line
+   names and the parent block of each test case `known-failing` on it. The `prd-context-exit=`
+   value must be `0` or `1`; `2` is a usage error, so fix the command. Never pipe, filter or
+   truncate the pack's output (no `| head`, no `| grep`): `prd-context-exit=` then reports the
+   filter's status, not the pack's. Work from the pack; read no whole PRD file yet. For a design choice
    the request leaves open, pick the recommendation the PRD or repo supports and carry it to
    step 5 as a decision the user confirms. A value only the user knows (a name, URL, limit):
    ask, and stop until answered.
@@ -90,7 +104,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `approved` in the block and the index. Revise every test case whose AC changed and write one,
    with all seven elements, for every new AC. Revise `errors.yaml` (new code or changed
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
-   step 1 listed. Set the PRD status to `In review`.
+   step 1 listed. If a block the change touches has a `Source:` line, run the pack again with
+   `--for implement` (its own Bash call, the same gate), re-read each region it marks STALE, and
+   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. Set the PRD status to `In review`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
@@ -123,7 +139,12 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
-   behaviour commit cites its IDs (`Refs: FR-005`).
+   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
+   to its requirement): write the code from `/prd-context <area> <changed IDs> implement`.
+   After the code commit, run the implement pack again (its own Bash call, the same gate), then
+   rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit
+   the PRD. A `Source:` refresh is provenance, not behaviour: it takes no version bump and no
+   §14 row, and the status stays Approved with no re-approval.
 
 ## Red Flags - STOP
 

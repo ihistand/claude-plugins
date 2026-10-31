@@ -488,8 +488,11 @@ Each milestone gets its own implementation plan and release.
 |---|---|---|
 | 0.1 | PRD folder format and templates (test cases included), `prd_lint.py`, standards and skills registries, `authoring-prds`, `changing-prds`, the CLAUDE.md block | Authoring a small sample project from scratch |
 | 0.2 | `adopting-prds`, `testing-from-prds`, `prd_trace.py`, the dry run, `prd-tester` | Adopting one Looker area (the sales rep KPI family), its characterization tests passing against looker.acuantia.com through the API |
-| 0.3 | `building-from-prds`, `deploying-from-prds`, git hooks, CI templates, `prd_drift.py`, `/prd-status`, `prd-builder`, `prd-deployer` | One Looker change made end to end through the workflow |
-| 0.4 | `handling-errors`, `errors.md`, nightly drift and smoke, `prd-error` issues, `/prd-error` | A real Looker error taken through Detect, Diagnose, Fix and Improve |
+| 0.3 | Tasks and context packs: `prd_context.py`, `/prd-context`, `adoption.md`, `Touches:` | A small adopted PRD migrated from the 0.2 format and one change made from the pack |
+| 0.4 | `building-from-prds`, `deploying-from-prds`, git hooks, CI templates, `prd_drift.py`, `/prd-status`, `prd-builder`, `prd-deployer` | One Looker change made end to end through the workflow |
+| 0.5 | `handling-errors`, `errors.md`, nightly drift and smoke, `prd-error` issues, `/prd-error` | A real Looker error taken through Detect, Diagnose, Fix and Improve |
+
+The 0.3 release was inserted ahead of the workflow milestones, which moved to 0.4 and 0.5; see `2026-10-30-prd-toolkit-0.3-design.md` §1.
 
 **Looker rollout.** `looker/` is a team repo; its PRD folder, hooks and CI jobs land through a
 merge request. Its contract types (explores, fields, dashboards, user attributes) are declared

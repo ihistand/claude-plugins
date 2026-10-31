@@ -7,7 +7,7 @@ the PRD from its report.
 
 Slots: `<REPO_ROOT>` the repository's absolute path; `<FORMAT>` the absolute path of the
 plugin's `references/prd-format.md`; `<AREA>` the area name; `<BOUNDARY>` its backticked globs
-from the adoption map; `<COMMIT>` `HEAD`'s short SHA; `<PRD_DIR>` `docs/prd/<slug>/`;
+from `adoption.md`; `<COMMIT>` `HEAD`'s short SHA; `<PRD_DIR>` `docs/prd/<slug>/`;
 `<NEXT_FR>` and `<NEXT_E>` the next free FR and E numbers; `<LEVELS>` the Level names from
 testing.md; `<LIVE_SYSTEM>` how to reach the running system read-only, or `none`.
 
@@ -89,16 +89,17 @@ One `errors.md` entry each, numbered from E-<NEXT_E>:
   ### E-nnn <title>
   Detected: <today>, adoption extract of <AREA> (<file>:<line> @<COMMIT>)
   Classification: code bug
+  Touches: FR-nnn
   Diagnosis: what the code does, and the evidence that says it should do otherwise
   Resolution: open
   Recurrence of: -
-followed by a line `Touches: FR-nnn` naming the requirement it borders. "none" if there are none.
+The `Touches:` line names the requirement IDs the bug borders, comma-separated, or `-` if there are none. The bootstrap copies it into the entry.
 
 QUESTIONS
 One per line: what only the owner can say, naming the requirement it blocks. "none" if none.
 
 OUTSIDE THE BOUNDARY
-Behaviour you saw that belongs to another area, one line each, for the adoption map.
+Behaviour you saw that belongs to another area, one line each, for `adoption.md`.
 
 FILES READ
 Every file you opened, every git command you ran, and every live-system call, one per line.

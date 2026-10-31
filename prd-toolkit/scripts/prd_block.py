@@ -48,18 +48,11 @@ def _required_skills(prd: model.Prd) -> str:
 
 
 def _adopted_areas(prd: model.Prd) -> str:
-    sec, rows = _rows(prd, 8)
-    if not rows:
+    if prd.adoption is None:
+        sec = next((s for s in prd.sections if s.number == 8), None)
         body = " ".join(t for _, t in sec.body) if sec else ""
-        if "Not applicable: new project" in body:
-            return "all (new project)"
-        return "none yet"
-    adopted = []
-    for r in rows:
-        cells = [c.strip() for c in r.cells] + [""] * 2
-        if cells[1].strip("`").strip() == "adopted":
-            adopted.append(cells[0].strip("`").strip())
-    return ", ".join(adopted) or "none yet"
+        return "all (new project)" if "Not applicable: new project" in body else "none yet"
+    return ", ".join(r.area for r in prd.adoption if r.state == "adopted") or "none yet"
 
 
 def render_block(prd: model.Prd, prd_rel: str) -> str:
@@ -151,6 +144,9 @@ def main(argv: list[str]) -> int:
         return 0 if e.code in (0, None) else 2
     try:
         prd = model.load(Path(args.prd_dir))
+        if prd.adoption_unmigrated:
+            print(f"prd_block: {prd.root.as_posix()}/prd.md: {model.UNMIGRATED}", file=sys.stderr)
+            return 2
         root = model.repo_root(prd.root)
         claude_md = Path(args.claude_md) if args.claude_md else root / "CLAUDE.md"
         try:

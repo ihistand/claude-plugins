@@ -43,3 +43,12 @@ def lint(root: Path) -> list:
 
 def fired(findings) -> set[str]:
     return {f.rule for f in findings}
+
+
+@pytest.fixture
+def ctx(tmp_path, monkeypatch) -> Path:
+    """The context-pack PRD (tests/context_fixture.py) at tmp_path/docs/prd/orders."""
+    from context_fixture import context_prd
+
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    return context_prd(tmp_path)
