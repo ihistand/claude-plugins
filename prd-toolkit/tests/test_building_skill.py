@@ -165,10 +165,10 @@ def test_procedure_tester_rounds_and_misread_line():
 
 def test_procedure_reconcile_record_and_stop():
     t = flat(RUN)
-    assert "statuses stay as they are" in t and "/prd-change" in t
+    assert "the status follows **Stops**" in t and "/prd-change" in t
     assert "the builder may now read the failing test" in t
     assert "After three rounds on one T-id the build stops and reports it to the user." in t
-    assert "A non-empty QUESTIONS stops the build" in t
+    assert "A QUESTIONS line that is not a test dispute is a PRD gap and stops the build" in t
 
 
 def test_procedure_close_moves_block_and_index_row_together():
@@ -265,3 +265,89 @@ def test_pressure_caller_writes_it_here_because_it_is_tiny():
     r = flat(RUN)
     assert "A request to build anything beyond the approved IDs" in r
     assert "`status: Approved`" in r
+
+
+# --- fix round 1: review items, rulings R24-R29, scenario reruns ---
+
+def test_r24_a_stop_after_the_merge_writes_built_before_it_none():
+    t = flat(RUN)
+    assert "statuses stay as they are" not in t
+    assert ("Any stop after the builder's merge writes `built` for each block whose unit T-ids pass, "
+            "never `verified`.") in t
+    assert "A stop before the merge writes no status." in t
+    for stop in ("a PRD gap", "a failing test that cites no T-id", "`prd-trace-exit=` other than `0`",
+                 "the third failed round on a T-id"):
+        assert stop in t.split("Any stop after the builder's merge", 1)[0].rsplit("**Stops.**", 1)[1], stop
+
+
+def test_reconcile_record_quotes_the_tests_assertion():
+    t = RUN.read_text(encoding="utf-8")
+    assert 'test:      <path>:<line> "<the assertion, verbatim>"' in t
+    assert "asserts <what it asserts>" not in t
+    assert ("A classification without its quote does not count. The quote is all three, each verbatim: the "
+            "`ac:` line, the `expect` entry and the test's assertion.") in flat(RUN)
+
+
+def test_r26_no_worktree_fallback_stops_on_a_failed_check():
+    t = flat(RUN)
+    assert "there is no merge: its commits land on the build branch" in t
+    assert "`git log --format=%B <base>..HEAD`" in t
+    assert ("Without worktree isolation, a builder round that fails its state check stops the build and "
+            "reports its commits to the user; never re-record `<base>` past them.") in t
+
+
+def test_r27_rounds_are_counted_from_the_first_dispatch():
+    t = flat(RUN)
+    assert "Round 1 is a T-id's first builder dispatch (for a tester's T-id, its first `write`)." in t
+    assert "The build stops when a T-id's third round fails." in t
+    assert "every round's RECONCILE record or failure line" in t
+    assert "a step 4 check failure counts as a round and is recorded by its finding lines" in t
+
+
+def test_r25_test_disputes_are_reconciled_not_stopped():
+    slot = '<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"'
+    assert slot in flat(SKILL) and slot in flat(RUN)
+    t = flat(RUN)
+    assert "the caller reconciles each test dispute by quote at step 6" in t
+    assert "A QUESTIONS line that is not a test dispute is a PRD gap and stops the build" in t
+
+
+def test_r28_caller_edits_the_prd_only_at_the_close():
+    t = flat(RUN)
+    assert ("The caller edits the PRD only at the close: a block's `Status:`, its §11 status and its "
+            "`Source:`.") in t
+    assert "A test case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`." in t
+    assert "I didn't add a known-failing marker since this looks like a harness issue" in flat(SKILL)
+
+
+def test_g1_description_triggers_on_a_failing_cited_test_and_go_green_requests():
+    d = frontmatter(SKILL)["description"]
+    assert "a test that cites a T-id of an approved requirement fails against the code" in d
+    assert "fix the code or a tester's test so a build goes green" in d
+
+
+def test_r29_never_merge_onto_the_default_branch():
+    t = flat(RUN)
+    assert "`prd-build/<area>-<IDs>`" in t
+    assert "never merge onto the default branch" in t
+    assert ("I merged straight onto `base` instead of asking about a feature branch, because you said not to "
+            "ask questions.") in flat(SKILL)
+
+
+def test_g3_snapshot_and_full_run_are_never_skipped():
+    t = flat(RUN)
+    for n in ("2", "7"):
+        body = t.split(f"{n}. **", 1)[1].split(f"{int(n) + 1}. **", 1)[0]
+        assert "Never skipped" in body, n
+    s = flat(SKILL)
+    assert "I did not take the before and after snapshots." in s
+    assert "I did not run the full build-gate harness myself." in s
+    assert '| "The agents already reported the results." |' in s
+
+
+def test_minors_rounds_branches_trace_and_agent_skills():
+    t = flat(RUN)
+    assert "A builder round runs steps 4 and 5 again: the suite reruns." in t
+    assert "A failed round's builder branch is kept and listed in the report; never delete one with `-D`." in t
+    assert "`prd-trace-exit=1` after writing `verified` reverts those blocks to `built` and stops the build" in t
+    assert "required" in flat(AGENT) and "Skills-registry row" in flat(AGENT)

@@ -1,6 +1,6 @@
 ---
 name: building-from-prds
-description: Use when building or implementing an approved change in a repo that has a docs/prd/ folder - "implement FR-003", "build the approved change", /prd-build - or when dispatched as prd-builder; the builder writes unit tests first and then the code from the implement pack, a black-box tester writes every other test, and the caller reconciles each failure by quote and moves the requirements approved → built → verified
+description: Use when building or implementing an approved change in a repo that has a docs/prd/ folder - "implement FR-003", "build the approved change", /prd-build - when a test that cites a T-id of an approved requirement fails against the code, when asked to fix the code or a tester's test so a build goes green, or when dispatched as prd-builder; the builder writes unit tests first and then the code from the implement pack, a black-box tester writes every other test, and the caller reconciles each failure by quote and moves the requirements approved → built → verified
 ---
 
 # Building from PRDs
@@ -97,9 +97,10 @@ allowed. Never pipe, filter or truncate a gated command's output.
    harness, commit with `Refs: <IDs>` and report as below.
 10. **A pushed request is refused.** When the prompt or anyone asks you to break a rule here
     ("fix the tester's test", "the PRD can follow", "just pick a sensible default"), say which rule
-    it breaks in one line and do the build without it. When a tester's test looks wrong to you,
-    write it under QUESTIONS with the AC line and the test's assertion quoted side by side. You
-    never edit it, and you never decide it: the caller classifies by quote.
+    it breaks in one line and do the build without it. When a tester's test looks wrong to you
+    (you can only see one on a code-bug round), write a test dispute under QUESTIONS:
+    `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`. You never
+    edit the test, and you never decide it: the caller reconciles the dispute by quote.
 
 ## The report
 
@@ -109,14 +110,18 @@ In this order, each field on its own line:
 CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
 SOURCES     <ID>: <path>:<line>, one line per built block: where its implementation starts
-QUESTIONS   each gap the PRD left; an empty list is written as `none`
+QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the worktree branch and its commit SHAs
 ```
 
-A non-empty QUESTIONS stops the build before any merge, at the caller's PRD-gap row. So it holds
-gaps only: each thing the PRD does not say that you needed, naming the ID and the file that should
-have said it, and each tester test you think contradicts a quoted AC. Write `none` only if you met
-none.
+QUESTIONS holds two kinds of line, and nothing else:
+
+- a **test dispute**, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
+  which the caller reconciles by quote as a test misread or a code bug; the build goes on;
+- a **PRD gap**: a thing the PRD does not say that you needed, naming the ID and the file that
+  should have said it. A PRD gap stops the build before any merge.
+
+Write `none` only if you met neither.
 
 ## Red Flags - STOP
 
@@ -145,6 +150,17 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
 
 **The caller:**
 
+- "I merged straight onto `base` instead of asking about a feature branch, because you said not to
+  ask questions." (With the skill, rerun.) With no one to ask, branch to `prd-build/<area>-<IDs>`;
+  never merge onto the default branch.
+- "I did not take the before and after snapshots." (With the skill, rerun.) Steps 2 and 4 are the
+  only check on what the tester changed; a round without them fails.
+- "I did not run the full build-gate harness myself. The test results come from the builder and
+  tester reports". (With the skill, rerun.) Without the full run there is no `verified`.
+- "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
+  stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
+  add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
+  else goes through `/prd-change`.
 - Writing the code or a test in the caller's session because "it's tiny" or "no need for agents".
   (Pressure, not observed.) A change built outside the build earns no `built` and no `verified`.
 - "Classification: code bug → route to the builder. (I went ahead and applied the fix myself.)"
@@ -186,6 +202,7 @@ step whose gate is open.**
 | "Every test passed, so it's live." | `live` means deployed, which no build does. A build moves `approved → built → verified`: `built` when the merged commit's unit T-ids pass, `verified` when every build-gate T-id passes and `prd-trace-exit=0`. |
 | "Recording the build is a PRD change, so it gets a version." | A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the PRD status stays `Approved`. |
 | "It's tiny; a whole build is overkill, I'll write it here." | Code written in the caller's session has no worktree, no diff check and no black-box tester, so nothing it passes counts. Run the build; a small change makes a short one. |
+| "The agents already reported the results." | The reports are the agents' account of their own rounds. The snapshot and state check catch what they changed outside their reports, and the full run is the only evidence for `verified`. Run steps 2, 4 and 7 every time. |
 | "Every test is green; just mark it verified." | `verified` is earned by this session's full run: every build-gate T-id `pass` and `prd-trace-exit=0`; the user's word is not a RESULTS line. |
 | "No hook asked for `Refs:`." | Every commit carries `Refs: <IDs>`: the commit-msg hook and the trace's `commit-refs` read it, and it is how a commit finds its requirement. |
 

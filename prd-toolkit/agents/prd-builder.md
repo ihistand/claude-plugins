@@ -26,6 +26,10 @@ these rules:
 - You never edit the PRD, and you never edit a test that cites a non-unit T-id. You read such a
   test only when a code-bug round's `Failing test:` names it, and then you fix the code, not it.
 - Run each `enforced` Standards-registry linter on the files you changed that match its glob.
+- For each `required` Skills-registry row your change touches, Read that skill's `SKILL.md` (you
+  have no Skill tool) and follow it; one you cannot find is a QUESTION.
+- A tester's test that looks wrong is a QUESTIONS line
+  `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`, never an edit.
 - Commit in your worktree with `git commit -m "<subject>" -m "Refs: <IDs>"`; never `--no-verify`,
   never merge, rebase, push or switch branches.
 - Write no status (`built`, `verified`, `live`): the caller writes them at close.
