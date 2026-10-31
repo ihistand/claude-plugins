@@ -121,3 +121,34 @@ def test_standards_rows(repo):
     assert [(r.glob, r.command, r.decision) for r in rows] == [
         ("**/*.sql", "fail-lint", "enforced"), ("**/*.py", "ok-lint", "enforced")]
     assert all(r.line > 0 for r in rows)
+
+
+def _commit_app(repo):
+    stage(repo, "src/app.py")
+    git(repo, "commit", "-q", "-m", "seed", "--no-verify")
+
+
+def test_cli_blocks_deletion_without_refs(repo, tmp_path):
+    _commit_app(repo)
+    git(repo, "rm", "-q", "src/app.py")
+    msg = tmp_path / "msg"
+    msg.write_text("Remove app\n")
+    assert run(repo, "commit-msg", "docs/prd/orders", str(msg)).returncode == 1
+    msg.write_text("Remove app\n\nRefs: FR-001\n")
+    assert run(repo, "commit-msg", "docs/prd/orders", str(msg)).returncode == 0
+
+
+def test_cli_blocks_rename_out_of_boundary(repo, tmp_path):
+    _commit_app(repo)
+    (repo / ".prd-toolkit").mkdir()
+    git(repo, "mv", "src/app.py", ".prd-toolkit/moved.py")
+    msg = tmp_path / "msg"
+    msg.write_text("Move app\n")
+    assert run(repo, "commit-msg", "docs/prd/orders", str(msg)).returncode == 1
+
+
+def test_cli_pre_commit_skips_deleted_paths(repo):
+    stage(repo, "src/gone.py")
+    git(repo, "commit", "-q", "-m", "seed", "--no-verify")
+    git(repo, "rm", "-q", "src/gone.py")
+    assert run(repo, "pre-commit", "docs/prd/orders").returncode == 0 and log(repo) == []

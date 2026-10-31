@@ -25,10 +25,22 @@ def _git(root: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, check=True, encoding="utf-8").stdout
 
 
-def _staged(root: Path) -> list[str]:
-    out = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
-                         cwd=root, capture_output=True, check=True).stdout
-    return [p.decode("utf-8", "surrogateescape") for p in out.split(b"\0") if p]
+def _staged(root: Path) -> tuple[list[str], list[str]]:
+    """(every path in the index diff, incl. deletions and rename sources; paths that exist after the commit: A/C/M/R destinations)."""
+    out = subprocess.run(["git", "diff", "--cached", "--name-status", "-z", "-M"], cwd=root, capture_output=True, check=True).stdout
+    tokens = [t.decode("utf-8", "surrogateescape") for t in out.split(b"\0")]
+    allp: list[str] = []
+    live: list[str] = []
+    i = 0
+    while i < len(tokens) and tokens[i]:
+        status = tokens[i][0]
+        n = 2 if status in "RC" else 1
+        paths = tokens[i + 1:i + 1 + n]
+        allp += paths
+        if status != "D":
+            live.append(paths[-1])
+        i += 1 + n
+    return allp, live
 
 
 def _merging(root: Path) -> bool:
@@ -64,12 +76,12 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         root = model.repo_root(prd.root)
-        staged = _staged(root)
+        staged, live = _staged(root)
         if args.hook == "commit-msg":
             message = Path(args.message_file).read_text(encoding="utf-8", errors="replace")
             problems = githook.commit_msg(prd, root, message, staged, _merging(root))
         else:
-            problems = githook.pre_commit(prd, root, staged)
+            problems = githook.pre_commit(prd, root, live)
     except Exception as e:
         print(f"prd-toolkit: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
