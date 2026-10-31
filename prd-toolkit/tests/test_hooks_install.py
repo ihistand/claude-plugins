@@ -119,3 +119,87 @@ def test_vendored_check_exits_2(repo):
     hooks.install(repo, PRD)
     r = run_vendored(repo, "check", PRD)
     assert r.returncode == 2 and "run check from the plugin, not the vendored copy" in r.stderr and r.stdout == ""
+
+
+GUARD = 'command -v uv >/dev/null 2>&1 || { echo "prd-toolkit: uv is not on PATH; install uv to run this hook" >&2; exit 1; }'
+
+
+def test_printed_line_is_appendable_sh(repo):
+    (repo / ".git/hooks/commit-msg").write_text("#!/bin/sh\necho mine\n")
+    lines = hooks.install(repo, PRD)
+    line = next(x for x in lines if "add this line" in x)
+    assert "exec" not in line and "before any `exit 0`" in line and "sh hook" in line
+    top = '"$(git rev-parse --show-toplevel)'
+    assert line.endswith(
+        f'{GUARD}; uv run --script {top}/.prd-toolkit/prd_git_hook.py" commit-msg {top}/{PRD}" "$@" || exit $?')
+
+
+def test_appended_line_runs_and_propagates_failure(repo):
+    log = repo / "log"
+    (repo / ".git/hooks/commit-msg").write_text(f"#!/bin/sh\necho mine >> {log}\n")
+    lines = hooks.install(repo, PRD)
+    line = next(x for x in lines if "add this line" in x)
+    line = line[line.index(GUARD):]
+    hook = repo / ".git/hooks/commit-msg"
+    hook.write_text(f"#!/bin/sh\necho mine >> {log}\n{line}\necho after >> {log}\n")
+    hook.chmod(0o755)
+    (repo / "m").write_text("Add x\n\nRefs: none (no behaviour change)\n")
+    r = subprocess.run([str(hook), str(repo / "m")], cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0 and log.read_text().split() == ["mine", "after"]
+    (repo / "m").write_text("Add x\n")
+    git(repo, "add", "src/app.py")
+    r = subprocess.run([str(hook), str(repo / "m")], cwd=repo, capture_output=True, text=True)
+    assert r.returncode != 0 and log.read_text().split() == ["mine", "after", "mine"]
+
+
+def test_prd_path_with_space_and_dollar(repo):
+    odd = "docs/prd/my $prd"
+    (repo / odd).parent.mkdir(parents=True, exist_ok=True)
+    (repo / "docs/prd/orders").rename(repo / odd)
+    hooks.install(repo, odd)
+    git(repo, "add", "src/app.py")
+    r = subprocess.run(["git", "commit", "-q", "-m", "Add x"], cwd=repo, capture_output=True, text=True)
+    assert r.returncode != 0 and "Refs" in r.stderr
+
+
+def test_hookspath_set_writes_no_shim(repo, tmp_path_factory):
+    other = tmp_path_factory.mktemp("elsewhere")
+    git(repo, "config", "core.hooksPath", str(other))
+    lines = hooks.install(repo, PRD)
+    assert list(other.iterdir()) == [] and not (repo / ".git/hooks/commit-msg").exists()
+    assert sum("add this line" in x for x in lines) == 2 and any(str(other) in x for x in lines)
+    other.joinpath("commit-msg").write_text(f"#!/bin/sh\n{hooks.MARKER}\n")
+    assert hooks.uninstall(repo) and other.joinpath("commit-msg").exists()
+    assert any("core.hooksPath" in x for x in hooks.uninstall(repo))
+
+
+def test_marker_must_be_second_line(repo):
+    mine = f"#!/bin/sh\necho x\n# note: {hooks.MARKER} is mentioned here\n{hooks.MARKER}\n"
+    (repo / ".git/hooks/commit-msg").write_text(mine)
+    lines = hooks.install(repo, PRD)
+    assert (repo / ".git/hooks/commit-msg").read_text() == mine and any("add this line" in x for x in lines)
+    hooks.uninstall(repo)
+    assert (repo / ".git/hooks/commit-msg").read_text() == mine
+
+
+def test_shim_has_lf_newlines(repo):
+    hooks.install(repo, PRD)
+    assert b"\r" not in (repo / ".git/hooks/commit-msg").read_bytes()
+
+
+def test_vendored_install_when_repo_root_has_plugin_json(repo):
+    hooks.install(repo, PRD)
+    (repo / ".claude-plugin").mkdir()
+    (repo / ".claude-plugin/plugin.json").write_text('{"version": "9"}')
+    for h in ("commit-msg", "pre-commit"):
+        (repo / ".git/hooks" / h).unlink()
+    r = run_vendored(repo, "install", PRD)
+    assert r.returncode == 0, r.stderr
+    assert (repo / ".git/hooks/commit-msg").is_file()
+
+
+def test_hook_run_leaves_no_pycache(repo):
+    hooks.install(repo, PRD)
+    git(repo, "add", "src/app.py")
+    subprocess.run(["git", "commit", "-q", "-m", "Add x"], cwd=repo, capture_output=True, text=True)
+    assert not list((repo / ".prd-toolkit").rglob("__pycache__"))

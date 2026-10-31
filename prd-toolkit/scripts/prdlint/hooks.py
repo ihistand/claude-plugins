@@ -16,8 +16,29 @@ PLUGIN_ROOT = SCRIPTS.parent
 
 
 def is_plugin() -> bool:
-    """True when running from the plugin; False from a vendored copy (no plugin.json above the scripts directory)."""
-    return (PLUGIN_ROOT / ".claude-plugin/plugin.json").is_file()
+    """True when running from the plugin: this directory is `scripts` and its parent holds .claude-plugin/plugin.json."""
+    return SCRIPTS.name == "scripts" and (PLUGIN_ROOT / ".claude-plugin/plugin.json").is_file()
+
+
+def _ours(path: Path) -> bool:
+    """A hook we wrote: the marker opens its second line."""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").split("\n")
+    except OSError:
+        return False
+    return len(lines) > 1 and lines[1].startswith(MARKER)
+
+
+def _quote(s: str) -> str:
+    """Escape for use inside double quotes in sh."""
+    for ch in ("\\", '"', "$", "`"):
+        s = s.replace(ch, "\\" + ch)
+    return s
+
+
+def _hooks_path_config(repo_root: Path) -> str:
+    r = subprocess.run(["git", "config", "--get", "core.hooksPath"], cwd=repo_root, capture_output=True, text=True, encoding="utf-8")
+    return r.stdout.strip()
 
 
 def plugin_version(plugin_root: Path) -> str:
@@ -70,9 +91,17 @@ def _vendor(repo_root: Path) -> None:
     (dest / "VERSION").write_text(plugin_version(PLUGIN_ROOT) + "\n", encoding="utf-8")
 
 
-def _exec_line(hook: str, prd_rel: str, top: str) -> str:
-    tail = ' "$@"' if hook == "commit-msg" else ""
-    return f'exec uv run --script "{top}/{VENDOR_DIR}/prd_git_hook.py" {hook} "{top}/{prd_rel}"{tail}'
+GUARD = 'command -v uv >/dev/null 2>&1 || { echo "prd-toolkit: uv is not on PATH; install uv to run this hook" >&2; exit 1; }'
+
+
+def _append_line(hook: str, prd_rel: str) -> str:
+    top = '"$(git rev-parse --show-toplevel)'
+    return (f'{GUARD}; uv run --script {top}/{VENDOR_DIR}/prd_git_hook.py" {hook} {top}/{_quote(prd_rel)}" "$@" || exit $?')
+
+
+def _append_message(hook: str, prd_rel: str, shown: str, why: str) -> str:
+    return (f"{why}; add this line to {shown}/{hook} (an sh hook; place it before any `exit 0` in it): "
+            + _append_line(hook, prd_rel))
 
 
 def install(repo_root: Path, prd_rel: str) -> list[str]:
@@ -81,16 +110,21 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     if is_plugin():
         _vendor(repo_root)
         lines.append(f"vendored the toolkit into {VENDOR_DIR}/ (version {plugin_version(PLUGIN_ROOT)})")
+    configured = _hooks_path_config(repo_root)
     hooks_dir, shown = _hooks_dir(repo_root)
+    if configured:
+        for hook in HOOKS:
+            lines.append(_append_message(hook, prd_rel, shown, f"core.hooksPath is set to {configured}; no shim written"))
+        return lines
     hooks_dir.mkdir(parents=True, exist_ok=True)
     for hook in HOOKS:
         path = hooks_dir / hook
-        if path.exists() and MARKER not in path.read_text(encoding="utf-8", errors="replace"):
-            lines.append(f"{shown}/{hook} already exists and was left alone; add this line to {shown}/{hook}: "
-                         + _exec_line(hook, prd_rel, "$(git rev-parse --show-toplevel)"))
+        if path.exists() and not _ours(path):
+            lines.append(_append_message(hook, prd_rel, shown, f"{shown}/{hook} already exists and was left alone"))
             continue
-        text = (_template_dir() / hook).read_text(encoding="utf-8").replace("{{hook}}", hook).replace("{{prd}}", prd_rel)
-        path.write_text(text, encoding="utf-8")
+        text = (_template_dir() / hook).read_text(encoding="utf-8").replace("{{hook}}", hook).replace("{{prd}}", _quote(prd_rel))
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
         path.chmod(0o755)
         lines.append(f"installed {shown}/{hook}")
     return lines
@@ -122,11 +156,14 @@ def check(repo_root: Path, plugin_root: Path) -> list[str]:
 
 
 def uninstall(repo_root: Path) -> list[str]:
+    configured = _hooks_path_config(Path(repo_root))
+    if configured:
+        return [f"core.hooksPath is set to {configured}; removed nothing"]
     hooks_dir, shown = _hooks_dir(Path(repo_root))
     lines: list[str] = []
     for hook in HOOKS:
         path = hooks_dir / hook
-        if path.is_file() and MARKER in path.read_text(encoding="utf-8", errors="replace"):
+        if path.is_file() and _ours(path):
             path.unlink()
             lines.append(f"removed {shown}/{hook}")
     return lines
