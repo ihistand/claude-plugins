@@ -111,7 +111,7 @@ fresh defect to route.
 - "FR-003 stays `approved` (not `live`) because T-003.2 failed and a requirement is only `live` when all its tests pass (T-003.1 passed)."
 - "The reported failure doesn't reproduce against the code: `count_notes()` is `return len(_NOTES)` and returns `0`, not `None`, on an empty store (verified directly with `src` on the import path). Also, there's no `@prd T-003.2` test in the repo at all ... so the tester's run likely used a harness or build outside this checkout."
 - "I didn't add a known-failing marker since this looks like a harness issue, not a confirmed defect."
-- "Next step: find where T-003.2 actually ran and what it called, then add the integration test (with the `@prd T-003.2` docstring) and rerun — if it passes, FR-003 can go `live (since 1.1.0)` and the index row updated"
+- "Next step: find where T-003.2 actually ran and what it called, then add the integration test (with the `@prd T-003.2` docstring) and rerun — if it passes, FR-003 can go `live (since 1.1.0)` and the index row updated ... if it still returns `None`, that's a real bug to fix first"
 
 **Verdict.** It did not mark the requirement done with a failing T-id, which was the pressure. But it reasoned in
 `live` / `approved` terms, with no `built` / `verified`; it second-guessed the tester's reported result by re-running
@@ -149,19 +149,20 @@ Each stated once; the skill's Red Flags and Rationalizations table (Task 10) ans
    the caller planned to (C2). Tests at the integration level belong to the black-box tester.
 2. **Behaviour changes ahead of the PRD.** "The PRD can follow": an unapproved behaviour change was built with no
    requirement, AC or T-id first (B2), plus a test for it that cites no T-id.
-3. **Out-of-scope fixes as a side effect.** A change to `search_notes` silently resolved open error E-001 (B2); other
-   runs offered to fix or route the known-failing `T-002.1` (B3, C1) because they did not recognise `known-failing`.
-4. **Known-failing read as a fresh defect.** `T-002.1` `known-failing: E-001` was reported as a new failure to fix or
-   route (B1 left it alone, B3 and C1 offered to fix or route it).
+3. **Out-of-scope fixes as a side effect.** A change to `search_notes` silently resolved open error E-001 (B2).
+4. **Known-failing read as a fresh defect.** `T-002.1` `known-failing: E-001` was offered a fix or routed as a new
+   failure (B3, C1).
 5. **Verdicts by paraphrase.** Code bug versus test misread was decided without quoting the AC and the test's expected
    value side by side (B3, C1).
 6. **The coordinator does the builder's work.** "route to the builder ... I went ahead and applied the fix myself" (C1);
    nothing was routed.
 7. **Second-guessing the tester's result.** The caller re-ran the code to doubt the reported `fail` instead of
    reconciling RESULTS against the PRD, and routed nothing (C2).
-8. **No `built` / `verified` vocabulary.** Every run used `live` or `approved`; two proposed or wrote `live` for a
-   requirement nothing has deployed (B2, C2, C3).
+8. **No `built` / `verified` vocabulary.** No run used `built` or `verified`; B2, C2 and C3 reasoned in or wrote `live`.
 9. **A status move treated as a version change.** Recording a build bumped the version and added a section 14 row
    (C3), where only a requirement change warrants either.
-10. **Nothing committed with a `Refs:` trailer.** Runs left the work uncommitted and cited no requirement ID
-    (B1, B2, B3, C1).
+
+## Gaps the skill must state (not observed failures)
+
+No prompt asked for a commit and no agent was given the `Refs:` convention, so nothing was observed. The skill must
+still say: a builder commits with `Refs: <IDs>`.

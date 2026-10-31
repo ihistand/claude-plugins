@@ -19,6 +19,9 @@ def test_build_repo_is_a_clean_approved_prd_with_fr_003_unimplemented(tmp_path):
     assert "Status: approved" in (prd / "features/notes.md").read_text(encoding="utf-8").split("### FR-003")[1]
     assert "| FR-003 | Count notes | approved |" in (prd / "prd.md").read_text(encoding="utf-8")
     assert "count_notes" not in "".join(p.read_text(encoding="utf-8") for p in (dst / "src").rglob("*.py"))
+    cases = (prd / "test-cases/notes.yaml").read_text(encoding="utf-8")
+    assert "T-003.1:\n  ac: AC-003.1\n  level: unit\n" in cases
+    assert "T-003.2:\n  ac: AC-003.2\n  level: integration\n" in cases
     env = {**os.environ, "PRD_PLUGINS_FILE": str(PLUGINS_FILE)}
     r = subprocess.run(["uv", "run", "--script", str(LINT), str(prd)], capture_output=True, text=True, env=env)
     assert r.returncode == 0, r.stdout + r.stderr
