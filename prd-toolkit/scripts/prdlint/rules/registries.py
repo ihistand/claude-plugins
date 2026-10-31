@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..findings import Finding
@@ -56,6 +57,25 @@ def _command(cell: str) -> str | None:
     except ValueError:
         tokens = m.group(1).split()
     return tokens[0] if tokens else None
+
+
+@dataclass(frozen=True)
+class StandardsRow:
+    glob: str
+    command: str
+    decision: str
+    line: int
+
+
+def standards_rows(prd: Prd) -> list[StandardsRow]:
+    """The §5 rows: glob without backticks, the whole first backticked span as the command, the Decision cell."""
+    rows = []
+    for r in _registry_rows(prd, 5):
+        cells = [c.strip() for c in r.cells] + [""] * 5
+        m = re.search(r"`([^`]*)`", cells[1])
+        rows.append(StandardsRow(cells[0].replace("`", "").strip(), m.group(1).strip() if m else "",
+                                 cells[4].strip("`").strip(), r.line))
+    return rows
 
 
 @rule("registries")

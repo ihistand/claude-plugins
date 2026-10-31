@@ -69,7 +69,7 @@ def _in_scope(prd: Prd) -> set[str] | None:
     return {r.area for r in prd.adoption if r.state == "adopted"}
 
 
-def _glob_re(glob: str) -> re.Pattern:
+def glob_re(glob: str) -> re.Pattern:
     out, i = "", 0
     while i < len(glob):
         if glob.startswith("**/", i):
@@ -103,7 +103,7 @@ def in_boundary(prd: Prd, repo_root: Path) -> Callable[[str], bool]:
             return not (skip and (path == skip or path.startswith(skip + "/")))
 
         return inside_new
-    rxs = [_glob_re(g) for r in prd.adoption if r.state == "adopted" for g in r.boundary]
+    rxs = [glob_re(g) for r in prd.adoption if r.state == "adopted" for g in r.boundary]
     return lambda path: any(rx.match(path) for rx in rxs)
 
 
