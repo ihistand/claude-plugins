@@ -9,7 +9,7 @@ from .model import Prd
 
 TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-current")
 
-_CITE = re.compile(r"@prd\s+(T-\d{3}\.\d+)\b")
+CITE = re.compile(r"@prd\s+(T-\d{3}\.\d+)\b")
 _REFS = re.compile(r"^Refs:[ \t]*(.*)$", re.MULTILINE)
 _REQ_ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
 _ERR_ID = re.compile(r"E-\d+")
@@ -53,7 +53,7 @@ def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
                 continue
             rel = p.relative_to(repo_root).as_posix() if p.is_relative_to(repo_root) else p.as_posix()
             for n, line in enumerate(text.split("\n"), 1):
-                for m in _CITE.finditer(line):
+                for m in CITE.finditer(line):
                     out.setdefault(m.group(1), []).append((rel, n))
     return out
 
