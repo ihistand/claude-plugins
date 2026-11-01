@@ -21,7 +21,7 @@
 >   blocks when the copy is present. `install` also writes `.prd-toolkit/.gitignore`.
 > - §8 and §12 (final review): job ids are sanitized, the GitHub workflow reads with
 >   `permissions: contents: read`, and a `test-<level>` job red while a `known-failing` case exists
->   is a known limit until 0.6.
+>   was a known limit (revised in 0.6: known-failing tests mark themselves).
 
 ## 1. Scope
 
@@ -335,8 +335,7 @@ its disposition. It names no hosts, users, platform objects or people.
   the mode.
 - changing-prds rule 6 still binds the caller by text alone (0.3's later item 5).
 - A build runs in one repository; a change across repositories waits for 0.7.
-- A generated `test-<level>` job runs the whole harness command, so it fails while any case is
-  `known-failing` on an open `E-nnn`, until 0.6's error handling.
+- Revised in prd-toolkit 0.6: known-failing tests mark themselves; see the 0.6 design §8.
 - A `commit --amend` that only rewrites the message stages no file, so the `commit-msg` hook does
   not check it; CI's `commit-refs` does.
 

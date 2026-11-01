@@ -168,8 +168,9 @@ blocks the commit when `uv` is missing, and skips with a message on a branch tha
 
 Known limits:
 
-- A `test-<level>` job runs the whole harness command, so it stays red while any case is
-  `known-failing` on an open `E-nnn`, until 0.6.
+- A case that is `known-failing` on an open `E-nnn` is a strict expected failure that tags its
+  citation, so known-failing tests mark themselves and a `test-<level>` job stays green while the
+  bug is open.
 - A `commit --amend` that only rewrites the message stages no file, so the `commit-msg` hook lets
   it through; CI's `commit-refs` (trace with `--range`) catches it.
 

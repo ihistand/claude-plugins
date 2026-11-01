@@ -38,7 +38,7 @@ def test_readme_hooks_and_ci_section():
     assert f"{PLUGIN_PATH}/prd_hooks.py check docs/prd/<slug>" in s and "After a plugin upgrade" in s
     assert "uninstall" in s
     assert "uv" in s and "bare runner" in s
-    assert "known-failing" in s and "0.6" in s  # R37
+    assert "known-failing" in s and "mark themselves" in s  # R37
     assert "commit --amend" in s and "commit-refs" in s  # minor 10
 
 
