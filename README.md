@@ -11,6 +11,7 @@ A living PRD as the single authority agents build, test and deploy from: a PRD f
 **Features:**
 - **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with prd-tester, and approves it
 - **changing-prds skill** - Changes the PRD first, with new IDs and a version bump, before any code
+- **building-from-prds skill** - Takes approved requirements to verified code: a builder in its own worktree, tests written by prd-tester, statuses approved, built, verified
 - **Slash commands**: `/prd-new`, `/prd-adopt`, `/prd-change`, `/prd-context`, `/prd-build` and `/prd-status`
 - **Lint CLI**: `prd_lint.py` checks 27 rules; `prd_block.py` writes the CLAUDE.md block
 

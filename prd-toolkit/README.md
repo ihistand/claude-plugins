@@ -6,7 +6,8 @@ that cannot read your code, and skills to author, adopt and change it. Version 0
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
-and for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md).
+for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md),
+and for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md).
 
 ## Install
 
@@ -121,7 +122,14 @@ the user cannot state.
 
 ## Changelog
 
-- **0.4.0:** `/prd-build` and the `building-from-prds` skill: `prd-builder` works in its own worktree while `prd-tester` writes its tests in the new `write` mode, and the build reconciles by quote. `/prd-status` (`prd_status.py`) and `prd_build_check.py`. `prd_hooks.py` vendors the scripts into `.prd-toolkit/`, installs `commit-msg` and `pre-commit` hooks (it never overwrites an existing hook and never sets `core.hooksPath`; with `core.hooksPath` set it writes no shim and prints the lines to add), and `ci --gitlab|--github` generates a merge-gate include file. `prd_lint.py --ci`. The Levels table in `testing.md` gains a `Gate` column (`build` or `deploy`). The commit rule covers new projects and checks cited IDs (deletions and rename sources count). Built blocks carry `Source:`. Statuses move `approved`, `built`, `verified` with no version bump. Upgrading a 0.3 PRD: lint fails `test-level` until `testing.md`'s Levels table has a Gate column (build or deploy), a patch bump. Generated CI jobs install only `uv`, so each standards linter and Levels harness command must run on a bare runner (for example `uv run ...`); GitLab jobs run on merge-request pipelines.
+- **0.4.0:**
+  - `/prd-build` and the `building-from-prds` skill: `prd-builder` works in its own worktree while `prd-tester` writes its tests in the new `write` mode; the build reconciles by quote. Statuses move `approved`, `built`, `verified` with no version bump; built blocks carry `Source:`.
+  - `/prd-status` (`prd_status.py`) and `prd_build_check.py`.
+  - `prd_hooks.py` vendors the scripts into `.prd-toolkit/` and installs `commit-msg` and `pre-commit` hooks. It never overwrites an existing hook and never sets `core.hooksPath`; with `core.hooksPath` set it writes no shim and prints the lines to add.
+  - `prd_hooks.py ci --gitlab|--github` generates a merge-gate include file. `prd_lint.py --ci` skips the installed-skill and on-PATH checks of `registries` and keeps every Decision check.
+  - The commit rule covers new projects and checks cited IDs (deletions and rename sources count).
+  - The Levels table in `testing.md` gains a `Gate` column (`build` or `deploy`). Upgrading a 0.3 PRD: lint fails `test-level` until the table has a Gate column (build or deploy), a patch bump.
+  - Generated CI jobs install only `uv`, so each standards linter and Levels harness command must run on a bare runner (for example `uv run ...`). GitLab jobs run on merge-request pipelines.
 - **0.3.0:** `/prd-context` and `prd_context.py` (decide and implement packs); `adoption.md`; `Touches:` in `errors.md`; `changing-prds` works from the pack. Upgrading a 0.2 PRD: it fails `sections` until §8's table moves to `adoption.md` and §8 reads `See adoption.md.`, a patch bump. The managed `CLAUDE.md` block's wording changed in 0.3: re-render it with `prd_block.py`; until then, `prd_block.py --check` reports it stale.
 - **0.2.0:** `/prd-adopt` and `adopting-prds`; `testing-from-prds`, the `prd-tester` agent and its guard hook; `prd_trace.py`; the `awaiting <who>` assumption status. Upgrading a 0.1 PRD: it fails `sections` until its `testing.md` Harness has every slot, in order, and a `Test roots:` list.
 - **0.1.0:** `/prd-new`, `/prd-change`, `prd_lint.py` (27 rules) and `prd_block.py`.
