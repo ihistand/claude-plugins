@@ -68,6 +68,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
    ```
 
+   `<IDs>` is joined with commas for `--req`, as `--req FR-006,FR-001`, never space-separated: a
+   space-separated list is a usage error (exit 2).
+
    `prd-lint-exit=` must be `0`. Grep `^status:` with the path `docs/prd/<slug>/prd.md`: it must be
    `status: Approved`. The status output must be empty: a dirty tree stops the build, and you ask
    the user what to do with it. On the repository's default branch, ask the user before branching.

@@ -106,7 +106,9 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
    step 1 listed. If a block the change touches has a `Source:` line, run the pack again with
    `--for implement` (its own Bash call, the same gate), re-read each region it marks STALE, and
-   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. Set the PRD status to `In review`.
+   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. A revised block keeps its
+   `Source:` line: refresh a STALE one to the current line and sha, and never drop it, because the
+   next implement pack reads FR code from it. Set the PRD status to `In review`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
@@ -138,7 +140,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    explicit approval. Then: status `Approved`; the `prd-lint-exit=` value is `0`; rerun
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
-   needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
+   needing an update; commit the PRD folder and CLAUDE.md with the trailer `Refs: none (no behaviour change)`. Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
    to its requirement): build with `/prd-build <area> <changed IDs>`. Its close writes the status
    moves and each `Source:` line, so there is no refresh to do. Code written outside `/prd-build`
@@ -166,6 +168,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
   above. A never-approved draft goes back to `prd-toolkit:authoring-prds`.
 - A dry-run slot holding a unit T-id, or no T-id at all.
 - A dry-run question dismissed without an exact quote of the PRD line that answers it.
+- "/prd-build rewrites it", so a revised block's `Source:` line is dropped instead of refreshed.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
