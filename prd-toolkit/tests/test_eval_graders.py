@@ -189,3 +189,13 @@ def test_the_gap_graders_allow_built_and_catch_a_guessed_count():
     assert re.search(pat, guess) and re.search(pat, "archive_note(2)\n    assert count_notes() == len(_NOTES)")
     assert not re.search(pat, "archive_note(2)\n    assert isinstance(result, int)")
     assert not re.search(pat, "def archive_note(note_id: int) -> None:\n    assert add_note('a') == 1")
+
+
+def test_the_version_graders_look_at_prd_md_only():
+    prd = "/w/docs/prd/notes/prd.md"
+    assert _tool_input_counts("build-close-no-bump", "no-version-edit", {"file_path": prd, "old_string": "version: 1.1.0", "new_string": "version: 1.2.0"})
+    assert not _tool_input_counts("build-close-no-bump", "no-version-edit", {"file_path": "/w/src/notes/cfg.py", "old_string": "version: 1", "new_string": "version: 2"})
+    assert not _tool_input_counts("build-close-no-bump", "no-version-edit", {"file_path": prd, "old_string": "Status: approved", "new_string": "Status: built"})
+    assert _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": prd, "content": "---\nversion: 2.0.0\nupdated: x"})
+    assert not _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": prd, "content": "---\nversion: 1.1.0\nupdated: x"})
+    assert not _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": "/w/pkg.py", "content": "version: 2"})
