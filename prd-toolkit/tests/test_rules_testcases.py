@@ -296,3 +296,44 @@ def test_deploy_levels_sharing_a_runner_script_are_not_an_overlap(prd):
     for level in ("unit", "system", "smoke"):
         _harness(level, f"bash tools/gate.sh {level}")(prd)
     assert overlap(prd) == []
+
+
+# ---- R32: option values are not paths; exclusion and selection options narrow what a build collects ----
+
+@pytest.mark.parametrize("command", [
+    "pytest --ignore tests/system tests/unit",
+    "pytest --ignore=tests/system --ignore=tests/e2e --ignore=tests/smoke tests",
+    "pytest tests --ignore tests/system --ignore tests/e2e --ignore tests/smoke",
+    "pytest tests --ignore-glob 'tests/[se]*'",
+    "pytest --deselect tests/system --deselect tests/e2e --deselect tests/smoke tests",
+    'pytest -m "not system and not e2e and not smoke" tests',
+    'pytest -k "not system" tests',
+    "python -m pytest -m unit tests",
+    "uv run pytest -q -m 'not system' .",
+])
+def test_build_level_that_excludes_or_selects_is_not_an_overlap(prd, command):
+    _harness("unit", command)(prd)
+    assert overlap(prd) == []
+
+
+def test_an_exclusion_covers_only_the_paths_it_names(prd):
+    _harness("unit", "pytest --ignore tests/system tests")(prd)
+    msgs = [f.message for f in overlap(prd)]
+    assert msgs == ["level 'unit' (Gate build) would collect level 'e2e' (Gate deploy) tests: tests/e2e",
+                    "level 'unit' (Gate build) would collect level 'smoke' (Gate deploy) tests: tests/smoke"]
+
+
+def test_excluding_a_file_inside_a_deploy_path_still_overlaps(prd):
+    _harness("unit", "pytest --ignore tests/system/test_a.py tests")(prd)
+    assert "tests/system" in " ".join(f.message for f in overlap(prd))
+
+
+def test_an_option_value_is_never_the_path(prd):
+    # --basetemp's value is a directory; the path the build collects is `tests`
+    _harness("unit", "pytest --basetemp build/tmp tests")(prd)
+    assert "level 'unit' (Gate build) would collect level 'system' (Gate deploy) tests: tests/system" in [f.message for f in overlap(prd)]
+
+
+def test_python_dash_m_names_the_runner_not_a_selection(prd):
+    _harness("unit", "python -m pytest tests")(prd)
+    assert len(overlap(prd)) == 3

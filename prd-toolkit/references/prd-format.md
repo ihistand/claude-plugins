@@ -251,8 +251,11 @@ refer to (levels, environments, fixtures).
   also reports a build-gate level whose Harness command's first path argument equals, or is a
   parent of, a deploy-gate level's (`pytest tests` and `pytest tests/system`): a build would run
   deploy-gate tests with no environment. The path is the first argument that holds a `/` or names a
-  test root, skipping program names, options and files with an extension, so a shared runner
-  script (`bash tools/gate.sh <level>`) is not one.
+  test root, skipping program names, options, the value of a runner option that takes one
+  (`--basetemp build/tmp`) and files with an extension, so a shared runner script
+  (`bash tools/gate.sh <level>`) is not one. A build command that excludes the deploy-gate path
+  (`--ignore`, `--ignore-glob`, `--deselect`) or selects its tests by an expression (`-m`, `-k`) is
+  not reported: `pytest tests --ignore tests/system` and `pytest -m "not system" tests` pass.
 - Levels: each `Harness command` is **one simple command** in backticks, such as
   `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
   first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or
