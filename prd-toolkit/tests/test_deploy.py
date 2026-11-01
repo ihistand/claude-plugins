@@ -126,10 +126,20 @@ def test_prints_exact_line(repo, printed, ok):
 
 
 def test_stdin_closed(repo):
+    """The runner's own stdin is an open pipe, so a command that inherited it would block."""
     change(repo, OPS, "Check: `cat .deploy/staging/greeting` prints `Hi`", "Check: `read x`")
-    started = time.monotonic()
-    r = deploy_cli(repo, "run")
-    assert r.returncode == 4 and time.monotonic() - started < 20
+    env = {**os.environ, "PRD_PLUGINS_FILE": str(PLUGINS_FILE)}
+    out_file = repo.parent / "stdin-test.out"
+    with open(out_file, "w", encoding="utf-8") as sink:
+        proc = subprocess.Popen([sys.executable, "-B", str(SCRIPT), "run", prd_dir(repo), "--timeout", "30"], stdin=subprocess.PIPE,
+                                stdout=sink, stderr=subprocess.STDOUT, text=True, env=env, cwd=repo)  # the pipe stays open: no communicate()
+        started = time.monotonic()
+        try:
+            code = proc.wait(timeout=20)
+        finally:
+            proc.kill()
+            proc.stdin.close()
+    assert code == 4 and time.monotonic() - started < 15, out_file.read_text(encoding="utf-8")
 
 
 def test_timeout(repo):
@@ -248,3 +258,70 @@ def test_plan_steps_unit(repo):
     assert deploy.EXIT == {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
     with pytest.raises(ValueError, match="staging, production"):
         deploy.plan_steps(prd, "local")
+
+
+def test_tests_step_without_levels_fails(repo):
+    change(repo, OPS, "   Run: tests system\n", "   Run: tests ,\n")
+    assert deploy_cli(repo, "run").returncode == 1  # lint refuses it first
+    from prdlint import model
+    prd = model.load(Path(prd_dir(repo)))
+    assert prd.operations.steps[1].tests == []
+    run_id = "20261102T101500Z-test"
+    deploy.start_run(prd, repo, run_id, None)
+    state, n = deploy.run_steps(prd, repo, run_id, prd.operations.steps[1:2], 2, 5)
+    assert (state, n) == ("failed", 2)
+    rec = deploy.read_log(repo, run_id)[-1]
+    assert rec["step"] == 2 and rec["result"] == "fail" and rec["stderr"] == "tests step names no levels"
+
+
+def test_lint_flags_a_tests_step_without_levels(repo):
+    from conftest import lint
+    change(repo, OPS, "   Run: tests system\n", "   Run: tests ,\n")
+    assert ("runbook-steps", "step 2: a tests step names no levels") in {(f.rule, f.message) for f in lint(repo / "docs/prd/orders")}
+
+
+def test_unexpected_error_mid_run_exits_4_with_final_line(repo, monkeypatch, capsys):
+    from prd_deploy import main
+
+    real = subprocess.Popen
+
+    def boom(cmd, *a, **k):
+        if "tools/gate.sh" in cmd[-1]:
+            raise OSError("no fork")
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(deploy.subprocess, "Popen", boom)
+    assert main(["run", prd_dir(repo)]) == 4
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[-1].startswith("prd-deploy: failed step=2 run=")
+    rec = deploy.read_log(repo, lines[0].removeprefix("run: "))[-1]
+    assert rec["step"] == 2 and rec["result"] == "fail" and "no fork" in rec["stderr"]
+
+
+def test_error_before_the_header_exits_2_silently(repo, monkeypatch, capsys):
+    from prd_deploy import main
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(deploy, "start_run", boom)
+    assert main(["run", prd_dir(repo)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == "" and "disk full" in captured.err
+
+
+def test_run_id_is_reserved_by_creating_the_log(repo, monkeypatch):
+    monkeypatch.setattr(deploy, "_now", lambda: datetime(2026, 11, 2, 10, 15, 0, tzinfo=timezone.utc))
+    a, b = deploy.new_run_id(repo, "staging"), deploy.new_run_id(repo, "staging")
+    assert (a, b) == ("20261102T101500Z-staging", "20261102T101500Z-staging-2")
+    assert (deploy.log_dir(repo) / f"{a}.jsonl").is_file()
+
+
+def test_environment_variables(repo, monkeypatch):
+    monkeypatch.setenv("TEST_ENV", "inherited")
+    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `mkdir -p .deploy/staging && echo \"$PRD_ENV|${TEST_ENV-unset}\" > .deploy/agent.env && echo Hi")
+    change(repo, "tools/gate.sh", 'echo "$TEST_ENV"', 'echo "$TEST_ENV|$PRD_ENV"')
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / ".deploy/agent.env").read_text().strip() == "staging|unset"
+    assert (repo / ".deploy/tests/system.env").read_text().strip() == "staging|staging"

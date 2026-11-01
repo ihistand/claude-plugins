@@ -80,9 +80,17 @@ def main(argv: list[str]) -> int:
             print("prd-deploy: refused step=0 run=none")
             return deploy.EXIT["refused"]
         run_id = deploy.new_run_id(repo_root, args.until)
-        deploy.start_run(prd, repo_root, run_id, args.until)
+        try:
+            deploy.start_run(prd, repo_root, run_id, args.until)
+        except Exception:
+            (deploy.log_dir(repo_root) / f"{run_id}.jsonl").unlink(missing_ok=True)
+            raise
         print(f"run: {run_id}", flush=True)
-        state, number = deploy.run_steps(prd, repo_root, run_id, steps, 1, args.timeout)
+        try:
+            state, number = deploy.run_steps(prd, repo_root, run_id, steps, 1, args.timeout)
+        except Exception as e:  # the run has started: say so and fail it
+            print(f"prd_deploy: internal error: {type(e).__name__}: {e}", file=sys.stderr)
+            state, number = "failed", 0
         print(f"prd-deploy: {state} step={number} run={run_id}")
         return deploy.EXIT[state]
     except Exception as e:

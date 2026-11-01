@@ -157,6 +157,8 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
         elif s.run is None and s.tests is None and not marked("Run", s):
             yield out(labels["Run"][1], _RUN_SHAPE.format(n=n, label="Run:") + f"; got '{labels['Run'][0]}'")
         if s.tests is not None:
+            if not s.tests:
+                yield out(labels["Run"][1], f"step {n}: a tests step names no levels")
             if "Check" in labels:
                 yield out(labels["Check"][1], f"step {n}: a tests step has no Check:")
             if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
