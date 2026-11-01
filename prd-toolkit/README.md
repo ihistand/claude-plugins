@@ -222,10 +222,12 @@ something unparseable, which is never counted as drift.
 uv run --script .prd-toolkit/prd_drift.py docs/prd/<slug> --env production
 ```
 
-**CI.** `prd_hooks.py ci` adds, for each environment in `## Drift` or named by a `tests` step, a
-`drift-<env>` job and a `test-deploy-<env>` job (the deploy-gate suites the runbook runs there,
-with `TEST_ENV=<env>`). Both start by hand (`workflow_dispatch` on GitHub, `when: manual` on
-GitLab), stay out of the merge gate, and never deploy; deploying is done from a session.
+**CI.** `prd_hooks.py ci` adds a `drift-<env>` job only for an environment with rows in
+`## Drift`, and a `test-deploy-<env>` job only for one that a `tests` step runs on: the
+deploy-gate suites the runbook runs there, each line `export PRD_ENV=<env> TEST_ENV=<env>; <harness
+command>`, so a compound command (`cd tools && bash gate.sh`) sees both variables. Both start by
+hand (`workflow_dispatch` on GitHub, `when: manual` on GitLab), stay out of the merge gate, and
+never deploy; deploying is done from a session.
 
 **What `prd_deploy.py` refuses.** Exit 1 (`refused`), with each reason printed:
 

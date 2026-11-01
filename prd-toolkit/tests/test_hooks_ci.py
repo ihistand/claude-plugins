@@ -200,9 +200,9 @@ def test_deploy_jobs(prd):
     assert all(j.manual for j in dj) and not any(j.manual for j in jobs(prd))
     by = {j.name: j for j in dj}
     assert by["drift-production"].script == ["uv run --script .prd-toolkit/prd_drift.py docs/prd/orders --env production"]
-    assert by["test-deploy-staging"].script == ["PRD_ENV=staging TEST_ENV=staging pytest tests/system",
-                                                "PRD_ENV=staging TEST_ENV=staging pytest tests/e2e"]
-    assert by["test-deploy-production"].script == ["PRD_ENV=production TEST_ENV=production pytest tests/smoke"]
+    assert by["test-deploy-staging"].script == ["export PRD_ENV=staging TEST_ENV=staging; pytest tests/system",
+                                                "export PRD_ENV=staging TEST_ENV=staging; pytest tests/e2e"]
+    assert by["test-deploy-production"].script == ["export PRD_ENV=production TEST_ENV=production; pytest tests/smoke"]
 
 
 def test_ci_never_deploys(prd):
@@ -284,4 +284,16 @@ def test_test_deploy_skips_levels_without_a_command(prd):
     loaded = model.load(prd)
     del loaded.testing.commands["e2e"]
     by = {j.name: j for j in hooks.deploy_jobs(loaded, PRD)}
-    assert by["test-deploy-staging"].script == ["PRD_ENV=staging TEST_ENV=staging pytest tests/system"]
+    assert by["test-deploy-staging"].script == ["export PRD_ENV=staging TEST_ENV=staging; pytest tests/system"]
+
+
+def test_test_deploy_exports_the_environment_for_a_compound_command(prd, tmp_path):
+    """`A=x cd tools && bash gate.sh` would set A for `cd` only; the job must export it for the whole line."""
+    import subprocess
+    loaded = model.load(prd)
+    loaded.testing.commands["smoke"] = 'cd "$TOOLS" && bash gate.sh smoke'
+    script = {j.name: j for j in hooks.deploy_jobs(loaded, PRD)}["test-deploy-production"].script
+    assert script == ['export PRD_ENV=production TEST_ENV=production; cd "$TOOLS" && bash gate.sh smoke']
+    (tmp_path / "gate.sh").write_text('echo "$PRD_ENV|$TEST_ENV"\n', encoding="utf-8")
+    out = subprocess.run(["bash", "-c", script[0]], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "TOOLS": str(tmp_path)})
+    assert out.stdout.strip() == "production|production", out.stderr

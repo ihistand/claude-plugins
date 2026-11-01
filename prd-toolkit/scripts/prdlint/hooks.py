@@ -248,7 +248,8 @@ def deploy_jobs(prd, prd_rel: str) -> list[CiJob]:
         levels = [lv for s in ops.steps if s.env == env and s.tests for lv in s.tests]
         if not any(s.env == env and s.tests is not None for s in ops.steps):
             continue
-        script = [f"PRD_ENV={shlex.quote(env)} TEST_ENV={shlex.quote(env)} {prd.testing.commands[lv]}" for lv in levels if lv in prd.testing.commands]
+        # exported, so a compound command (`cd tools && bash gate.sh`) sees them past its first word
+        script = [f"export PRD_ENV={shlex.quote(env)} TEST_ENV={shlex.quote(env)}; {prd.testing.commands[lv]}" for lv in levels if lv in prd.testing.commands]
         if script:  # an empty job is invalid CI
             raw.append(CiJob(f"test-deploy-{env}", script, True))
     base = ci_jobs(prd, prd_rel)
