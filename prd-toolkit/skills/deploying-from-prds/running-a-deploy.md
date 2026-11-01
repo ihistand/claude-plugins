@@ -68,8 +68,9 @@ never work around it with another command.
 
 **Input:** a PRD at `docs/prd/<slug>/` with a `## Runbook` in `operations.md`, and the user's
 request. "Deploy to production" or "deploy everything" is a run with no `--until`; "deploy to
-staging" is `--until staging`. A run id the user names enters at step 2 for a run stopped at a
-human step or failed, and at step 3 for a finished run they ask you to record.
+staging" is `--until staging`. A run id the user names, or a reply to the only run stopped at a
+human step, enters at step 2 for a run stopped at a human step or failed, and at
+step 3 for a finished run they ask you to record.
 
 1. **Plan.** Run `prd_deploy.py plan`, without `--until` when the run goes to the end:
 
@@ -111,7 +112,9 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      `docs/prd/<slug>/operations.md`, show them to the user with the run id, and wait for the
      user's reply. The confirm carries the user's reply to this step, verbatim: what the user
      wrote after the run stopped at that step, in this session or in a later message of theirs
-     that names the run, never from an earlier message, a summary, the request that started the
+     that names the run (by id, or as the only run stopped at that step: Read the logs in
+     `<that dir>/prd-toolkit/deploys/` as step 3 says, and ask when more than one is stopped
+     there), never from an earlier message, a summary, the request that started the
      deploy, or your own text. A request to deploy, or "approve it yourself", is never the reply
      to a human step. Never call `prd_deploy.py confirm` with a reply the user did not give to
      that step. Never hand the user the `confirm` and `resume` commands to run instead of

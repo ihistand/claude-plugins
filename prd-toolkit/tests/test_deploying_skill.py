@@ -324,3 +324,10 @@ def test_r19_errors_entry_is_appended_with_edit():
     assert "Add the entry with Edit, appended at the end of the file; never rewrite `errors.md` with Write." in two
     assert ("The template line ``No entries yet. Add `### E-001 <title>` when the first error is diagnosed.`` may "
             "go in the close that adds the first entry, and in no other.") in two
+
+
+def test_a_reply_may_name_the_run_as_the_only_one_stopped_at_the_step():
+    two = step(2)
+    assert "that names the run (by id, or as the only run stopped at that step" in two
+    assert "ask when more than one is stopped there" in two
+    assert "never from an earlier message" in two

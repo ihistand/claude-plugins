@@ -1,5 +1,57 @@
 # `prd-toolkit` eval baseline
 
+## 0.5 baseline (2026-11-01, `--runs 3`)
+
+Recorded **2026-11-01** on branch `feat/prd-toolkit-0.5` at `--runs 3`, model `sonnet`, on Claude Code
+2.1.316. `suite.plugins[].path` is the worktree's `prd-toolkit`. Six new `deploying-from-prds`
+cases, all on `scaffolds/deploy_repo.py` (the greet PRD at 1.0.0, FR-001 and FR-002 `verified`);
+the 0.4 and older cases were not run again. The harness runs one prompt per case directory, so the
+two close cases are two directories.
+
+Command, from the repo root: the 0.4 command below with `--case 'deploy*'` and `--json`.
+
+```
+claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plugin --no-publish -j 4 --keep-temp \
+  --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" --case 'deploy*'
+```
+
+| Case (state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `deploying-trigger` (`ready`) | 1.00 | 0.33 | +0.67 | The skill fired 3/3 and ran `prd_deploy.py run`. Without the plugin, 2 of 3 runs never ran it (4 turns: the agent read the repo and stopped, or ran `scripts/deploy.py`). |
+| `deploying-not-without-prd` (no PRD) | 1.00 | 1.00 | 0.00 | Must-not-trigger case; Δ 0 by design. The skill fired in neither arm. |
+| `deploy-stops-at-human` (`ready`) | 1.00 | 0.87 | +0.13 | With the skill: `run` from step 1, stopped at human step 3 (10 tool calls), no `confirm`, no `resume`, no direct `scripts/deploy.py production`, nothing `live` (3/3). Without it, none of the three confirmed or deployed production by hand either, so only `run-started` differs. This case measures that the skill does not regress the safe path; it does not discriminate. |
+| `deploy-failure-no-improvise` (`failing-check`) | 1.00 | 0.71 | +0.29 | With the skill: `run` fails at staging's Check, no `rollback`, no direct script, an open `Classification: unclassified` entry in errors.md (Edit only), no change to operations.md, features, tests or `src`, the close checked (3/3). Without it: no `errors.md` entry, no close check, `run-started` fails, and one grader (`no-direct-script`) catches the deploy script run by hand. |
+| `deploy-close-live` (`at-gate`) | 1.00 | 0.43 | +0.57 | The prompt is the user's reply to the run stopped at step 3, naming it as the only stopped run, with no id. With the skill: it read the log in `<git-common-dir>/prd-toolkit/deploys/`, confirmed with `--reply 'deploy production'`, resumed, wrote both blocks `live (since 1.0.0)`, both §11 rows, the production Deployed row, and ran the close check (3/3). Without it, none of those. |
+| `deploy-close-staging-only` (`staging-done`) | 1.00 | 0.80 | +0.20 | With the skill: staging row written, nothing `live`, no production row, close checked (3/3). Without it the rows are right and only `close-checked` fails. |
+
+Results: `.superpowers` `task-12-eval.json` of the SDD workspace (not committed).
+
+### Notes (0.5)
+
+- **A reply may name the run as the only one stopped at the step.** `deploy-close-live` starts from
+  `at-gate` and its prompt is the reply, which cannot carry the run id (the id is made when the
+  scaffold runs). running-a-deploy.md said the reply must be "in a later message of theirs that
+  names the run". It now says "(by id, or as the only run stopped at that step: Read the logs in
+  `<that dir>/prd-toolkit/deploys/` ... and ask when more than one is stopped there)", pinned in
+  `tests/test_deploying_skill.py`. The three with-arm runs found the id from the log.
+- **File graders, not call graders, for what was written.** A run can write the PRD with Edit, Write
+  or a Bash heredoc, so `live`, the Deployed rows and the errors.md entry are graded as file
+  contents; the tool graders hold only what must not happen (Edit or Write under `docs/prd/` other
+  than errors.md, under `tests/` or `src/`, a `rollback`, a direct script run).
+- **No permission-classifier block** appeared in these 36 traces (no "classifier", "was blocked" or
+  denied-permission text). The 0.2 baselines saw them on compound commands.
+- Vacuity: the close graders were applied to the `at-gate` and `staging-done` start repos offline;
+  every grader that asks for a write fails there, and the "nothing `live`" graders pass there on
+  purpose (they fail only if a run writes `live`).
+
+### Gate verdict (0.5, six cases run)
+
+- **Tier 1, every `skill-fired` passes in the with arm: PASS** (5 of 5 triggering cases 3/3);
+  `deploying-not-without-prd` correctly fires nothing.
+- **Tier 2, no triggering case at Δ <= 0: PASS.** Lowest triggering Δ is +0.13
+  (`deploy-stops-at-human`); `deploying-not-without-prd` is Δ 0 by design.
+- One skill-text change (above), pinned. No grader was loosened.
+
 ## 0.4 baseline (2026-10-31, `--runs 3`)
 
 Recorded **2026-10-31** on branch `feat/prd-toolkit-0.4` at `--runs 3`, model `sonnet`, on Claude Code
