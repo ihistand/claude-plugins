@@ -42,7 +42,7 @@ export const plugins = [
     id: 'prd-toolkit',
     name: 'prd-toolkit',
     version: '0.5.0',
-    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 31-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code and a deploy script that takes it live. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status and /prd-deploy.',
+    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code and a deploy script that takes it live. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status and /prd-deploy.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
       { name: '/prd-new', description: 'Start a PRD for a new project', workflow: 'Interview → docs/prd/<slug>/ with contracts and test cases → lint → prd-tester dry run → approve → CLAUDE.md block' },

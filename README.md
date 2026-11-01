@@ -6,7 +6,7 @@ Claude Code plugins for data engineering (sqlanvil-toolkit), 3D printing workflo
 
 ### prd-toolkit
 
-A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 31-rule linter, standards and skills registries, and skills to author and change it, plus a builder that takes an approved change to verified code and a deploy script that takes it live.
+A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 32-rule linter, standards and skills registries, and skills to author and change it, plus a builder that takes an approved change to verified code and a deploy script that takes it live.
 
 **Features:**
 - **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with prd-tester, and approves it
@@ -14,7 +14,7 @@ A living PRD as the single authority agents build, test and deploy from: a PRD f
 - **building-from-prds skill** - Takes approved requirements to verified code: a builder in its own worktree, tests written by prd-tester, statuses approved, built, verified
 - **deploying-from-prds skill** - Deploys a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, and records Deployed rows and `verified` → `live`
 - **Slash commands**: `/prd-new`, `/prd-adopt`, `/prd-change`, `/prd-context`, `/prd-build`, `/prd-status` and `/prd-deploy`
-- **Lint CLI**: `prd_lint.py` checks 31 rules; `prd_block.py` writes the CLAUDE.md block
+- **Lint CLI**: `prd_lint.py` checks 32 rules; `prd_block.py` writes the CLAUDE.md block
 
 **For full documentation:** See [prd-toolkit/README.md](./prd-toolkit/README.md)
 

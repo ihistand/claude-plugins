@@ -370,11 +370,37 @@ One entry per error, newest last:
 ### E-001 <title>
 Detected: <date>, <source>
 Classification: code bug | spec gap | invalid requirement | environment | standard | unclassified
+Confirmed: <YYYY-MM-DD>, "<the user's reply, verbatim>"
 Touches: <requirement IDs or ->
+Evidence: <a command and its output, a failing test line or a log excerpt>
+  <continuation lines, indented two spaces>
 Diagnosis: <why>
-Resolution: <the AC, T-id and version that fixed it>
+Resolution: <T-id> [<level>], PRD <X.Y.Z>, fixed in <commit> | not a defect: <why>
 Recurrence of: <E-nnn or ->
 ```
+
+`Detected:` is `<YYYY-MM-DD>, <source>`. `Confirmed:` (optional) is `<YYYY-MM-DD>, "<reply>"`,
+written only by `prd_error.py confirm`. `Evidence:` (optional) holds at most 20 lines, with
+continuation lines indented two spaces, and never a secret value or data classified `confidential`
+or `pii`. `Classification:` is one of `code bug`, `spec gap`, `invalid requirement`,
+`environment`, `standard`, `unclassified`. The `error-entries` rule reports a malformed `Detected:`
+or `Confirmed:`, an unknown class, an `Evidence:` over 20 lines, a `Recurrence of:` that names no
+entry, and a `Confirmed:` on an `unclassified` entry.
+
+The **state** of an entry is derived from its lines and never written:
+
+| State | Lines |
+|---|---|
+| `unclassified` | `Classification: unclassified`, or no `Classification:` |
+| `proposed` | a class other than `unclassified`, no `Confirmed:` |
+| `confirmed` | `Confirmed:`, no resolution |
+| `resolved` | a resolution (the open/resolved rule below) |
+
+A resolution has one of three forms: `<T-id> [<level>], PRD <X.Y.Z>, fixed in <7-40 hex>` (code
+bug, spec gap, invalid requirement, standard); `<T-id or ->, PRD <X.Y.Z>, run <run id>`
+(environment); `not a defect: <why>` (any class). Lint does not check a resolution's form, since
+entries resolved before 0.6 hold free text; `prd_error.py check` checks the form of each resolution
+added inside its range.
 
 `Touches:` is optional. It lists the requirement IDs (`UJ-nn`, `FR-nnn`, `NFR-nnn`) the error
 concerns, comma-separated, and `-` means none. `index-consistent` reports a `Touches:` ID that no
