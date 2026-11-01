@@ -331,3 +331,9 @@ def test_a_reply_may_name_the_run_as_the_only_one_stopped_at_the_step():
     assert "that names the run (by id, or as the only run stopped at that step" in two
     assert "ask when more than one is stopped there" in two
     assert "never from an earlier message" in two
+
+
+def test_r28_missing_deploy_gate_test_routes_to_a_tester_only_build():
+    two = step(2)
+    assert ("the missing test goes to `/prd-build <area> <IDs>` with that block's ID, whose tester-only round "
+            "writes it without a builder or a status change") in two

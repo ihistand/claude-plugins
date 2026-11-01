@@ -458,7 +458,9 @@ def test_g5_no_tester_tids_skips_step5():
             "and the close's `verified` needs only the builder's UNIT lines, your step 7 run and "
             "`prd-trace-exit=0`.") in t
     step3 = t.split("3. **Dispatch both in one message**", 1)[1].split("4. **Check the state.**", 1)[0]
-    assert "With no non-unit build-gate T-ids, dispatch the builder alone: the tester has no `write`." in step3
+    # R28: the builder goes alone only when there is no non-unit T-id at all, build gate or deploy gate
+    assert "With no non-unit T-ids, dispatch the builder alone: the tester has no `write`." in step3
+    assert "With no non-unit build-gate T-ids, dispatch the builder alone" not in step3
 
 
 THREE_SOURCES = ("every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the "
@@ -528,3 +530,66 @@ def test_r26_never_built_is_scoped_to_a_clean_close():
     close = flat(RUN).split("8. **Close.**", 1)[1].split("Run `git rev-parse", 1)[0]
     assert "Never leave it `built` at a clean close" in close
     assert "On a stopped build it stays `built`, and the next clean build closes it `verified`" in close
+
+
+# --- R28: the build's tester writes deploy-gate tests, and the build never runs them ---
+
+def _step(t: str, n: int, title: str, nxt: str) -> str:
+    return t.split(f"{n}. **{title}", 1)[1].split(nxt, 1)[0]
+
+
+def test_r28_split_gives_the_tester_every_non_unit_tid():
+    step1 = _step(flat(RUN), 1, "Preflight.**", "2. **Snapshot**")
+    assert "Deploy-gate T-ids are not run in 0.4." not in step1
+    for s in ["**unit** (level `unit`) for the builder, and **non-unit** (every other level, build gate and "
+              "deploy gate alike) for the tester's `write`",
+              "The tester writes a test for every non-unit T-id and never runs a deploy-gate one.",
+              "Of those, only the **build-gate non-unit** T-ids (a level whose `Gate` is `build`) run in the "
+              "build: step 5's suite and its `--results` list, step 7 and the close's `verified` take them "
+              "and never a deploy-gate T-id, which runs at `/prd-deploy`."]:
+        assert s in step1, s
+
+
+def test_r28_step3_dispatches_the_tester_with_every_non_unit_tid():
+    step3 = _step(flat(RUN), 3, "Dispatch both in one message**", "4. **Check the state.**")
+    assert ("`prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and every non-unit "
+            "T-id, build gate and deploy gate, each with its test-case file.") in step3
+    assert ("When every non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their "
+            "tests, and step 5 is skipped.") in step3
+
+
+def test_r28_tester_files_citing_deploy_gate_tids_are_the_testers():
+    step4 = _step(flat(RUN), 4, "Check the state.**", "5. **Run.**")
+    assert ("A test that cites a deploy-gate T-id is the tester's like any other non-unit test: "
+            "`prd_build_check.py --diff` fails a builder round that edits it, and the commit below takes it "
+            "with the rest.") in step4
+
+
+def test_r28_suite_results_and_close_stay_build_gate():
+    t = flat(RUN)
+    step5 = _step(t, 5, "Run.**", "6. **Reconcile**")
+    assert ("A deploy-gate T-id is never in the suite or its `--tids` list, though the tester wrote its test "
+            "in step 3: it runs at `/prd-deploy`.") in step5
+    step7 = _step(t, 7, "Full run.**", "8. **Close.**")
+    assert "Run every Levels harness command whose `Gate` is `build`" in step7
+    close = t.split("8. **Close.**", 1)[1]
+    assert "every non-unit build-gate T-id passes on the tester's suite RESULTS" in close
+
+
+def test_r28_tester_only_round_for_verified_blocks():
+    t = flat(RUN)
+    inp = t.split("**Input:**", 1)[1].split("Both agents must be", 1)[0]
+    assert "or at `verified` for a tester-only round (below)" in inp
+    para = t.split("**A tester-only round.**", 1)[1].split("1. **Preflight.**", 1)[0]
+    for s in ["A block already `verified` whose deploy-gate T-ids no test cites",
+              "`<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`",
+              "`/prd-build <area> <IDs>`",
+              "no builder and no status change",
+              "Grep `@prd <T-id>`",
+              "Dispatch `prd-toolkit:prd-tester` alone, `Mode: write`, with those T-ids only",
+              "step 4's tester bullet",
+              '`git commit -m "test(<area>): <T-ids> from the PRD" -m "Refs: <IDs>"`',
+              "That dispatch replaces step 3, and steps 5 to 8 are skipped",
+              "the block stays `verified`",
+              "its `Status:`, `Source:` and §11 row are untouched"]:
+        assert s in para, s

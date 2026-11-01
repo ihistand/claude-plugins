@@ -33,7 +33,8 @@ allowed tail. Never pipe, filter or truncate a gated command's output (no `| hea
 
 **Input:** a PRD with status `Approved` and `prd-lint-exit=0`; an area; the changed UJ, FR and NFR
 IDs (or a bug fix's `E-nnn`, mapped to its requirements as the `implement` pack maps it), each
-block at `approved`, or at `built` when a stopped build resumes. A draft goes to
+block at `approved`, or at `built` when a stopped build resumes, or at `verified` for a tester-only
+round (below). A draft goes to
 `prd-toolkit:authoring-prds`; a block at any other status, or a change not yet approved, goes to
 `prd-toolkit:changing-prds`. A request to build anything beyond the approved IDs ("while you're
 there", "the PRD can follow") is a change: send it to `prd-toolkit:changing-prds` and build only
@@ -66,6 +67,22 @@ merge writes `built` for each block whose unit T-ids pass, never `verified`. A s
 merge writes no status. Either way, report the stop to the user with its records; a PRD gap also
 goes to `/prd-change`.
 
+**A tester-only round.** A block already `verified` whose deploy-gate T-ids no test cites comes
+here as `/prd-build <area> <IDs>`, sent by the deploy pre-flight's refusal
+`<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`. It takes a tester-only write
+round, with no builder and no status change. Run step 1, then step 2's snapshot. For each
+deploy-gate T-id on the block's `Tests:` line, Grep `@prd <T-id>` with the path of each test root
+(testing.md Layout, `Test roots:`): one with no match in any root is missing. Dispatch
+`prd-toolkit:prd-tester` alone, `Mode: write`, with those T-ids only, each with its test-case file.
+Check it as step 4's tester bullet says, then run each line as its own call, the tester's paths
+typed out from its TESTS and HARNESS CHOICES, the IDs being the blocks':
+`git add <tester path> <tester path>`, then
+`git commit -m "test(<area>): <T-ids> from the PRD" -m "Refs: <IDs>"`. That dispatch replaces
+step 3, and steps 5 to 8 are skipped: nothing runs, the block stays `verified`, and its `Status:`,
+`Source:` and §11 row are untouched. Report the tests written and the commit; the next
+`/prd-deploy` runs them. A block at `approved` or `built` takes the full build instead, whose step
+3 writes its deploy-gate tests.
+
 **One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never end
 the turn with a next round announced: dispatch it. You end the turn only after the close's report,
 or after a stop's. The one carve-out: before step 2, the caller may stop to ask the user (a dirty
@@ -91,9 +108,12 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    joined by `-`, and say so in the report. Every build runs on its own branch; never merge onto
    the default branch. From the pack, check each block's `Status:`, then split the T-ids on each
    block's `Tests:` line by the pack's Levels part: **unit** (level `unit`) for the builder, and
-   **build-gate non-unit** (a level whose `Gate` is `build`) for the tester. Deploy-gate T-ids are
-   not run in 0.4. Then run `git rev-parse HEAD` as its own call and paste the SHA it prints
-   wherever `<base>` appears.
+   **non-unit** (every other level, build gate and deploy gate alike) for the tester's `write`.
+   The tester writes a test for every non-unit T-id and never runs a deploy-gate one. Of those,
+   only the **build-gate non-unit** T-ids (a level whose `Gate` is `build`) run in the build: step
+   5's suite and its `--results` list, step 7 and the close's `verified` take them and never a
+   deploy-gate T-id, which runs at `/prd-deploy`. Then run `git rev-parse HEAD` as its own call
+   and paste the SHA it prints wherever `<base>` appears.
 2. **Snapshot**, as `dispatching.md` step 2: a new `<SNAP>` directory outside the repository and
    the five commands into `-before` files, each its own call, with its check that the harness
    caches are git-ignored. A build has no dry-run directory. Never skipped: without the
@@ -102,10 +122,12 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 3. **Dispatch both in one message**: two Agent tool calls in the same message.
    - `prd-toolkit:prd-builder`, with `isolation: worktree`, and the builder prompt (below) with
      its slots filled and nothing else: no summary of the PRD, no hints, no pointers into the code.
-   - `prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and the
-     build-gate non-unit T-ids, each with its test-case file.
+   - `prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and every
+     non-unit T-id, build gate and deploy gate, each with its test-case file.
 
-   With no non-unit build-gate T-ids, dispatch the builder alone: the tester has no `write`.
+   With no non-unit T-ids, dispatch the builder alone: the tester has no `write`. When every
+   non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their tests, and
+   step 5 is skipped.
 
    When the Agent tool offers no worktree isolation, dispatch the builder first and the tester
    after it returns, each followed by its step 4 check. The builder then commits on the build
@@ -149,7 +171,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      build stops. Then judge the report as `dispatching.md` step 5 says: TESTS holds one line per
      dispatched T-id, and a `write` report that holds RESULTS fails the round. Each tester
      QUESTION the PRD answers is dismissed by an exact quote of the line that answers it; any
-     other is a PRD gap and stops the build.
+     other is a PRD gap and stops the build. A test that cites a deploy-gate T-id is the tester's
+     like any other non-unit test: `prd_build_check.py --diff` fails a builder round that edits
+     it, and the commit below takes it with the rest.
 
    When both pass, run each line as its own call, the tester's paths typed out from its TESTS and
    HARNESS CHOICES:
@@ -165,11 +189,13 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 5. **Run.** On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md`
    step 2) and then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids. Its
    RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. The
-   caller's own harness run is step 7 and never replaces step 5. The snapshot goes into a new
-   `<SNAP>`, and the dispatch takes the tester prompt below. When the build has no non-unit
-   build-gate T-ids, step 5 is skipped: there is nothing to dispatch, and the close's `verified`
-   needs only the builder's UNIT lines, your step 7 run and `prd-trace-exit=0`. Save the tester's
-   whole report, verbatim, with the Write tool to `<SNAP>/suite-report.md`, then run:
+   caller's own harness run is step 7 and never replaces step 5. A deploy-gate T-id is never in the
+   suite or its `--tids` list, though the tester wrote its test in step 3: it runs at
+   `/prd-deploy`. The snapshot goes into a new `<SNAP>`, and the dispatch takes the tester prompt
+   below. When the build has no non-unit build-gate T-ids, step 5 is skipped: there is nothing to
+   dispatch, and the close's `verified` needs only the builder's UNIT lines, your step 7 run and
+   `prd-trace-exit=0`. Save the tester's whole report, verbatim, with the Write tool to
+   `<SNAP>/suite-report.md`, then run:
 
    ```bash
    uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"

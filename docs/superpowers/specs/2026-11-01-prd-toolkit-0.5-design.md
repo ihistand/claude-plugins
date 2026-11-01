@@ -7,6 +7,22 @@
 > (`2026-10-31-prd-toolkit-0.4-design.md` last). Where this addendum and any of them disagree, this
 > addendum wins for 0.5.
 
+> **Revisions.** Corrections from the hello-world proof (slice 2) and the controller's rulings:
+> - §4 and §9 (R28): §4's `tests` steps and pre-flight assumed the build had written the
+>   deploy-gate tests, and §9 said the tester's `write` mode "already writes" them. It did not:
+>   0.4's build gave the tester build-gate non-unit T-ids only, so a fully `verified` PRD reached
+>   staging with no deploy-gate test and production was refused. Now the build's tester, in
+>   `Mode: write`, gets every non-unit T-id of the blocks built, build gate and deploy gate, and
+>   writes their tests from the PRD alone without running a deploy-gate one; it is dispatched
+>   whenever there is any non-unit T-id. Step 5's suite, `prd_build_check.py --results`, step 7 and
+>   the close's `verified` stay build-gate only. A block already `verified` whose deploy-gate T-ids
+>   no test cites takes a tester-only write round through `/prd-build <area> <IDs>` (no builder, no
+>   status change, the tests committed with `Refs: <IDs>`): the route the pre-flight refusal names.
+> - §9 (R26, R27): a block with no unit and no build-gate T-ids (only deploy-gate ones) moves to
+>   `verified` at a clean close, since the `built → verified` conditions hold vacuously; it is never
+>   left `built` at a clean close, because pre-flight refuses a deploy while any block is `built`. On
+>   a stopped build it stays `built`, and the next clean build closes it `verified`.
+
 ## 1. Scope
 
 0.4 takes an approved change to `verified` code. 0.5 takes **verified code to a running

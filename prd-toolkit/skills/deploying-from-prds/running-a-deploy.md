@@ -106,7 +106,8 @@ step 3 for a finished run they ask you to record.
      a dirty tree or a lint or trace finding is the user's to settle. A run that reaches
      production is refused for a `verified` block's deploy-gate T-id that no test cites
      (`<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`): the missing test goes to
-     `prd-toolkit:building-from-prds`. A refused `run` ran nothing (`run=none`): there is no
+     `/prd-build <area> <IDs>` with that block's ID, whose tester-only round writes it without a
+     builder or a status change. A refused `run` ran nothing (`run=none`): there is no
      close.
    - **3, human step.** Read step N's `Do:` and `Check:` in the `## Runbook` of
      `docs/prd/<slug>/operations.md`, show them to the user with the run id, and wait for the

@@ -69,7 +69,9 @@ calling the API's SDK.
    ```
 
    Dispatch with the Agent tool; under `claude --agent` the `skills:` preload does not load.
-   A write's T-ids are the new or changed non-unit T-ids the caller names, each with its test-case file.
+   A write's T-ids are the non-unit T-ids the caller names, build gate and deploy gate alike (new
+   or changed ones, or a `verified` block's deploy-gate T-ids that no test cites), each with its
+   test-case file; a write runs none of them.
    A `Misread:` line makes the dispatch a test-misread round: the tester may change that one test, only so it
    matches the quote. Add it only after you have checked the test against the PRD.
    A dry run's T-ids are the ones `--sample-tids` printed. A suite's T-id list is every non-unit
