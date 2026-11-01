@@ -49,7 +49,7 @@ def _same(a, b) -> bool:
     return a == b
 
 
-def drift_findings(prd: Prd, repo_root: Path, env: str | None) -> tuple[list[Finding], list[str]]:
+def drift_findings(prd: Prd, repo_root: Path, env: str | None, timeout: int = TIMEOUT) -> tuple[list[Finding], list[str]]:
     """Drift findings in table order, and tool errors."""
     findings: list[Finding] = []
     errors: list[str] = []
@@ -57,18 +57,28 @@ def drift_findings(prd: Prd, repo_root: Path, env: str | None) -> tuple[list[Fin
         if env is not None and row.env != env:
             continue
         where = f"{OPS}:{row.line}: drift {row.env} {row.check}"
+        if row.check not in ("version", "config"):
+            why = "schema drift arrives in prd-toolkit 0.6" if row.check == "schema" else "checks are version and config"
+            errors.append(f"{where}: not supported ({why})")
+            continue
+        if row.check == "config" and not isinstance(prd.yaml.get("contracts/config.yaml"), dict):
+            errors.append(f"{where}: contracts/config.yaml does not exist")
+            continue
         if not row.command:
             errors.append(f"{where}: has no command")
             continue
-        r = deploy._execute(row.command, repo_root, {"PRD_ENV": row.env}, TIMEOUT)
+        r = deploy._execute(row.command, repo_root, {"PRD_ENV": row.env}, timeout)
         if r["timed_out"]:
-            errors.append(f"{where}: timed out after {TIMEOUT} s")
+            errors.append(f"{where}: timed out after {timeout} s")
             continue
         if r["exit"] != 0:
             errors.append(f"{where}: the command exited {r['exit']}")
             continue
         text = r["out"].decode("utf-8", errors="replace").strip()
         if row.check == "version":
+            if not text:
+                errors.append(f"{where}: the command printed nothing")
+                continue
             want = next((d.version for d in prd.operations.deployed if d.env == row.env), None)
             if want is None:
                 findings.append(Finding(OPS, row.line, "drift-version", f"{row.env} has no Deployed row"))

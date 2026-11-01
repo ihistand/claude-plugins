@@ -160,3 +160,57 @@ def test_command_gets_prd_env(repo):
     ops.write_text(ops.read_text(encoding="utf-8").replace("`cat .deploy/production/version`", "`echo $PRD_ENV-x`"), encoding="utf-8")
     r = drift(repo)
     assert r.returncode == 1 and "production runs production-x" in r.stdout
+
+
+def set_check(repo: Path, old: str, new: str) -> None:
+    ops = repo / OPS
+    ops.write_text(ops.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+
+
+def test_schema_only_is_an_error(repo):
+    set_check(repo, "| production | version |", "| production | schema |")
+    set_check(repo, "| production | config |", "| production | schema |")
+    r = drift(repo)
+    n = line_of(repo, "| production | schema |")
+    assert r.returncode == 2 and r.stdout == ""
+    assert f"operations.md:{n}: drift production schema: not supported (schema drift arrives in prd-toolkit 0.6)" in r.stderr
+
+
+def test_check_names_are_exact(repo):
+    set_check(repo, "| production | version |", "| production | Version |")
+    r = drift(repo)
+    n = line_of(repo, "| production | Version |")
+    assert r.returncode == 2 and r.stdout == ""
+    assert f"operations.md:{n}: drift production Version: not supported (checks are version and config)" in r.stderr
+
+
+def test_env_with_only_a_schema_row(repo):
+    set_check(repo, "| production | config |", "| staging | schema | `true` |\n| production | config |")
+    r = drift(repo, "--env", "staging")
+    assert r.returncode == 2 and r.stdout == ""
+    assert "drift staging schema: not supported" in r.stderr
+
+
+def test_config_without_config_yaml(repo):
+    (repo / CONFIG).unlink()
+    r = drift(repo)
+    n = line_of(repo, "| production | config |")
+    assert r.returncode == 2 and r.stdout == ""
+    assert f"operations.md:{n}: drift production config: contracts/config.yaml does not exist" in r.stderr
+
+
+def test_empty_version_output(repo):
+    put(repo, "version", "  \n")
+    r = drift(repo)
+    n = line_of(repo, "| production | version |")
+    assert r.returncode == 2 and r.stdout == ""
+    assert f"operations.md:{n}: drift production version: the command printed nothing" in r.stderr
+
+
+def test_timeout(repo):
+    from prdlint import drift as engine, model
+    set_check(repo, "`cat .deploy/production/version`", "`sleep 5`")
+    prd = model.load(repo / "docs/prd/orders")
+    findings, errors = engine.drift_findings(prd, repo, "production", timeout=1)
+    assert findings == [] or all(f.rule != "drift-version" for f in findings)
+    assert any("drift production version: timed out after 1 s" in e for e in errors)
