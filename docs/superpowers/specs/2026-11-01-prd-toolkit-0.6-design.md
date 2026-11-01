@@ -7,6 +7,11 @@
 > (`2026-11-01-prd-toolkit-0.5-design.md` last). Where this addendum and any of them disagree, this
 > addendum wins for 0.6.
 
+> **Revisions.**
+> - §3 (plan): lint's `error-entries` does not check a resolution's form. Entries resolved under 0.2
+>   to 0.5 hold free text, so a lint check would fail every existing ledger, against §14.
+>   `prd_error.py check` checks the form of each resolution added inside its range (§4).
+
 ## 1. Scope
 
 0.5 records a failed deploy as an open, `unclassified` E-nnn and stops. 0.6 **closes the loop**:
@@ -100,8 +105,8 @@ A resolution is `<T-id> [<level>], PRD <version>, fixed in <commit>` (code bug, 
 requirement, standard), `<T-id or ->, PRD <version>, run <run id>` (environment), or
 `not a defect: <why>` (any class).
 
-**`error-entries`** (lint, the 32nd rule) reports the format only: a malformed `Detected:`,
-`Confirmed:` or resolution; an `Evidence:` over 20 lines; a `Recurrence of:` naming no entry; a
+**`error-entries`** (lint, the 32nd rule) reports the format only: a malformed `Detected:` or
+`Confirmed:`; an `Evidence:` over 20 lines; a `Recurrence of:` naming no entry; a
 `Confirmed:` on an `unclassified` entry. The rule "a resolution needs `Confirmed:`" belongs to
 `prd_error.py check` (section 4), which applies it only to entries resolved inside the checked
 range, so entries resolved under 0.2 to 0.5 stay valid without a confirmation that never happened.

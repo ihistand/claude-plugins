@@ -26,7 +26,7 @@
 - The rendered CLAUDE.md block stays under 1,536 bytes.
 - Skill text that tells an agent to run a command gives one command per Bash call with literal paths (0.2's dispatching rule), naming the vendored `.prd-toolkit/` copy or an absolute plugin path, never `${CLAUDE_PLUGIN_ROOT}` inside a Bash command (0.5's R20).
 - Verify before every commit: `uv run --directory prd-toolkit pytest -q`. Before the release commit also `cd web && npm test` and `claude plugin validate ./prd-toolkit`.
-- **Ruling (plan, corrects spec §3):** lint's `error-entries` does not check the resolution format. Entries resolved under 0.2–0.5 hold free text (the fixture's `E-001`), so a lint check would fail every existing ledger, against spec §14. `prd_error.py check` checks the format of a resolution added inside its range. Task 1 adds a Revisions note to the spec saying so.
+- **Ruling (plan, corrects spec §3):** lint's `error-entries` does not check the resolution format. Entries resolved under 0.2–0.5 hold free text (the fixture's `E-001`), so a lint check would fail every existing ledger, against spec §14. `prd_error.py check` checks the format of a resolution added inside its range. The spec's Revisions note says so.
 - **Ruling (plan, not spec):** `/prd-build --fixes E-nnn` passes `E-nnn` to `prd_context.py --req` as well; the context pack's Known defects part already carries the whole entry (Diagnosis and Evidence included), so no pack change is needed.
 
 ## Review Focus
@@ -46,7 +46,6 @@
 - Create: `prd-toolkit/scripts/prdlint/rules/errors.py` (register it where the other rule modules are imported)
 - Modify: `prd-toolkit/references/prd-format.md` ("errors.md"), `prd-toolkit/templates/prd/errors.md` (format comment only; keep the placeholder text byte-identical, `deploy.LEDGER_PLACEHOLDER` depends on it)
 - Modify: `prd-toolkit/tests/test_coverage.py` (`SPEC_RULES` gains `error-entries`)
-- Modify: `docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md` (a `> **Revisions.**` block under the header: the Global Constraints ruling above)
 - Test: `prd-toolkit/tests/test_errors_model.py` (new)
 
 **Interfaces:**
@@ -87,7 +86,7 @@ def test_unknown_class(prd): ...     # "Classification: typo" → ("error-entrie
 Each finding's line is the offending line. If `index-consistent` already reports an unknown class, drop `test_unknown_class` and leave that check where it is.
 
 - [ ] **Step 2: Run** `uv run --directory prd-toolkit pytest -q tests/test_errors_model.py`. Expected: FAIL (`AttributeError: 'ErrorEntry' object has no attribute 'title'`).
-- [ ] **Step 3: Implement** the fields in `_errors_ledger` (a line starting with two spaces right after `Evidence:` continues it) and the rule in `rules/errors.py`. Update `prd-format.md` with spec §3's two lines, the state table and the resolution forms (noting that `prd_error.py check`, not lint, checks a resolution's form), and the spec's Revisions note.
+- [ ] **Step 3: Implement** the fields in `_errors_ledger` (a line starting with two spaces right after `Evidence:` continues it) and the rule in `rules/errors.py`. Update `prd-format.md` with spec §3's two lines, the state table and the resolution forms (noting that `prd_error.py check`, not lint, checks a resolution's form).
 - [ ] **Step 4: Run** the whole suite. Expected: PASS, 32 rules.
 - [ ] **Step 5: Commit** `feat(prd-toolkit): errors.md entry model and error-entries`.
 
