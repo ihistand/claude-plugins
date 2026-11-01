@@ -276,25 +276,45 @@ def _resolution(prd: Prd, repo_root: Path, head: str, e: ErrorEntry, cited: dict
     return out
 
 
+_RUN_NAME = re.compile(r"\d{8}T\d{6}Z-[0-9A-Za-z._-]*[0-9A-Za-z_-]")
+
+
+def _failed_env(prd: Prd, recs: list[dict], step: int | None) -> str | None:
+    """The environment a run failed on: the step `Detected:` names, else the run's failing (or unfinished) step."""
+    if step is None:
+        rec = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None) \
+            or next(iter(deploy.unfinished_starts(recs)), None)
+        step = rec.get("step") if rec else None
+    return next((s.env for s in prd.operations.steps if s.number == step), None)
+
+
 def _run_finished(prd: Prd, repo_root: Path, e: ErrorEntry, run_id: str) -> list[str]:
-    """A `run R` resolution: R's log shows the environment of the entry's failed run finished. Not applicable when
-    `Detected:` names no run."""
-    step = _STEP.search(e.detected)
-    if not step:
-        return []
-    named = next((t for t in _TOKEN.findall(e.detected)
-                  if deploy.RUN_ID.fullmatch(t) and deploy.detected_names_failure(e.detected, t, step.group(1))
-                  and deploy._log_path(repo_root, t).is_file()), None)
-    if named is None:
-        return []
-    env = next((s.env for s in prd.operations.steps if s.number == int(step.group(1))), None)
-    if not env:
-        return []
+    """A `run R` resolution: R has a log, and it shows the environment of the entry's failed run finished (or, when
+    `Detected:` names no run, every environment R's own plan covered)."""
+    logs = deploy.log_dir(repo_root)
     try:
-        finished = deploy.finished_envs(deploy.read_log(repo_root, run_id), prd)
+        recs = deploy.read_log(repo_root, run_id)
     except (OSError, ValueError):
-        finished = []
-    return [] if env in finished else [f"run {run_id} did not finish {env}"]
+        return [f"run {run_id} has no log in {logs}"]
+    finished = deploy.finished_envs(recs, prd)
+    step = _STEP.search(e.detected)
+    failed = next((m.group(0) for m in _TOKEN.finditer(e.detected) if _RUN_NAME.fullmatch(m.group(0).rstrip("."))), None)
+    if failed is None:
+        header = next((r for r in recs if r.get("kind") == "header"), {})
+        try:
+            plan = deploy.plan_steps(prd, header.get("until"))
+        except ValueError:
+            plan = list(prd.operations.steps)
+        envs = list(dict.fromkeys(s.env for s in plan if s.env))
+    else:
+        failed = failed.rstrip(".")
+        try:
+            frecs = deploy.read_log(repo_root, failed)
+        except (OSError, ValueError):
+            return [f"the failed run {failed} named in Detected: has no log in {logs}"]
+        env = _failed_env(prd, frecs, int(step.group(1)) if step else None)
+        envs = [env] if env else []
+    return [f"run {run_id} did not finish {env}" for env in envs if env not in finished]
 
 
 def _changelog_versions(prd: Prd) -> set[str]:
@@ -316,7 +336,8 @@ def check_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
     base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
     prefix = deploy.prd_rel(prd, repo_root)
     rel = "errors.md" if prefix == "." else f"{prefix}/errors.md"
-    shas = deploy._git(repo_root, "rev-list", "--reverse", "--end-of-options", f"{base}..{head}").split()
+    commits = [ln.split() for ln in deploy._git(repo_root, "rev-list", "--parents", "--reverse", "--end-of-options", f"{base}..{head}").splitlines()]
+    shas = [c[0] for c in commits]
 
     cache: dict[str, dict[str, ErrorEntry]] = {}
 
@@ -327,16 +348,16 @@ def check_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
         return cache[text]
 
     out: list[tuple[str, str]] = []
-    prev = ledger_at(base)
-    for sha in shas:
+    for sha, *parents in commits:
         cur = ledger_at(sha)
-        if cur is not prev:
-            out += _structure(prev, cur)
-        prev = cur
+        for parent in parents:  # a merge is compared with each parent
+            prev = ledger_at(parent)
+            if cur is not prev:
+                out += _structure(prev, cur)
 
     is_code = trace.outside_prd(prd, repo_root)
     for sha in shas:
-        files = [f for f in deploy._git(repo_root, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--root", sha).split("\0") if f]
+        files = [f for f in deploy._git(repo_root, "diff-tree", "-m", "--no-commit-id", "--name-only", "-r", "-z", "--root", sha).split("\0") if f]
         if not any(is_code(f) for f in files):
             continue
         body = deploy._git(repo_root, "log", "-1", "--format=%B", sha)
@@ -347,7 +368,7 @@ def check_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
                 out.append((eid, f"commit {sha[:8]} changes code and cites {eid}, which was not confirmed at that commit"))
 
     start, end = ledger_at(base), ledger_at(head)
-    new = [e for i, e in end.items() if not e.open and (i not in start or start[i].open)]
+    new = [e for i, e in end.items() if not e.open and (i not in start or start[i].resolution != e.resolution)]
     if new:
         with tempfile.TemporaryDirectory(prefix="prd-error-check-") as tmp:
             try:

@@ -10,7 +10,7 @@ from deploy_fixture import deploy_repo
 from legacy import commit, git
 from test_deploy import OPS, change, deploy_cli, run_id_of
 
-from prdlint import errors, model, trace
+from prdlint import deploy, errors, model, trace
 
 PRD = "docs/prd/orders"
 ERRORS = f"{PRD}/errors.md"
@@ -152,10 +152,12 @@ def test_resolution_not_a_form(repo):
 
 
 def test_not_a_defect_and_run_without_t_are_forms(repo):
+    run_id = failed(repo)
+    good = good_run(repo)
     base = start(repo, entry(2), entry(3, title="B"))
     put(repo, ledger(entry(2, resolution="not a defect: the input was invalid"),
-                     entry(3, title="B", resolution="-, PRD 1.0.0, run 20261101T000000Z-all")))
-    assert check(repo, base) == []
+                     entry(3, title="B", resolution=f"-, PRD 1.0.0, run {good}")))
+    assert check(repo, base) == [] and run_id != good
 
 
 def test_t_id_without_a_test_case(repo):
@@ -255,10 +257,52 @@ def test_run_that_finished_the_environment(repo):
     assert check(repo, base) == []
 
 
-def test_run_check_does_not_apply_when_detected_names_no_run(repo):
-    base = start(repo, entry(cls="environment"))
-    put(repo, ledger(entry(cls="environment", resolution="-, PRD 1.0.0, run 20261101T000000Z-all")))
-    assert check(repo, base) == []
+def good_run(repo) -> str:
+    change(repo, OPS, "echo Bad > .deploy/staging/greeting", "echo Hi > .deploy/staging/greeting")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0, r.stdout + r.stderr
+    return run_id_of(r)
+
+
+def resolve_env(repo, base, det, run, cls="environment"):
+    put(repo, ledger(entry(detected=det, cls=cls, resolution=f"-, PRD 1.0.0, run {run}")))
+    return check(repo, base)
+
+
+def test_run_without_a_log(repo):
+    run_id = failed(repo)
+    det = f"2026-11-03, deploy {run_id} step 1"
+    base = start(repo, entry(detected=det, cls="environment"))
+    gone = "20261101T000000Z-all"
+    assert resolve_env(repo, base, det, gone) == [pre() + f"run {gone} has no log in {deploy.log_dir(repo)}"]
+
+
+def test_failed_run_named_in_detected_without_a_log(repo):
+    run_id = failed(repo)
+    good = good_run(repo)
+    gone = "20261031T000000Z-all"
+    det = f"2026-11-03, deploy {gone} step 1"
+    base = start(repo, entry(detected=det, cls="environment"))
+    assert run_id != good
+    assert resolve_env(repo, base, det, good) == [pre() + f"the failed run {gone} named in Detected: has no log in {deploy.log_dir(repo)}"]
+
+
+def test_failed_environment_comes_from_the_log_when_detected_has_no_step(repo):
+    run_id = failed(repo)
+    det = f"2026-11-03, deploy {run_id}"
+    base = start(repo, entry(detected=det, cls="environment"))
+    assert resolve_env(repo, base, det, run_id) == [pre() + f"run {run_id} did not finish staging"]
+    good = good_run(repo)
+    assert resolve_env(repo, base, det, good) == []
+
+
+def test_detected_naming_no_run_needs_the_run_to_finish_its_plan(repo):
+    run_id = failed(repo)
+    det = "2026-11-03, reported by a user"
+    base = start(repo, entry(detected=det, cls="environment"))
+    assert resolve_env(repo, base, det, run_id) == [pre() + f"run {run_id} did not finish staging", pre() + f"run {run_id} did not finish production"]
+    good = good_run(repo)
+    assert resolve_env(repo, base, det, good) == []
 
 
 def code(repo, name, msg) -> str:
@@ -321,3 +365,57 @@ def test_refs_problems_gate_unit(repo):
     assert trace.refs_problems(prd, msg, code_commit=True) == [
         "E-002 is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"]
     assert base
+
+
+# --- fix round 1 ---
+
+@pytest.mark.parametrize("bad, finding", [
+    ("garbage ???", "resolution is not one of the three forms"),
+    ("T-001.1 [integration], PRD 1.0.0, fixed in 1234567", "commit 1234567 is not an ancestor of HEAD"),
+    ("T-001.1 [integration], PRD 9.9.9, fixed in {fix}", "PRD 9.9.9 is above the PRD version 1.0.0"),
+    ("T-001.9 [integration], PRD 1.0.0, fixed in {fix}", "T-001.9 has no test case"),
+])
+def test_rewriting_a_resolved_resolution_is_checked(repo, bad, finding):
+    base = start(repo, resolved(repo, fix()))
+    put(repo, ledger(resolved(repo, bad)))
+    assert check(repo, base) == [pre() + finding]
+
+
+def test_rewritten_resolution_needs_confirmed(repo):
+    base = start(repo, entry(confirmed=None, resolution="old free text"))
+    put(repo, ledger(resolved(repo, fix(), confirmed=None)))
+    assert check(repo, base) == [pre() + "resolved without Confirmed:"]
+
+
+def side_branch(repo, ledger_text=None):
+    git(repo, "checkout", "-q", "-b", "side")
+    if ledger_text:
+        put(repo, ledger_text, "On the side")
+    else:
+        code(repo, "side.txt", "On the side")
+    git(repo, "checkout", "-q", "main")
+    (repo / "README.md").write_text("main\n")
+    commit(repo, "Unrelated on main", "README.md")
+
+
+def test_merged_side_branch_is_clean(repo):
+    base = start(repo, entry(2))
+    side_branch(repo, ledger(entry(2), entry(3, title="B")))
+    git(repo, "merge", "-q", "--no-ff", "-m", "Merge side", "side")
+    assert check(repo, base) == []
+
+
+def test_deletion_inside_a_merge(repo):
+    base = start(repo, entry(2))
+    side_branch(repo)
+    git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
+    put(repo, ledger(), "Merge side")
+    assert check(repo, base) == [pre() + "deleted"]
+
+
+def test_merge_that_changes_code_and_cites_an_unconfirmed_entry(repo):
+    base = start(repo, entry(2, confirmed=None))
+    side_branch(repo)
+    git(repo, "merge", "-q", "--no-ff", "-m", "Merge side\n\nRefs: E-002", "side")
+    merge = sha(repo)[:8]
+    assert check(repo, base) == [pre() + f"commit {merge} changes code and cites E-002, which was not confirmed at that commit"]
