@@ -449,7 +449,13 @@ def finished_envs(log: list[dict], prd: Prd) -> list[str]:
     out = []
     for env, number in last.items():
         recs = [r for r in steps if r.get("step") == number]
-        if recs and all(r.get("result") == "pass" for r in recs):
+        if recs and recs[-1].get("result") == "human":  # a human step passes once confirmed and resumed, with nothing failing after it
+            idx = [i for i, r in enumerate(log) if r.get("kind") == "confirm" and r.get("step") == number]
+            ok = bool(idx) and any(r.get("kind") == "resume" and r.get("step") == number for r in log[idx[-1] + 1:])
+            later_fail = any(r.get("kind") == "step" and r.get("result") == "fail" and (r.get("step") or 0) > number for r in log)
+            if ok and not later_fail:
+                out.append(env)
+        elif recs and all(r.get("result") == "pass" for r in recs):
             out.append(env)
     return out
 
@@ -474,14 +480,33 @@ def _status_cell_mask(line: str) -> str:
     return "|".join(cells)
 
 
-def _mask(prd: Prd, rel: str, text: str) -> list[tuple[int, str]]:
+_SEP = re.compile(r"^\|\s*:?-+:?\s*(\|\s*:?-+:?\s*){4}\|$")
+_HEADER = ["Environment", "PRD version", "Commit", "Date", "Run"]
+
+
+def _deployed_section(text: str):
+    return next((s for s in sections(text) if s.title.strip().lower() == "deployed"), None)
+
+
+def _created_ok(prd: Prd) -> bool:
+    """A newly created Deployed section holds exactly its heading, header row, separator row and rows."""
+    s = _deployed_section(prd.docs.get("operations.md", ""))
+    if s is None:
+        return False
+    rows = {r.line for r in prd.operations.deployed}
+    rest = [t.strip() for n, t in s.body if t.strip() and n not in rows]
+    return len(rest) == 2 and [c.strip() for c in rest[0].strip("|").split("|")] == _HEADER and bool(_SEP.match(rest[1]))
+
+
+def _mask(prd: Prd, rel: str, text: str, created: bool = False) -> list[tuple[int, str]]:
     """The file's non-blank lines with the lines the close may change blanked out; (line number, text)."""
     lines = text.split("\n")
     drop: set[int] = set()
     if rel == "operations.md":
-        for s in sections(text):
-            if s.title.strip().lower() == "deployed":
-                drop.update([s.line] + [n for n, _ in s.body])
+        drop.update(r.line for r in prd.operations.deployed)  # only the data rows
+        s = _deployed_section(text)
+        if created and s is not None and _created_ok(prd):
+            drop.update([s.line] + [n for n, _ in s.body])
     elif rel in prd.docs and (rel == "nfr.md" or re.fullmatch(r"features/[^/]+\.md", rel)):
         for b in prd.blocks:
             if b.file == rel:
@@ -515,6 +540,8 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
     run_head = str(header.get("head"))
     if base != run_head:
         return [f"the range must start at the run's HEAD {run_head[:7]}"]
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=repo_root, capture_output=True, timeout=60).returncode != 0:
+        return ["the range's head does not descend from the run's HEAD"]
     prefix = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
     with tempfile.TemporaryDirectory(prefix="prd-deploy-check-") as tmp:
         try:
@@ -549,10 +576,6 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
     out += [f"Deployed {env}: more than one row" for env, n in seen.items() if n > 1]
     kept = set(seen)
     out += [f"Deployed {r.env}: a row may be replaced, not removed" for r in b_prd.operations.deployed if r.env not in kept]
-    hs = next((s for s in sections(h_prd.docs.get("operations.md", "")) if s.title.strip().lower() == "deployed"), None)
-    for n, text in (hs.body if hs else []):
-        if text.strip() and not text.lstrip().startswith("|"):
-            out.append(f"{prefix + '/' if prefix != '.' else ''}operations.md:{n}: {ONLY}")
 
     # statuses
     base_blocks = {b.id: b for b in b_prd.blocks}
@@ -570,15 +593,21 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             out.append(f"{bid}: still verified after a production finish")
     base_idx = {r.id: (r.status, r.since) for r in b_prd.index}
     for r in h_prd.index:
-        hb = head_blocks.get(r.id)
-        bb = base_blocks.get(r.id)
-        moved = base_idx.get(r.id) != (r.status, r.since) or (bb is not None and (bb.status, bb.since) != (hb.status, hb.since))
-        if hb is not None and moved and r.status != hb.status:
-            out.append(f"{r.id}: the §11 index says {r.status}, the block says {hb.status}")
+        hb, bb = head_blocks.get(r.id), base_blocks.get(r.id)
+        changed = base_idx.get(r.id) != (r.status, r.since)
+        if hb is None:
+            if changed:
+                out.append(f"{r.id}: the §11 index row changed but the PRD has no block {r.id}")
+            continue
+        moved = changed or (bb is not None and (bb.status, bb.since) != (hb.status, hb.since))
+        if moved and (r.status, r.since) != (hb.status, hb.since):
+            out.append(f"{r.id}: the §11 index says {r.status} since {r.since}, the block says {hb.status} since {hb.since}")
 
     # errors.md
     new = [e for i, e in h_prd.errors_ledger.items() if i not in b_prd.errors_ledger]
     drop_errors: set[int] = set()
+    if failed is not None and not new:
+        out.append(f"errors.md: the run failed at step {failed.get('step')} but no open unclassified entry was added")
     if failed is not None and len(new) == 1:
         e = new[0]
         etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
@@ -597,7 +626,7 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             bl = [(n, t) for n, t in enumerate(b_text.split("\n"), 1) if t.strip()]
             hl = [(n, t) for n, t in enumerate(h_text.split("\n"), 1) if t.strip()]
         else:
-            bl, hl = _mask(b_prd, rel, b_text), _mask(h_prd, rel, h_text)
+            bl, hl = _mask(b_prd, rel, b_text), _mask(h_prd, rel, h_text, created=_deployed_section(b_prd.docs.get("operations.md", "")) is None)
             if rel == "errors.md":
                 hl = [(n, t) for n, t in hl if n not in drop_errors]
         out += [f"{path}:{n}: {ONLY}" for n in _diff_lines(bl, hl)]

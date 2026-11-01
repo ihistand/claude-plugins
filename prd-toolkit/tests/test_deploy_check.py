@@ -321,3 +321,129 @@ def test_unknown_run_creates_no_log(repo):
         r = deploy_cli(repo, *args)
         assert r.returncode == 2 and r.stdout == "" and f"no log for run {bad}" in r.stderr, r.stderr
     assert sorted(p.name for p in deploy.log_dir(repo).iterdir()) == before
+
+
+# ---- fix round 1 ----
+
+HUMAN_LAST = """5. Smoke on production (actor: human) (env: production)
+   Do: look at production and reply "smoke ok"
+   Check: the reply says "smoke ok"
+"""
+
+
+def test_human_last_step_counts_as_finished_once_confirmed_and_resumed(repo):
+    change(repo, OPS, "5. Smoke on production (actor: agent) (env: production)\n   Run: tests smoke\n", HUMAN_LAST)
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert confirm(repo, run_id, step="5", reply="smoke ok").returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+    log = deploy.read_log(repo, run_id)
+    assert deploy.finished_envs(log, model.load(repo / PRD)) == ["staging", "production"]
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    close(repo, run_id)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_human_last_step_not_finished_before_it_is_confirmed(repo):
+    change(repo, OPS, "5. Smoke on production (actor: agent) (env: production)\n   Run: tests smoke\n", HUMAN_LAST)
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    assert resume(repo, run_id).returncode == 3
+    log = deploy.read_log(repo, run_id)
+    assert deploy.finished_envs(log, model.load(repo / PRD)) == ["staging"]
+    assert confirm(repo, run_id, step="5", reply="smoke ok").returncode == 0  # confirmed, not yet resumed
+    log = deploy.read_log(repo, run_id)
+    assert deploy.finished_envs(log, model.load(repo / PRD)) == ["staging"]
+
+
+def test_index_since_must_match(repo):
+    run_id = full_run(repo)
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    p = repo / PRD / "prd.md"
+    p.write_text(re.sub(r"^(\| FR-001 \|.*?\| live \| \S+ \| )1\.0\.0( \|)", r"\g<1>0.1.0\2", p.read_text(encoding="utf-8"), flags=re.M), encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(f.startswith("FR-001: ") and "index" in f and "0.1.0" in f for f in out), out
+
+
+def test_index_row_without_a_block_may_not_change(repo):
+    run_id = full_run(repo)
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    p = repo / PRD / "features/import.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("### FR-001 ", "### FR-001x ", 1), encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(f.startswith("FR-001: ") and "no block" in f for f in out), out
+
+
+def seed_deployed_section(repo, extra="") -> None:
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").rstrip("\n") + "\n\n## Deployed\n\n" + extra
+                 + "| Environment | PRD version | Commit | Date | Run |\n|---|---|---|---|---|\n", encoding="utf-8")
+    commit(repo, "Seed the Deployed section", OPS)
+
+
+def test_deployed_prose_deleted(repo):
+    seed_deployed_section(repo, "Rows are written by the deploy close.\n\n")
+    run_id = staging_run(repo)
+    p = repo / OPS
+    text = p.read_text(encoding="utf-8").replace("Rows are written by the deploy close.\n\n", "")
+    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id)
+    p.write_text(text.rstrip("\n") + "\n" + row + "\n", encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{OPS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_deployed_header_renamed(repo):
+    seed_deployed_section(repo)
+    run_id = staging_run(repo)
+    p = repo / OPS
+    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id)
+    p.write_text(p.read_text(encoding="utf-8").replace("PRD version", "Version").rstrip("\n") + "\n" + row + "\n", encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{OPS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_created_deployed_section_must_have_the_spec_header(repo):
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace("PRD version", "Version"), encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{OPS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_created_deployed_section_may_not_carry_prose(repo):
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace("\n## Deployed\n", "\n## Deployed\n\nAll good.\n"), encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{OPS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_failed_run_needs_its_entry(repo):
+    run_id = failed_run(repo)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Close without an entry")
+    out = findings(check(repo, run_id))
+    assert out == ["errors.md: the run failed at step 1 but no open unclassified entry was added"]
+
+
+def test_range_head_must_descend_from_base(repo):
+    run_id = staging_run(repo)
+    base = deploy.read_log(repo, run_id)[0]["head"]
+    git(repo, "checkout", "-q", "--orphan", "other")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Unrelated")
+    r = deploy_cli(repo, "check", "--run", run_id, "--diff", f"{base}..other")
+    assert findings(r) == ["the range's head does not descend from the run's HEAD"]
