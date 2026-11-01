@@ -2,7 +2,7 @@
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
 repo with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent
-that cannot read your code, and skills to author, adopt and change it. Version 0.3.0.
+that cannot read your code, and skills to author, adopt and change it. Version 0.4.0.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -28,6 +28,8 @@ install hint and exits 2.
 | `/prd-adopt [area]` | `prd-toolkit:adopting-prds` | Bring an existing repo under a PRD one area at a time, from the code, with the user's word on each requirement |
 | `/prd-change <description>` | `prd-toolkit:changing-prds` | Change the PRD first, with new IDs and a version bump, before any code |
 | `/prd-context [area] [IDs] [implement]` | `prd_context.py` | Print the focused context pack for one task: the decide pack, or with `implement` the implement pack |
+| `/prd-build [IDs]` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works in its own worktree while `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
+| `/prd-status` | `prd_status.py` | Show where each requirement stands |
 
 ## Lint CLI
 
@@ -119,6 +121,7 @@ the user cannot state.
 
 ## Changelog
 
+- **0.4.0:** `/prd-build` and the `building-from-prds` skill: `prd-builder` works in its own worktree while `prd-tester` writes its tests in the new `write` mode, and the build reconciles by quote. `/prd-status` (`prd_status.py`) and `prd_build_check.py`. `prd_hooks.py` vendors the scripts into `.prd-toolkit/`, installs `commit-msg` and `pre-commit` hooks (it never overwrites an existing hook and never sets `core.hooksPath`; with `core.hooksPath` set it writes no shim and prints the lines to add), and `ci --gitlab|--github` generates a merge-gate include file. `prd_lint.py --ci`. The Levels table in `testing.md` gains a `Gate` column (`build` or `deploy`). The commit rule covers new projects and checks cited IDs (deletions and rename sources count). Built blocks carry `Source:`. Statuses move `approved`, `built`, `verified` with no version bump. Upgrading a 0.3 PRD: lint fails `test-level` until `testing.md`'s Levels table has a Gate column (build or deploy), a patch bump. Generated CI jobs install only `uv`, so each standards linter and Levels harness command must run on a bare runner (for example `uv run ...`); GitLab jobs run on merge-request pipelines.
 - **0.3.0:** `/prd-context` and `prd_context.py` (decide and implement packs); `adoption.md`; `Touches:` in `errors.md`; `changing-prds` works from the pack. Upgrading a 0.2 PRD: it fails `sections` until §8's table moves to `adoption.md` and §8 reads `See adoption.md.`, a patch bump. The managed `CLAUDE.md` block's wording changed in 0.3: re-render it with `prd_block.py`; until then, `prd_block.py --check` reports it stale.
 - **0.2.0:** `/prd-adopt` and `adopting-prds`; `testing-from-prds`, the `prd-tester` agent and its guard hook; `prd_trace.py`; the `awaiting <who>` assumption status. Upgrading a 0.1 PRD: it fails `sections` until its `testing.md` Harness has every slot, in order, and a `Test roots:` list.
 - **0.1.0:** `/prd-new`, `/prd-change`, `prd_lint.py` (27 rules) and `prd_block.py`.
@@ -147,6 +150,8 @@ docs/prd/<project>/
 ├── testing.md              levels, harness, environments, sign-offs
 ├── operations.md           environments, deploy and rollback runbook
 └── errors.md               the Error-Driven Development ledger
+
+.prd-toolkit/               vendored scripts, version file and hook sources (written by prd_hooks.py install)
 ```
 
 The exact syntax lint parses is `references/prd-format.md`. The starting files are in

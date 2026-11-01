@@ -41,25 +41,29 @@ export const plugins = [
   {
     id: 'prd-toolkit',
     name: 'prd-toolkit',
-    version: '0.3.0',
-    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent that cannot read your code, and skills to author, adopt and change it. Includes /prd-new, /prd-adopt, /prd-change and /prd-context.',
+    version: '0.4.0',
+    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent that cannot read your code, and skills to author, adopt and change it, and a builder that takes an approved change to verified code. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build and /prd-status.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
       { name: '/prd-new', description: 'Start a PRD for a new project', workflow: 'Interview → docs/prd/<slug>/ with contracts and test cases → lint → prd-tester dry run → approve → CLAUDE.md block' },
       { name: '/prd-adopt', description: 'Bring an existing repo, one area at a time, under a PRD', workflow: 'Bootstrap → extract as-built requirements with sources → user confirms each one → prd-tester characterization suite → trace → approve' },
       { name: '/prd-change', description: 'Change the PRD before changing behaviour', workflow: 'New or changed IDs → version bump → lint → approval → only then the code' },
       { name: '/prd-context', description: 'Print the focused context pack for one PRD task', workflow: 'Pick the PRD → decide or implement pack for an area or requirement IDs → prd_context.py prints only what the task needs' },
+      { name: '/prd-build', description: 'Build approved PRD changes to verified code', workflow: 'Pick the approved IDs → prd-builder in its own worktree while prd-tester writes the tests → merge → quote-based reconcile → statuses approved → built → verified' },
+      { name: '/prd-status', description: 'Show where each requirement stands', workflow: 'prd_status.py reads the PRD and the build state → prints each requirement as approved, built or verified' },
     ],
     skills: [
       { name: 'authoring-prds', description: 'Interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from; also approves and signs off a draft PRD' },
       { name: 'changing-prds', description: 'Changes the PRD first, with new IDs and a version bump, before any code, when behaviour changes in a repo that has docs/prd/' },
       { name: 'adopting-prds', description: 'Brings an existing codebase under a PRD one area at a time: extracts as-built requirements with sources, confirms intent with the user, and closes each area with characterization tests run by prd-tester' },
+      { name: 'building-from-prds', description: 'Takes approved PRD changes to verified code: a builder works in its own worktree, the tester writes its tests, the build reconciles by quote and moves statuses approved, built, verified' },
       { name: 'testing-from-prds', description: 'Black-box testing from the PRD alone, run by the prd-tester agent for dry runs and suites; the caller checks integrity after each dispatch' },
     ],
     references: [
       { label: 'Design spec', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-29-prd-toolkit-design.md' },
       { label: 'Design spec (0.2)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md' },
       { label: 'Design spec (0.3)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md' },
+      { label: 'Design spec (0.4)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md' },
     ],
   },
 ]
