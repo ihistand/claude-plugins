@@ -18,3 +18,9 @@ def test_every_rule_has_a_failing_case():
     import test_rules_contracts as d, test_rules_registries as e
     covered = {case.rule for m in (a, b, c, d, e) for case in m.CASES}
     assert covered == SPEC_RULES
+
+
+def test_trace_rules_are_five():
+    from prdlint.trace import TRACE_RULES
+
+    assert TRACE_RULES == ("t-implemented", "test-cites-live", "commit-refs", "status-current", "known-failing-tags")

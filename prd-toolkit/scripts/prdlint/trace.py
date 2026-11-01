@@ -7,9 +7,10 @@ from pathlib import Path
 from .findings import Finding
 from .model import Prd, gate_of
 
-TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-current")
+TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-current", "known-failing-tags")
 
 CITE = re.compile(r"@prd\s+(T-\d{3}\.\d+)\b")
+TAG = re.compile(r"@prd\s+(T-\d{3}\.\d+)\s+known-failing:?\s+(E-\d+)\b")
 _REFS = re.compile(r"^Refs:[ \t]*(.*)$", re.MULTILINE)
 _REQ_ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
 _ERR_ID = re.compile(r"E-\d+")
@@ -35,9 +36,9 @@ def _roots(prd: Prd, repo_root: Path) -> list[Path]:
     return [(repo_root / r.strip().rstrip("/")) for r in roots]
 
 
-def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
-    """T-id -> [(file relative to repo_root, line)] for every `@prd T-nnn.n` under the test roots."""
-    out: dict[str, list[tuple[str, int]]] = {}
+def _scan(prd: Prd, repo_root: Path, rx: re.Pattern) -> list[tuple[tuple[str, ...], str, int]]:
+    """Every match of `rx` under the test roots as (groups, file relative to repo_root, line)."""
+    out: list[tuple[tuple[str, ...], str, int]] = []
     seen: set[Path] = set()
     for root in _roots(prd, repo_root):
         files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file()) if root.is_dir() else []
@@ -53,8 +54,24 @@ def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
                 continue
             rel = p.relative_to(repo_root).as_posix() if p.is_relative_to(repo_root) else p.as_posix()
             for n, line in enumerate(text.split("\n"), 1):
-                for m in CITE.finditer(line):
-                    out.setdefault(m.group(1), []).append((rel, n))
+                for m in rx.finditer(line):
+                    out.append((m.groups(), rel, n))
+    return out
+
+
+def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
+    """T-id -> [(file relative to repo_root, line)] for every `@prd T-nnn.n` under the test roots."""
+    out: dict[str, list[tuple[str, int]]] = {}
+    for (tid,), rel, n in _scan(prd, repo_root, CITE):
+        out.setdefault(tid, []).append((rel, n))
+    return out
+
+
+def tagged_citations(prd: Prd, repo_root: Path) -> dict[tuple[str, str], list[tuple[str, int]]]:
+    """(T-id, E-id) -> [(file relative to repo_root, line)] for every `@prd T-nnn.n known-failing E-nnn`."""
+    out: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for (tid, eid), rel, n in _scan(prd, repo_root, TAG):
+        out.setdefault((tid, eid), []).append((rel, n))
     return out
 
 
@@ -193,6 +210,23 @@ def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]
             findings.append(Finding(b.file, line, "t-implemented", f"{tid} ({b.id}) is cited by no test; add `@prd {tid}` to the test that proves it"))
             if b.status in ("verified", "live") or (b.status == "built" and level == "unit"):
                 findings.append(Finding(b.file, line, "status-current", f"{b.id} is {b.status} but {tid} has no citing test"))
+
+    tagged = tagged_citations(prd, repo_root)
+    cases = {tc.id: tc for tc in prd.test_cases}
+    for tc in prd.test_cases:
+        eid = tc.data.get("known-failing")
+        if isinstance(eid, str) and (tc.id, eid) not in tagged:
+            findings.append(Finding(tc.file, tc.line, "known-failing-tags",
+                                    f"{tc.id} is known-failing on {eid} but no citation is tagged `known-failing {eid}`"))
+    for (tid, eid), places in sorted(tagged.items()):
+        tc = cases.get(tid)
+        entry = prd.errors_ledger.get(eid)
+        for file, line in places:
+            where = _rel(prd, repo_root / file)
+            if tc is not None and tc.data.get("known-failing") != eid:
+                findings.append(Finding(where, line, "known-failing-tags", f"tags {tid} known-failing {eid}, but its test case is not known-failing on {eid}"))
+            if entry is not None and not entry.open:
+                findings.append(Finding(where, line, "known-failing-tags", f"tags {tid} known-failing {eid}, which is resolved"))
 
     if rev_range:
         inside_boundary = in_boundary(prd, repo_root)
