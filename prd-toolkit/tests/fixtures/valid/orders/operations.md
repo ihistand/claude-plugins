@@ -2,17 +2,43 @@
 
 ## Environments
 
-| Environment | URL |
-|---|---|
-| local | http://localhost:8080 |
-| ci | none; runs inside the pipeline |
-| staging | https://orders-staging.example.com |
-| production | https://orders.example.com |
+| Environment | URL | Production |
+|---|---|---|
+| local | http://localhost:8080 | no |
+| ci | none; runs inside the pipeline | no |
+| staging | https://orders-staging.example.com | no |
+| production | https://orders.example.com | yes |
 
 ## Runbook
 
-1. Deploy the build with `./deploy.sh staging`, then run the system tests. (actor: agent)
-2. Deploy to production with `./deploy.sh production` after the owner approves. (actor: human)
+1. Deploy to staging (actor: agent) (env: staging)
+   Run: `./deploy.sh staging`
+   Check: `curl -fsS https://orders-staging.example.com/health` prints `ok`
+   Rollback: `./deploy.sh staging --previous`
+2. System tests on staging (actor: agent) (env: staging)
+   Run: tests system, e2e
+3. Approve production (actor: human) (env: production)
+   Do: read the staging results and reply "deploy production"
+   Check: the reply says "deploy production"
+4. Deploy to production (actor: agent) (env: production)
+   Run: `./deploy.sh production`
+   Check: `curl -fsS https://orders.example.com/health` prints `ok`
+   Rollback: `./deploy.sh production --previous`
+5. Smoke on production (actor: agent) (env: production)
+   Run: tests smoke
+
+## Deployed
+
+| Environment | PRD version | Commit | Date | Run |
+|---|---|---|---|---|
+| production | 1.0.0 | 3f2c1a9 | 2026-11-02 | 20261102T103000Z-production |
+
+## Drift
+
+| Environment | Check | Introspection command |
+|---|---|---|
+| production | version | `curl -fsS https://orders.example.com/version` |
+| production | config | `curl -fsS https://orders.example.com/settings` |
 
 ## Secrets
 

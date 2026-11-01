@@ -43,8 +43,8 @@ def test_fixture_loads_without_findings(prd):
     assert all(b.status == "live" and b.since == "1.0.0" for b in p.blocks)
     assert "contracts/errors.yaml" in p.yaml and "contracts/dependencies/geocoder.yaml" in p.yaml
     assert "features/import.md" in p.docs and "contracts/events.md" in p.docs
-    assert set(p.testing.levels) == {"unit", "integration", "component", "system", "e2e", "acceptance"}
-    assert set(p.testing.environments) == {"local", "ci", "staging"}
+    assert set(p.testing.levels) == {"unit", "integration", "component", "system", "e2e", "acceptance", "smoke"}
+    assert set(p.testing.environments) == {"local", "ci", "staging", "production"}
     assert len(p.testing.fixtures) == 3 and p.testing.signoffs
     assert [r.cells[0] for r in p.assumptions] == ["A-01"]
 

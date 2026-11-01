@@ -71,7 +71,7 @@ def test_fixture_roles_name_a_secret_and_environments_parse(prd):
     p = model.load(prd)
     roles = p.yaml["contracts/permissions.yaml"]["roles"]
     assert all(isinstance(r.get("secret"), str) and r["secret"] for r in roles.values())
-    assert set(p.testing.environments) == {"local", "ci", "staging"}
+    assert set(p.testing.environments) == {"local", "ci", "staging", "production"}
 
 
 def _flat(path: Path) -> str:

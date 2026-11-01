@@ -13,3 +13,18 @@ T-004.1:
     effects: []
     errors: []
     leaks: none
+
+T-004.2:
+  ac: AC-004.1
+  level: smoke
+  target: op:getOrder
+  environment: production
+  identity: test-rep
+  preconditions: []
+  input:
+    id: 1
+  expect:
+    output: {status: 200, p95_ms_max: 300}
+    effects: []
+    errors: []
+    leaks: none

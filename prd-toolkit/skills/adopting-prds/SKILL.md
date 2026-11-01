@@ -23,10 +23,21 @@ nothing below.
 
 Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (`adoption.md`, `| Area | State | Boundary |`; §8 holds only `See adoption.md.`),
 `as-built` blocks with `Source: <file>:<line> @<commit>`, the `errors.md` ledger and
-`known-failing: E-nnn`. Read it before writing. Lint, the mechanical gate:
+`known-failing: E-nnn`. Read it before writing. **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
+directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
+root is two directories above the skill's base directory (Claude Code shows it as "Base
+directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
+Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
+A script that is not found is a tool error: report it, never guess another path.
+A first adoption has no `.prd-toolkit/` until the hooks install, so it uses the plugin path; a later
+area in an adopted repo uses the vendored copy, so lint and trace match what CI runs.
+
+Lint, the mechanical gate:
 
 ```bash
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
+uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
 ```
 
 The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `2` usage or internal error. Ignore the Bash call's own success; the trailing echo always succeeds. Use this form every time you run lint.
@@ -102,9 +113,19 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   and skills rows from this session's skills listing (§6), every row's Decision `proposed`; the
   four `{{…}}` slots; each optional contract populated or declared `Not applicable`; the
   Harness in `testing.md`, with `Test roots:`; for the Levels table, ask the user which Gate
-  (`build` or `deploy`) each level runs at, and never keep the template's Gate silently.
+  (`build` or `deploy`) each level runs at, and never keep the template's Gate silently. A
+  build-gate Harness command never collects a deploy-gate level's test path (`pytest tests`
+  collects `tests/system`): give each level its own path. Lint reports an overlap (`test-level`).
   Anything only the user knows (the owner, intent, environments, secrets) stays a
   `[NEEDS CLARIFICATION: …]` marker.
+- **Operations** (`operations.md` is project-wide, so this is read from the repo, not from the
+  extractor's report): the adopter writes the runbook as-built, from the repo's deploy scripts, CI
+  files and docs, in the grammar of `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md` (Environments
+  with the `Production` column, and `(actor: …) (env: …)` steps with their labelled lines), and
+  writes `[NEEDS CLARIFICATION]` for a command it cannot find; it invents no deploy command. When
+  the repo has deployed environments, offer the `## Drift` table (a `version` row, and a `config`
+  row when `contracts/config.yaml` exists) with the introspection command the code already has,
+  and write it only on the user's yes.
 - **Test roots:** list every directory that already holds the project's tests (find them with
   Glob: test files, test configs, a test framework's own folder), each backticked, then any new
   directory the characterization suite needs. Never leave an existing test directory out: the
@@ -187,7 +208,7 @@ leave the area `extracted`.
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
 per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
-`uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --for implement --req <ID>; echo "prd-context-exit=$?"`.
+`uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --for implement --req <ID>; echo "prd-context-exit=$?"`.
 The `prd-context-exit=` value must be `0` or `1`; `1` marks STALE regions, which the preview shows as they are. Never pipe, filter or truncate the pack's output (no `| head`, no `| grep`): `prd-context-exit=` then reports the filter's status, not the pack's. The
 options:
 
@@ -254,7 +275,7 @@ files; if a test case changed since, run step 4 again.
 3. **Trace,** before the user's approval and before any commit:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
+   uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
    `prd-trace-exit=2` is a tool error, never a pass: fix and rerun. A finding on `features/<area>.md`, or a `test-cites-live` finding that names one of the area's T-ids, blocks: set the row back to `confirmed` and return to step 4. Any other finding predates this area: show it to the user as pre-existing; it does not block.
@@ -280,8 +301,8 @@ files; if a test case changed since, run step 4 again.
    in place of `--github` for a GitLab project):
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --github docs/prd/<slug>
+   uv run --script <scripts>/prd_hooks.py install docs/prd/<slug>
+   uv run --script <scripts>/prd_hooks.py ci --github docs/prd/<slug>
    ```
 
    A yes also commits `.prd-toolkit/` and the CI file. Hooks change no code; CI then gates every

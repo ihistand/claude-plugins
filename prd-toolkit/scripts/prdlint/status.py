@@ -4,10 +4,10 @@ from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
-from . import trace
+from . import deploy, trace
 from .model import Prd, gate_of
 
-PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Matrix")
+PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Deployed", "Matrix")
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,48 @@ def _open_errors(prd: Prd) -> list[StatusItem]:
     return rows or [StatusItem("Open errors", None, "None.")]
 
 
+def _stopped(prd: Prd, repo_root: Path, env: str, after: str | None) -> str | None:
+    """`run <id> stopped (<state>) at step <N>` for the newest usable log of this PRD that touches `env` and did not finish it."""
+    try:
+        run_ids = sorted((p.stem for p in deploy.log_dir(repo_root).glob("*.jsonl")), reverse=True)
+        mine = deploy.prd_rel(prd, repo_root)
+    except Exception:
+        return None
+    for run_id in run_ids:
+        if after and run_id <= after:
+            break
+        try:
+            log = deploy.read_log(repo_root, run_id)
+            if not log or log[0].get("kind") != "header" or log[0].get("prd") != mine:
+                continue  # another PRD's run, or a log too old to name its PRD
+            touched = [r for r in log if r.get("kind") in ("start", "step") and r.get("env") == env]
+            if not touched:
+                continue
+            if env in deploy.finished_envs(log, prd):
+                return None
+            last = touched[-1]
+            state = "unfinished" if last["kind"] == "start" else {"human": "human", "fail": "failed"}.get(last.get("result"), "unfinished")
+            return f"run {run_id} stopped ({state}) at step {last['step']}"
+        except Exception:
+            continue
+    return None
+
+
+def _deployed(prd: Prd, repo_root: Path) -> list[StatusItem]:
+    ops = prd.operations
+    rows = {r.env: r for r in ops.deployed}
+    names = list(ops.environments) + [e for e in rows if e not in ops.environments]
+    out = []
+    for env in names:
+        row = rows.get(env)
+        if row:
+            out.append(StatusItem("Deployed", env, f"{env}: {row.version} at {row.commit}, {row.date}"))
+        stopped = _stopped(prd, repo_root, env, row.run if row else None)
+        if stopped:
+            out.append(StatusItem("Deployed", env, f"{env}: {stopped}"))
+    return out or [StatusItem("Deployed", None, "None.")]
+
+
 def _matrix(prd: Prd, repo_root: Path) -> list[StatusItem]:
     cited = trace.citations(prd, repo_root)
     rows = []
@@ -70,7 +112,7 @@ def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusIte
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
     return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
-            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _matrix(prd, repo_root))
+            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 
 
 def render_text(items: list[StatusItem]) -> str:

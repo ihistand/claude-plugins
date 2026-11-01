@@ -72,7 +72,7 @@ CASES: list[Case] = [
     Case("test-cases-consistent", "Tests line cites an entry that is absent", _edit("features/api.md", TESTS_002, TESTS_002.replace("T-002.2 [integration]", "T-002.2 [integration], T-002.9 [unit]"))),
     Case("test-cases-consistent", "entry no Tests line cites", _append("test-cases/import.yaml", "\nT-001.9:\n  ac: AC-001.1\n  level: unit\n")),
     Case("test-cases-consistent", "named file missing", _edit("features/api.md", TESTS_003, TESTS_003.replace("api.yaml", "orders.yaml"))),
-    Case("test-level", "level smoke", _edit("test-cases/import.yaml", "  ac: AC-001.3\n  level: unit", "  ac: AC-001.3\n  level: smoke")),
+    Case("test-level", "level nightly", _edit("test-cases/import.yaml", "  ac: AC-001.3\n  level: unit", "  ac: AC-001.3\n  level: nightly")),
     Case("test-level", "level missing", _edit("test-cases/import.yaml", "  ac: AC-001.3\n  level: unit\n", "  ac: AC-001.3\n")),
     Case("sufficiency", "leaks deleted", _edit("test-cases/import.yaml", "    errors: [IMPORT_DUPLICATE]\n    leaks: none\n", "    errors: [IMPORT_DUPLICATE]\n")),
     Case("sufficiency", "signoff deleted", _edit("test-cases/import.yaml", "  signoff: Sample Owner\n", "")),
@@ -81,7 +81,7 @@ CASES: list[Case] = [
     Case("sufficiency", "target kind unknown", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: widget:importer")),
     Case("sufficiency", "input empty", _edit("test-cases/api.yaml", "  input:\n    id: 999\n", "  input: {}\n")),
     Case("sufficiency", "errors not a list", _edit("test-cases/api.yaml", "    errors: [ORDER_NOT_FOUND]", "    errors: ORDER_NOT_FOUND")),
-    Case("sufficiency", "output missing", _edit("test-cases/nfr.yaml", "    output: {status: 200, p95_ms_max: 300}\n", "")),
+    Case("sufficiency", "output missing", _edit("test-cases/nfr.yaml", "    id: 1\n    load: 50 requests/s for 60 s\n  expect:\n    output: {status: 200, p95_ms_max: 300}\n", "    id: 1\n    load: 50 requests/s for 60 s\n  expect:\n")),
     Case("sufficiency", "unparseable file", _write("test-cases/nfr.yaml", ": : :\n")),
     Case("test-refs", "precondition fixture not registered", _edit("test-cases/api.yaml", "T-002.1:\n  ac: AC-002.1\n  level: integration\n  target: op:getOrder\n  environment: ci\n  identity: test-rep\n  preconditions: [customers/two_customers, orders/one_existing]", "T-002.1:\n  ac: AC-002.1\n  level: integration\n  target: op:getOrder\n  environment: ci\n  identity: test-rep\n  preconditions: [customers/two_customers, orders/missing]")),
     Case("test-refs", "fixture registered but no file", _both(
@@ -91,8 +91,8 @@ CASES: list[Case] = [
     Case("test-refs", "refs names a missing file", _edit("test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "contracts/nowhere.md"]')),
     Case("test-refs", "refs names a missing heading", _edit("test-cases/import.yaml", '"contracts/events.md#import_orders"', '"contracts/events.md#export_orders"')),
     Case("test-refs", "refs escapes the PRD folder", _edit("test-cases/import.yaml", '"testing.md#Harness"]', '"testing.md#Harness", "../../README.md"]')),
-    Case("test-refs", "identity unknown", _edit("test-cases/nfr.yaml", "identity: test-rep", "identity: test-nobody")),
-    Case("test-refs", "op typo", _edit("test-cases/nfr.yaml", "target: op:getOrder", "target: op:getOrdr")),
+    Case("test-refs", "identity unknown", _edit("test-cases/nfr.yaml", "identity: test-rep\n  preconditions: [customers/two_customers, orders/one_existing]\n  input:\n    id: 1\n    load", "identity: test-nobody\n  preconditions: [customers/two_customers, orders/one_existing]\n  input:\n    id: 1\n    load")),
+    Case("test-refs", "op typo", _edit("test-cases/nfr.yaml", "  level: system\n  target: op:getOrder", "  level: system\n  target: op:getOrdr")),
     Case("test-refs", "table typo", _edit("test-cases/import.yaml", "target: code:importer.import_file", "target: table:order")),
     Case("test-refs", "job typo", _edit("test-cases/import.yaml", "  ac: AC-001.2\n  level: integration\n  target: job:import_orders", "  ac: AC-001.2\n  level: integration\n  target: job:import_order")),
     Case("test-refs", "ac number differs", _edit("test-cases/api.yaml", "T-002.1:\n  ac: AC-002.1", "T-002.1:\n  ac: AC-001.1")),
@@ -175,7 +175,7 @@ def test_builtin_type_name_is_not_a_target_kind(prd):
 
 
 def test_non_mapping_case_is_reported_once_by_the_loader(prd):
-    _edit("test-cases/nfr.yaml", "T-004.1:\n  ac:", "T-004.1: oops\nT-004.2:\n  ac:")(prd)
+    _edit("test-cases/nfr.yaml", "T-004.1:\n  ac:", "T-004.1: oops\nT-004.9:\n  ac:")(prd)
     messages = [f.message for f in lint(prd) if f.rule == "sufficiency" and "T-004.1" in f.message]
     assert len(messages) == 1
 
@@ -253,3 +253,87 @@ def test_custom_items_maps_types_to_top_level_keys(prd):
     assert custom_items(model.load(prd)) == {}
     _looker(prd)
     assert custom_items(model.load(prd)) == {"looker": {"orders_summary"}}
+
+
+# ---- final review: a build-gate command must not collect deploy-gate tests (finding 3) ----
+
+def _harness(level: str, command: str):
+    import re
+
+    def go(prd):
+        p = prd / "testing.md"
+        text = p.read_text(encoding="utf-8")
+        new, n = re.subn(rf"^(\| {level} \| )`[^`]*`", lambda m: m.group(1) + f"`{command}`", text, flags=re.M)
+        assert n == 1, level
+        p.write_text(new, encoding="utf-8")
+    return go
+
+
+def overlap(prd):
+    return [f for f in lint(prd) if f.rule == "test-level" and "would collect" in f.message]
+
+
+@pytest.mark.parametrize("command,path", [("pytest tests", "tests/system"), ("pytest tests/", "tests/system"),
+                                          ("uv run pytest .", "tests/system"), ("pytest ./tests/system", "tests/system"),
+                                          ("TEST_ENV=ci python -m pytest -q tests", "tests/system")])
+def test_build_level_that_collects_a_deploy_level(prd, command, path):
+    _harness("unit", command)(prd)
+    found = overlap(prd)
+    assert f"level 'unit' (Gate build) would collect level 'system' (Gate deploy) tests: {path}" in [f.message for f in found]
+    assert all(f.file == "testing.md" for f in found)
+    lines = (prd / "testing.md").read_text(encoding="utf-8").split("\n")
+    assert all(lines[f.line - 1].startswith("| unit |") for f in found)
+
+
+@pytest.mark.parametrize("command", ["pytest tests/unit", "pytest tests/systematic", "bash tools/gate.sh unit",
+                                     "cd tools && bash gate.sh unit", "./node_modules/.bin/jest"])
+def test_build_level_that_does_not_collect_a_deploy_level(prd, command):
+    _harness("unit", command)(prd)
+    assert overlap(prd) == []
+
+
+def test_deploy_levels_sharing_a_runner_script_are_not_an_overlap(prd):
+    for level in ("unit", "system", "smoke"):
+        _harness(level, f"bash tools/gate.sh {level}")(prd)
+    assert overlap(prd) == []
+
+
+# ---- R32: option values are not paths; exclusion and selection options narrow what a build collects ----
+
+@pytest.mark.parametrize("command", [
+    "pytest --ignore tests/system tests/unit",
+    "pytest --ignore=tests/system --ignore=tests/e2e --ignore=tests/smoke tests",
+    "pytest tests --ignore tests/system --ignore tests/e2e --ignore tests/smoke",
+    "pytest tests --ignore-glob 'tests/[se]*'",
+    "pytest --deselect tests/system --deselect tests/e2e --deselect tests/smoke tests",
+    'pytest -m "not system and not e2e and not smoke" tests',
+    'pytest -k "not system" tests',
+    "python -m pytest -m unit tests",
+    "uv run pytest -q -m 'not system' .",
+])
+def test_build_level_that_excludes_or_selects_is_not_an_overlap(prd, command):
+    _harness("unit", command)(prd)
+    assert overlap(prd) == []
+
+
+def test_an_exclusion_covers_only_the_paths_it_names(prd):
+    _harness("unit", "pytest --ignore tests/system tests")(prd)
+    msgs = [f.message for f in overlap(prd)]
+    assert msgs == ["level 'unit' (Gate build) would collect level 'e2e' (Gate deploy) tests: tests/e2e",
+                    "level 'unit' (Gate build) would collect level 'smoke' (Gate deploy) tests: tests/smoke"]
+
+
+def test_excluding_a_file_inside_a_deploy_path_still_overlaps(prd):
+    _harness("unit", "pytest --ignore tests/system/test_a.py tests")(prd)
+    assert "tests/system" in " ".join(f.message for f in overlap(prd))
+
+
+def test_an_option_value_is_never_the_path(prd):
+    # --basetemp's value is a directory; the path the build collects is `tests`
+    _harness("unit", "pytest --basetemp build/tmp tests")(prd)
+    assert "level 'unit' (Gate build) would collect level 'system' (Gate deploy) tests: tests/system" in [f.message for f in overlap(prd)]
+
+
+def test_python_dash_m_names_the_runner_not_a_selection(prd):
+    _harness("unit", "python -m pytest tests")(prd)
+    assert len(overlap(prd)) == 3

@@ -183,6 +183,8 @@ def index_consistent(prd: Prd):
         if a.state in ADOPTION_STATES and a.state != "not started" and f"features/{a.area}.md" not in prd.docs:
             yield Finding("adoption.md", a.line, "index-consistent", f"adoption area '{a.area}' is {a.state} but features/{a.area}.md does not exist")
     for e in prd.errors_ledger.values():
+        if e.classification == "unclassified" and not e.open:
+            yield Finding("errors.md", e.line, "index-consistent", f"{e.id}: unclassified is allowed only on an open entry")
         for req, n in e.touches:
             if req not in block:
                 yield Finding("errors.md", n, "index-consistent", f"{e.id} Touches {req}, which no block defines")

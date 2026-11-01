@@ -257,3 +257,54 @@ def test_install_writes_gitignore_for_pycache(repo):
     hooks.install(repo, PRD)
     assert (repo / ".prd-toolkit/.gitignore").read_text() == "__pycache__/\n"
     assert hooks.check(repo, PLUGIN_ROOT) == []
+
+
+def test_vendored_has_deploy_scripts(repo):
+    assert "prd_deploy.py" in hooks.VENDORED and "prd_drift.py" in hooks.VENDORED
+    hooks.install(repo, PRD)
+    for f in ("prd_deploy.py", "prd_drift.py", "prdlint/deploy.py", "prdlint/drift.py"):
+        assert (repo / ".prd-toolkit" / f).is_file(), f
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+
+
+def test_check_reports_stale_deploy_script(repo):
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/prd_deploy.py").write_text("# stale\n")
+    assert any("prd_deploy.py differs" in x for x in hooks.check(repo, PLUGIN_ROOT))
+
+
+# --- the vendored copy must run from .prd-toolkit/ alone (task 11 fix round 2) ---
+
+def test_vendors_the_block_template(repo):
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/templates/claude-block.md").read_bytes() == (PLUGIN_ROOT / "templates/claude-block.md").read_bytes()
+
+
+def test_check_reports_a_stale_vendored_block_template(repo):
+    hooks.install(repo, PRD)
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+    (repo / ".prd-toolkit/templates/claude-block.md").write_text("old\n")
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/templates/claude-block.md differs from the plugin copy"]
+    (repo / ".prd-toolkit/templates/claude-block.md").unlink()
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/templates/claude-block.md is missing"]
+
+
+def test_every_vendored_script_runs_from_the_vendored_copy(repo):
+    """No traceback, missing file or import error from any VENDORED script run in .prd-toolkit/ (exit codes for findings are fine)."""
+    hooks.install(repo, PRD)
+    git(repo, "add", "-A"); git(repo, "commit", "-q", "--no-verify", "-m", "init")
+    (repo / "msg.txt").write_text("feat: x\n\nRefs: none (no behaviour change)\n")
+    calls = {
+        "prd_lint.py": [PRD], "prd_trace.py": [PRD], "prd_status.py": [PRD], "prd_context.py": [PRD],
+        "prd_block.py": [PRD, "--claude-md", "CLAUDE.md"], "prd_build_check.py": [PRD, "--diff", "HEAD..HEAD"],
+        "prd_deploy.py": ["plan", PRD], "prd_drift.py": [PRD], "prd_hooks.py": ["check", PRD],
+        "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"],
+    }
+    assert set(calls) == set(hooks.VENDORED), set(hooks.VENDORED) ^ set(calls)
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    for name, args in calls.items():
+        r = subprocess.run([sys.executable, f".prd-toolkit/{name}", *args], cwd=repo, capture_output=True, text=True, env=env)
+        err = r.stdout + r.stderr
+        for bad in ("Traceback", "No such file", "ModuleNotFoundError", "ImportError", "FileNotFoundError"):
+            assert bad not in err, (name, err[-600:])
+    assert "prd-toolkit:start" in (repo / "CLAUDE.md").read_text()

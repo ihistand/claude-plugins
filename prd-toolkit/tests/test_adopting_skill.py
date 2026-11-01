@@ -121,7 +121,7 @@ def test_characterization_triage_and_gate():
 def test_trace_runs_on_the_adopted_row_before_approval():
     gate = step(SKILL.read_text(encoding="utf-8"), 5)
     order = ["1. **Gates.**", "2. **The adoption-map row.**", "3. **Trace,** before the user's approval and before any commit",
-             'prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"', "4. **Approval.**"]
+             'prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"', "4. **Approval.**"]
     at = [gate.find(o) for o in order]
     assert -1 not in at and at == sorted(at), dict(zip(order, at))
     assert ("Set only the area's row to `adopted`, uncommitted: trace scopes by that row. The status, the version "

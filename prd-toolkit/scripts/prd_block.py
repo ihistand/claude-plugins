@@ -23,7 +23,9 @@ from prdlint.markdown import tables  # noqa: E402
 
 START = "<!-- prd-toolkit:start -->"
 END = "<!-- prd-toolkit:end -->"
-TEMPLATE = Path(__file__).resolve().parent.parent / "templates/claude-block.md"
+_HERE = Path(__file__).resolve().parent
+# vendored in .prd-toolkit/, the template sits beside the script; in the plugin it is one level up
+TEMPLATE = _HERE / "templates/claude-block.md" if (_HERE / "templates/claude-block.md").is_file() else _HERE.parent / "templates/claude-block.md"
 
 
 class BlockError(Exception):

@@ -36,13 +36,15 @@ describe('plugins data', () => {
     }
   })
 
-  it('prd-toolkit has 6 commands', () => {
+  it('prd-toolkit has 7 commands', () => {
     const prd = plugins.find(p => p.id === 'prd-toolkit')
-    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status'])
-    expect(prd.version).toBe('0.4.0')
+    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy'])
+    expect(prd.version).toBe('0.5.0')
     expect(prd.description).toContain('/prd-context')
     expect(prd.description).toContain('/prd-build')
     expect(prd.description).toContain('/prd-status')
+    expect(prd.description).toContain('/prd-deploy')
+    expect(prd.skills.map(k => k.name)).toContain('deploying-from-prds')
     expect(prd.skills.map(k => k.name)).toContain('building-from-prds')
   })
 
@@ -56,6 +58,7 @@ describe('plugins data', () => {
     expect(urls.some(u => u.endsWith('/2026-10-29-prd-toolkit-0.2-design.md'))).toBe(true)
     expect(urls.some(u => u.endsWith('/2026-10-30-prd-toolkit-0.3-design.md'))).toBe(true)
     expect(urls.some(u => u.endsWith('/2026-10-31-prd-toolkit-0.4-design.md'))).toBe(true)
+    expect(urls.some(u => u.endsWith('/2026-11-01-prd-toolkit-0.5-design.md'))).toBe(true)
   })
 
   it('plugin ids match known routes', () => {

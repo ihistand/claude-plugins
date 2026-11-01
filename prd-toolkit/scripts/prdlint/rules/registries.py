@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..findings import Finding
 from ..markdown import sections, tables
-from ..model import Prd, repo_root
+from ..model import DRIFT_CHECKS, Prd, gate_of, production_envs, repo_root
 from ..registry import rule
 
 STANDARDS_DECISIONS = {"enforced", "declined", "proposed"}
@@ -111,16 +111,139 @@ def registries(prd: Prd) -> Iterator[Finding]:
                 yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed; if it is built into Claude Code, mark the row 'recommended'")
 
 
-_STEP = re.compile(r"^\s*\d+[.)]\s")
-_ACTOR = re.compile(r"\(actor:\s*(agent|human)\)")
+MIGRATION_HINT = " (prd-toolkit 0.5 runbook format)"
+_RUN_SHAPE = "step {n}: {label} must be one backticked command or tests <level>[, <level>]"
 
 
-@rule("runbook-actors")
-def runbook_actors(prd: Prd) -> Iterator[Finding]:
+@rule("runbook-steps")
+def runbook_steps(prd: Prd) -> Iterator[Finding]:
     text = prd.docs.get("operations.md")
     if text is None:
         return
-    sec = next((s for s in sections(text) if s.title.strip().lower() == "runbook"), None)
-    for n, line in sec.body if sec else []:
-        if _STEP.match(line) and not _ACTOR.search(line):
-            yield Finding("operations.md", n, "runbook-actors", "runbook step has no (actor: agent) or (actor: human)")
+    ops = prd.operations
+    old_format = bool(ops.steps) and not any(s.env is not None for s in ops.steps) and "(env:" not in text
+    first = True
+
+    def out(line: int, msg: str) -> Finding:
+        nonlocal first
+        msg += MIGRATION_HINT if first and old_format else ""
+        first = False
+        return Finding("operations.md", line, "runbook-steps", msg)
+
+    def marked(label: str, s) -> bool:  # an unfilled [NEEDS CLARIFICATION: ...] value is the markers-open rule's business
+        return "[NEEDS CLARIFICATION:" in s.labels[label][0]
+
+    expected = 1
+    for s in ops.steps:
+        n = s.number
+        if s.number != expected:
+            yield out(s.line, f"step {n}: expected step {expected}")
+        expected = s.number + 1
+        for label, line in s.repeated:
+            yield out(line, f"step {n}: label {label} appears twice")
+        if s.actor is None:
+            yield out(s.line, f"step {n}: the step line needs (actor: agent|human) (env: <environment>)")
+            continue
+        labels = s.labels
+        if s.actor == "human":
+            bad = [k for k in ("Run", "Rollback") if k in labels]
+            if bad:
+                yield out(labels[bad[0]][1], f"step {n}: a human step takes Do: and Check:, not {' or '.join(k + ':' for k in bad)}")
+            elif "Do" not in labels or "Check" not in labels:
+                yield out(s.line, f"step {n}: a human step needs Do: and Check:")
+            continue
+        if "Do" in labels:
+            yield out(labels["Do"][1], f"step {n}: an agent step takes Run:, Check: and Rollback:, not Do:")
+        if "Run" not in labels:
+            yield out(s.line, f"step {n}: an agent step needs Run:")
+        elif s.run is None and s.tests is None and not marked("Run", s):
+            yield out(labels["Run"][1], _RUN_SHAPE.format(n=n, label="Run:") + f"; got '{labels['Run'][0]}'")
+        if s.tests is not None:
+            if not s.tests:
+                yield out(labels["Run"][1], f"step {n}: a tests step names no levels")
+            if "Check" in labels:
+                yield out(labels["Check"][1], f"step {n}: a tests step has no Check:")
+            if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
+                yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
+            continue
+        if "Check" not in labels:
+            yield out(s.line, f"step {n}: an agent step needs Check:")
+        elif s.check is None and not marked("Check", s):
+            yield out(labels["Check"][1], f"step {n}: Check: must be one backticked command, optionally followed by prints `<text>`; got '{labels['Check'][0]}'")
+        if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
+            yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
+
+
+@rule("runbook-env")
+def runbook_env(prd: Prd) -> Iterator[Finding]:
+    if "operations.md" not in prd.docs:
+        return
+    ops = prd.operations
+    testing = prd.testing.environments
+
+    def unknown(env: str) -> str:
+        near = next((e for e in ops.environments if e.lower() == env.lower()), None)
+        return f"environment '{env}' is not in operations.md Environments" + (f" (did you mean '{near}'?)" if near else "")
+
+    def check(env: str, line: int, prefix: str) -> Iterator[Finding]:
+        if env not in ops.environments:
+            yield Finding("operations.md", line, "runbook-env", prefix + unknown(env))
+        elif env not in testing:
+            yield Finding("operations.md", line, "runbook-env", f"{prefix}environment '{env}' is not in testing.md Environments")
+
+    for env, line in ops.environments.items():
+        if env not in testing:
+            yield Finding("operations.md", line, "runbook-env", f"environment '{env}' is in operations.md but not in testing.md Environments")
+        if ops.has_production and ops.production.get(env) not in ("yes", "no"):
+            yield Finding("operations.md", line, "runbook-env", f"environment '{env}': Production '{ops.production.get(env)}' is not yes or no")
+    if ops.environments:
+        first = min(ops.environments.values())
+        if not ops.has_production:
+            yield Finding("operations.md", first, "runbook-env", "operations.md Environments has no Production column")
+        elif not production_envs(prd):
+            yield Finding("operations.md", first, "runbook-env", "operations.md Environments: no environment has Production yes")
+    for s in ops.steps:
+        if s.env is not None:
+            yield from check(s.env, s.line, f"step {s.number}: ")
+    for d in ops.deployed:
+        yield from check(d.env, d.line, "Deployed row: ")
+    for d in ops.drift:
+        yield from check(d.env, d.line, "Drift row: ")
+
+
+@rule("production-gate")
+def production_gate(prd: Prd) -> Iterator[Finding]:
+    steps = prd.operations.steps
+    for env in sorted(production_envs(prd)):
+        i = next((i for i, s in enumerate(steps) if s.env == env), None)
+        if i is None:
+            continue
+        if steps[i].actor != "human" and not (i > 0 and steps[i - 1].actor == "human"):
+            yield Finding("operations.md", steps[i].line, "production-gate",
+                          f"step {steps[i].number} deploys {env} with no human step at or just before it")
+
+
+@rule("runbook-tests")
+def runbook_tests(prd: Prd) -> Iterator[Finding]:
+    for s in prd.operations.steps:
+        for level in s.tests or []:
+            line = s.labels["Run"][1]
+            if level not in prd.testing.levels:
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' is not in testing.md Levels")
+                continue
+            gate = gate_of(prd, level)
+            if gate != "deploy":
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' has Gate {gate or 'none'}; a tests step runs deploy-gate levels")
+            elif not prd.testing.commands.get(level) and "[NEEDS CLARIFICATION:" not in prd.testing.command_cells.get(level, ""):
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' has no Harness command")
+
+
+@rule("drift-rows")
+def drift_rows(prd: Prd) -> Iterator[Finding]:
+    for d in prd.operations.drift:
+        if d.check == "schema":
+            yield Finding("operations.md", d.line, "drift-rows", "check 'schema': schema drift arrives in prd-toolkit 0.6")
+        elif d.check not in DRIFT_CHECKS:
+            yield Finding("operations.md", d.line, "drift-rows", f"check '{d.check}' is not version or config")
+        elif d.check == "config" and not (prd.root / "contracts/config.yaml").is_file():
+            yield Finding("operations.md", d.line, "drift-rows", "a config drift row needs contracts/config.yaml")

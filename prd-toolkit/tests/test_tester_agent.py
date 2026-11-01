@@ -361,3 +361,11 @@ def test_write_reads_clause_sits_in_rule_one_scope_sentence():
     t = _flat(SKILL)
     assert "plus the files you write; a write reads the same." in t
     assert "A write reads what a suite reads." not in t
+
+
+def test_r28_write_tids_include_deploy_gate_and_never_run():
+    text = _flat(DISPATCHING)
+    assert ("A write's T-ids are the non-unit T-ids the caller names, build gate and deploy gate alike (new or "
+            "changed ones, or a `verified` block's deploy-gate T-ids that no test cites), each with its "
+            "test-case file; a write runs none of them.") in text
+    assert "A write's T-ids are the new or changed non-unit T-ids the caller names" not in text

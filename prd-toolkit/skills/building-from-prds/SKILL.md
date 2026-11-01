@@ -34,6 +34,7 @@ PRD: docs/prd/<slug>/
 Area: <area>
 IDs: <UJ, FR and NFR IDs>
 Unit T-ids: <one per line, with its test-case file>
+Scripts: <scripts directory, as an absolute path>
 ```
 
 A code-bug round adds three lines after those:
@@ -44,6 +45,18 @@ Quote: "<the test case's ac: line>" / "<the expect entry>"
 Failing test: <path>
 ```
 
+**Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
+directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
+root is two directories above the skill's base directory (Claude Code shows it as "Base
+directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
+Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
+A script that is not found is a tool error: report it, never guess another path.
+
+The caller gives the builder `<scripts>` as the `Scripts:` line of its prompt, as an absolute path
+(the repository root joined to `.prd-toolkit` when the copy is vendored); the builder uses that value.
+
 Give every command its own Bash call, with literal paths: no `&&`, no `;` chains, no `$(…)`, no
 path held in a variable. The gate forms below end with `; echo "<script>-exit=$?"`; that tail is
 allowed. Never pipe, filter or truncate a gated command's output.
@@ -51,7 +64,7 @@ allowed. Never pipe, filter or truncate a gated command's output.
 ## Non-negotiable rules
 
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
-   `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
+   `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
    `prd-context-exit=0` is current; `1` means a STALE source: re-read each code region the pack
    marks STALE before you rely on it; `2` is a usage error: fix the command. Work from the pack.
    Open a PRD file only for what the pack's closing lines name, your unit T-ids' entries in the

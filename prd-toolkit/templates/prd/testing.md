@@ -12,6 +12,7 @@
 | system | [NEEDS CLARIFICATION: system harness command] | [NEEDS CLARIFICATION: environment] | deploy |
 | e2e | [NEEDS CLARIFICATION: e2e harness command] | [NEEDS CLARIFICATION: environment] | deploy |
 | acceptance | [NEEDS CLARIFICATION: acceptance harness command] | [NEEDS CLARIFICATION: environment] | deploy |
+| smoke | [NEEDS CLARIFICATION: smoke harness command] | production | deploy |
 
 ## Harness
 
@@ -44,6 +45,7 @@ for example Browser identity when there is no UI.
 | Environment | Purpose | Access | Base URL | Database | Logs |
 |---|---|---|---|---|---|
 | [NEEDS CLARIFICATION: first environment] | [NEEDS CLARIFICATION: purpose] | [NEEDS CLARIFICATION: who may use it] | [NEEDS CLARIFICATION: base URL a test calls, or none] | [NEEDS CLARIFICATION: database or connection a test uses, never a password] | [NEEDS CLARIFICATION: where this environment's logs are read] |
+| production | [NEEDS CLARIFICATION: purpose] | [NEEDS CLARIFICATION: who may use it] | [NEEDS CLARIFICATION: base URL a test calls, or none] | [NEEDS CLARIFICATION: database or connection a test uses, never a password] | [NEEDS CLARIFICATION: where this environment's logs are read] |
 
 ## Leak checks
 

@@ -201,3 +201,22 @@ def test_vendored_toolkit_edit_fails(repo):
     (repo / ".prd-toolkit/prd_lint.py").write_text("# changed\n")
     commit(repo, "edit")
     assert diff(repo) == [".prd-toolkit/prd_lint.py: the builder may not edit the vendored .prd-toolkit/ copy"]
+
+
+DEPLOY_GATE = "T-004.1"  # level system, Gate deploy in the fixture's Levels
+
+
+def test_r28_builder_edit_of_a_deploy_gate_test_fails(repo):
+    (repo / "tests/system").mkdir()
+    (repo / "tests/system/test_sys.py").write_text(f"# @prd {DEPLOY_GATE}\ndef test_s():\n    pass\n")
+    commit(repo, "tester's deploy-gate test")
+    git(repo, "tag", "-f", "base")
+    (repo / "tests/system/test_sys.py").write_text(f"# @prd {DEPLOY_GATE}\ndef test_s():\n    assert 1\n")
+    commit(repo, "builder edit")
+    assert any(f"tests/system/test_sys.py cites {DEPLOY_GATE}, a tester's test" in f for f in diff(repo))
+
+
+def test_r28_results_check_takes_only_the_dispatched_build_gate_tids():
+    report = f"RESULTS\n{NONUNIT}: pass\n"
+    assert buildcheck.results_findings(report, [NONUNIT]) == []
+    assert buildcheck.results_findings(report + f"{DEPLOY_GATE}: pass\n", [NONUNIT]) == [f"{DEPLOY_GATE} was not dispatched"]

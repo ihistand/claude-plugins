@@ -20,7 +20,11 @@ CASES: list[Case] = [
     Case("registries", "skill-not-installed", _edit("prd.md", SKILL_ROW, "| plans | nonexistent:skill | required |")),
     Case("registries", "decision-proposed-while-approved", _edit("prd.md", SKILL_ROW, "| plans | superpowers:writing-plans | proposed |")),
     Case("registries", "decision-outside-enum", _edit("prd.md", "| code, schema.sql | enforced |", "| code, schema.sql | maybe |")),
-    Case("runbook-actors", "step-without-actor", _edit("operations.md", "2. Deploy to production with `./deploy.sh production` after the owner approves. (actor: human)", "2. Deploy to production with `./deploy.sh production` after the owner approves.")),
+    Case("runbook-steps", "step-without-actor", _edit("operations.md", "3. Approve production (actor: human) (env: production)", "3. Approve production (env: production)")),
+    Case("runbook-env", "env-not-in-operations", _edit("operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: qa)\n   Run: `./deploy.sh staging`")),
+    Case("production-gate", "deploy-without-human", _edit("operations.md", "3. Approve production (actor: human)", "3. Approve production (actor: agent)")),
+    Case("runbook-tests", "unknown-level", _edit("operations.md", "Run: tests system, e2e", "Run: tests system, nope")),
+    Case("drift-rows", "schema-row", _edit("operations.md", "| production | version |", "| production | schema |")),
 ]
 
 
@@ -44,7 +48,7 @@ def test_declined_rows_are_not_checked(prd):
 
 
 def test_fixture_registries_are_clean(prd):
-    assert not {"registries", "runbook-actors"} & fired(lint(prd))
+    assert not {"registries", "runbook-steps"} & fired(lint(prd))
 
 
 def test_plugin_skill_installed(tmp_path, monkeypatch):

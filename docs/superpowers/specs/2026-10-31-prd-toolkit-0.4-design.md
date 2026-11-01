@@ -92,6 +92,8 @@ block at `approved`, or at `built` when a stopped build resumes.
      IDs: <UJ, FR and NFR IDs>
      Unit T-ids: <one per line, with its test-case file>
      ```
+     > Revised in prd-toolkit 0.5 (R21): the dispatch also carries a `Scripts:` line, the absolute
+     > scripts directory, because `${CLAUDE_PLUGIN_ROOT}` is empty in Bash.
      It runs `prd_context.py … --for implement` itself, writes unit tests first, then the code,
      runs the standards linters and required skills, and commits in its worktree with
      `Refs: <IDs>`.

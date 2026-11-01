@@ -1,8 +1,10 @@
 """Test-case rules: every test is fully specified by the PRD alone (spec 4.1, 4.2)."""
 import csv
+import fnmatch
 import io
 import json
 import re
+import shlex
 from collections.abc import Iterator
 
 from ..findings import Finding
@@ -149,6 +151,111 @@ def test_cases_consistent(prd: Prd):
             yield Finding(tc.file, tc.line, "test-cases-consistent", f"{tc.id} is cited by no Tests line naming {tc.file}")
 
 
+_SHELL_OPS = {"&&", "||", ";", "|", "&"}
+
+
+def _norm(path: str) -> str:
+    while path.startswith("./"):
+        path = path[2:]
+    return path.rstrip("/") or "."
+
+
+# Runner options whose value is a separate token (pytest, jest, go test). The value is never the path.
+_EXCLUDE_OPTS = {"--ignore", "--ignore-glob", "--deselect", "--testPathIgnorePatterns"}
+_SELECT_OPTS = {"-m", "-k", "-t", "--testNamePattern", "-run"}
+_VALUE_OPTS = _EXCLUDE_OPTS | _SELECT_OPTS | {
+    "-p", "-c", "-o", "-n", "-W", "--rootdir", "--confcutdir", "--basetemp", "--junitxml", "--junit-xml",
+    "--cov", "--cov-report", "--cov-config", "--log-file", "--maxfail", "--tb", "--durations",
+    "--import-mode", "--override-ini", "--config", "--roots", "--selectProjects", "-tags", "-timeout",
+}
+
+
+class Harness:
+    """What a Harness command collects: its first path, the paths it excludes, and whether a marker or
+    keyword expression selects the tests (which the lint cannot evaluate)."""
+
+    def __init__(self, path: str | None, excluded: list[str], selects: bool):
+        self.path, self.excluded, self.selects = path, excluded, selects
+
+    def excludes(self, path: str) -> bool:
+        return any(path == e or path.startswith(e + "/") or fnmatch.fnmatchcase(path, e) for e in self.excluded)
+
+
+def parse_harness(command: str, roots: set[str]) -> Harness:
+    """Read a Harness command: a heuristic, never a shell parser.
+
+    The path is the first argument that holds a `/` or is `.` or a test root's name. Program names (each
+    simple command's first word, and the module after `python -m`), `VAR=value` prefixes, options, the
+    value of a runner option that takes one, and files with an extension (a runner script like
+    `tools/gate.sh`) are never paths. `--ignore` / `--ignore-glob` / `--deselect` values are exclusions;
+    `-m` / `-k` and their kin select tests by an expression.
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    path, excluded, selects = None, [], False
+    want_program, program, pending = True, "", None
+    for tok in tokens:
+        if tok in _SHELL_OPS:
+            want_program, pending = True, None
+            continue
+        if want_program:
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
+                continue
+            want_program, program = False, tok.rsplit("/", 1)[-1]
+            continue
+        if pending:  # the value of the option before it
+            if pending in _EXCLUDE_OPTS:
+                excluded.append(_norm(tok))
+            elif pending in _SELECT_OPTS:
+                selects = True
+            pending = None
+            continue
+        if tok.startswith("-"):
+            opt, eq, value = tok.partition("=")
+            if program.startswith("python") and opt == "-m":
+                want_program = True  # `python -m pytest`: the module is the runner
+                continue
+            if eq:
+                if opt in _EXCLUDE_OPTS:
+                    excluded.append(_norm(value))
+                elif opt in _SELECT_OPTS:
+                    selects = True
+            elif opt in _VALUE_OPTS:
+                pending = opt
+            continue
+        if path is None:
+            name = _norm(tok)
+            if name in (".", "..") or name in roots or ("/" in tok and "." not in name.rsplit("/", 1)[-1]):
+                path = name
+    return Harness(path, excluded, selects)
+
+
+def harness_path(command: str, roots: set[str]) -> str | None:
+    """The first path-like argument of a Harness command, normalized (see `parse_harness`)."""
+    return parse_harness(command, roots).path
+
+
+def _overlaps(prd: Prd):
+    """(build level, deploy level, deploy path) where the build level's path is the deploy level's or a parent
+    of it, the build command does not exclude that path, and no expression selects its tests."""
+    t = prd.testing
+    roots = {_norm(r) for r in t.harness.test_roots or []}
+    parsed = {lvl: parse_harness(cmd, roots) for lvl, cmd in t.commands.items()}
+    for b in t.levels:
+        h = parsed.get(b)
+        if t.gates.get(b) != "build" or not h or not h.path or h.selects:
+            continue
+        for d in t.levels:
+            dp = parsed[d].path if d in parsed else None
+            if t.gates.get(d) != "deploy" or not dp:
+                continue
+            bp = h.path
+            if (bp == dp or bp == "." or dp.startswith(bp + "/")) and not h.excludes(dp):
+                yield b, d, dp
+
+
 @rule("test-level")
 def test_level(prd: Prd):
     t = prd.testing
@@ -159,6 +266,8 @@ def test_level(prd: Prd):
             for lvl, g in t.gates.items():
                 if g not in model.GATES:
                     yield Finding("testing.md", t.levels[lvl], "test-level", f"level '{lvl}': Gate '{g}' is not one of {', '.join(model.GATES)}")
+            for b, d, path in _overlaps(prd):  # a build run, local or in CI, would run deploy-gate tests with no environment
+                yield Finding("testing.md", t.levels[b], "test-level", f"level '{b}' (Gate build) would collect level '{d}' (Gate deploy) tests: {path}")
     for tc in _cases(prd):
         level = tc.data.get("level")
         if _blank(level):

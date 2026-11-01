@@ -55,7 +55,7 @@ def main(argv: list[str]) -> int:
             except ValueError:
                 print(f"prd_hooks: {prd.root} is not inside the repository at {root}", file=sys.stderr)
                 return 2
-            code, out = hooks.write_ci(root, "gitlab" if args.gitlab else "github", hooks.ci_jobs(prd, prd_rel), args.force)
+            code, out = hooks.write_ci(root, "gitlab" if args.gitlab else "github", hooks.ci_jobs(prd, prd_rel) + hooks.deploy_jobs(prd, prd_rel), args.force, prd.operations.secrets)
             for line in out:
                 print(line)
             return code

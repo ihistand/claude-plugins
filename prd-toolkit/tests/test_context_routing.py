@@ -1,4 +1,5 @@
 """Routing: /prd-context, the changing-prds and adopting-prds wording, and the managed block."""
+import re
 from pathlib import Path
 
 from conftest import edit
@@ -40,7 +41,7 @@ def test_block_stays_small(prd):
 
 def test_changing_step_1_runs_the_decide_pack():
     step1 = section(CHANGING, "1. **Restate the change**", "2. **Edit the PRD.**")
-    assert "scripts/prd_context.py" in step1 and 'echo "prd-context-exit=$?"' in step1
+    assert "<scripts>/prd_context.py" in step1 and 'echo "prd-context-exit=$?"' in step1
     assert "Read whole PRD files only to edit them" in CHANGING.read_text()
     assert "Grep the PRD folder for each ID" not in step1
     assert "as your first look at the PRD, run the pack" in " ".join(step1.split())
@@ -66,7 +67,7 @@ def test_adopting_previews_come_from_the_implement_pack():
 def test_command_maps_arguments():
     raw = (ROOT / "commands/prd-context.md").read_text()
     t = " ".join(raw.split())
-    assert raw.startswith("---\ndescription: ") and "scripts/prd_context.py" in t
+    assert raw.startswith("---\ndescription: ") and "<scripts>/prd_context.py" in t
     assert "ask which PRD" in t
     assert "is the area: pass it as `--area <area>`" in t
     assert "`UJ-`, `FR-`, `NFR-`, `AC-`, `T-` or `E-`" in t and "never the area" in t
@@ -171,3 +172,148 @@ def test_block_renders_the_install_command_with_the_prd_path(prd):
 def test_format_source_and_statuses():
     t = " ".join((ROOT / "references/prd-format.md").read_text().split())
     assert "where the code that implements the block is" in t and "A status move is progress, not behaviour" in t
+
+
+# --- Task 11: existing text learns deploying (spec sections 3 and 9) ---
+
+AUTHORING = ROOT / "skills/authoring-prds/SKILL.md"
+RUNNING_BUILD = ROOT / "skills/building-from-prds/running-a-build.md"
+FORMAT = ROOT / "references/prd-format.md"
+SPEC_BASE = ROOT.parent / "docs/superpowers/specs/2026-10-29-prd-toolkit-design.md"
+
+
+def flat(path: Path) -> str:
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_authoring_interview_asks_for_deploying():
+    t = flat(AUTHORING)
+    assert "which environment is production" in t and "the smoke cases" in t
+    assert "(actor: agent|human) (env: <environment>)" in t
+    assert "`(actor: human)` runbook steps" in t  # the registered-skill rule stays
+    assert "passes the `runbook-steps`, `runbook-env`, `production-gate`, `runbook-tests` and `drift-rows` rules" in t
+
+
+def test_adoption_writes_the_runbook_as_built():
+    t = flat(ADOPTING)
+    step0 = " ".join(section(ADOPTING, "- **Fill the project-wide sections from the repo**", "- **Test roots:**").split())
+    assert "writes the runbook as-built, from the repo's deploy scripts, CI files and docs" in step0
+    assert "Environments with the `Production` column" in step0 and "offer the `## Drift` table" in step0
+    assert "from the deploy scripts, CI files and docs the extractor read" not in t
+    assert "writes the runbook as-built" in t and "`[NEEDS CLARIFICATION]` for a command it cannot find" in t
+    assert "offer the `## Drift` table" in t
+
+
+def test_build_close_leaves_deploy_gate_tests_to_prd_deploy():
+    t = flat(RUNNING_BUILD)
+    assert "deploy-gate tests run at `/prd-deploy`" in t
+
+
+def test_block_names_the_deployer():
+    t = (ROOT / "templates/claude-block.md").read_text()
+    assert "/prd-deploy" in t and "never run a runbook command yourself" in " ".join(t.split())
+
+
+def test_format_has_the_runbook_grammar():
+    t = flat(FORMAT)
+    assert "`N. <title> (actor: agent|human) (env: <environment>)`" in t
+    assert "(actor: agent)` or `(actor: human)` on the step's first line" not in t  # the 0.4 text
+    for word in ("`Run:`", "`Check:`", "`Rollback:`", "`Do:`", "prints `<text>`", "`tests <level>[, <level>]`",
+                 "| Environment | URL | Production |", "## Deployed", "| Environment | PRD version | Commit | Date | Run |",
+                 "## Drift", "| Environment | Check | Introspection command |", "`version` or `config`",
+                 "`smoke`", "Gate `deploy`", "`runbook-steps`", "`runbook-env`", "`production-gate`",
+                 "`runbook-tests`", "`drift-rows`"):
+        assert word in t, word
+
+
+def test_format_unclassified_and_migration_row():
+    t = flat(FORMAT)
+    assert "unclassified" in t and "only on an open entry" in t
+    assert "format: runbook steps (prd-toolkit 0.5)" in t
+
+
+def test_base_spec_revision_notes():
+    t = " ".join(SPEC_BASE.read_text(encoding="utf-8").split())
+    assert "Revised in prd-toolkit 0.5: `prd-deployer` is replaced by `prd_deploy.py` and `running-a-deploy.md`" in t
+    assert "Revised in prd-toolkit 0.5: the `drift` row loses its `schema.sql` half until 0.6" in t
+
+
+# --- R21: no Bash command holds ${CLAUDE_PLUGIN_ROOT}, which is empty there ---
+
+R21_FILES = ["agents/prd-builder.md", "commands/prd-context.md", "commands/prd-status.md",
+             "skills/adopting-prds/SKILL.md", "skills/authoring-prds/SKILL.md",
+             "skills/building-from-prds/SKILL.md", "skills/building-from-prds/running-a-build.md",
+             "skills/changing-prds/SKILL.md"]
+
+
+def test_r21_no_bash_command_holds_plugin_root():
+    for rel in R21_FILES:
+        t = (ROOT / rel).read_text(encoding="utf-8")
+        assert '"${CLAUDE_PLUGIN_ROOT}/scripts/' not in t, rel
+        assert "${CLAUDE_PLUGIN_ROOT}/scripts/" not in t, rel
+        assert "<scripts>/" in t, rel
+
+
+def test_r21_each_file_says_which_script():
+    for rel in R21_FILES:
+        if rel == "agents/prd-builder.md":
+            continue
+        t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "`${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call" in t, rel
+        assert "a literal absolute path" in t and "two directories above" in t, rel
+        assert "Base directory for this skill" in t, rel
+
+
+def test_r21_adopted_repos_use_the_vendored_copy_and_unadopted_the_plugin():
+    for rel in ("skills/changing-prds/SKILL.md", "skills/building-from-prds/SKILL.md",
+                "skills/building-from-prds/running-a-build.md", "skills/adopting-prds/SKILL.md",
+                "commands/prd-context.md", "commands/prd-status.md"):
+        t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "`<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/` directory" in t, rel
+    t = " ".join((ROOT / "skills/adopting-prds/SKILL.md").read_text(encoding="utf-8").split())
+    assert "A first adoption has no `.prd-toolkit/` until the hooks install, so it uses the plugin path" in t
+    for rel in ("skills/authoring-prds/SKILL.md",):
+        t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "has no `.prd-toolkit/` until the hooks install" in t, rel
+        assert "`<scripts>` is the plugin's `scripts` directory" in t, rel
+
+
+def test_r21_command_wording_and_load_only_for_the_path():
+    for rel in ("commands/prd-context.md", "commands/prd-status.md"):
+        t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "when a prd-toolkit skill loads" in t and "when the skill loads a prd-toolkit skill" not in t, rel
+        assert "loaded only to read its base directory" in t and "none of its steps are followed" in t, rel
+
+
+def test_r21_every_scripts_call_is_vendored():
+    """Scan, do not list: a script a text calls through <scripts> must be one the hooks vendor."""
+    from prdlint import hooks
+    called = set()
+    for rel in R21_FILES:
+        called |= set(re.findall(r"<scripts>/(\w+\.py)", (ROOT / rel).read_text(encoding="utf-8")))
+    called |= set(re.findall(r"<scripts>/(\w+\.py)", (ROOT / "skills/deploying-from-prds/running-a-deploy.md").read_text(encoding="utf-8")))
+    assert called and "prd_block.py" in called
+    assert called <= set(hooks.VENDORED), called - set(hooks.VENDORED)
+
+
+def test_gap_rule_keeps_its_end():
+    assert "Do not guess or read the code to fill the gap." in " ".join((ROOT / "templates/claude-block.md").read_text().split())
+
+
+def test_format_repeated_label_reported():
+    assert "one per label; a repeated label is ignored" not in flat(FORMAT)
+    assert "one per label; lint reports a repeated label (`runbook-steps`), and the first is used" in flat(FORMAT)
+
+
+def test_04_spec_notes_the_scripts_line():
+    t = " ".join((ROOT.parent / "docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md").read_text(encoding="utf-8").split())
+    assert "Revised in prd-toolkit 0.5 (R21): the dispatch also carries a `Scripts:` line" in t
+
+
+def test_r21_builder_gets_the_scripts_path_in_its_prompt():
+    for rel in ("agents/prd-builder.md", "skills/building-from-prds/SKILL.md", "skills/building-from-prds/running-a-build.md"):
+        t = (ROOT / rel).read_text(encoding="utf-8")
+        assert "Scripts: <scripts directory, as an absolute path>" in t or rel.startswith("agents"), rel
+    b = " ".join((ROOT / "agents/prd-builder.md").read_text(encoding="utf-8").split())
+    assert "the `Scripts:` line when your prompt has one; otherwise the Which-script rule of the `building-from-prds` skill" in b
+    assert "run nothing" not in b

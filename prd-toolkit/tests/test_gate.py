@@ -32,4 +32,4 @@ def test_bad_gate_value(prd):
 
 
 def test_gate_of_unknown_level_is_none(prd):
-    assert model.gate_of(model.load(prd), "smoke") is None
+    assert model.gate_of(model.load(prd), "nightly") is None
