@@ -257,3 +257,17 @@ def test_install_writes_gitignore_for_pycache(repo):
     hooks.install(repo, PRD)
     assert (repo / ".prd-toolkit/.gitignore").read_text() == "__pycache__/\n"
     assert hooks.check(repo, PLUGIN_ROOT) == []
+
+
+def test_vendored_has_deploy_scripts(repo):
+    assert "prd_deploy.py" in hooks.VENDORED and "prd_drift.py" in hooks.VENDORED
+    hooks.install(repo, PRD)
+    for f in ("prd_deploy.py", "prd_drift.py", "prdlint/deploy.py", "prdlint/drift.py"):
+        assert (repo / ".prd-toolkit" / f).is_file(), f
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+
+
+def test_check_reports_stale_deploy_script(repo):
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/prd_deploy.py").write_text("# stale\n")
+    assert any("prd_deploy.py differs" in x for x in hooks.check(repo, PLUGIN_ROOT))
