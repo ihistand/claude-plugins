@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..findings import Finding
@@ -58,9 +59,29 @@ def _command(cell: str) -> str | None:
     return tokens[0] if tokens else None
 
 
+@dataclass(frozen=True)
+class StandardsRow:
+    glob: str
+    command: str
+    decision: str
+    line: int
+
+
+def standards_rows(prd: Prd) -> list[StandardsRow]:
+    """The §5 rows: glob without backticks, the whole first backticked span as the command, the Decision cell."""
+    rows = []
+    for r in _registry_rows(prd, 5):
+        cells = [c.strip() for c in r.cells] + [""] * 5
+        m = re.search(r"`([^`]*)`", cells[1])
+        rows.append(StandardsRow(cells[0].replace("`", "").strip(), m.group(1).strip() if m else "",
+                                 cells[4].strip("`").strip(), r.line))
+    return rows
+
+
 @rule("registries")
 def registries(prd: Prd) -> Iterator[Finding]:
     approved = prd.frontmatter.get("status", "").strip() == "Approved"
+    ci = os.environ.get("PRD_LINT_CI") == "1"  # prd_lint.py --ci: skip the checks that depend on the machine
     for r in _registry_rows(prd, 5):
         cells = [c.strip() for c in r.cells] + [""] * 5
         decision = cells[4].strip("`").strip()
@@ -71,8 +92,10 @@ def registries(prd: Prd) -> Iterator[Finding]:
             yield Finding("prd.md", r.line, "registries", "standards row is still 'proposed' but the PRD is Approved")
         if decision == "enforced":
             cmd = _command(cells[1])
-            if cmd is None or shutil.which(cmd) is None:
-                yield Finding("prd.md", r.line, "registries", f"enforced linter command '{cmd or cells[1]}' is not on PATH")
+            if cmd is None:  # no command at all is a finding anywhere, CI included
+                yield Finding("prd.md", r.line, "registries", f"enforced standards row has no linter command ('{cells[1]}'); put it in backticks")
+            elif not ci and shutil.which(cmd) is None:  # --ci skips only the on-PATH lookup
+                yield Finding("prd.md", r.line, "registries", f"enforced linter command '{cmd}' is not on PATH")
     root = None
     for r in _registry_rows(prd, 6):
         cells = [c.strip() for c in r.cells] + [""] * 3
@@ -82,7 +105,7 @@ def registries(prd: Prd) -> Iterator[Finding]:
             continue
         if decision == "proposed" and approved:
             yield Finding("prd.md", r.line, "registries", "skills row is still 'proposed' but the PRD is Approved")
-        if decision == "required":
+        if decision == "required" and not ci:
             root = root or repo_root(prd.root)
             if not installed_skill(skill, root):
                 yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed; if it is built into Claude Code, mark the row 'recommended'")

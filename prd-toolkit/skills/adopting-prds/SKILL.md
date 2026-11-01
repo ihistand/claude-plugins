@@ -101,8 +101,10 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   and 2 say: the stack (§1), the glossary (§3), standards rows from detected linter configs (§5)
   and skills rows from this session's skills listing (§6), every row's Decision `proposed`; the
   four `{{…}}` slots; each optional contract populated or declared `Not applicable`; the
-  Harness in `testing.md`, with `Test roots:`. Anything only the user knows (the owner, intent,
-  environments, secrets) stays a `[NEEDS CLARIFICATION: …]` marker.
+  Harness in `testing.md`, with `Test roots:`; for the Levels table, ask the user which Gate
+  (`build` or `deploy`) each level runs at, and never keep the template's Gate silently.
+  Anything only the user knows (the owner, intent, environments, secrets) stays a
+  `[NEEDS CLARIFICATION: …]` marker.
 - **Test roots:** list every directory that already holds the project's tests (find them with
   Glob: test files, test configs, a test framework's own folder), each backticked, then any new
   directory the characterization suite needs. Never leave an existing test directory out: the
@@ -273,6 +275,17 @@ files; if a test case changed since, run step 4 again.
      `docs/superpowers/plans/` grep.
 
    Then commit the PRD folder, the suite's tests and CLAUDE.md together.
+5. **Hooks and CI.** When the repository has no `.prd-toolkit/` yet, offer to install the hooks
+   and generate CI, and run them only on the user's explicit yes, each its own call (`--gitlab`
+   in place of `--github` for a GitLab project):
+
+   ```bash
+   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>
+   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --github docs/prd/<slug>
+   ```
+
+   A yes also commits `.prd-toolkit/` and the CI file. Hooks change no code; CI then gates every
+   merge on lint, trace, the standards rows and the build-gate levels.
 
 ## When the user pushes
 

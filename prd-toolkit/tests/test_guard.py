@@ -13,10 +13,10 @@ TESTING = """# Testing
 
 ## Levels
 
-| Level | Harness command | Environment |
-|---|---|---|
-| unit | `uv run pytest tests/unit` | local |
-| integration | `uv run pytest tests/integration` | ci |
+| Level | Harness command | Environment | Gate |
+|---|---|---|---|
+| unit | `uv run pytest tests/unit` | local | build |
+| integration | `uv run pytest tests/integration` | ci | build |
 
 ## Harness
 
@@ -375,8 +375,8 @@ def test_one_broken_prd_leaves_the_others_roots_alone(tmp_path):
 def test_a_harness_row_starting_with_a_shell_word_is_still_blocked(tmp_path):
     import importlib.util
 
-    text = TESTING.replace("| integration | `uv run pytest tests/integration` | ci |\n",
-                           "| integration | `uv run pytest tests/integration` | ci |\n| e2e | `bash run.sh` | ci |\n")
+    text = TESTING.replace("| integration | `uv run pytest tests/integration` | ci | build |\n",
+                           "| integration | `uv run pytest tests/integration` | ci | build |\n| e2e | `bash run.sh` | ci | deploy |\n")
     assert text != TESTING
     spec = importlib.util.spec_from_file_location("prd_tester_guard_row", GUARD)
     guard = importlib.util.module_from_spec(spec)

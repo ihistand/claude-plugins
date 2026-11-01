@@ -75,6 +75,7 @@ class Row:
 class Table:
     header: list[str]
     rows: list[Row]
+    line: int = 0
 
 
 def split_cells(line: str) -> list[str]:
@@ -111,7 +112,7 @@ def tables(body: list[tuple[int, str]]) -> list[Table]:
     while i < len(body):
         n, text = body[i]
         if text.lstrip().startswith("|") and i + 1 < len(body) and _SEP.match(body[i + 1][1]):
-            table = Table(split_cells(text), [])
+            table = Table(split_cells(text), [], n)
             i += 2
             while i < len(body) and body[i][1].lstrip().startswith("|"):
                 table.rows.append(Row(split_cells(body[i][1]), body[i][0]))

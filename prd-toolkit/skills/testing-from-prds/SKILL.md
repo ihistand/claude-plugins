@@ -28,14 +28,21 @@ outside the scratchpad and the test roots, and every Bash command that is not a 
 command, `ls`, `mkdir` or `uv run python -m py_compile` on allowed paths. A block is the rule
 working. It is not an obstacle to route around.
 
-## The two modes
+## The three modes
 
-| | Dry run | Suite |
-|---|---|---|
-| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | adoption step 4; building (0.4); new or changed T-ids |
-| Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
-| Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
-| Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, then RESULTS |
+| | Dry run | Write | Suite |
+|---|---|---|---|
+| Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | building (0.4): the tester's round while the builder writes the code | adoption step 4; building (0.4), after a write; new or changed T-ids |
+| Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
+| Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
+| Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, never RESULTS | the same four, then RESULTS |
+
+Write mode exists because the build's tester cannot run its tests before the code exists. It reads
+what a suite may read and writes to the test roots, and it does not run them. The guard does not
+know the mode: write mode's no-run rule, like the dry run's, is held by instruction, and the
+caller fails a `write` round whose report holds RESULTS. A suite after a write finds the tests
+written and runs them; it revises one only on a test-misread round: a `Mode: suite` dispatch whose prompt carries a
+`Misread:` line for that T-id (rule 2).
 
 A dry run tests the PRD: can a stranger write every test from it alone? Running those tests
 against the system would test the code instead, and its output would leak the code's answers
@@ -46,12 +53,14 @@ into your report.
 1. **Read only what your mode allows.** In a dry run, read only the PRD folder and your own
    dry-run directory; do not list or read the test roots. In a suite, you may also read the
    helpers testing.md names and the test files that cite one of your T-ids (for example
-   `tests/conftest.py`, and a test whose docstring holds `@prd T-…`), plus the files you write.
+   `tests/conftest.py`, and a test whose docstring holds `@prd T-…`), plus the files you write; a write reads the same.
    Never `src/`, other tests, README, CLAUDE.md, git history, memory or the environment. Not "a peek", not "only the signature",
    not by `cat`, `python -c`, `grep` or a test that prints the source. Always give Glob and Grep a
    `path` inside the PRD folder or your directory.
 2. **Every expected value comes from the PRD.** Never change an expected value, an assertion or
-   an input to make a test pass. Never add `skip`, `xfail` or a looser comparison. A test that
+   an input to make a test pass, except on a `Misread:` line: when a suite's prompt carries
+   `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`, you may change
+   that one test, only so it matches the quoted PRD text; every value still comes from the PRD. Never add `skip`, `xfail` or a looser comparison. A test that
    fails against the live system is reported as `fail`. A test case may record exact values read
    from a closed window of a live system (its `input` names the read: the query and the date
    range); they are the PRD's values, so assert them as written.
@@ -59,10 +68,11 @@ into your report.
    contents. Never fill it from the system: not from the code, and not by running the code and
    copying its output. Assert what the PRD gives, record the question, and carry on.
 4. **Never edit the code or the PRD.** You write test files only, in your dry-run directory
-   (dry run) or the test roots (suite). A failure goes back as a change request or an `E-nnn`
+   (dry run) or the test roots (write, suite). A failure goes back as a change request or an `E-nnn`
    candidate, never as a fix.
-5. **Run only the Levels harness commands**, exactly as testing.md writes them, plus `ls`,
-   `mkdir` and `uv run python -m py_compile`. When the guard blocks a path you mistyped, use the
+5. **Run the Levels harness commands only in a suite**, exactly as testing.md writes them; never in a
+   dry run or a write, where you run only `ls`, `mkdir` and `uv run python -m py_compile`. In a suite those
+   are allowed too. When the guard blocks a path you mistyped, use the
    right path. When it blocks anything else, do not retry it another way: record it under
    QUESTIONS (what you needed, and which file should have said it) and carry on.
 6. Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
@@ -84,7 +94,7 @@ question and carry on with the next element.
 
 Test helpers that testing.md names (fixtures, clients, loaders, page objects) may not exist yet.
 If they do not exist yet, write them yourself, to match what testing.md says about them: in a
-dry run, always write them in your dry-run directory, without looking whether they exist; in a
+dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a
 suite, in the test roots. A detail testing.md leaves open about a
 helper's own internals (a method signature, a return value, a default such as following
 redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. Anything else the
@@ -115,7 +125,7 @@ In this order:
 3. **HARNESS CHOICES**: every helper you wrote and each internal detail you chose for it, one per
    line. Write "none" if you wrote no helper.
 4. **FILES READ**: every path you opened, listed or searched, including the blocked ones.
-5. **RESULTS** (suite only): one line per dispatched T-id, in exactly one of three forms:
+5. **RESULTS** (suite only; a write report has none): one line per dispatched T-id, in exactly one of three forms:
    `<T-id>: pass`, `<T-id>: fail: <one line>` or `<T-id>: known-failing E-nnn`. The `fail` line
    says what the harness printed against what the PRD expects; `known-failing` is only for a
    test case that carries `known-failing: E-nnn` and fails as that entry describes. Anything else
@@ -161,6 +171,7 @@ Quoted from runs without this skill, except where marked:
 - Retrying a blocked call by another path, another tool or a script. (From a with-plugin run,
   T2 run 1: after a block it tried "the same command with the absolute path".)
 - Running a dry run's tests against the system.
+- Running a write's tests, even "just to check" while the code is partly there.
 
 **All of these mean: stop, delete what you took from outside the PRD, and record a QUESTION.**
 
@@ -175,7 +186,8 @@ Quoted from runs without this skill, except where marked:
 | "The code's message is the only one there is." | Then the PRD is missing it. Ask; assert only what the PRD gives. |
 | "Fixing the handler is quicker than a change request." | The tester who fixes the code tests their own fix. The suite then proves nothing. |
 | "The guard blocked Read, so `cat` is fine." | The block is the rule. Record it; never route around it. |
-| "The test file is in `tests/`, so I may read it." | In a dry run, no: the test roots are not yours to read. In a suite, only your own files, the named helpers and tests that cite your T-ids. Other tests encode the code. |
+| "The code is partly there, I'll run it to check." | A write never runs. The caller runs the suite after the code is merged; a run now tests half-built code and its result means nothing. |
+| "The test file is in `tests/`, so I may read it." | In a dry run, no: the test roots are not yours to read. In a suite or a write, only your own files, the named helpers and tests that cite your T-ids. Other tests encode the code. |
 
 ## Callers
 

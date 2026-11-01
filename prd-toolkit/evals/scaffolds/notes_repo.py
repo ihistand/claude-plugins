@@ -225,9 +225,9 @@ T-002.1:
 
 ## Levels
 
-| Level | Harness command | Environment |
-|---|---|---|
-| integration | `uv run pytest tests` | local |
+| Level | Harness command | Environment | Gate |
+|---|---|---|---|
+| integration | `uv run pytest tests` | local | build |
 
 ## Harness
 

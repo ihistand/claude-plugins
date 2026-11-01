@@ -49,9 +49,11 @@ def test_citations_map_tid_to_file_and_line(tmp_path):
 
 
 def test_uncited_tid_fires_t_implemented(tmp_path):
-    prd = build(tmp_path, features={"notes": block("FR-001", "approved", ["T-001.1", "T-001.2"])})
+    prd = build(tmp_path, features={"notes": block("FR-001", "as-built", ["T-001.1", "T-001.2"])})
     f = trace_rules(prd)
     assert rules(f) == ["t-implemented"] and "T-001.2" in f[0].message and f[0].file == "features/notes.md"
+    prd = build(tmp_path / "b", features={"notes": block("FR-001", "approved", ["T-001.1", "T-001.2"])})
+    assert trace_rules(prd) == []  # R35: an approved block has nothing built to cite
 
 
 def test_citation_prefix_does_not_count(tmp_path):
@@ -79,11 +81,6 @@ def test_live_requirement_with_uncited_tid_fires_status_current(tmp_path):
     assert "FR-001" in next(x for x in f if x.rule == "status-current").message
 
 
-def test_built_requirement_does_not_fire_status_current(tmp_path):
-    prd = build(tmp_path, features={"notes": block("FR-001", "built", ["T-001.1", "T-001.2"])})
-    assert rules(trace_rules(prd)) == ["t-implemented"]
-
-
 def test_out_of_scope_area_is_ignored(tmp_path):
     feats = {"notes": block("FR-001", "live", ["T-001.1"]), "other": block("FR-002", "live", ["T-002.1"])}
     prd = build(tmp_path, adoption=ADOPTED + "\n| other | confirmed | `lib/**` |", features=feats)
@@ -97,14 +94,14 @@ def test_empty_adoption_map_covers_no_area(tmp_path):
 
 
 def test_new_project_covers_every_area_including_nfr(tmp_path):
-    feats = {"notes": block("FR-001", "approved", ["T-001.1"]), "nfr.md": block("NFR-001", "approved", ["T-005.1"])}
+    feats = {"notes": block("FR-001", "as-built", ["T-001.1"]), "nfr.md": block("NFR-001", "as-built", ["T-005.1"])}
     prd = build(tmp_path, adoption=None, features=feats)
     f = trace_rules(prd)
     assert [(x.rule, x.file) for x in f] == [("t-implemented", "nfr.md")]
 
 
 def test_nfr_area_is_scoped_by_its_adoption_row(tmp_path):
-    feats = {"notes": block("FR-001", "approved", ["T-001.1"]), "nfr.md": block("NFR-001", "approved", ["T-005.1"])}
+    feats = {"notes": block("FR-001", "as-built", ["T-001.1"]), "nfr.md": block("NFR-001", "as-built", ["T-005.1"])}
     assert trace_rules(build(tmp_path, features=feats)) == []
     prd = build(tmp_path / "b", adoption=ADOPTED + "\n| nfr | adopted | `src/**` |", features=feats)
     assert rules(trace_rules(prd)) == ["t-implemented"]
@@ -174,14 +171,45 @@ def test_empty_refs_line_does_not_match_across_a_newline(tmp_path):
     assert rules(trace_rules(prd, "HEAD~1..HEAD")) == ["commit-refs"]
 
 
-def test_commit_refs_never_fires_for_a_new_project(tmp_path):
+def test_new_project_commit_with_valid_refs_is_clean(tmp_path):
     prd = build(tmp_path, adoption=None)
-    assert [x for x in trace_rules(prd, "HEAD") if x.rule == "commit-refs"] == []
+    assert [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"] == []
+
+
+def test_new_project_commit_touching_src_without_refs_fires(tmp_path):
+    prd = build(tmp_path, adoption=None)
+    repo = prd.parents[2]
+    (repo / "src/notes/app.py").write_text("# c\n" + (repo / "src/notes/app.py").read_text(), encoding="utf-8")
+    commit(repo, "Tidy", "src")
+    f = [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"]
+    assert len(f) == 1 and "touches src/notes/app.py inside the Boundary: no `Refs:` trailer" in f[0].message
+
+
+def test_new_project_commit_citing_a_removed_id_fires(tmp_path):
+    feats = {"notes": block("FR-001", "live", ["T-001.1"]) + block("FR-002", "removed", ["T-002.1"])}
+    prd = build(tmp_path, adoption=None, features=feats)
+    repo = prd.parents[2]
+    (repo / "src/notes/app.py").write_text("# c\n" + (repo / "src/notes/app.py").read_text(), encoding="utf-8")
+    commit(repo, "Tidy\n\nRefs: FR-002", "src")
+    f = [x for x in trace_rules(prd, "HEAD~1..HEAD") if x.rule == "commit-refs"]
+    assert len(f) == 1 and "FR-002 is removed" in f[0].message
+
+
+def test_built_requirement_with_uncited_unit_test_fires_status_current(tmp_path):
+    prd = build(tmp_path, features={"notes": block("FR-001", "built", ["T-001.1", "T-001.2"])})
+    f = [x for x in trace_rules(prd) if x.rule == "status-current"]
+    assert len(f) == 1 and "FR-001 is built but T-001.2 has no citing test" in f[0].message
+
+
+def test_built_requirement_missing_only_a_non_unit_citation_is_not_flagged(tmp_path):
+    text = "### FR-001 A behaviour\nStatus: built (since 1.0.0)\nTests: T-001.1 [unit], T-001.2 [integration]  (test-cases/x.yaml)\n\n"
+    prd = build(tmp_path, features={"notes": text})
+    assert [x for x in trace_rules(prd) if x.rule == "status-current"] == []
 
 
 def test_a_leftover_dry_run_directory_does_not_count(tmp_path):
     """A dry run's tests are thrown away: a citation left in `.prd-dry-run-*` proves nothing."""
-    prd = build(tmp_path, features={"notes": block("FR-001", "approved", ["T-001.1", "T-001.2"])})
+    prd = build(tmp_path, features={"notes": block("FR-001", "as-built", ["T-001.1", "T-001.2"])})
     leftover = prd.parents[2] / "tests/.prd-dry-run-20261030T120000/nested"
     leftover.mkdir(parents=True)
     (leftover / "test_t0012.py").write_text('def test_x():\n    """@prd T-001.2"""\n', encoding="utf-8")
@@ -199,3 +227,59 @@ def test_unmigrated_02_prd_exits_2_with_the_migration_message(tmp_path, capsys):
     assert main([str(prd), "--range", "HEAD"]) == 2
     out, err = capsys.readouterr()
     assert out == "" and "section 8: the adoption map moved to adoption.md in prd-toolkit 0.3" in err
+
+
+# R35: trace is gate-aware. approved blocks are skipped; built/verified/as-built need unit and
+# build-gate citations only (a level with no Gate row counts as build); live needs all.
+LEVELS = (
+    "## Levels\n\n| Level | Harness command | Environment | Gate |\n|---|---|---|---|\n"
+    "| unit | `pytest tests` | local | build |\n| integration | `pytest tests` | local | build |\n"
+    "| e2e | `pytest e2e` | staging | deploy |\n\n"
+)
+
+
+def gated(tmp_path: Path, features: dict[str, str]) -> Path:
+    prd = build(tmp_path, features=features)
+    t = prd / "testing.md"
+    t.write_text(t.read_text(encoding="utf-8").replace("# Testing\n\n", "# Testing\n\n" + LEVELS), encoding="utf-8")
+    (prd.parents[2] / "tests/test_more.py").write_text('def test_y():\n    """@prd T-001.2"""\n', encoding="utf-8")
+    return prd
+
+
+def levelled(fr: str, status: str, tests: str) -> str:
+    return f"### {fr} A behaviour\nStatus: {status} (since 1.0.0)\nTests: {tests}  (test-cases/x.yaml)\n\n"
+
+
+def test_verified_with_uncited_deploy_gate_tid_is_clean(tmp_path):
+    feats = {"notes": levelled("FR-001", "verified", "T-001.1 [unit], T-001.2 [integration], T-001.3 [e2e]")}
+    assert trace_rules(gated(tmp_path, feats)) == []
+
+
+def test_other_approved_block_with_uncited_tids_is_clean(tmp_path):
+    feats = {"notes": levelled("FR-001", "verified", "T-001.1 [unit], T-001.2 [integration], T-001.3 [e2e]")
+             + levelled("FR-002", "approved", "T-002.1 [unit], T-002.2 [integration]")}
+    assert trace_rules(gated(tmp_path, feats)) == []
+
+
+def test_live_with_uncited_deploy_gate_tid_fires_both(tmp_path):
+    feats = {"notes": levelled("FR-001", "live", "T-001.1 [unit], T-001.2 [integration], T-001.3 [e2e]")}
+    f = trace_rules(gated(tmp_path, feats))
+    assert sorted(rules(f)) == ["status-current", "t-implemented"] and all("T-001.3" in x.message for x in f)
+
+
+def test_built_with_uncited_build_gate_integration_fires_t_implemented(tmp_path):
+    feats = {"notes": levelled("FR-001", "built", "T-001.1 [unit], T-001.2 [integration], T-001.4 [integration]")}
+    f = trace_rules(gated(tmp_path, feats))
+    assert rules(f) == ["t-implemented"] and "T-001.4" in f[0].message
+
+
+def test_verified_with_uncited_build_gate_tid_fires_both(tmp_path):
+    feats = {"notes": levelled("FR-001", "verified", "T-001.1 [unit], T-001.2 [integration], T-001.4 [integration], T-001.3 [e2e]")}
+    f = trace_rules(gated(tmp_path, feats))
+    assert sorted(rules(f)) == ["status-current", "t-implemented"] and all("T-001.4" in x.message for x in f)
+
+
+def test_level_with_no_gate_row_counts_as_build(tmp_path):
+    feats = {"notes": levelled("FR-001", "verified", "T-001.1 [unit], T-001.2 [integration], T-001.5 [component]")}
+    f = trace_rules(gated(tmp_path, feats))
+    assert sorted(rules(f)) == ["status-current", "t-implemented"]

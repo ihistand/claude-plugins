@@ -1,0 +1,42 @@
+"""Logic of the commit-msg and pre-commit git hooks (the shell shims call prd_git_hook.py)."""
+import shlex
+import subprocess
+from pathlib import Path
+
+from . import trace
+from .model import Prd
+from .rules import registries
+
+
+def commit_msg(prd: Prd, repo_root: Path, message: str, staged: list[str], merging: bool) -> list[str]:
+    """Problems with the commit message; [] for a merge commit or when nothing staged is under the commit rule."""
+    if merging:
+        return []
+    inside = trace.in_boundary(prd, repo_root)
+    if not any(inside(f) for f in staged):
+        return []
+    text = "\n".join(line for line in message.splitlines() if not line.startswith("#"))
+    return trace.refs_problems(prd, text)
+
+
+def pre_commit(prd: Prd, repo_root: Path, staged: list[str]) -> list[str]:
+    """Run each enforced standards row on the staged files its glob matches; one problem per failing row."""
+    problems = []
+    for row in registries.standards_rows(prd):
+        if row.decision != "enforced" or not row.command:
+            continue
+        rx = trace.glob_re(row.glob)
+        # a path starting with `-` would read as an option: pass it as ./<path>
+        files = [("./" + f) if f.startswith("-") else f for f in staged if rx.match(f)]
+        if not files:
+            continue
+        try:
+            argv = shlex.split(row.command) + files
+            r = subprocess.run(argv, cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        except (OSError, ValueError) as e:
+            problems.append(f"`{row.command}` could not run: {e}")
+            continue
+        if r.returncode != 0:
+            out = (r.stdout + r.stderr).strip()
+            problems.append(f"`{row.command}` failed (exit {r.returncode}) on {', '.join(files)}" + (f":\n{out}" if out else ""))
+    return problems

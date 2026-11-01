@@ -114,7 +114,9 @@ globs (`features/import.md`, `src/importer/**`), comma-separated; the loader rea
 backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, or `awaiting <who>`
 (a named person, for example `awaiting Sam Rivera`; a bare `awaiting` is a violation).
 
-Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch.
+The Boundary is where the commit rule applies. With an `adoption.md`, it is the globs of the `adopted` rows. A project with no `adoption.md` (a new project) has no map, so its Boundary is every path outside the PRD folder and `.prd-toolkit/`. A commit that touches a Boundary path carries a `Refs:` trailer. The grammar: the line starts with `Refs:` (case-sensitive; `refs:` is not a trailer), and its value is either exactly `none (no behaviour change)` or comma-separated IDs (spaces around a comma are fine). Every `Refs:` line in the message counts, so two lines are two lists. An ID is `UJ-nn`, `FR-nnn` or `NFR-nnn` that a block defines and that is not `removed`, or `E-nnn` that `errors.md` records. Any other key (a ticket number, say) goes in its own trailer, not in `Refs:`.
+
+Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch. The 0.4 migration adds the Gate column to the Levels table in `testing.md`; record it as the §14 row `format: Levels Gate column (prd-toolkit 0.4)`, a patch bump.
 
 ## Requirement blocks
 
@@ -139,10 +141,14 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 
 An optional `Source: <path>:<line> @<sha>` field line (continuation lines allowed) records the
 code a block was read from when an existing system is adopted. An `as-built` block must have one
-(`index-consistent`).
+(`index-consistent`). `Source:` means where the code that implements the block is: provenance for
+an `as-built` block, a pointer for a built one (`/prd-build` writes it at close). It is optional
+outside `as-built`.
 
 - `Status:` is `approved`, `built`, `verified`, `live`, `as-built` or `removed`, optionally
-  followed by `(since X.Y.Z)`. `live` always carries `since`.
+  followed by `(since X.Y.Z)`. `live` always carries `since`. Status moves go
+  `approved → built → verified`. A status move is progress, not behaviour: no version bump, no
+  §14 row, no re-approval. The block and its §11 row move together, written at a build's close.
 - `Acceptance (EARS):` lists `- AC-nnn.n <text>` items. `nnn` equals the parent's number. The
   text starts with When, While, If, Where or "The <thing> shall"; extra lines are indented.
 - A removed AC keeps its line, with `(removed in X.Y.Z)` between the ID and its original
@@ -229,7 +235,7 @@ T-012.2:
 ## testing.md
 
 ```
-## Levels        | Level | Harness command | Environment |
+## Levels        | Level | Harness command | Environment | Gate |
 ## Harness       - **<Slot>.** <convention>   (bullets, not a table)
 ## Environments  | Environment | Purpose | Access | Base URL | Database | Logs |
 ## Leak checks   | Sink | Read from | Scanned for |
@@ -240,6 +246,8 @@ T-012.2:
 Level-2 headings with those names; the first column of each table is the name that other files
 refer to (levels, environments, fixtures).
 
+- Levels: `Gate` is `build` (the level runs before deploy, on the code alone) or `deploy` (it needs the
+  deployed system); `test-level` reports a missing column once and any other value per row.
 - Levels: each `Harness command` is **one simple command** in backticks, such as
   `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
   first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or

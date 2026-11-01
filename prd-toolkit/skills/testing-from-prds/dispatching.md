@@ -60,21 +60,24 @@ calling the API's SDK.
    and nothing else: no summary of the PRD, no hints, no answers.
 
    ```
-   Mode: <dry run | suite>
+   Mode: <dry run | write | suite>
    PRD: docs/prd/<slug>/
    Dry-run directory: <first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/   (dry run only)
    T-ids (one per line, each with its test-case file, as --sample-tids prints them):
    <T_IDS>
+   Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"   (suite only, optional, one line per affected T-id)
    ```
 
    Dispatch with the Agent tool; under `claude --agent` the `skills:` preload does not load.
+   A write's T-ids are the new or changed non-unit T-ids the caller names, each with its test-case file.
+   A `Misread:` line makes the dispatch a test-misread round: the tester may change that one test, only so it
+   matches the quote. Add it only after you have checked the test against the PRD.
    A dry run's T-ids are the ones `--sample-tids` printed. A suite's T-id list is every non-unit
    T-id in `test-cases/<area>.yaml`, which the caller reads; `--sample-tids` is for dry runs only.
 
    Only when `prd-toolkit:prd-tester` is not in the Agent tool's list, a dry run falls back to
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md` with a general-purpose agent,
-   the same dry-run directory in its `<SCRATCH_DIR>` slot; record the run as unguarded. A suite
-   has no fallback: report it as not run.
+   the same dry-run directory in its `<SCRATCH_DIR>` slot; record the run as unguarded. A suite and a write have no fallback: report them as not run.
 4. **Check the state** after the tester returns: run the same five commands into `-after`
    files, each its own call (`git add -A` brings `<SNAP>/index` up to date), then each of these:
 
@@ -87,11 +90,12 @@ calling the API's SDK.
    `git diff --name-only <tree-before SHA> <tree-after SHA>` with the two SHAs pasted in.
 
    A dry run's check exempts only the run's own `.prd-dry-run-<YYYYMMDDTHHMMSS>/`: any other
-   changed path, inside a test root or not, fails it. A suite's check exempts the test roots.
+   changed path, inside a test root or not, fails it. A write's and a suite's check exempt the test roots.
    Anything else changed (the PRD folder, source, config) **fails the run**, whatever the report
    says. Report the changed paths to the user and restore nothing automatically: the user decides
    what to keep.
-5. **Judge the report.** A dry run passes on the triage and pass terms in
+5. **Judge the report.** A `write` report has QUESTIONS, TESTS, HARNESS CHOICES and FILES READ; a `write` report that holds RESULTS fails the round, because the guard does not know the mode and the no-run rule is held by instruction alone. Check TESTS for one line per dispatched T-id.
+   A dry run passes on the triage and pass terms in
    `${CLAUDE_PLUGIN_ROOT}/skills/authoring-prds/dry-run-prompt.md` (below its prompt block):
    every question dismissed by an exact quote, TESTS complete, FILES READ inside the PRD folder
    and the run's own dry-run directory, HARNESS CHOICES that change no assertion. A suite also

@@ -162,8 +162,8 @@ def notes_repo(tmp_path: Path) -> Path:
     prd.mkdir(parents=True)
     (prd / "prd.md").write_text("# notes\n", encoding="utf-8")
     (prd / "testing.md").write_text(
-        "# Testing\n\n## Levels\n\n| Level | Harness command | Environment |\n|---|---|---|\n"
-        "| integration | `uv run pytest tests` | local |\n\n## Harness\n\n"
+        "# Testing\n\n## Levels\n\n| Level | Harness command | Environment | Gate |\n|---|---|---|---|\n"
+        "| integration | `uv run pytest tests` | local | build |\n\n## Harness\n\n"
         "- **Layout.** `tests/test_<area>.py`. Test roots: `tests/`.\n", encoding="utf-8")
     return repo
 
@@ -296,3 +296,68 @@ def test_rule_reads_with_the_tools_not_bash_in_skill_and_agent():
     agent_rules = _flat(AGENT).split("keep to these rules:", 1)[1].split("The prompt gives the mode", 1)[0]
     assert RULE_TOOLS in skill_rules
     assert RULE_TOOLS in agent_rules
+
+
+def test_modes_table_has_write():
+    t = SKILL.read_text(encoding="utf-8")
+    assert "## The three modes" in t and "## The two modes" not in t
+    assert "| | Dry run | Write | Suite |" in t
+    assert "the build's tester cannot run its tests before the code exists" in t
+
+
+def test_dispatch_prompt_names_write():
+    assert "Mode: <dry run | write | suite>" in DISPATCHING.read_text(encoding="utf-8")
+
+
+def test_caller_fails_write_round_with_results():
+    assert "a `write` report that holds RESULTS fails the round" in DISPATCHING.read_text(encoding="utf-8")
+
+
+def test_agent_fallback_names_write():
+    assert "In write mode, write tests to the test roots and do not run them" in AGENT.read_text(encoding="utf-8")
+
+
+def test_skill_says_guard_does_not_know_write_mode():
+    t = " ".join(SKILL.read_text(encoding="utf-8").split())
+    assert "The guard does not know the mode" in t
+    assert "A suite after a write finds the tests written and runs them" in t
+
+
+def _flat(path):
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_rule_five_runs_harness_only_in_a_suite():
+    t = _flat(SKILL)
+    assert "Run the Levels harness commands only in a suite" in t
+    assert "never in a dry run or a write" in t
+    assert 'Running a write\'s tests, even "just to check" while the code is partly there' in t
+    assert "A write never runs. The caller runs the suite after the code is merged" in t
+
+
+def test_agent_fallback_and_description_cover_write():
+    t = _flat(AGENT)
+    fm = frontmatter(AGENT)
+    assert "write" in fm["description"]
+    assert "A write reads what a suite reads, writes to the test roots, never runs the harness and never reports RESULTS" in t
+
+
+def test_misread_exception_is_defined_in_skill_dispatching_and_agent():
+    slot = 'Misread: <T-id>: "<verbatim quote of the test case\'s ac: line and the expect entry>"'
+    assert slot in _flat(DISPATCHING)
+    assert "`Misread:` line" in _flat(SKILL)
+    assert "except on a `Misread:` line" in _flat(SKILL)
+    assert "except on a `Misread:` line" in _flat(AGENT)
+
+
+def test_write_named_in_helper_placement_and_rationalization_and_dispatch_fallback():
+    t = _flat(SKILL)
+    assert "in a dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a suite, in the test roots" in t
+    assert "In a suite or a write, only your own files" in t
+    assert "A suite and a write have no fallback" in _flat(DISPATCHING)
+
+
+def test_write_reads_clause_sits_in_rule_one_scope_sentence():
+    t = _flat(SKILL)
+    assert "plus the files you write; a write reads the same." in t
+    assert "A write reads what a suite reads." not in t
