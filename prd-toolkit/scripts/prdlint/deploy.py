@@ -526,15 +526,26 @@ LEDGER_PLACEHOLDER = "No entries yet. Add `### E-001 <title>` when the first err
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
+def _levels_passed(steps: list[dict], step: Step) -> bool:
+    """Every planned level of a tests step has a `pass` record."""
+    return all(any(r.get("step") == step.number and r.get("level") == lv and r.get("result") == "pass" for r in steps) for lv in step.tests or [])
+
+
 def finished_envs(log: list[dict], prd: Prd) -> list[str]:
-    """Environments whose last runbook step has a `pass` in the log (every level record, for a tests step)."""
+    """Environments whose last runbook step has a `pass` in the log, every planned level of each of their tests steps
+    has a `pass` record, and no step started on them without finishing."""
     steps = [r for r in log if r.get("kind") == "step"]
+    unfinished = {r.get("env") for r in unfinished_starts(log)}
     last: dict[str, int] = {}
     for s in prd.operations.steps:
         if s.env:
             last[s.env] = s.number
     out = []
     for env, number in last.items():
+        if env in unfinished:
+            continue
+        if not all(_levels_passed(steps, s) for s in prd.operations.steps if s.env == env and s.tests is not None):
+            continue
         recs = [r for r in steps if r.get("step") == number]
         if recs and recs[-1].get("result") == "human":  # a human step passes once confirmed and resumed, with nothing failing after it
             idx = [i for i, r in enumerate(log) if r.get("kind") == "confirm" and r.get("step") == number]
@@ -643,6 +654,10 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
     finished = finished_envs(recs, b_prd)
     prod_finished = bool(production_envs(b_prd) & set(finished))
     failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
+    if failed is None:  # a step that started and has no record (its record could not be written, or the call was killed) failed too
+        failed = next(iter(unfinished_starts(recs)), None)
+    m_date = re.match(r"(\d{4})(\d{2})(\d{2})T", run_id)
+    run_date = "-".join(m_date.groups()) if m_date else None
 
     # Deployed rows
     base_rows = {(r.env, r.version, r.commit, r.date, r.run) for r in b_prd.operations.deployed}
@@ -663,6 +678,10 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             out.append(f"Deployed {r.env}: run {r.run} is not {run_id}")
         if not _DATE.fullmatch(r.date):
             out.append(f"Deployed {r.env}: date {r.date} is not YYYY-MM-DD")
+        elif run_date and r.date != run_date:
+            out.append(f"Deployed {r.env}: date {r.date} is not the run's date {run_date}")
+    new_rows = {r.env for r in h_prd.operations.deployed if (r.env, r.version, r.commit, r.date, r.run) not in base_rows}
+    out += [f"Deployed: {env} finished in this run but has no row for it" for env in finished if env not in new_rows]
     out += [f"Deployed {env}: more than one row" for env, n in seen.items() if n > 1]
     kept = set(seen)
     out += [f"Deployed {r.env}: a row may be replaced, not removed" for r in b_prd.operations.deployed if r.env not in kept]

@@ -12,7 +12,7 @@ from prdlint import deploy, model
 
 PRD = "docs/prd/orders"
 ERRORS = f"{PRD}/errors.md"
-ROW = "| {env} | 1.0.0 | {sha} | 2026-11-02 | {run} |"
+ROW = "| {env} | 1.0.0 | {sha} | {date} | {run} |"
 ENTRY = """
 ### E-002 Deploy failed
 Detected: 2026-11-02, deploy {run} step {step}
@@ -53,9 +53,14 @@ def failed_run(repo) -> str:
     return run_id_of(r)
 
 
+def run_date(run_id: str) -> str:
+    """The run id's first eight digits as YYYY-MM-DD: the date a Deployed row carries."""
+    return f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}"
+
+
 def deployed(repo, run_id, *envs) -> str:
     sha = deploy.read_log(repo, run_id)[0]["head"][:7]
-    rows = "\n".join(ROW.format(env=e, sha=sha, run=run_id) for e in envs)
+    rows = "\n".join(ROW.format(env=e, sha=sha, run=run_id, date=run_date(run_id)) for e in envs)
     return f"\n## Deployed\n\n| Environment | PRD version | Commit | Date | Run |\n|---|---|---|---|---|\n{rows}\n"
 
 
@@ -162,14 +167,15 @@ def test_row_wrong_commit(repo):
 
 @pytest.mark.parametrize("old,new,needle", [
     ("| 1.0.0 |", "| 1.0.1 |", "Deployed staging: version 1.0.1"),
-    ("| 2026-11-02 |", "| Nov 2 |", "Deployed staging: date Nov 2"),
+    ("| {date} |", "| Nov 2 |", "Deployed staging: date Nov 2"),
     ("| " + "{run}" + " |", "| other-run |", "Deployed staging: run other-run"),
 ])
 def test_row_other_cells(repo, old, new, needle):
     run_id = staging_run(repo)
     add_deployed(repo, run_id, "staging")
     p = repo / OPS
-    p.write_text(p.read_text(encoding="utf-8").replace(old.replace("{run}", run_id), new.replace("{run}", run_id)), encoding="utf-8")
+    fill = lambda t: t.replace("{run}", run_id).replace("{date}", run_date(run_id))
+    p.write_text(p.read_text(encoding="utf-8").replace(fill(old), fill(new)), encoding="utf-8")
     close(repo, run_id)
     assert any(f.startswith(needle) for f in findings(check(repo, run_id)))
 
@@ -395,7 +401,7 @@ def test_deployed_prose_deleted(repo):
     run_id = staging_run(repo)
     p = repo / OPS
     text = p.read_text(encoding="utf-8").replace("Rows are written by the deploy close.\n\n", "")
-    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id)
+    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id, date=run_date(run_id))
     p.write_text(text.rstrip("\n") + "\n" + row + "\n", encoding="utf-8")
     close(repo, run_id)
     out = findings(check(repo, run_id))
@@ -406,7 +412,7 @@ def test_deployed_header_renamed(repo):
     seed_deployed_section(repo)
     run_id = staging_run(repo)
     p = repo / OPS
-    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id)
+    row = ROW.format(env="staging", sha=deploy.read_log(repo, run_id)[0]["head"][:7], run=run_id, date=run_date(run_id))
     p.write_text(p.read_text(encoding="utf-8").replace("PRD version", "Version").rstrip("\n") + "\n" + row + "\n", encoding="utf-8")
     close(repo, run_id)
     out = findings(check(repo, run_id))
@@ -505,3 +511,97 @@ def test_other_lines_still_count_in_the_first_entry_close(repo):
     close(repo, run_id, "Record the failure", ERRORS)
     out = findings(check(repo, run_id))
     assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+# ---- final review: every finished environment has its row (2), complete level records (7), the run's date (8) ----
+
+def test_production_close_without_rows(repo):
+    run_id = full_run(repo)
+    go_live(repo)
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert "Deployed: staging finished in this run but has no row for it" in out
+    assert "Deployed: production finished in this run but has no row for it" in out
+
+
+def test_finished_env_whose_row_was_not_replaced(repo):
+    """An earlier run's row left in place is not this run's row."""
+    first = staging_run(repo)
+    add_deployed(repo, first, "staging")
+    close(repo, first)
+    run_id = staging_run(repo)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Close without rows")
+    assert findings(check(repo, run_id)) == ["Deployed: staging finished in this run but has no row for it"]
+
+
+def test_staging_close_needs_only_the_staging_row(repo):
+    run_id = staging_run(repo)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Close without rows")
+    assert findings(check(repo, run_id)) == ["Deployed: staging finished in this run but has no row for it"]
+
+
+def test_row_date_must_be_the_runs_date(repo):
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace(f"| {run_date(run_id)} |", "| 1999-01-01 |"), encoding="utf-8")
+    close(repo, run_id)
+    assert f"Deployed staging: date 1999-01-01 is not the run's date {run_date(run_id)}" in findings(check(repo, run_id))
+
+
+def test_a_tests_step_needs_every_planned_level(repo):
+    """The reviewer's probe: a level record that never reached the log leaves the environment unfinished."""
+    change(repo, OPS, "   Run: tests system\n", "   Run: tests system, e2e\n")
+    prd = model.load(repo / PRD)
+    log = [{"kind": "header"},
+           {"kind": "step", "step": 1, "env": "staging", "result": "pass"},
+           {"kind": "start", "step": 2, "env": "staging", "level": "system"},
+           {"kind": "step", "step": 2, "env": "staging", "level": "system", "result": "pass"}]
+    assert deploy.finished_envs(log, prd) == []  # e2e has no record at all
+    log += [{"kind": "start", "step": 2, "env": "staging", "level": "e2e"}]
+    assert deploy.finished_envs(log, prd) == []  # e2e started and did not finish
+    log += [{"kind": "step", "step": 2, "env": "staging", "level": "e2e", "result": "pass"}]
+    assert deploy.finished_envs(log, prd) == ["staging"]
+
+
+def test_an_unfinished_start_leaves_its_environment_unfinished(repo):
+    prd = model.load(repo / PRD)
+    log = [{"kind": "header"},
+           {"kind": "step", "step": 1, "env": "staging", "result": "pass"},
+           {"kind": "start", "step": 2, "env": "staging", "level": "system"},
+           {"kind": "start", "step": 2, "env": "staging", "level": "e2e"},
+           {"kind": "step", "step": 2, "env": "staging", "level": "system", "result": "pass"}]
+    assert deploy.finished_envs(log, prd) == []
+
+
+def unwritten_failure(repo, monkeypatch, capsys) -> str:
+    """A run whose step 1 record could not be written: it exits 4 with a start and no step record."""
+    from prd_deploy import main
+
+    real = deploy.append
+
+    def flaky(repo_root, rid, record):
+        if record.get("kind") == "step" and record.get("step") == 1:
+            raise OSError("disk full")
+        return real(repo_root, rid, record)
+
+    monkeypatch.setattr(deploy, "append", flaky)
+    assert main(["run", prd_dir(repo)]) == 4
+    monkeypatch.setattr(deploy, "append", real)
+    run_id = capsys.readouterr().out.splitlines()[0].removeprefix("run: ")
+    assert not [r for r in deploy.read_log(repo, run_id) if r.get("kind") == "step"]
+    return run_id
+
+
+def test_an_unfinished_start_needs_an_errors_entry(repo, monkeypatch, capsys):
+    run_id = unwritten_failure(repo, monkeypatch, capsys)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Close without an entry")
+    assert findings(check(repo, run_id)) == ["errors.md: the run failed at step 1 but no open unclassified entry was added"]
+
+
+def test_an_unfinished_start_accepts_its_entry(repo, monkeypatch, capsys):
+    run_id = unwritten_failure(repo, monkeypatch, capsys)
+    add_entry(repo, run_id)
+    close(repo, run_id, "Record the failure", ERRORS)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr

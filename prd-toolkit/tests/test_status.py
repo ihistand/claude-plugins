@@ -178,7 +178,7 @@ def test_deployed_none_without_rows(prd_repo):
 
 def test_unfinished_human_run_after_row(prd_repo):
     run = "20261103T000000Z-production"
-    write_log(prd_repo, run, step(1, "staging", "pass"), step(2, "staging", "pass"), step(3, "production", "human"))
+    write_log(prd_repo, run, step(1, "staging", "pass"), *levels(2, "staging", "system", "e2e"), step(3, "production", "human"))
     assert deployed(build(prd_repo)) == [
         "production: 1.0.0 at 3f2c1a9, 2026-11-02", f"production: run {run} stopped (human) at step 3"]
 
@@ -204,14 +204,14 @@ def test_row_follows_its_environment_when_both(prd_repo):
 
 
 def test_finished_or_older_run_adds_nothing(prd_repo):
-    write_log(prd_repo, "20261103T000000Z-staging", step(1, "staging", "pass"), step(2, "staging", "pass"))
+    write_log(prd_repo, "20261103T000000Z-staging", step(1, "staging", "pass"), *levels(2, "staging", "system", "e2e"))
     write_log(prd_repo, "20261101T000000Z-production", step(3, "production", "human"))  # older than the row's run
     assert deployed(build(prd_repo)) == ["production: 1.0.0 at 3f2c1a9, 2026-11-02"]
 
 
 def test_newest_run_wins(prd_repo):
     write_log(prd_repo, "20261103T000000Z-staging", step(1, "staging", "fail"))
-    write_log(prd_repo, "20261104T000000Z-staging", step(1, "staging", "pass"), step(2, "staging", "pass"))
+    write_log(prd_repo, "20261104T000000Z-staging", step(1, "staging", "pass"), *levels(2, "staging", "system", "e2e"))
     assert deployed(build(prd_repo)) == ["production: 1.0.0 at 3f2c1a9, 2026-11-02"]
 
 
