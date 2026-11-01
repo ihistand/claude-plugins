@@ -15,7 +15,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import deploy, model  # noqa: E402
+from prdlint import deploy, model, trace  # noqa: E402
 
 
 def _fail(message: str) -> int:
@@ -43,6 +43,10 @@ def _parser() -> argparse.ArgumentParser:
             p.add_argument("--reply", required=True, metavar="TEXT")
         else:
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
+    p = sub.add_parser("check", help="the close check: a deploy run's close commit says only what its log proves")
+    p.add_argument("prd_dir")
+    p.add_argument("--run", required=True, metavar="ID")
+    p.add_argument("--diff", required=True, metavar="BASE..HEAD", help="BASE is the run's HEAD")
     return parser
 
 
@@ -141,6 +145,16 @@ def main(argv: list[str]) -> int:
         return _fail(f"{prd.root.as_posix()}/prd.md: {model.UNMIGRATED}")
     if args.command in ("confirm", "resume", "rollback"):
         return _existing_run(args, prd)
+    if args.command == "check":
+        try:
+            found = deploy.close_findings(prd, model.repo_root(prd.root), args.run, args.diff)
+        except (ValueError, trace.BadRange) as e:
+            return _fail(str(e))
+        except Exception as e:
+            return _fail(f"internal error: {type(e).__name__}: {e}")
+        for f in found:
+            print(f)
+        return 1 if found else 0
     steps, problem = _steps_or_message(prd, args.until)
     if problem:
         return _fail(problem)

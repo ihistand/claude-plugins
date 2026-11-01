@@ -3,12 +3,14 @@
 The only code that runs a runbook's commands. Commands run with `bash -c` at the repo root with
 stdin closed, in their own process group so a timeout kills the whole tree.
 """
+import difflib
 import json
 import os
 import re
 import signal
 import sys
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +22,10 @@ except ImportError:  # Windows
     import msvcrt
 
 from . import registry, trace
-from .model import Prd, Step
+from .buildcheck import _resolve, _show
+from .markdown import sections
+from .model import Prd, Step, load, production_envs
+from .trace import BadRange
 
 EXIT = {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
 TAIL = 4096
@@ -328,7 +333,7 @@ def run_lock(repo_root: Path, run_id: str):
     """
     check_run_id(run_id)
     try:
-        f = open(_log_path(repo_root, run_id), "a", encoding="utf-8")
+        f = open(_log_path(repo_root, run_id), "r+", encoding="utf-8")  # never creates a log for an unknown run
     except FileNotFoundError:
         raise ValueError(f"no log for run {run_id}") from None
     try:
@@ -425,3 +430,175 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
     append(repo_root, run_id, {"kind": "rollback", "step": step, "command": target.rollback, **rec, "started": started, "ended": _iso()})
     print(f"rollback step {step} {target.env}: {'pass' if ok else 'fail'}", flush=True)
     return 0 if ok else (rec["exit"] if rec["exit"] not in (None, 0) else -1)
+
+
+# ---- the close check (spec section 5, step 4) ----
+
+ONLY = "only Deployed rows and Status: lines may change"
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_DEPLOYED = re.compile(r"^##\s+Deployed\s*$", re.I)
+
+
+def finished_envs(log: list[dict], prd: Prd) -> list[str]:
+    """Environments whose last runbook step has a `pass` in the log (every level record, for a tests step)."""
+    steps = [r for r in log if r.get("kind") == "step"]
+    last: dict[str, int] = {}
+    for s in prd.operations.steps:
+        if s.env:
+            last[s.env] = s.number
+    out = []
+    for env, number in last.items():
+        recs = [r for r in steps if r.get("step") == number]
+        if recs and all(r.get("result") == "pass" for r in recs):
+            out.append(env)
+    return out
+
+
+def _tree(repo_root: Path, rev: str, prefix: str, dest: Path) -> Path:
+    """The PRD folder as it is at `rev`, written under `dest`; its root is returned."""
+    names = _git(repo_root, "ls-tree", "-r", "--name-only", "-z", rev, "--", prefix).split("\0")
+    root = dest / "prd"
+    root.mkdir(parents=True)
+    for name in filter(None, names):
+        rel = name if prefix == "." else name[len(prefix) + 1:]
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_show(repo_root, rev, name), encoding="utf-8")
+    return root
+
+
+def _status_cell_mask(line: str) -> str:
+    cells = line.split("|")
+    if len(cells) >= 7:  # | id | title | status | file | since |
+        cells[3], cells[5] = "", ""
+    return "|".join(cells)
+
+
+def _mask(prd: Prd, rel: str, text: str) -> list[tuple[int, str]]:
+    """The file's non-blank lines with the lines the close may change blanked out; (line number, text)."""
+    lines = text.split("\n")
+    drop: set[int] = set()
+    if rel == "operations.md":
+        for s in sections(text):
+            if s.title.strip().lower() == "deployed":
+                drop.update([s.line] + [n for n, _ in s.body])
+    elif rel in prd.docs and (rel == "nfr.md" or re.fullmatch(r"features/[^/]+\.md", rel)):
+        for b in prd.blocks:
+            if b.file == rel:
+                n = next((n for n, t in b.lines if t.startswith("Status:")), None)
+                if n:
+                    lines[n - 1] = "Status:"
+    elif rel == "prd.md":
+        for r in prd.index:
+            lines[r.line - 1] = _status_cell_mask(lines[r.line - 1])
+    return [(n, t) for n, t in enumerate(lines, 1) if n not in drop and t.strip()]
+
+
+def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> list[int]:
+    """The first head line of each differing stretch."""
+    sm = difflib.SequenceMatcher(None, [t for _, t in base], [t for _, t in head], autojunk=False)
+    out = []
+    for tag, _, _, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        out.append(head[j1][0] if j1 < len(head) else (head[-1][0] if head else 1))
+    return out
+
+
+def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
+    """Findings for a run's close commit(s); BadRange for a bad range, ValueError for an unusable log."""
+    m = re.match(r"^([^.\s][^\s]*?)\.\.([^.\s][^\s]*)$", rng)
+    if not m or "..." in rng:
+        raise BadRange(f"bad range {rng}: expected <base>..<head>")
+    base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
+    header, recs = _load_log(repo_root, run_id)
+    run_head = str(header.get("head"))
+    if base != run_head:
+        return [f"the range must start at the run's HEAD {run_head[:7]}"]
+    prefix = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
+    with tempfile.TemporaryDirectory(prefix="prd-deploy-check-") as tmp:
+        try:
+            b_prd, h_prd = (load(_tree(repo_root, rev, prefix, Path(tmp) / name)) for rev, name in ((base, "base"), (head, "head")))
+        except Exception as e:
+            raise BadRange(f"cannot load the PRD at {base[:7]} and {head[:7]}: {e}") from None
+    out: list[str] = []
+    version = header.get("version")
+    finished = finished_envs(recs, b_prd)
+    prod_finished = bool(production_envs(b_prd) & set(finished))
+    failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
+
+    # Deployed rows
+    base_rows = {(r.env, r.version, r.commit, r.date, r.run) for r in b_prd.operations.deployed}
+    seen: dict[str, int] = {}
+    for r in h_prd.operations.deployed:
+        seen[r.env] = seen.get(r.env, 0) + 1
+    for r in h_prd.operations.deployed:
+        if (r.env, r.version, r.commit, r.date, r.run) in base_rows:
+            continue
+        if r.env not in finished:
+            out.append(f"Deployed {r.env}: the run did not finish {r.env}")
+            continue
+        if r.version != version:
+            out.append(f"Deployed {r.env}: version {r.version}, the run deployed {version}")
+        if len(r.commit) < 7 or not run_head.startswith(r.commit.lower()):
+            out.append(f"Deployed {r.env}: commit {r.commit} is not the run's HEAD")
+        if r.run != run_id:
+            out.append(f"Deployed {r.env}: run {r.run} is not {run_id}")
+        if not _DATE.fullmatch(r.date):
+            out.append(f"Deployed {r.env}: date {r.date} is not YYYY-MM-DD")
+    out += [f"Deployed {env}: more than one row" for env, n in seen.items() if n > 1]
+    kept = set(seen)
+    out += [f"Deployed {r.env}: a row may be replaced, not removed" for r in b_prd.operations.deployed if r.env not in kept]
+    hs = next((s for s in sections(h_prd.docs.get("operations.md", "")) if s.title.strip().lower() == "deployed"), None)
+    for n, text in (hs.body if hs else []):
+        if text.strip() and not text.lstrip().startswith("|"):
+            out.append(f"{prefix + '/' if prefix != '.' else ''}operations.md:{n}: {ONLY}")
+
+    # statuses
+    base_blocks = {b.id: b for b in b_prd.blocks}
+    head_blocks = {b.id: b for b in h_prd.blocks}
+    for bid, hb in head_blocks.items():
+        bb = base_blocks.get(bid)
+        if bb is not None and (bb.status, bb.since) != (hb.status, hb.since):
+            if not prod_finished:
+                out.append(f"{bid}: {hb.status} after a run that did not finish production")
+            elif bb.status != "verified" or hb.status != "live":
+                out.append(f"{bid}: {bb.status} to {hb.status}; only verified to live may change")
+            elif hb.since != version:
+                out.append(f"{bid}: since {hb.since}, the run deployed {version}")
+        if prod_finished and hb.status == "verified":
+            out.append(f"{bid}: still verified after a production finish")
+    base_idx = {r.id: (r.status, r.since) for r in b_prd.index}
+    for r in h_prd.index:
+        hb = head_blocks.get(r.id)
+        bb = base_blocks.get(r.id)
+        moved = base_idx.get(r.id) != (r.status, r.since) or (bb is not None and (bb.status, bb.since) != (hb.status, hb.since))
+        if hb is not None and moved and r.status != hb.status:
+            out.append(f"{r.id}: the §11 index says {r.status}, the block says {hb.status}")
+
+    # errors.md
+    new = [e for i, e in h_prd.errors_ledger.items() if i not in b_prd.errors_ledger]
+    drop_errors: set[int] = set()
+    if failed is not None and len(new) == 1:
+        e = new[0]
+        etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
+        detected = re.search(r"^Detected:.*$", etext, re.M)
+        step_ok = detected and re.search(rf"\bstep\s+{failed.get('step')}\b", detected.group(0)) and run_id in detected.group(0)
+        if not (e.open and e.classification == "unclassified" and step_ok):
+            out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
+        drop_errors = set(range(e.line, e.end + 1))
+
+    # every other change
+    diff = _git(repo_root, "diff", "--no-renames", "--name-only", "-z", base, head).split("\0")
+    for path in dict.fromkeys(filter(None, diff)):
+        rel = path[len(prefix) + 1:] if prefix != "." and path.startswith(prefix + "/") else (path if prefix == "." else None)
+        b_text, h_text = _show(repo_root, base, path), _show(repo_root, head, path)
+        if rel is None:
+            bl = [(n, t) for n, t in enumerate(b_text.split("\n"), 1) if t.strip()]
+            hl = [(n, t) for n, t in enumerate(h_text.split("\n"), 1) if t.strip()]
+        else:
+            bl, hl = _mask(b_prd, rel, b_text), _mask(h_prd, rel, h_text)
+            if rel == "errors.md":
+                hl = [(n, t) for n, t in hl if n not in drop_errors]
+        out += [f"{path}:{n}: {ONLY}" for n in _diff_lines(bl, hl)]
+    return list(dict.fromkeys(out))
