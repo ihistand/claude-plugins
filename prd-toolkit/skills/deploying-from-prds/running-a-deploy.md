@@ -18,9 +18,13 @@ runbook says to run is not.
 
 **When the harness denies a `prd_deploy.py` command, or the script is slow, stop and tell the
 user**: name the command so they can allow it, exactly as you ran it, and wait for them. A denied
-`run` is never a reason to run its steps another way. For a slow run, give `run` and `resume` the
-Bash tool's longest timeout, or run them in the background and wait for the exit. Never start a
-second `prd_deploy.py` command on a run while one is still working; the script refuses it.
+`run` is never a reason to run its steps another way. Slow never means running the steps
+yourself. Run `run` and `resume` in the background, and wait for the exit: the script's 600 s
+timeout per command can outlive a foreground Bash call. A Bash call that timed out or was killed
+is reported to the user, never rerun, and never finished by hand: the step it was running is
+logged as started, and the next `resume` refuses with "step <N> started and did not finish".
+Never start a second `prd_deploy.py` command on a run while one is still working; the script
+refuses it.
 
 **Code, tests and the runbook are never edited during a deploy**, nor the PRD outside the close
 (step 3), even when the user says "fix it and carry on". A failed step is a defect to record
@@ -75,7 +79,8 @@ human step or failed, and at step 3 for a finished run they ask you to record.
 
    and paste the SHA wherever `<base>` appears. `run` refuses a tracked tree with changes and
    nothing is committed before the close, so this is the run's HEAD (the log header's `head`).
-2. **Run.** Run `prd_deploy.py run`, with the same `--until` as the plan or none:
+2. **Run.** Run `prd_deploy.py run` in the background, with the same `--until` as the plan or
+   none:
 
    ```bash
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" run docs/prd/<slug> --until <env>; echo "prd-deploy-exit=$?"
@@ -86,8 +91,11 @@ human step or failed, and at step 3 for a finished run they ask you to record.
 
    - **0, done.** Go to step 3.
    - **1, refused.** Report each `refused:` line and stop. A `built` block goes to `/prd-build`;
-     a dirty tree or a lint or trace finding is the user's to settle. A refused `run` ran
-     nothing (`run=none`): there is no close.
+     a dirty tree or a lint or trace finding is the user's to settle. A run that reaches
+     production is refused for a `verified` block's deploy-gate T-id that no test cites
+     (`<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`): the missing test goes to
+     `prd-toolkit:building-from-prds`. A refused `run` ran nothing (`run=none`): there is no
+     close.
    - **3, human step.** Read step N's `Do:` and `Check:` in the `## Runbook` of
      `docs/prd/<slug>/operations.md`, show them to the user with the run id, and wait for the
      user's reply. The confirm carries the user's reply to this step, verbatim: what the user
@@ -104,7 +112,8 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
      ```
 
-     Exit 0 prints `confirmed: step <N> run=<id>`. Then `prd_deploy.py resume`, which continues
+     Exit 0 prints `confirmed: step <N> run=<id>`. Then `prd_deploy.py resume`, in the
+     background, which continues
      after the confirmed step and exits as `run` does; act on its exit by this list again:
 
      ```bash
@@ -121,13 +130,13 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      A run stopped at a human step is not closed: a close commit moves HEAD, and `resume` then
      refuses with "HEAD moved since the run started". Close it (step 3) only when the user
      declines the step or asks to record the run as it stands; it cannot be resumed after.
-   - **4, failed.** Stop. Run `git rev-parse --git-common-dir` as its own call (a relative
-     answer is under the repository root) and Read
+   - **4, failed.** Stop. Run `git rev-parse --git-common-dir` as its own call, from the
+     repository root (a relative answer is relative to it), and Read
      `<that dir>/prd-toolkit/deploys/<run id>.jsonl`: the failed step's record holds its command,
      exit code and the stdout and stderr tails (a `check` inside it for a failed `Check:`). Show
      the user the failed step, those output tails and its `Rollback:` command (the run printed it
-     as `rollback: <command>`; a step without one has none to offer). Ask whether to roll back,
-     and run `prd_deploy.py rollback` only on the user's yes in their own words, given after
+     as `` rollback: `<command>` ``; a step without one has none to offer). Ask whether to roll
+     back, and run `prd_deploy.py rollback` only on the user's yes in their own words, given after
      they saw the failure; a message of theirs that names the run and asks for the rollback is
      one. Never run it unasked, and never run the `Rollback:` command by hand:
 
@@ -155,10 +164,12 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      Diagnosing it is not part of the deploy: the entry stays open and unclassified. Go to
      step 3; the close commit carries the entry. A failed run ends, and `resume` refuses it.
      Start a new run only when the user asks for one after seeing the failure, and tell them
-     first whether anything changed: a new run on the same commit runs the same commands.
+     first whether anything changed: a new run on the same commit runs the same commands. A new
+     run after a failed one starts again at step 1, after the failed run's close (step 3) and
+     close check (step 4), and both runs go in one report.
 3. **Close.** The close is always committed, after every run that ran a step: one that finished,
    one that failed, and one stopped at a human step that the user ends. For a run from an earlier
-   session, run `git rev-parse --git-common-dir` and Read
+   session, run `git rev-parse --git-common-dir` from the repository root and Read
    `<that dir>/prd-toolkit/deploys/<run id>.jsonl`: its first line's `head` is `<base>` and its
    `version` the run's PRD version, and its `step` records give each step's result.
 
@@ -194,9 +205,12 @@ human step or failed, and at step 3 for a finished run they ask you to record.
    ```
 
    Both must be `0`. A finding on a line you wrote is yours: fix it and run both again. A `live`
-   block needs a citation for every T-id, deploy gate included; a deploy-gate T-id that no test
-   cites is not yours to fix: commit nothing, give the finding to the user with the run and stop
-   at step 5. Otherwise, each its own call:
+   block needs a citation for every T-id, deploy gate included, and pre-flight refuses a
+   production run that lacks one, so a trace finding here is unexpected. If one comes anyway (a
+   deploy-gate T-id that no test cites), it is not yours to fix: commit the close regardless,
+   because `prd_deploy.py check` validates it against the log, not the trace. Give the finding to
+   the user in the report, and send the missing citation to `prd-toolkit:building-from-prds`.
+   Then, each its own call:
 
    ```bash
    git add docs/prd/<slug>
@@ -223,4 +237,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
 5. **Report.** The run id; each step's result; every human reply, quoted verbatim; a run left
    stopped at a human step, with its `Do:`; the rollback offered and its result, or that it was
    not run and its command; the Deployed rows written; the IDs moved to `live`; any `E-nnn`
-   added; the close commit and the close check's result.
+   added; a trace finding at the close, with where it went; the close commit and the close
+   check's result. A rollback not run before the close stays unrun: the close commit moved
+   HEAD, so the rollback can no longer run through the script and is never run by hand. Name
+   its command for the user only as information.

@@ -245,3 +245,55 @@ def test_platform_neutral():
         t = path.read_text(encoding="utf-8").lower()
         for word in ("acuantia", "rotoplas", "gcloud", "bigquery", "looker", "ivan"):
             assert word not in t, (path.name, word)
+
+
+# --- fix round 1: review items and rulings R17, R18 ---
+
+def test_r17_a_trace_finding_at_the_close_still_commits():
+    three, five = step(3), flat(RUN).split(" 5. **Report.**", 1)[1]
+    assert "commit nothing" not in flat(RUN) and "commit nothing" not in flat(SKILL)
+    assert "commit the close regardless" in three
+    assert "`prd_deploy.py check` validates it against the log, not the trace" in three
+    assert "prd-toolkit:building-from-prds" in three
+    assert "a trace finding at the close" in five
+    assert "has no citing test; it cannot go live" in step(2)  # the pre-flight refusal that makes it unexpected
+    rule7 = flat(SKILL).split("7. **The close is committed and checked.**", 1)[1].split("8. **", 1)[0]
+    assert "unless" not in rule7 and "except" not in rule7
+
+
+def test_r18_run_and_resume_in_the_background():
+    t = flat(RUN)
+    assert "Run `run` and `resume` in the background, and wait for the exit" in t
+    assert "longest timeout" not in t
+    assert ("A Bash call that timed out or was killed is reported to the user, never rerun, and never finished by "
+            "hand") in t
+    assert "started and did not finish" in t
+    for path in (SKILL, RUN):
+        assert "Slow never means running the steps yourself." in flat(path), path.name
+
+
+def test_rollback_after_the_close_is_not_run():
+    five = flat(RUN).split(" 5. **Report.**", 1)[1]
+    assert "the rollback can no longer run through the script and is never run by hand" in five
+    assert "only as information" in five
+
+
+def test_rollback_line_matches_the_script():
+    assert "`` rollback: `<command>` ``" in RUN.read_text(encoding="utf-8")
+
+
+def test_git_common_dir_runs_from_the_repository_root():
+    t = flat(RUN)
+    assert "from the repository root" in t
+    assert "(a relative answer is under the repository root)" not in t
+
+
+def test_d6_paraphrase_is_not_a_quote():
+    s = flat(SKILL)
+    assert "\"to run production by hand on the user's reply\"" not in s
+    assert "(baseline summary, not a quote)" in s
+
+
+def test_a_new_run_after_a_failed_one():
+    assert ("A new run after a failed one starts again at step 1, after the failed run's close (step 3) and close "
+            "check (step 4), and both runs go in one report.") in flat(RUN)

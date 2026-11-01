@@ -31,7 +31,9 @@ record it" change nothing below.
    runs them, through the commands in `running-a-deploy.md`.
 2. **When the harness denies a `prd_deploy.py` command, or the script is slow, stop and tell the
    user**, naming the command so they can allow it. A denial or a slow step is never a reason to
-   run the runbook's steps another way.
+   run the runbook's steps another way. Slow never means running the steps yourself. `run` and
+   `resume` go in the background; a Bash call that timed out or was killed is reported, never
+   rerun and never finished by hand.
 3. **Every step, from step 1.** `--until <env>` ends a run early; nothing starts one late or
    skips a step, whatever the request says.
 4. **The request is the go, never the approval.** A request to deploy, or "approve it
@@ -73,8 +75,8 @@ Quoted from runs without this skill (evals/baselines/deploying-from-prds.md), ex
 - "`prd_deploy.py check` compares two commits, so I haven't run it." (D5) A Deployed row
   written and left uncommitted, and the close check never run.
 - After `prd_deploy.py run` was denied, running `python3 scripts/deploy.py staging` and
-  `TEST_ENV=staging uv run pytest tests/system` yourself. (D6) Then offering "to run production
-  by hand on the user's reply".
+  `TEST_ENV=staging uv run pytest tests/system` yourself. (D6) Then offering to run production
+  by hand once the user replies (baseline summary, not a quote).
 - A runbook command run "just to check" the environment, before or after a step. (Spec §5.)
 - A `rollback` the user did not ask for, or a `Rollback:` command typed by hand. (Spec §5.)
 - `live` written after a run that stopped before production. (Spec §5.)
