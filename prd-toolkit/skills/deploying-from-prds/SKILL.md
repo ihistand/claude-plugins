@@ -4,7 +4,8 @@ description: Use when deploying, releasing to production or shipping to staging 
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/deploying-from-prds/running-a-deploy.md` whole before anything else
-(no offset, no limit): it is your next tool call, and you follow it step by step, steps 1 to 5.
+(no offset, no limit; it sits beside this file, in the skill's base directory): it is your next
+tool call, and you follow it step by step, steps 1 to 5.
 Run no command, read no PRD file and touch no environment before you have read it.
 
 # Deploying from PRDs
@@ -28,7 +29,10 @@ record it" change nothing below.
 
 1. **Never run a runbook command yourself.** Not a step's `Run:`, `Check:` or `Rollback:`, not
    a `tests` step's harness command, not the deploy script "just to check". Only `prd_deploy.py`
-   runs them, through the commands in `running-a-deploy.md`.
+   runs them, through the commands in `running-a-deploy.md`. Call the repository's vendored
+   `.prd-toolkit/prd_deploy.py` when `.prd-toolkit/` exists, otherwise the plugin's
+   `scripts/prd_deploy.py` as a literal absolute path, the plugin root being two directories
+   above the skill's base directory: `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call.
 2. **When the harness denies a `prd_deploy.py` command, or the script is slow, stop and tell the
    user**, naming the command so they can allow it. A denial or a slow step is never a reason to
    run the runbook's steps another way. Slow never means running the steps yourself. `run` and

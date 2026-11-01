@@ -33,6 +33,17 @@ then a new deploy. A runbook that is wrong (a bad command, a `Check:` that tests
 is a gap for `prd-toolkit:changing-prds`, never a line you correct to get the run through. Say in
 one line which rule a request to edit breaks, and go on with the procedure without the edit.
 
+**Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: `.prd-toolkit/prd_deploy.py`, `.prd-toolkit/prd_lint.py` and
+`.prd-toolkit/prd_trace.py` are the copy its hooks and CI run. Otherwise `<scripts>` is the
+plugin's `scripts` directory, written as a literal absolute path (in double quotes if it
+holds a space): the plugin root is two directories above the skill's base directory (Claude
+Code shows it as "Base directory for this skill" when the skill loads), and `<scripts>` is
+`<plugin root>/scripts`. Before step 1, Glob for `.prd-toolkit/prd_deploy.py` to decide, and
+use the same `<scripts>` for every command of the deploy. A script that is not found is a tool
+error: report it, never guess another path.
+
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, run id and SHA in it is typed out in full: paste what a command printed, never a
 variable that holds it or a `$(…)`. The gate forms `; echo "prd-deploy-exit=$?"`,
@@ -63,7 +74,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
 1. **Plan.** Run `prd_deploy.py plan`, without `--until` when the run goes to the end:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" plan docs/prd/<slug> --until <env>; echo "prd-deploy-exit=$?"
+   uv run --script <scripts>/prd_deploy.py plan docs/prd/<slug> --until <env>; echo "prd-deploy-exit=$?"
    ```
 
    It runs nothing and prints one line per step: number, actor, environment, title and an agent
@@ -83,7 +94,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
    none:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" run docs/prd/<slug> --until <env>; echo "prd-deploy-exit=$?"
+   uv run --script <scripts>/prd_deploy.py run docs/prd/<slug> --until <env>; echo "prd-deploy-exit=$?"
    ```
 
    Pre-flight refuses unless the tracked tree is clean, `prd_lint` and `prd_trace` exit 0 and no
@@ -109,7 +120,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      `prd_deploy.py confirm`, writing each `'` in the reply as `'\''`:
 
      ```bash
-     uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
+     uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
      ```
 
      Exit 0 prints `confirmed: step <N> run=<id>`. Then `prd_deploy.py resume`, in the
@@ -117,7 +128,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      after the confirmed step and exits as `run` does; act on its exit by this list again:
 
      ```bash
-     uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" resume docs/prd/<slug> --run <id>; echo "prd-deploy-exit=$?"
+     uv run --script <scripts>/prd_deploy.py resume docs/prd/<slug> --run <id>; echo "prd-deploy-exit=$?"
      ```
 
      `resume` refuses when HEAD, the PRD version or the tracked tree moved since the run
@@ -141,7 +152,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      one. Never run it unasked, and never run the `Rollback:` command by hand:
 
      ```bash
-     uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" rollback docs/prd/<slug> --run <id> --step <N>; echo "prd-deploy-exit=$?"
+     uv run --script <scripts>/prd_deploy.py rollback docs/prd/<slug> --run <id> --step <N>; echo "prd-deploy-exit=$?"
      ```
 
      It prints `rollback step <N> <env>: pass|fail`, then
@@ -151,7 +162,11 @@ human step or failed, and at step 3 for a finished run they ask you to record.
      no one to ask, nothing is rolled back and the report names the command.
 
      Then add an open entry at the end of `docs/prd/<slug>/errors.md`, numbered after its last
-     `E-nnn`, with no `Resolution:` line, whether or not the step was rolled back:
+     `E-nnn` (`E-001` for the first), with no `Resolution:` line, whether or not the step was
+     rolled back. Add the entry with Edit, appended at the end of the file; never rewrite
+     `errors.md` with Write. The template line
+     ``No entries yet. Add `### E-001 <title>` when the first error is diagnosed.`` may go in the
+     close that adds the first entry, and in no other. Every other line stays as it is:
 
      ```
      ### E-<nnn> Deploy <run id> failed at step <N>
@@ -200,8 +215,8 @@ human step or failed, and at step 3 for a finished run they ask you to record.
    its own call:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
+   uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
+   uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
    Both must be `0`. A finding on a line you wrote is yours: fix it and run both again. A `live`
@@ -223,7 +238,7 @@ human step or failed, and at step 3 for a finished run they ask you to record.
    `<base>` is the run's HEAD:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_deploy.py" check docs/prd/<slug> --run <id> --diff <base>..HEAD; echo "prd-deploy-exit=$?"
+   uv run --script <scripts>/prd_deploy.py check docs/prd/<slug> --run <id> --diff <base>..HEAD; echo "prd-deploy-exit=$?"
    ```
 
    `prd_deploy.py check` compares the run's HEAD with the close. Exit 0 is clean. Exit 1 prints

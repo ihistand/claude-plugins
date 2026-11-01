@@ -445,6 +445,8 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
 # ---- the close check (spec section 5, step 4) ----
 
 ONLY = "only Deployed rows and Status: lines may change"
+# templates/prd/errors.md's placeholder; the close that adds the ledger's first entry may remove it
+LEDGER_PLACEHOLDER = "No entries yet. Add `### E-001 <title>` when the first error is diagnosed."
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DEPLOYED = re.compile(r"^##\s+Deployed\s*$", re.I)
 
@@ -626,6 +628,7 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         if not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))
+    first_entry = failed is not None and len(new) == 1 and not b_prd.errors_ledger
 
     # every other change
     diff = _git(repo_root, "diff", "--no-renames", "--name-only", "-z", base, head).split("\0")
@@ -639,5 +642,7 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             bl, hl = _mask(b_prd, rel, b_text), _mask(h_prd, rel, h_text, created=_deployed_section(b_prd.docs.get("operations.md", "")) is None)
             if rel == "errors.md":
                 hl = [(n, t) for n, t in hl if n not in drop_errors]
+                if first_entry:  # removing the placeholder is allowed here, and only here
+                    bl, hl = ([(n, t) for n, t in lines if t.strip() != LEDGER_PLACEHOLDER] for lines in (bl, hl))
         out += [f"{path}:{n}: {ONLY}" for n in _diff_lines(bl, hl)]
     return list(dict.fromkeys(out))

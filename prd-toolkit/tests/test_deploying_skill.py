@@ -207,7 +207,7 @@ def test_gate_forms_in_both_files():
         for line in path.read_text(encoding="utf-8").splitlines():
             for script, gate in (("prd_deploy.py", "prd-deploy-exit"), ("prd_lint.py", "prd-lint-exit"),
                                  ("prd_trace.py", "prd-trace-exit")):
-                if f'"${{CLAUDE_PLUGIN_ROOT}}/scripts/{script}"' in line:
+                if f"<scripts>/{script}" in line:
                     assert f'echo "{gate}=$?"' in line, (path.name, line)
 
 
@@ -224,7 +224,7 @@ def test_procedure_commands_are_one_per_call_with_literal_paths():
                 assert bad not in head, (bad, line)
     t = RUN.read_text(encoding="utf-8")
     for cmd in ("plan", "run", "confirm", "resume", "rollback", "check"):
-        assert f'uv run --script "${{CLAUDE_PLUGIN_ROOT}}/scripts/prd_deploy.py" {cmd} docs/prd/<slug>' in t, cmd
+        assert f"uv run --script <scripts>/prd_deploy.py {cmd} docs/prd/<slug>" in t, cmd
     assert "One command per Bash call, with literal paths." in flat(RUN)
 
 
@@ -297,3 +297,30 @@ def test_d6_paraphrase_is_not_a_quote():
 def test_a_new_run_after_a_failed_one():
     assert ("A new run after a failed one starts again at step 1, after the failed run's close (step 3) and close "
             "check (step 4), and both runs go in one report.") in flat(RUN)
+
+
+# --- fix round 2: REFACTOR from the GREEN reruns (R19, R20) ---
+
+def test_r20_which_script_to_call():
+    for path in (SKILL, RUN, COMMAND):
+        assert '"${CLAUDE_PLUGIN_ROOT}/scripts/' not in path.read_text(encoding="utf-8"), path.name
+    t = flat(RUN)
+    assert "`${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call" in t
+    assert "`<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/` directory" in t
+    assert "the copy its hooks and CI run" in t
+    assert "two directories above the skill's base directory" in t and "Base directory for this skill" in t
+    assert "a literal absolute path" in t
+    s = flat(SKILL)
+    assert "`.prd-toolkit/prd_deploy.py`" in s and "two directories above the skill's base directory" in s
+    blocks = re.findall(r"```bash\n(.*?)```", RUN.read_text(encoding="utf-8"), re.S)
+    for block in blocks:
+        for line in block.splitlines():
+            if ".py" in line:
+                assert line.strip().startswith("uv run --script <scripts>/"), line
+
+
+def test_r19_errors_entry_is_appended_with_edit():
+    two = step(2)
+    assert "Add the entry with Edit, appended at the end of the file; never rewrite `errors.md` with Write." in two
+    assert ("The template line ``No entries yet. Add `### E-001 <title>` when the first error is diagnosed.`` may "
+            "go in the close that adds the first entry, and in no other.") in two

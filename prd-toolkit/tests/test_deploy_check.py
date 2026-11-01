@@ -447,3 +447,61 @@ def test_range_head_must_descend_from_base(repo):
     git(repo, "commit", "-q", "--allow-empty", "-m", "Unrelated")
     r = deploy_cli(repo, "check", "--run", run_id, "--diff", f"{base}..other")
     assert findings(r) == ["the range's head does not descend from the run's HEAD"]
+
+
+# --- the template placeholder in errors.md (R19) ---
+
+PLACEHOLDER = "No entries yet. Add `### E-001 <title>` when the first error is diagnosed."
+
+
+def empty_ledger(repo, extra="") -> None:
+    (repo / ERRORS).write_text(f"# Error ledger\n\n{PLACEHOLDER}\n{extra}", encoding="utf-8")
+    commit(repo, "Empty the ledger", ERRORS)
+
+
+def test_first_entry_may_replace_the_placeholder(repo):
+    empty_ledger(repo)
+    run_id = failed_run(repo)
+    (repo / ERRORS).write_text("# Error ledger\n" + ENTRY.format(run=run_id, step=1).replace("E-002", "E-001"), encoding="utf-8")
+    close(repo, run_id, "Record the failure", ERRORS)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_first_entry_may_keep_the_placeholder(repo):
+    empty_ledger(repo)
+    run_id = failed_run(repo)
+    add_entry(repo, run_id, number="E-001")
+    close(repo, run_id, "Record the failure", ERRORS)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_placeholder_removed_without_an_entry(repo):
+    empty_ledger(repo)
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    (repo / ERRORS).write_text("# Error ledger\n", encoding="utf-8")
+    close(repo, run_id)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_placeholder_removed_when_the_ledger_had_entries(repo):
+    old = (repo / ERRORS).read_text(encoding="utf-8")
+    (repo / ERRORS).write_text(old.rstrip("\n") + f"\n\n{PLACEHOLDER}\n", encoding="utf-8")
+    commit(repo, "A stray placeholder", ERRORS)
+    run_id = failed_run(repo)
+    (repo / ERRORS).write_text(old.rstrip("\n") + "\n" + ENTRY.format(run=run_id, step=1), encoding="utf-8")
+    close(repo, run_id, "Record the failure", ERRORS)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+
+
+def test_other_lines_still_count_in_the_first_entry_close(repo):
+    empty_ledger(repo)
+    run_id = failed_run(repo)
+    (repo / ERRORS).write_text("# Errors\n" + ENTRY.format(run=run_id, step=1).replace("E-002", "E-001"), encoding="utf-8")
+    close(repo, run_id, "Record the failure", ERRORS)
+    out = findings(check(repo, run_id))
+    assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
