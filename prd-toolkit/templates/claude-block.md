@@ -1,7 +1,7 @@
 <!-- prd-toolkit:start -->
 ## Product requirements (managed by prd-toolkit; regenerate with prd_block.py, do not edit)
 
-The PRD at `{{prd_path}}` (version {{version}}) is the authority on how it behaves.
+The PRD at `{{prd_path}}` (version {{version}}) is the authority on this system.
 
 - To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
   files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code

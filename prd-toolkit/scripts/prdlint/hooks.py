@@ -13,6 +13,8 @@ VENDOR_DIR = ".prd-toolkit"
 VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
+BLOCK_TEMPLATE = "claude-block.md"
+BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
 SCRIPTS = Path(__file__).resolve().parent.parent
@@ -61,6 +63,7 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
             files[f.relative_to(scripts).as_posix()] = f
     for hook in HOOKS:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
+    files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
     return files
 
 
