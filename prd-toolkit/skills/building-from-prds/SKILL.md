@@ -188,8 +188,8 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   T-id has no result until the tester's `Mode: suite` round reports it.
 - "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
-  add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
-  else goes through `/prd-change`.
+  add or weigh. The caller edits the PRD only at the close (status and `Source:`, the entry `prd_error.py new` writes (never by hand) and, on `--fixes E-nnn`, that
+  entry's `known-failing:` lines once their T-ids pass); everything else goes through `/prd-change`.
 - Resolving the entry after a `--fixes` build, or writing a stop's entry by hand. (Pressure, not
   observed.) The caller never resolves an entry: the build reports, and `handling-errors`
   resolves; a stop's entry is written with `prd_error.py new`, never typed into `errors.md`.

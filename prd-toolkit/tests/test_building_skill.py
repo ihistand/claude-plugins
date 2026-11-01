@@ -317,7 +317,7 @@ def test_r25_test_disputes_are_reconciled_not_stopped():
 def test_r28_caller_edits_the_prd_only_at_the_close():
     t = flat(RUN)
     assert ("The caller edits the PRD only at the close: a block's `Status:`, its §11 status and its "
-            "`Source:`.") in t
+            "`Source:`, ") in t
     assert "A test case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`." in t
     assert "I didn't add a known-failing marker since this looks like a harness issue" in flat(SKILL)
 
@@ -649,3 +649,40 @@ def test_fixes_close_edit_is_one_line_only():
 def test_caller_never_resolves_the_entry():
     assert "The caller never resolves the entry: the build reports, and `handling-errors` resolves" in flat(RUN)
     assert "never resolves an entry" in flat(SKILL)
+
+
+# --- fix round 1 ---
+
+def test_caller_rules_allow_the_entry_and_the_fixes_edit():
+    r = flat(RUN)
+    assert ("`Source:`, the entry `prd_error.py new` writes for a stop (never by hand) and, on a `--fixes` build, "
+            "the removal of that entry's `known-failing:` lines") in r
+    assert "Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, " in r
+    assert "the entry `prd_error.py new` writes (never by hand) and, on `--fixes E-nnn`" in flat(SKILL)
+
+
+def test_stop_entry_order_and_commit():
+    r = flat(RUN)
+    for s in ("A stop that records an entry writes the stop's status, then runs `prd_error.py new`, then runs the "
+              "close's lint and trace, then commits `errors.md` with the status edits in one commit",
+              "`Refs: E-nnn` and the blocks' IDs",
+              "A stop before the builder's merge still records its entry",
+              "A dirty-tree stop records none and commits nothing",
+              '--source "build <area> <IDs>"', "`--source` is `build <area> <IDs> --fixes E-nnn`"):
+        assert s in r, s
+
+
+def test_fixes_refusal_runs_first_in_step_1():
+    r = flat(RUN)
+    for s in ("run it before anything else in step 1; after a refusal, nothing else runs",
+              "An entry absent from the `--open` output (resolved or unknown) is refused too"):
+        assert s in r, s
+    step1 = RUN.read_text(encoding="utf-8").split("1. **Preflight.**", 1)[1]
+    assert step1.index("prd_error.py list") < step1.index("prd_lint.py")
+
+
+def test_unmark_line_and_not_passing_regression():
+    r = flat(RUN)
+    for s in ("Un-mark: T-002.5, T-002.6 (known-failing E-003)", "the builder un-marks a unit regression T-id itself",
+              "stops the build at step 7", "names each such T-id", "the un-mark is idempotent"):
+        assert s in r, s
