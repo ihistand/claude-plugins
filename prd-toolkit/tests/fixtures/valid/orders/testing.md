@@ -10,6 +10,7 @@
 | system | `pytest tests/system` | staging | deploy |
 | e2e | `pytest tests/e2e` | staging | deploy |
 | acceptance | `python3 tools/acceptance_report.py` | staging | deploy |
+| smoke | `pytest tests/smoke` | production | deploy |
 
 ## Harness
 
@@ -36,6 +37,7 @@
 | local | Developer machine, throwaway database | Developer | http://localhost:8080 | `orders_local` on localhost:5432 | the uvicorn console |
 | ci | Pipeline run, fresh database per job | CI service account | http://localhost:8080 | `orders_ci`, created per job | the job log |
 | staging | Production-shaped, synthetic data only | Team, test identities | https://orders-staging.example.com | `orders_staging` | `./logs.sh staging` |
+| production | Live service, real data; smoke checks only | Team, read-only smoke identity | https://orders.example.com | `orders_production` | `./logs.sh production` |
 
 ## Leak checks
 

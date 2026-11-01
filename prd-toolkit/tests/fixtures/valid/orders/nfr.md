@@ -5,7 +5,7 @@ Status: live (since 1.0.0)
 Acceptance (EARS):
 - AC-004.1 The API shall answer getOrder within 300 ms at p95 under 50 requests/s.
 Errors: -
-Tests: T-004.1 [system]  (test-cases/nfr.yaml)
+Tests: T-004.1 [system], T-004.2 [smoke]  (test-cases/nfr.yaml)
 Traces: UJ-01; FR-002
 
 ## Observability

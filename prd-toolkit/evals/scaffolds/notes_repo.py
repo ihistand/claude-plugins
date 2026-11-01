@@ -281,13 +281,16 @@ Not applicable: the module writes no logs and exports no metrics.
 
 ## Environments
 
-| Environment | URL |
-|---|---|
-| local | none |
+| Environment | URL | Production |
+|---|---|---|
+| local | none | no |
+| production | none; callers pin the tag | yes |
 
 ## Runbook
 
-1. (actor: human) Release by tagging the repository; callers pin the tag.
+1. Release by tagging the repository (actor: human) (env: production)
+   Do: tag the repository; callers pin the tag
+   Check: the tag appears in the repository's tag list
 
 ## Secrets
 

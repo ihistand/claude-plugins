@@ -104,6 +104,51 @@ class Testing:
 
 
 @dataclass
+class Step:
+    number: int
+    title: str
+    actor: str | None  # agent | human; None when the step line does not match the grammar
+    env: str | None
+    line: int
+    labels: dict[str, tuple[str, int]] = field(default_factory=dict)  # Run | Check | Rollback | Do -> (raw value, line)
+    run: str | None = None  # the unwrapped backticked command of Run
+    tests: list[str] | None = None  # the levels of a `Run: tests <level>[, <level>]` step
+    check: str | None = None
+    prints: str | None = None
+    rollback: str | None = None
+
+
+@dataclass
+class DeployedRow:
+    env: str
+    version: str
+    commit: str
+    date: str
+    run: str
+    line: int
+
+
+@dataclass
+class DriftRow:
+    env: str
+    check: str
+    command: str | None  # the backticked introspection command; None when the cell has none
+    line: int
+
+
+@dataclass
+class Operations:
+    environments: dict[str, int] = field(default_factory=dict)  # environment -> row line
+    production: dict[str, str] = field(default_factory=dict)  # environment -> raw Production cell
+    has_production: bool = False  # the Environments table has a Production column
+    steps: list[Step] = field(default_factory=list)
+    runbook_line: int = 0
+    deployed: list[DeployedRow] = field(default_factory=list)
+    drift: list[DriftRow] = field(default_factory=list)
+    secrets: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Prd:
     root: Path
     frontmatter: dict[str, str]
@@ -121,6 +166,7 @@ class Prd:
     adoption: list[AdoptionRow] | None = None  # None exactly when adoption.md is absent
     adoption_unmigrated: bool = False  # a 0.2 PRD: §8 still holds the table and adoption.md is absent
     errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
+    operations: Operations = field(default_factory=Operations)
 
 
 _HEADING = re.compile(r"^#{1,3}\s")
@@ -263,6 +309,97 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
     return ledger
 
 
+_STEP_LINE = re.compile(r"^(\d+)\.\s+(.*?)\s*\(actor:\s*(agent|human)\)\s*\(env:\s*`?([^`)]+?)`?\)\s*$")
+_STEP_ANY = re.compile(r"^(\d+)\.\s+(.*?)\s*$")
+_LABEL = re.compile(r"^\s+(Run|Check|Rollback|Do):\s*(.*?)\s*$")
+_CMD = re.compile(r"^`([^`]+)`$")
+_CHECK = re.compile(r"^`([^`]+)`(?:\s+prints\s+`([^`]*)`)?$")
+_TESTS = re.compile(r"^tests\s+(.+)$")
+_SECRET_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+
+
+def _step(m: re.Match, n: int, body: list[tuple[int, str]]) -> Step:
+    full = _STEP_LINE.match(m.group(0))
+    s = Step(int(full.group(1) if full else m.group(1)), (full or m).group(2), full.group(3) if full else None,
+             full.group(4).strip() if full else None, n)
+    for ln, text in body:
+        lm = _LABEL.match(text)
+        if lm:
+            s.labels.setdefault(lm.group(1), (lm.group(2), ln))
+    if "Run" in s.labels:
+        raw = s.labels["Run"][0]
+        tm = _TESTS.match(raw)
+        cm = _CMD.match(raw)
+        if tm:
+            s.tests = [x.strip() for x in tm.group(1).split(",") if x.strip()]
+        elif cm:
+            s.run = cm.group(1).strip()
+    if "Check" in s.labels:
+        km = _CHECK.match(s.labels["Check"][0])
+        if km:
+            s.check, s.prints = km.group(1).strip(), km.group(2)
+    if "Rollback" in s.labels:
+        cm = _CMD.match(s.labels["Rollback"][0])
+        if cm:
+            s.rollback = cm.group(1).strip()
+    return s
+
+
+def _operations(text: str) -> Operations:
+    ops = Operations()
+    secs = sections(text)
+    env = _table_under(secs, "Environments")
+    if env:
+        hdr = [h.strip().strip("`").lower() for h in env.header]
+        pi = hdr.index("production") if "production" in hdr else -1
+        ops.has_production = pi >= 0
+        ops.environments = _names(env)
+        if pi >= 0:
+            for r in env.rows:
+                ops.production[r.cells[0].strip("`")] = (r.cells[pi] if pi < len(r.cells) else "").strip().strip("`").strip()
+    for s in secs:
+        title = s.title.strip().lower()
+        if title == "runbook":
+            ops.runbook_line = s.line
+            stripped = strip_code("\n".join(t for _, t in s.body)).split("\n")
+            cur: tuple[re.Match, int] | None = None
+            body: list[tuple[int, str]] = []
+            for (n, orig), st in zip(s.body, stripped):
+                m = _STEP_ANY.match(orig) if re.match(r"^\d+\.\s", st) else None
+                if m:
+                    if cur:
+                        ops.steps.append(_step(cur[0], cur[1], body))
+                    cur, body = (m, n), []
+                elif cur:
+                    body.append((n, orig))
+            if cur:
+                ops.steps.append(_step(cur[0], cur[1], body))
+        elif title == "deployed":
+            ts = tables(s.body)
+            for r in ts[0].rows if ts else []:
+                c = [x.strip().strip("`") for x in r.cells] + [""] * 5
+                ops.deployed.append(DeployedRow(c[0], c[1], c[2], c[3], c[4], r.line))
+        elif title == "drift":
+            ts = tables(s.body)
+            for r in ts[0].rows if ts else []:
+                c = r.cells + [""] * 3
+                cm = re.search(r"`([^`]+)`", c[2])
+                ops.drift.append(DriftRow(c[0].strip("`"), c[1].strip("`").strip(), cm.group(1).strip() if cm else None, r.line))
+        elif title == "secrets":
+            for _, text_ in s.body:
+                bm = re.match(r"^\s*[-*]\s+(.*)$", text_)
+                if bm:
+                    for name in (x.strip() for x in bm.group(1).split(":", 1)[0].split(",")):
+                        if _SECRET_NAME.fullmatch(name):
+                            ops.secrets.append(name)
+    return ops
+
+
+def production_envs(prd: Prd) -> set[str]:
+    """The environments whose Production cell is `yes`."""
+    return {e for e, v in prd.operations.production.items() if v.lower() == "yes"}
+
+
 def _harness(body: list[tuple[int, str]]) -> Harness:
     h = Harness()
     for n, text in body:
@@ -361,7 +498,7 @@ def load(prd_dir: Path) -> Prd:
 
     s8 = sec(8)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
-               adoption=_adoption(docs), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
+               adoption=_adoption(docs), operations=_operations(docs.get("operations.md", "")), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
                adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
 
 

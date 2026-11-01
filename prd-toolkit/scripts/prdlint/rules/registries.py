@@ -111,16 +111,59 @@ def registries(prd: Prd) -> Iterator[Finding]:
                 yield Finding("prd.md", r.line, "registries", f"required skill '{skill}' is not installed; if it is built into Claude Code, mark the row 'recommended'")
 
 
-_STEP = re.compile(r"^\s*\d+[.)]\s")
-_ACTOR = re.compile(r"\(actor:\s*(agent|human)\)")
+MIGRATION_HINT = " (prd-toolkit 0.5 runbook format)"
+_RUN_SHAPE = "step {n}: {label} must be one backticked command or tests <level>[, <level>]"
 
 
-@rule("runbook-actors")
-def runbook_actors(prd: Prd) -> Iterator[Finding]:
+@rule("runbook-steps")
+def runbook_steps(prd: Prd) -> Iterator[Finding]:
     text = prd.docs.get("operations.md")
     if text is None:
         return
-    sec = next((s for s in sections(text) if s.title.strip().lower() == "runbook"), None)
-    for n, line in sec.body if sec else []:
-        if _STEP.match(line) and not _ACTOR.search(line):
-            yield Finding("operations.md", n, "runbook-actors", "runbook step has no (actor: agent) or (actor: human)")
+    ops = prd.operations
+    old_format = bool(ops.steps) and not any(s.env is not None for s in ops.steps) and "(env:" not in text
+    first = True
+
+    def out(line: int, msg: str) -> Finding:
+        nonlocal first
+        msg += MIGRATION_HINT if first and old_format else ""
+        first = False
+        return Finding("operations.md", line, "runbook-steps", msg)
+
+    def marked(label: str, s) -> bool:  # an unfilled [NEEDS CLARIFICATION: ...] value is the markers-open rule's business
+        return "[NEEDS CLARIFICATION:" in s.labels[label][0]
+
+    expected = 1
+    for s in ops.steps:
+        n = s.number
+        if s.number != expected:
+            yield out(s.line, f"step {n}: expected step {expected}")
+        expected = s.number + 1
+        if s.actor is None:
+            yield out(s.line, f"step {n}: the step line needs (actor: agent|human) (env: <environment>)")
+            continue
+        labels = s.labels
+        if s.actor == "human":
+            bad = [k for k in ("Run", "Rollback") if k in labels]
+            if bad or "Do" not in labels or "Check" not in labels:
+                line = labels[bad[0]][1] if bad else s.line
+                yield out(line, f"step {n}: a human step takes Do: and Check:, not {' or '.join(k + ':' for k in bad) or 'Run:'}")
+            continue
+        if "Do" in labels:
+            yield out(labels["Do"][1], f"step {n}: an agent step takes Run:, Check: and Rollback:, not Do:")
+        if "Run" not in labels:
+            yield out(s.line, f"step {n}: an agent step needs Run:")
+        elif s.run is None and s.tests is None and not marked("Run", s):
+            yield out(labels["Run"][1], _RUN_SHAPE.format(n=n, label="Run:") + f"; got '{labels['Run'][0]}'")
+        if s.tests is not None:
+            if "Check" in labels:
+                yield out(labels["Check"][1], f"step {n}: a tests step has no Check:")
+            if "Rollback" in labels:
+                yield out(labels["Rollback"][1], f"step {n}: a tests step has no Rollback:")
+            continue
+        if "Check" not in labels:
+            yield out(s.line, f"step {n}: an agent step needs Check:")
+        elif s.check is None and not marked("Check", s):
+            yield out(labels["Check"][1], f"step {n}: Check: must be one backticked command, optionally followed by prints `<text>`; got '{labels['Check'][0]}'")
+        if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
+            yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
