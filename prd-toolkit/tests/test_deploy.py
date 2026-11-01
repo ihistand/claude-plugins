@@ -776,3 +776,113 @@ def test_resume_record_failure_runs_no_command(repo, monkeypatch, capsys):
     monkeypatch.setattr(deploy, "append", flaky)
     assert main(["resume", prd_dir(repo), "--run", run_id]) == 2
     assert capsys.readouterr().out == "" and not (repo / ".deploy/production").exists()
+
+
+# ---- round 2: two human steps, matched completions, a lock around the check-and-record window ----
+
+TWO_HUMAN_TAIL = """5. Approve smoke (actor: human) (env: production)
+   Do: reply "run smoke"
+   Check: the reply says "run smoke"
+6. Mark done (actor: agent) (env: production)
+   Run: `mkdir -p .deploy && touch .deploy/step6`
+   Check: `ls .deploy/step6` prints `.deploy/step6`
+"""
+
+
+def two_human_steps(repo):
+    p = repo / OPS
+    text = p.read_text(encoding="utf-8")
+    head, tail = text.split("5. Smoke on production")
+    rest = tail.split("## Drift", 1)[1]
+    p.write_text(head + TWO_HUMAN_TAIL + "\n## Drift" + rest, encoding="utf-8")
+    commit(repo, "Two human steps", OPS)
+
+
+def test_second_human_step_can_be_resumed(repo):
+    two_human_steps(repo)
+    from conftest import lint
+    assert [(f.rule, f.message) for f in lint(repo / "docs/prd/orders")] == []
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 3 and r.stdout.splitlines()[-1] == f"prd-deploy: human step=5 run={run_id}", r.stdout + r.stderr
+    assert not (repo / ".deploy/step6").exists()
+    r = resume(repo, run_id)  # step 5 has no confirm yet
+    assert r.returncode == 1 and "refused: step 5 has no confirm record" in r.stdout.splitlines()
+    assert confirm(repo, run_id, step="5", reply="run smoke").returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stdout.splitlines()[-1] == f"prd-deploy: done step=6 run={run_id}", r.stdout + r.stderr
+    assert (repo / ".deploy/step6").exists()
+    assert resume(repo, run_id).returncode == 1
+
+
+def test_a_start_is_finished_only_by_its_own_step_and_level(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    rec = {"kind": "step", "env": "production", "actor": "agent", "command": "x", "exit": 0, "stdout": "", "stderr": "", "started": "t", "ended": "t", "result": "pass"}
+    hand_append(repo, run_id, {"kind": "start", "step": 4, "command": "x", "at": "t"}, {**rec, "step": 5})
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: step 4 started and did not finish; check the environment, then start a new run" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_a_level_start_is_not_finished_by_another_level(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    rec = {"kind": "step", "step": 2, "level": "system", "env": "staging", "actor": "agent", "command": "x", "exit": 0, "stdout": "", "stderr": "", "started": "t", "ended": "t", "result": "pass"}
+    hand_append(repo, run_id, {"kind": "start", "step": 2, "level": "e2e", "command": "x", "at": "t"}, rec)
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: step 2 started and did not finish; check the environment, then start a new run" in r.stdout.splitlines()
+
+
+@pytest.fixture
+def locked(repo):
+    """Hold the exclusive lock of a run's log, as a concurrent prd_deploy would while it checks and records."""
+    import fcntl
+
+    handles = []
+
+    def hold(run_id):
+        f = open(deploy.log_dir(repo) / f"{run_id}.jsonl", "a", encoding="utf-8")
+        fcntl.flock(f, fcntl.LOCK_EX)
+        handles.append(f)
+
+    yield hold
+    for f in handles:
+        f.close()
+
+
+def test_resume_refuses_while_the_run_is_locked(repo, locked):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    locked(run_id)
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: another prd_deploy command is working on this run" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "resume"]
+
+
+def test_confirm_refuses_while_the_run_is_locked(repo, locked):
+    run_id = stopped_run(repo)
+    locked(run_id)
+    r = confirm(repo, run_id)
+    assert r.returncode == 2 and r.stdout == "" and "another prd_deploy command" in r.stderr
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"]
+
+
+def test_rollback_refuses_while_the_run_is_locked(repo, locked):
+    run_id = failed_run(repo)
+    locked(run_id)
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 1 and "refused: another prd_deploy command is working on this run" in r.stdout.splitlines()
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_the_lock_is_released_before_a_command_runs(repo):
+    probe = ("python3 -c \"import fcntl,glob; [fcntl.flock(open(p, 'a'), fcntl.LOCK_EX | fcntl.LOCK_NB) for p in glob.glob('.git/prd-toolkit/deploys/*.jsonl')]\""
+             " && touch .deploy/lock-free")
+    change(repo, OPS, "Run: `mkdir -p .deploy/production && echo Hello", f"Run: `{probe}; mkdir -p .deploy/production && echo Hello")
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    assert resume(repo, run_id).returncode == 0
+    assert (repo / ".deploy/lock-free").exists()

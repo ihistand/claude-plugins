@@ -94,17 +94,25 @@ def _existing_run(args, prd: model.Prd) -> int:
             print(f"prd-deploy: {state} step={args.step} run={args.run}")
             return 0 if code == 0 else deploy.EXIT["failed"]
         # resume: the checks come first, because the runbook is read from the PRD as it is now
-        confirmed, until = deploy.resume_point(repo_root, args.run)
-        reasons = deploy.resume_problems(prd, repo_root, args.run)
+        plan = {}
+
+        def extra(confirmed: int, until) -> list[str]:
+            steps, problem = _steps_or_message(prd, until)
+            if problem:
+                raise ValueError(problem)
+            step = next((s for s in steps if s.number == confirmed), None)
+            if step is None or step.actor != "human":
+                return [f"step {confirmed} is not a human step of the runbook"]
+            plan["steps"] = steps
+            return []
+
+        try:
+            confirmed, until, reasons = deploy.start_resume(prd, repo_root, args.run, extra)  # records the resume before any command runs
+        except deploy.Refused as e:
+            return _refuse(e.reasons, 0, args.run)
         if reasons:
             return _refuse(reasons, confirmed, args.run)
-        steps, problem = _steps_or_message(prd, until)
-        if problem:
-            return _fail(problem)
-        step = next((s for s in steps if s.number == confirmed), None)
-        if step is None or step.actor != "human":
-            return _refuse([f"step {confirmed} is not a human step of the runbook"], confirmed, args.run)
-        deploy.begin_resume(repo_root, args.run, confirmed)  # uses up the confirm before any command runs
+        steps = plan["steps"]
         print(f"resume: {args.run}", flush=True)
         if confirmed == steps[-1].number:
             print(f"prd-deploy: done step={confirmed} run={args.run}")

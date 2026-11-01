@@ -9,8 +9,15 @@ import re
 import signal
 import sys
 import subprocess
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+    import msvcrt
 
 from . import registry, trace
 from .model import Prd, Step
@@ -266,15 +273,19 @@ def _confirmed(recs: list[dict], step: int) -> bool:
 
 def confirm(repo_root: Path, run_id: str, step: int, reply: str) -> None:
     """Record the reply to the human step the run stopped at. ValueError (a usage error) when it cannot."""
-    _, recs = _load_log(repo_root, run_id)
-    last = _last_step(recs)
-    if last is None or last.get("step") != step or last.get("result") != "human":
-        raise ValueError(f"step {step} is not the human step this run stopped at")
-    if not reply.strip():
-        raise ValueError("the reply is empty")
-    if _confirmed(recs, step):
-        raise ValueError(f"step {step} already has a confirm record")
-    append(repo_root, run_id, {"kind": "confirm", "step": step, "reply": reply, "at": _iso()})
+    try:
+        with run_lock(repo_root, run_id):
+            _, recs = _load_log(repo_root, run_id)
+            last = _last_step(recs)
+            if last is None or last.get("step") != step or last.get("result") != "human":
+                raise ValueError(f"step {step} is not the human step this run stopped at")
+            if not reply.strip():
+                raise ValueError("the reply is empty")
+            if _confirmed(recs, step):
+                raise ValueError(f"step {step} already has a confirm record")
+            append(repo_root, run_id, {"kind": "confirm", "step": step, "reply": reply, "at": _iso()})
+    except Refused as e:
+        raise ValueError(e.reasons[0]) from None
 
 
 def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
@@ -292,23 +303,62 @@ def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
 def _used_or_unfinished(recs: list[dict]) -> list[str]:
     """A confirm is used once, and a command that was started is never run again."""
     reasons = []
-    last_confirm = {}
-    for i, r in enumerate(recs):
-        if r.get("kind") == "confirm":
-            last_confirm[r.get("step")] = i
-    for n, i in last_confirm.items():
-        if any(r.get("kind") == "resume" and r.get("step") == n for r in recs[i + 1:]):
+    last = _last_step(recs)
+    if last is not None and last.get("result") == "human":  # only the human step the run stopped at
+        n = last["step"]
+        idx = [i for i, r in enumerate(recs) if r.get("kind") == "confirm" and r.get("step") == n]
+        if idx and any(r.get("kind") == "resume" and r.get("step") == n for r in recs[idx[-1] + 1:]):
             reasons.append(f"step {n}'s confirm was already used")
     for i, r in enumerate(recs):
-        if r.get("kind") == "start" and not r.get("rollback") and not any(x.get("kind") == "step" for x in recs[i + 1:]):
+        if r.get("kind") != "start" or r.get("rollback"):
+            continue
+        done = any(x.get("kind") == "step" and x.get("step") == r.get("step") and (r.get("level") is None or x.get("level") in (None, r.get("level")))
+                   for x in recs[i + 1:])
+        if not done:
             reasons.append(f"step {r.get('step')} started and did not finish; check the environment, then start a new run")
             break
     return list(dict.fromkeys(reasons))
 
 
-def begin_resume(repo_root: Path, run_id: str, step: int) -> None:
-    """Use up the confirm of `step`; nothing may run if this fails."""
-    append(repo_root, run_id, {"kind": "resume", "step": step, "at": _iso()})
+@contextmanager
+def run_lock(repo_root: Path, run_id: str):
+    """An exclusive, non-waiting lock on the run's log, so two commands cannot both pass their checks before either records.
+
+    Raises Refused when another prd_deploy holds it. Never hold it while a runbook command runs.
+    """
+    check_run_id(run_id)
+    try:
+        f = open(_log_path(repo_root, run_id), "a", encoding="utf-8")
+    except FileNotFoundError:
+        raise ValueError(f"no log for run {run_id}") from None
+    try:
+        try:
+            if fcntl is not None:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            raise Refused(["another prd_deploy command is working on this run"]) from None
+        yield
+    finally:
+        f.close()  # closing releases the lock
+
+
+def start_resume(prd: Prd, repo_root: Path, run_id: str, extra=None) -> tuple[int, str | None, list[str]]:
+    """Check that the run may continue and, under the run lock, use up the confirm in the same breath.
+
+    Returns (confirmed step, until, reasons); the resume record is written only when `reasons` is empty.
+    `extra(confirmed, until)` may add reasons (or raise ValueError) before anything is recorded.
+    """
+    with run_lock(repo_root, run_id):
+        confirmed, until = resume_point(repo_root, run_id)
+        reasons = resume_problems(prd, repo_root, run_id)
+        if not reasons and extra is not None:
+            reasons = extra(confirmed, until)
+        if not reasons:
+            append(repo_root, run_id, {"kind": "resume", "step": confirmed, "at": _iso()})
+        return confirmed, until, reasons
 
 
 def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
@@ -346,25 +396,26 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
 
     ValueError for a usage problem, Refused when HEAD or the PRD version moved.
     """
-    header, recs = _load_log(repo_root, run_id)
-    last = _last_step(recs)
-    if last is None or last.get("step") != step or last.get("result") != "fail":
-        raise ValueError(f"step {step} is not the failed step of this run")
-    reasons = _moved(prd, repo_root, header)
-    if reasons:
-        raise Refused(reasons)
-    target = next((s for s in prd.operations.steps if s.number == step), None)
-    if target is None or not target.rollback:
-        raise ValueError(f"step {step} has no Rollback")
-    if any(r.get("kind") == "start" and r.get("rollback") and r.get("step") == step for r in recs):
-        raise ValueError(f"step {step}'s rollback was already started")
-    if any(r.get("kind") == "rollback" and r.get("step") == step for r in recs):
-        raise ValueError(f"step {step} was already rolled back")
-    started = _iso()
-    try:
-        append(repo_root, run_id, {"kind": "start", "step": step, "env": target.env, "rollback": True, "command": target.rollback, "at": started})
-    except Exception as e:
-        raise ValueError(f"could not record the rollback start, so it was not run: {e}") from None
+    with run_lock(repo_root, run_id):
+        header, recs = _load_log(repo_root, run_id)
+        last = _last_step(recs)
+        if last is None or last.get("step") != step or last.get("result") != "fail":
+            raise ValueError(f"step {step} is not the failed step of this run")
+        reasons = _moved(prd, repo_root, header)
+        if reasons:
+            raise Refused(reasons)
+        target = next((s for s in prd.operations.steps if s.number == step), None)
+        if target is None or not target.rollback:
+            raise ValueError(f"step {step} has no Rollback")
+        if any(r.get("kind") == "start" and r.get("rollback") and r.get("step") == step for r in recs):
+            raise ValueError(f"step {step}'s rollback was already started")
+        if any(r.get("kind") == "rollback" and r.get("step") == step for r in recs):
+            raise ValueError(f"step {step} was already rolled back")
+        started = _iso()
+        try:
+            append(repo_root, run_id, {"kind": "start", "step": step, "env": target.env, "rollback": True, "command": target.rollback, "at": started})
+        except Exception as e:
+            raise ValueError(f"could not record the rollback start, so it was not run: {e}") from None
     try:
         r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, timeout)
         rec = {"exit": r["exit"], "stdout": r["stdout"], "stderr": r["stderr"], "ok": r["exit"] == 0 and not r["timed_out"]}
