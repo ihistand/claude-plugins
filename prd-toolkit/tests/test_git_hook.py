@@ -157,3 +157,12 @@ def test_cli_pre_commit_skips_deleted_paths(repo):
 def test_pre_commit_passes_dash_paths_as_dot_slash(repo):
     """Minor 9: a staged path starting with `-` must not read as an option to the linter."""
     assert githook.pre_commit(p(repo), repo, ["-x.py", "src/a.py"]) == [] and log(repo) == ["./-x.py", "src/a.py"]
+
+
+def test_code_commit_citing_an_unconfirmed_entry_is_blocked(repo):
+    (repo / "docs/prd/orders/errors.md").write_text(
+        "# Error ledger\n\n### E-002 x\nDetected: 2026-11-03, report\nClassification: code bug\nDiagnosis: d\nResolution: -\nRecurrence of: -\n")
+    msg = "Fix x\n\nRefs: E-002"
+    assert githook.commit_msg(p(repo), repo, msg, ["src/x.py"], merging=False) == [
+        "E-002 is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"]
+    assert githook.commit_msg(p(repo), repo, msg, ["docs/prd/orders/errors.md"], merging=False) == []

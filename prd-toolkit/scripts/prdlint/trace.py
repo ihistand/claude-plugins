@@ -14,6 +14,7 @@ TAG = re.compile(r"@prd\s+(T-\d{3}\.\d+)\s+known-failing:?\s+(E-\d+)\b")
 _REFS = re.compile(r"^Refs:[ \t]*(.*)$", re.MULTILINE)
 _REQ_ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
 _ERR_ID = re.compile(r"E-\d+")
+UNCONFIRMED = "{} is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"
 REFS_NONE = "none (no behaviour change)"
 _SHA = re.compile(r"[0-9a-f]{40}")
 DEFAULT_TEST_ROOTS = ["tests"]
@@ -124,8 +125,19 @@ def in_boundary(prd: Prd, repo_root: Path) -> Callable[[str], bool]:
     return lambda path: any(rx.match(path) for rx in rxs)
 
 
-def refs_problems(prd: Prd, message: str) -> list[str]:
-    """What is wrong with the `Refs:` trailer(s) of a commit message; [] when it passes."""
+def outside_prd(prd: Prd, repo_root: Path) -> Callable[[str], bool]:
+    """Predicate on a repo-relative path: is it outside the PRD folder, so a commit touching it changes code?"""
+    try:
+        skip = prd.root.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        skip = None
+    return lambda path: not (skip is not None and (skip == "." or path == skip or path.startswith(skip + "/")))
+
+
+def refs_problems(prd: Prd, message: str, code_commit: bool = False) -> list[str]:
+    """What is wrong with the `Refs:` trailer(s) of a commit message; [] when it passes.
+
+    A commit that changes code (`code_commit`) may cite an entry only once it holds `Confirmed:`."""
     values = [m.group(1).strip() for m in _REFS.finditer(message)]
     values = [v for v in values if v]
     if not values:
@@ -147,8 +159,11 @@ def refs_problems(prd: Prd, message: str) -> list[str]:
                 elif b.status == "removed":
                     problems.append(f"{ref} is removed")
             elif _ERR_ID.fullmatch(ref):
-                if ref not in prd.errors_ledger:
+                entry = prd.errors_ledger.get(ref)
+                if entry is None:
                     problems.append(f"{ref} is not defined in the PRD")
+                elif code_commit and entry.confirmed_raw is None:
+                    problems.append(UNCONFIRMED.format(ref))
             else:
                 problems.append(f"`{ref}` is not a PRD ID; give other keys their own trailer")
     return problems

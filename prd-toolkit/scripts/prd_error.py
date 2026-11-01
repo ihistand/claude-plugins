@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""The errors.md ledger: new, list, propose, confirm, resolve. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
+"""The errors.md ledger: new, list, propose, confirm, resolve, check. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
 import sys
 from datetime import date
@@ -16,7 +16,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import deploy, errors, model  # noqa: E402
+from prdlint import deploy, errors, model, trace  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -30,6 +30,9 @@ def _parser() -> argparse.ArgumentParser:
             c.add_argument("eid")
         return c
 
+    c = sub.add_parser("check", help="every change to errors.md in <base>..<head>: findings on stdout, exit 1 when any")
+    c.add_argument("prd_dir")
+    c.add_argument("range")
     c = cmd("new", False)
     c.add_argument("--title", required=True)
     c.add_argument("--source", required=True)
@@ -68,6 +71,8 @@ def _run(args: argparse.Namespace, prd: model.Prd, today: date) -> list[str]:
         evidence = Path(args.evidence_file).read_text(encoding="utf-8").splitlines() if args.evidence_file else []
         touches = [t.strip() for t in args.touches.split(",") if t.strip()]
         return [errors.new(prd, args.title, args.source, touches, evidence, today)]
+    if args.cmd == "check":
+        return errors.check_findings(prd, model.repo_root(prd.root), args.range)
     if args.cmd == "list":
         return errors.list_lines(prd, args.open)
     if args.cmd == "propose":
@@ -89,7 +94,7 @@ def main(argv: list[str], today: date | None = None) -> int:
     try:
         prd = model.load(Path(args.prd_dir))
         out = _run(args, prd, today or date.today())
-    except (model.NotAPrd, ValueError) as e:
+    except (model.NotAPrd, ValueError, trace.BadRange) as e:
         print(f"prd_error: {e}", file=sys.stderr)
         return 2
     except deploy.Refused as e:
@@ -101,7 +106,7 @@ def main(argv: list[str], today: date | None = None) -> int:
         return 2
     for line in out:
         print(line)
-    return 0
+    return 1 if args.cmd == "check" and out else 0
 
 
 if __name__ == "__main__":

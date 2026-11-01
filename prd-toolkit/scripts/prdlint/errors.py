@@ -1,10 +1,15 @@
 """errors.md writes: each command replaces or inserts lines inside one entry and nothing else in the file moves."""
 import re
+import subprocess
+import tempfile
 from datetime import date
 from pathlib import Path
 
+from . import deploy, trace
+from .buildcheck import _resolve, _show
 from .deploy import LEDGER_PLACEHOLDER, Refused
-from .model import CLASSES, ErrorEntry, Prd, _errors_ledger
+from .markdown import tables
+from .model import CLASSES, ErrorEntry, Prd, _errors_ledger, load
 
 MAX_EVIDENCE = 20
 ORDER = ("Detected", "Classification", "Confirmed", "Touches", "Evidence", "Diagnosis", "Resolution", "Recurrence of")
@@ -196,3 +201,162 @@ def summary(e: ErrorEntry) -> str:
 def list_lines(prd: Prd, open_only: bool) -> list[str]:
     return [f"{e.id} {summary(e)} {', '.join(t for t, _ in e.touches) or '-'} {e.title}".rstrip()
             for e in _errors_ledger(_read(prd)).values() if e.open or not open_only]
+
+
+_FIX = re.compile(r"(T-\d{3}\.\d+) \[[^\]\s][^\]]*\], PRD (\d+\.\d+\.\d+), fixed in ([0-9a-f]{7,40})")
+_ENV = re.compile(r"(T-\d{3}\.\d+|-), PRD (\d+\.\d+\.\d+), run (\S+)")
+_NOT_A_DEFECT = re.compile(r"not a defect: \S.*")
+_RANGE = re.compile(r"^([^.\s][^\s]*?)\.\.([^.\s][^\s]*)$")
+_STEP = re.compile(r"\bstep\s+(\d+)\b")
+_TOKEN = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]*")
+
+
+def _ver(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.split("."))
+
+
+def _structure(prev: dict[str, ErrorEntry], cur: dict[str, ErrorEntry]) -> list[tuple[str, str]]:
+    """What one write did to the ledger besides adding entries and filling in lines: (E-id, finding)."""
+    out: list[tuple[str, str]] = []
+    added = [e for i, e in cur.items() if i not in prev]
+    for eid, e in prev.items():
+        if eid not in cur:
+            twin = next((a for a in added if a.title == e.title), None)
+            out.append((eid, f"renumbered to {twin.id}" if twin else "deleted"))
+    common = [i for i in cur if i in prev]
+    before = {i: n for n, i in enumerate(prev)}
+    for n, x in enumerate(common):
+        later = next((y for y in common[n + 1:] if before[y] < before[x]), None)
+        if later:
+            out.append((x, f"moved before {later}"))
+    for eid in common:
+        a, b = prev[eid], cur[eid]
+        if a.detected != b.detected:
+            out.append((eid, "Detected: changed"))
+        if a.confirmed_raw is not None:
+            if a.classification != b.classification:
+                out.append((eid, "Classification: changed after Confirmed:"))
+            if a.confirmed_raw != b.confirmed_raw:
+                out.append((eid, "Confirmed: changed"))
+    return out
+
+
+def _resolution(prd: Prd, repo_root: Path, head: str, e: ErrorEntry, cited: dict, tagged: dict, versions: set[str]) -> list[str]:
+    """Findings on a resolution added in the range, judged against the PRD at head."""
+    text = e.resolution
+    fix, env, nad = _FIX.fullmatch(text), _ENV.fullmatch(text), _NOT_A_DEFECT.fullmatch(text)
+    if not (fix or env or nad):
+        return ["resolution is not one of the three forms"]
+    out: list[str] = []
+    if nad:
+        return out
+    tid, version = (fix or env).group(1), (fix or env).group(2)
+    if tid != "-":
+        cases = {tc.id: tc for tc in prd.test_cases}
+        if tid not in cases:
+            out.append(f"{tid} has no test case")
+        else:
+            if tid not in cited:
+                out.append(f"{tid} is cited by no test")
+            if cases[tid].data.get("known-failing") == e.id or (tid, e.id) in tagged:
+                out.append(f"{tid} is still known-failing on {e.id}")
+    head_version = prd.frontmatter.get("version", "")
+    if re.fullmatch(r"\d+\.\d+\.\d+", head_version) and _ver(version) > _ver(head_version):
+        out.append(f"PRD {version} is above the PRD version {head_version}")
+    elif version not in versions:
+        out.append(f"PRD {version} has no changelog row")
+    if fix:
+        commit = fix.group(3)
+        ok = subprocess.run(["git", "merge-base", "--is-ancestor", commit + "^{commit}", head], cwd=repo_root,
+                            capture_output=True, timeout=60).returncode == 0
+        if not ok:
+            out.append(f"commit {commit} is not an ancestor of HEAD")
+    else:
+        out += _run_finished(prd, repo_root, e, env.group(3))
+    return out
+
+
+def _run_finished(prd: Prd, repo_root: Path, e: ErrorEntry, run_id: str) -> list[str]:
+    """A `run R` resolution: R's log shows the environment of the entry's failed run finished. Not applicable when
+    `Detected:` names no run."""
+    step = _STEP.search(e.detected)
+    if not step:
+        return []
+    named = next((t for t in _TOKEN.findall(e.detected)
+                  if deploy.RUN_ID.fullmatch(t) and deploy.detected_names_failure(e.detected, t, step.group(1))
+                  and deploy._log_path(repo_root, t).is_file()), None)
+    if named is None:
+        return []
+    env = next((s.env for s in prd.operations.steps if s.number == int(step.group(1))), None)
+    if not env:
+        return []
+    try:
+        finished = deploy.finished_envs(deploy.read_log(repo_root, run_id), prd)
+    except (OSError, ValueError):
+        finished = []
+    return [] if env in finished else [f"run {run_id} did not finish {env}"]
+
+
+def _changelog_versions(prd: Prd) -> set[str]:
+    for s in prd.sections:
+        if s.title.strip().lower() == "changelog":
+            ts = tables(s.body)
+            return {r.cells[0].strip() for r in ts[0].rows} if ts else set()
+    return set()
+
+
+def check_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
+    """Findings for every change to errors.md in `base..head`, each `errors.md: E-nnn: <finding>`.
+
+    BadRange for a bad range. Structure is judged write by write, the code-commit gate against errors.md at each
+    commit, a resolution added in the range against the PRD at head."""
+    m = _RANGE.match(rng)
+    if not m or "..." in rng:
+        raise trace.BadRange(f"bad range {rng}: expected <base>..<head>")
+    base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
+    prefix = deploy.prd_rel(prd, repo_root)
+    rel = "errors.md" if prefix == "." else f"{prefix}/errors.md"
+    shas = deploy._git(repo_root, "rev-list", "--reverse", "--end-of-options", f"{base}..{head}").split()
+
+    cache: dict[str, dict[str, ErrorEntry]] = {}
+
+    def ledger_at(rev: str) -> dict[str, ErrorEntry]:
+        text = _show(repo_root, rev, rel)
+        if text not in cache:
+            cache[text] = _errors_ledger(text)
+        return cache[text]
+
+    out: list[tuple[str, str]] = []
+    prev = ledger_at(base)
+    for sha in shas:
+        cur = ledger_at(sha)
+        if cur is not prev:
+            out += _structure(prev, cur)
+        prev = cur
+
+    is_code = trace.outside_prd(prd, repo_root)
+    for sha in shas:
+        files = [f for f in deploy._git(repo_root, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", "--root", sha).split("\0") if f]
+        if not any(is_code(f) for f in files):
+            continue
+        body = deploy._git(repo_root, "log", "-1", "--format=%B", sha)
+        cited = [r.strip() for m_ in trace._REFS.finditer(body) for r in m_.group(1).split(",")]
+        for eid in dict.fromkeys(r for r in cited if trace._ERR_ID.fullmatch(r)):
+            e = ledger_at(sha).get(eid)
+            if e is None or e.confirmed_raw is None:
+                out.append((eid, f"commit {sha[:8]} changes code and cites {eid}, which was not confirmed at that commit"))
+
+    start, end = ledger_at(base), ledger_at(head)
+    new = [e for i, e in end.items() if not e.open and (i not in start or start[i].open)]
+    if new:
+        with tempfile.TemporaryDirectory(prefix="prd-error-check-") as tmp:
+            try:
+                h_prd = load(deploy._tree(repo_root, head, prefix, Path(tmp)))
+            except Exception as ex:
+                raise trace.BadRange(f"cannot load the PRD at {head[:7]}: {ex}") from None
+            cited, tagged, versions = trace.citations(prd, repo_root), trace.tagged_citations(prd, repo_root), _changelog_versions(h_prd)
+            for e in new:
+                if e.confirmed_raw is None:
+                    out.append((e.id, "resolved without Confirmed:"))
+                out += [(e.id, f) for f in _resolution(h_prd, repo_root, head, e, cited, tagged, versions)]
+    return list(dict.fromkeys(f"errors.md: {eid}: {f}" for eid, f in out))

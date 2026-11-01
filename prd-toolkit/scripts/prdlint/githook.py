@@ -16,7 +16,7 @@ def commit_msg(prd: Prd, repo_root: Path, message: str, staged: list[str], mergi
     if not any(inside(f) for f in staged):
         return []
     text = "\n".join(line for line in message.splitlines() if not line.startswith("#"))
-    return trace.refs_problems(prd, text)
+    return trace.refs_problems(prd, text, code_commit=any(map(trace.outside_prd(prd, repo_root), staged)))
 
 
 def pre_commit(prd: Prd, repo_root: Path, staged: list[str]) -> list[str]:
