@@ -13,9 +13,11 @@ from legacy import commit, git  # noqa: E402
 
 TICKET = (
     "# Ticket\n\n"
-    "Add a `hello` command: `hello <name>` prints `Hello, <name>!`; an empty name is an error.\n"
+    "Add a `hello` command: `hello <name>` prints `Hello, <name>!`; an empty name is an error.\n\n"
+    "Deploy to staging and production (local `.deploy/<env>` venvs). The greeting is configurable per "
+    "environment: `Hi` on staging, `Hello` on production.\n"
 )
-GITIGNORE = ".venv/\n__pycache__/\n.pytest_cache/\n"
+GITIGNORE = ".venv/\n__pycache__/\n.pytest_cache/\n.deploy/\n"
 
 
 def main(dst: str) -> None:

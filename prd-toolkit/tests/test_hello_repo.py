@@ -5,6 +5,8 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parent.parent / "evals/scaffolds/hello_repo.py"
 TICKET = "Add a `hello` command: `hello <name>` prints `Hello, <name>!`; an empty name is an error."
+DEPLOY = ("Deploy to staging and production (local `.deploy/<env>` venvs). The greeting is configurable per "
+          "environment: `Hi` on staging, `Hello` on production.")
 
 
 def _git(dst, *args):
@@ -17,7 +19,9 @@ def test_hello_repo_is_one_commit_with_ticket_and_gitignore_on_main(tmp_path):
     assert _git(dst, "branch", "--show-current") == "main"
     assert _git(dst, "rev-list", "--count", "HEAD") == "1"
     assert sorted(_git(dst, "ls-files").split("\n")) == [".gitignore", "TICKET.md"]
-    assert TICKET in (dst / "TICKET.md").read_text(encoding="utf-8")
+    ticket = (dst / "TICKET.md").read_text(encoding="utf-8")
+    assert TICKET in ticket and DEPLOY in ticket
+    assert ".deploy/" in (dst / ".gitignore").read_text(encoding="utf-8").split("\n")
     assert _git(dst, "status", "--porcelain") == ""
 
 
