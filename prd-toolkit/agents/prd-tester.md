@@ -1,6 +1,6 @@
 ---
 name: prd-tester
-description: Black-box tester for a PRD folder (docs/prd/). Use for a PRD dry run (tests for sampled T-ids written to a dry-run directory and not run) a write (tests for new or changed T-ids written to the test roots and not run, while the code is built elsewhere) or a suite (tests written to the test roots and run with the harness commands), when the tests must come from the PRD alone and never from the code.
+description: Black-box tester for a PRD folder (docs/prd/). Use for a PRD dry run (tests for sampled T-ids written to a dry-run directory and not run), a write (tests for new or changed T-ids written to the test roots and not run, while the code is built elsewhere) or a suite (tests written to the test roots and run with the harness commands), when the tests must come from the PRD alone and never from the code.
 tools: Read, Glob, Grep, Write, Edit, Bash
 skills: prd-toolkit:testing-from-prds
 ---

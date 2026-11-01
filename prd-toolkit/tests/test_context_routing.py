@@ -161,6 +161,13 @@ def test_block_names_hook_install():
     assert "Run `.prd-toolkit/prd_hooks.py install` once per clone" in (ROOT / "templates/claude-block.md").read_text()
 
 
+def test_block_renders_the_install_command_with_the_prd_path(prd):
+    """R38: the block names the real PRD path, and the command sits on one line (no broken code span)."""
+    block = prd_block.render_block(model.load(prd), "docs/prd/orders")
+    assert "`uv run --script .prd-toolkit/prd_hooks.py install docs/prd/orders`" in block
+    assert "<slug>" not in block
+
+
 def test_format_source_and_statuses():
     t = " ".join((ROOT / "references/prd-format.md").read_text().split())
     assert "where the code that implements the block is" in t and "A status move is progress, not behaviour" in t

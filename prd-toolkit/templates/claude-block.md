@@ -12,8 +12,8 @@ The PRD at `{{prd_path}}` (version {{version}}) is the authority for how this sy
   state), stop and raise a change request with `/prd-change`. Do not guess, and do not read
   the code to fill the gap.
 - Cite the IDs a commit implements in its message: `Refs: FR-012`.
-- Run `.prd-toolkit/prd_hooks.py install` once per clone (`uv run --script .prd-toolkit/prd_hooks.py
-  install docs/prd/<slug>`).
+- Run `.prd-toolkit/prd_hooks.py install` once per clone:
+  `uv run --script .prd-toolkit/prd_hooks.py install {{prd_path}}`.
 - Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`.
 
 Required skills (skills registry):

@@ -14,7 +14,7 @@ read the code or the PRD, or dispatch any agent before you have read it. The bui
 are not yours to follow, and you never write the code or a test yourself; the caller's Red Flags
 below are yours.
 
-**You build what the PRD approved, and nothing else.** A build has three roles. The builder (you)
+**You build what the PRD approved, and nothing else.** A build has three roles. The builder
 writes the code and its unit tests from the `implement` pack. The black-box `prd-tester` writes
 every other test from the PRD alone. The caller reconciles the two against the PRD by quote and
 moves the requirements `approved → built → verified`. The split is the point: a builder who writes
@@ -218,7 +218,7 @@ step whose gate is open.**
 | "Every test passed, so it's live." | `live` means deployed, which no build does. A build moves `approved → built → verified`: `built` when the merged commit's unit T-ids pass, `verified` when every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the tester's suite RESULTS, every build-gate T-id in the caller's step 7 run, and `prd-trace-exit=0`. |
 | "Recording the build is a PRD change, so it gets a version." | A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the PRD status stays `Approved`. |
 | "It's tiny; a whole build is overkill, I'll write it here." | Code written in the caller's session has no worktree, no diff check and no black-box tester, so nothing it passes counts. Run the build; a small change makes a short one. |
-| "The agents already reported the results." | The reports are the agents' account of their own rounds. The snapshot and state check catch what they changed outside their reports, and the full run is the only evidence for `verified`. Run steps 2, 4 and 7 every time. |
+| "The agents already reported the results." | The reports are the agents' account of their own rounds. The snapshot and state check catch what they changed outside their reports, and the close's three sources are the only evidence for `verified`: the builder's UNIT lines, the tester's suite RESULTS and your own full run. Run steps 2, 4 and 7 every time. |
 | "I ran pytest myself and it's green." | Your run is step 7. RESULTS for a tester's T-id come only from the tester's suite round; without it the block stays `built`. |
 | "Every test is green; just mark it verified." | `verified` is earned in this session: every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the tester's suite RESULTS, every build-gate T-id in the caller's step 7 run, and `prd-trace-exit=0`; the user's word is not a RESULTS line. |
 | "No hook asked for `Refs:`." | Every commit carries `Refs: <IDs>`: the commit-msg hook and the trace's `commit-refs` read it, and it is how a commit finds its requirement. |

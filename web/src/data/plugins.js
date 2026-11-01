@@ -42,7 +42,7 @@ export const plugins = [
     id: 'prd-toolkit',
     name: 'prd-toolkit',
     version: '0.4.0',
-    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent that cannot read your code, and skills to author, adopt and change it, and a builder that takes an approved change to verified code. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build and /prd-status.',
+    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build and /prd-status.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
       { name: '/prd-new', description: 'Start a PRD for a new project', workflow: 'Interview → docs/prd/<slug>/ with contracts and test cases → lint → prd-tester dry run → approve → CLAUDE.md block' },
@@ -57,7 +57,7 @@ export const plugins = [
       { name: 'changing-prds', description: 'Changes the PRD first, with new IDs and a version bump, before any code, when behaviour changes in a repo that has docs/prd/' },
       { name: 'adopting-prds', description: 'Brings an existing codebase under a PRD one area at a time: extracts as-built requirements with sources, confirms intent with the user, and closes each area with characterization tests run by prd-tester' },
       { name: 'building-from-prds', description: 'Takes approved PRD changes to verified code: a builder works in its own worktree, the tester writes its tests, the build reconciles by quote and moves statuses approved, built, verified' },
-      { name: 'testing-from-prds', description: 'Black-box testing from the PRD alone, run by the prd-tester agent for dry runs and suites; the caller checks integrity after each dispatch' },
+      { name: 'testing-from-prds', description: 'Black-box testing from the PRD alone, run by the prd-tester agent for dry runs, writes and suites; the caller checks integrity after each dispatch' },
     ],
     references: [
       { label: 'Design spec', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-29-prd-toolkit-design.md' },

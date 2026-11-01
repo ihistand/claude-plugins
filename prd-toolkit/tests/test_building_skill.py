@@ -300,7 +300,8 @@ def test_r26_no_worktree_fallback_stops_on_a_failed_check():
 def test_r27_rounds_are_counted_from_the_first_dispatch():
     t = flat(RUN)
     assert "Round 1 is a T-id's first builder dispatch (for a tester's T-id, its first `write`)." in t
-    assert "The build stops when a T-id's third round fails." in t
+    # final review minor 11: the repeated sentence is gone; test_final_review pins the one kept
+    assert "After a third failed round on one T-id the build stops and reports it to the user." in t
     assert "every round's RECONCILE record or failure line" in t
     assert "a step 4 check failure counts as a round and is recorded by its finding lines" in t
 

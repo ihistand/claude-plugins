@@ -40,22 +40,24 @@ build as not run. A build has no fallback: never write the code or the tests you
 **Rounds.** Each T-id gets at most three rounds. Round 1 is a T-id's first builder dispatch (for a
 tester's T-id, its first `write`). Each later dispatch that carries the T-id (a builder round, a
 test-misread round, a dispatch again after a failed check) is its next round, and a step 4 check
-failure counts as a round and is recorded by its finding lines. The build stops when a T-id's third
-round fails. After a third failed round on one T-id the build stops and reports it to the user. The
-stop report carries every round's RECONCILE record or failure line for that T-id.
+failure counts as a round and is recorded by its finding lines. After a third failed round on one
+T-id the build stops and reports it to the user. The stop report carries every round's RECONCILE
+record or failure line for that T-id.
 
-**Stops.** A build stops on a PRD gap (a QUESTIONS line that is not a test dispute, a tester
-QUESTION the PRD does not answer, or step 6's PRD-gap row), on a failing test that cites no T-id,
-on a failed tester state check (`dispatching.md` step 4), on a failed builder state check only
-without worktree isolation; with it, a failed builder check is a failed round (**Rounds**), on a
-`prd-trace-exit=` other than `0` in step 7 or the close, and on the third failed round on a T-id.
-Any stop after the builder's merge writes `built` for each block
-whose unit T-ids pass, never `verified`. A stop before the merge writes no status. Either way,
-report the stop to the user with its records; a PRD gap also goes to `/prd-change`.
+**Stops.** A build stops on a dirty working tree in step 1 (no status: nothing has merged), on
+a PRD gap (a QUESTIONS line that is not a test dispute, a tester QUESTION the PRD does not answer,
+or step 6's PRD-gap row), on a failing test that cites no T-id, on a failed tester state check
+(`dispatching.md` step 4), on a failed builder state check only without worktree isolation; with
+it, a failed builder check is a failed round (**Rounds**), on a `prd-trace-exit=` other than `0`
+in step 7 or the close, and on the third failed round on a T-id. Any stop after the builder's
+merge writes `built` for each block whose unit T-ids pass, never `verified`. A stop before the
+merge writes no status. Either way, report the stop to the user with its records; a PRD gap also
+goes to `/prd-change`.
 
 **One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never end
 the turn with a next round announced: dispatch it. You end the turn only after the close's report,
-or after a stop's.
+or after a stop's. The one carve-out: before step 2, the caller may stop to ask the user (a dirty
+tree, or a branch off the default branch, in step 1) and resumes the build at step 1 once answered.
 
 1. **Preflight.** Run each line as its own call:
 
@@ -114,12 +116,11 @@ or after a stop's.
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
      one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
      stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. A test
-     dispute,
-     `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`, does not
-     stop it: the caller reconciles each test dispute by quote at step 6, as a test misread or a
-     code bug. A UNIT line that is not `pass` fails the round, and the next builder round
-     carries it as its `Failure:`, with the quote of that T-id's test case and its unit test as
-     `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
+     dispute, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
+     does not stop it: the caller reconciles each test dispute by quote at step 6, as a test
+     misread or a code bug. A UNIT line that is not `pass` fails the round, and the next builder
+     round carries it as its `Failure:`, with the quote of that T-id's test case and its unit test
+     as `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
      builder again, as the next round of each of its unit T-ids. A failed round's builder branch
      is kept and listed in the report; never delete one with `-D`. Without worktree isolation, a
      failed builder check stops the build instead, as step 3 says. Without worktree isolation,
