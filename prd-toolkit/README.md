@@ -1,14 +1,16 @@
 # prd-toolkit
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
-repo with contracts and black-box test cases, a 27-rule linter and trace checks, a test agent
+repo with contracts and black-box test cases, a 31-rule linter and trace checks, a test agent
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
-approved change to verified code. Version 0.4.0.
+approved change to verified code, and a deploy script that takes verified code to a running
+environment. Version 0.5.0.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
 for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md),
-and for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md).
+for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md),
+and for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md).
 
 ## Install
 
@@ -31,22 +33,27 @@ install hint and exits 2.
 | `/prd-change <description>` | `prd-toolkit:changing-prds` | Change the PRD first, with new IDs and a version bump, before any code |
 | `/prd-context [area] [IDs] [implement]` | `prd_context.py` | Print the focused context pack for one task: the decide pack, or with `implement` the implement pack |
 | `/prd-build <area> <IDs>` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works in its own worktree while `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
-| `/prd-status` | `prd_status.py` | Show where each requirement stands |
+| `/prd-status` | `prd_status.py` | Show where each requirement stands, and the version each environment runs |
+| `/prd-deploy [--until <env>] [<run id>]` | `prd-toolkit:deploying-from-prds` | Deploy a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, then record the run (see Deploying) |
 
 ## Lint CLI
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>   # inside Claude Code
+uv run --script .prd-toolkit/prd_lint.py docs/prd/<slug>   # a repo with hooks installed
 uv run --script prd-toolkit/scripts/prd_lint.py --list-rules
 uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 ```
 
-- `${CLAUDE_PLUGIN_ROOT}` is set only inside Claude Code skills and commands. From a shell, use
-  the plugin's install path (its `installPath` in `~/.claude/plugins/installed_plugins.json`)
-  or a checkout of this repo, as the other two lines do.
+- **Which copy to run.** A person's shell does not set `${CLAUDE_PLUGIN_ROOT}`, so the commands here
+  name a path. In a repo whose hooks are installed, run the vendored copy,
+  `.prd-toolkit/<script>.py`. Before the first install (no `.prd-toolkit/` yet) run the plugin's
+  install path, `~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/<script>.py`, where `ihistand` is this marketplace's name and
+  `<version>` is the installed version (`claude plugin list` shows it, and so does
+  `ls ~/.claude/plugins/cache/ihistand/prd-toolkit/`). A checkout of this repo works too, as the
+  other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
-- `--list-rules` prints the 27 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
+- `--list-rules` prints the 31 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 
@@ -98,7 +105,7 @@ fails open.
 `testing.md` (falling back to `tests/`) for `@prd T-nnn.n` citations.
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>
+uv run --script .prd-toolkit/prd_trace.py docs/prd/<slug>
 uv run --script prd-toolkit/scripts/prd_trace.py docs/prd/<slug> --range BASE..HEAD
 ```
 
@@ -121,11 +128,11 @@ findings, 2 on a usage, dependency or internal error. A malformed `--range` exit
 matches). It never overwrites an existing hook and never sets `core.hooksPath`; in either case it
 prints the line to add.
 
-The first install runs from the plugin, inside Claude Code; then commit `.prd-toolkit/` so every
+The first install runs from the plugin's install path (see Lint CLI for how to find it); then commit `.prd-toolkit/` so every
 clone and CI run the same copy:
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py install docs/prd/<slug>
 ```
 
 Git does not clone hooks, so each other clone runs the vendored copy once (the managed CLAUDE.md
@@ -141,8 +148,8 @@ Generate the merge-gate CI file, then commit it. `--github` writes
 differs is rewritten only with `--force`.
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --github docs/prd/<slug>
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --gitlab docs/prd/<slug>
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --github docs/prd/<slug>
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --gitlab docs/prd/<slug>
 ```
 
 After a plugin upgrade, `check` names every vendored file that differs from the plugin (exit 1);
@@ -150,7 +157,7 @@ run `install` from the plugin again to refresh the copy, and commit it. `uninsta
 the hooks it wrote and leaves `.prd-toolkit/`:
 
 ```
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" check docs/prd/<slug>
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py check docs/prd/<slug>
 uv run --script .prd-toolkit/prd_hooks.py uninstall docs/prd/<slug>
 ```
 
@@ -166,6 +173,79 @@ Known limits:
 - A `commit --amend` that only rewrites the message stages no file, so the `commit-msg` hook lets
   it through; CI's `commit-refs` (trace with `--range`) catches it.
 
+## Deploying
+
+`/prd-deploy [--until <env>] [<run id>]` runs the `deploying-from-prds` skill. It takes `verified`
+code to a running environment by running the `operations.md` runbook with `prd_deploy.py`: every
+step from 1, in order, never from the middle. A script runs the commands, not the model. The skill
+shows the plan, relays the user's reply to each human step, offers a failed step's rollback, and
+at the end writes only what the run's log proves: the `## Deployed` rows, `verified` → `live (since
+X.Y.Z)` after a production finish, and an open `E-nnn` for each failure. Then it commits that close
+and runs `prd_deploy.py check`. A deploy changes no behaviour, so it bumps no version.
+
+**The runbook.** Each step is a numbered line followed by labelled lines:
+
+```
+3. Approve production (actor: human) (env: production)
+   Do: read the staging results and reply "deploy production"
+   Check: the reply says "deploy production"
+4. Deploy to production (actor: agent) (env: production)
+   Run: `./deploy.sh production`
+   Check: `curl -fsS https://orders.example.com/health` prints `ok`
+   Rollback: `./deploy.sh production --previous`
+```
+
+- The step line is `N. <title> (actor: agent|human) (env: <environment>)`; steps are numbered from 1
+  without gaps.
+- An agent step has `Run:` (one backticked command, or `tests <level>[, <level>...]`), a `Check:`
+  (one backticked command, optionally followed by ``prints `<text>` ``, which must equal one stdout
+  line) and an optional `Rollback:`. A `tests` step has no `Check:`: the suite, run against that
+  environment, is its check. `tests` levels are the Levels in `testing.md`, including the
+  `smoke` level.
+- A human step has `Do:` and `Check:`, both prose. It is where a person's approval is given: the run
+  stops there until the user replies, and `confirm` records the reply verbatim. The request to
+  deploy is never that reply.
+- **The production gate.** The first production step must be a human step, or come after one. Lint
+  fails a runbook without it (`production-gate`); there is no opt-out. Environments has a
+  `Production` column (`yes` or `no`) that says which environment is production.
+
+**`## Deployed`** is the PRD's record of what each environment runs: a table of environment, PRD
+version, commit, date and run id, one row per environment, written at a run's close and replacing
+that environment's earlier row. **`## Drift`** is an optional table of environment, check
+(`version` or `config`) and an introspection command; `prd_drift.py <prd-dir> [--env <env>]` runs
+each command and compares what it prints with the Deployed row (`version`) or with
+`contracts/config.yaml` (`config`). It exits 0 for no drift, 1 for drift (each finding is
+`operations.md:<line>: drift-<check>: <what>`) and 2 when a command failed, timed out or printed
+something unparseable, which is never counted as drift.
+
+```
+uv run --script .prd-toolkit/prd_drift.py docs/prd/<slug> --env production
+```
+
+**CI.** `prd_hooks.py ci` adds, for each environment in `## Drift` or named by a `tests` step, a
+`drift-<env>` job and a `test-deploy-<env>` job (the deploy-gate suites the runbook runs there,
+with `TEST_ENV=<env>`). Both start by hand (`workflow_dispatch` on GitHub, `when: manual` on
+GitLab), stay out of the merge gate, and never deploy; deploying is done from a session.
+
+**What `prd_deploy.py` refuses.** Exit 1 (`refused`) with each reason printed, when:
+
+- the tracked working tree is dirty;
+- `prd_lint` or `prd_trace` finds anything;
+- any requirement is still `built` (a deploy starts from `verified`);
+- a `tests` step runs a deploy-gate test, before production, that no requirement cites;
+- a human step has no `confirm`, so a `resume` would pass it unconfirmed;
+- a `confirm` was already used, or HEAD or the PRD version moved since the run started;
+- a step started and did not finish (a killed or timed-out call), or the run failed: a failure ends
+  the run, and `resume` never goes past it;
+- a second rollback of the same step.
+
+A failed step exits 4 and prints its `Rollback:` command; the script never runs it unasked.
+
+**Known limit.** The script cannot prove that a person wrote a `confirm` reply. The skill requires
+the user's own message, verbatim, the log keeps it, and the close report quotes it, but a `confirm`
+reply is trusted to be the user's. Steps run in a shell on the session's machine with its
+credentials; the toolkit adds no sandbox.
+
 ## Assumption status `awaiting <who>`
 
 An assumption row in section 12 has status `open`, `confirmed`, `corrected` or `awaiting <who>`,
@@ -176,6 +256,44 @@ the user cannot state.
 
 ## Changelog
 
+- **0.5.0:**
+  - `/prd-deploy` and the `deploying-from-prds` skill: `prd_deploy.py` runs the `operations.md` runbook, every step from 1 in order, and stops at each human step and on each failure. The model never types a runbook command; it relays each reply verbatim, records a failure in `errors.md`, and closes with Deployed rows and `verified` → `live (since X.Y.Z)` (see Deploying).
+  - The runbook is a step grammar: `(actor: …) (env: …)` and the labels `Run:`, `Check:`, `Rollback:`, `Do:`. Environments gains a `Production` column. `operations.md` gains `## Deployed` and `## Drift`.
+  - `prd_drift.py` compares what an environment runs with what the PRD says (`version` and `config`).
+  - A `smoke` level in `testing.md`. Five lint rules: `runbook-steps`, `runbook-env`, `production-gate`, `runbook-tests` and `drift-rows`.
+  - Generated CI adds manual `drift-<env>` and `test-deploy-<env>` jobs, outside the merge gate; they never deploy. `/prd-status` shows each environment's deployed version.
+  - The README's shell commands name a real path (`.prd-toolkit/<script>.py`, or the plugin's install path for the first install) instead of `${CLAUDE_PLUGIN_ROOT}`, which a shell does not set.
+  - Upgrading a 0.4 PRD: lint fails `runbook-steps` until each runbook step carries `(env: …)` and its labels, and `runbook-env` until Environments has a Production column; a patch bump with the §14 row `format: runbook steps (prd-toolkit 0.5)`. `## Deployed` and `## Drift` are optional. The 0.4 runbook and its 0.5 form:
+
+    ```
+    ## Runbook
+
+    1. Deploy the build with `./deploy.sh staging`, then run the system tests. (actor: agent)
+    2. Deploy to production with `./deploy.sh production` after the owner approves. (actor: human)
+    ```
+
+    ```
+    ## Runbook
+
+    1. Deploy to staging (actor: agent) (env: staging)
+       Run: `./deploy.sh staging`
+       Check: `curl -fsS https://orders-staging.example.com/health` prints `ok`
+       Rollback: `./deploy.sh staging --previous`
+    2. System tests on staging (actor: agent) (env: staging)
+       Run: tests system, e2e
+    3. Approve production (actor: human) (env: production)
+       Do: read the staging results and reply "deploy production"
+       Check: the reply says "deploy production"
+    4. Deploy to production (actor: agent) (env: production)
+       Run: `./deploy.sh production`
+       Check: `curl -fsS https://orders.example.com/health` prints `ok`
+       Rollback: `./deploy.sh production --previous`
+    5. Smoke on production (actor: agent) (env: production)
+       Run: tests smoke
+    ```
+
+    The Environments table gains the column, `yes` on the production row and `no` on the others:
+    `| Environment | URL | Production |`.
 - **0.4.0:**
   - `/prd-build` and the `building-from-prds` skill: `prd-builder` works in its own worktree while `prd-tester` writes its tests in the new `write` mode; the build reconciles by quote. Statuses move `approved`, `built`, `verified` with no version bump; built blocks carry `Source:`.
   - `/prd-status` (`prd_status.py`) and `prd_build_check.py`.
@@ -211,7 +329,7 @@ docs/prd/<project>/
 │                           config.yaml, data-classification.yaml, dependencies/, fixtures/
 ├── nfr.md                  NFRs with numeric bounds
 ├── testing.md              levels, harness, environments, sign-offs
-├── operations.md           environments, deploy and rollback runbook
+├── operations.md           environments, deploy and rollback runbook, Deployed and Drift tables
 └── errors.md               the Error-Driven Development ledger
 
 .prd-toolkit/               vendored scripts, version file and hook sources (written by prd_hooks.py install)

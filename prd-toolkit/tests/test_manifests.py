@@ -12,8 +12,15 @@ def test_descriptions_match_and_name_new_commands():
     entry = next(p for p in market["plugins"] if p["name"] == "prd-toolkit")
     assert plugin["description"] == entry["description"]
     assert plugin["version"] == entry["version"]
-    for cmd in ("/prd-build", "/prd-status"):
+    for cmd in ("/prd-build", "/prd-status", "/prd-deploy"):
         assert cmd in plugin["description"]
+
+
+def test_versions_are_0_5_0():
+    plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
+    market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+    entry = next(p for p in market["plugins"] if p["name"] == "prd-toolkit")
+    assert plugin["version"] == entry["version"] == "0.5.0"
 
 
 def test_web_description_matches():

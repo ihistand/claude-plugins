@@ -11,8 +11,9 @@ AUTHORING = SKILLS / "authoring-prds/SKILL.md"
 ADOPTING = SKILLS / "adopting-prds/SKILL.md"
 README = ROOT / "README.md"
 
-INSTALL = 'uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>'  # the README: no Bash tool there
-CI = 'uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --github docs/prd/<slug>'
+PLUGIN_PATH = "~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts"  # R22: a shell does not set CLAUDE_PLUGIN_ROOT
+INSTALL = f"uv run --script {PLUGIN_PATH}/prd_hooks.py install docs/prd/<slug>"  # the README: no Bash tool there
+CI = f"uv run --script {PLUGIN_PATH}/prd_hooks.py ci --github docs/prd/<slug>"
 SKILL_INSTALL = "uv run --script <scripts>/prd_hooks.py install docs/prd/<slug>"  # skills: R21
 
 
@@ -34,7 +35,7 @@ def test_readme_hooks_and_ci_section():
     assert INSTALL in s and "commit `.prd-toolkit/`" in s
     assert "uv run --script .prd-toolkit/prd_hooks.py install docs/prd/<slug>" in s  # per clone
     assert "ci --github" in s and "ci --gitlab" in s and "include:" in s
-    assert 'prd_hooks.py" check docs/prd/<slug>' in s and "After a plugin upgrade" in s
+    assert f"{PLUGIN_PATH}/prd_hooks.py check docs/prd/<slug>" in s and "After a plugin upgrade" in s
     assert "uninstall" in s
     assert "uv" in s and "bare runner" in s
     assert "known-failing" in s and "0.6" in s  # R37
