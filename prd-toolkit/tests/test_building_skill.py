@@ -167,7 +167,8 @@ def test_procedure_reconcile_record_and_stop():
     t = flat(RUN)
     assert "the status follows **Stops**" in t and "/prd-change" in t
     assert "the builder may now read the failing test" in t
-    assert "After three rounds on one T-id the build stops and reports it to the user." in t
+    assert "After a third failed round on one T-id the build stops and reports it to the user." in t
+    assert "After three rounds on one T-id" not in t
     assert "A QUESTIONS line that is not a test dispute is a PRD gap and stops the build" in t
 
 
@@ -351,3 +352,68 @@ def test_minors_rounds_branches_trace_and_agent_skills():
     assert "A failed round's builder branch is kept and listed in the report; never delete one with `-D`." in t
     assert "`prd-trace-exit=1` after writing `verified` reverts those blocks to `built` and stops the build" in t
     assert "required" in flat(AGENT) and "Skills-registry row" in flat(AGENT)
+
+
+# --- fix round 2 ---
+
+def test_a_prd_gap_defers_to_stops_not_before_any_merge():
+    assert "before any merge" not in flat(SKILL)
+    assert "before any merge" not in flat(RUN)
+    assert ("A PRD gap stops the build: `built` for the blocks an earlier round merged, otherwise no "
+            "status (the caller's **Stops**).") in flat(SKILL)
+    step4 = flat(RUN).split("4. **Check the state.**", 1)[1].split("5. **Run.**", 1)[0]
+    assert ("is a PRD gap and stops the build, as **Stops** says: `built` if a merge happened, "
+            "otherwise no status.") in step4
+
+
+def test_b_stops_scopes_the_state_check():
+    stops = flat(RUN).split("**Stops.**", 1)[1].split("1. **Preflight.**", 1)[0]
+    assert "a failed state check," not in stops
+    assert "on a failed tester state check (`dispatching.md` step 4)" in stops
+    assert ("on a failed builder state check only without worktree isolation; with it, a failed builder "
+            "check is a failed round (**Rounds**)") in stops
+    assert "steps 2 and 4 are the snapshot and state check for the tester's rounds" in flat(SKILL)
+
+
+def test_g3_the_failing_test_route_takes_the_snapshot():
+    inp = flat(RUN).split("**Input:**", 1)[1].split("Both agents must be", 1)[0]
+    assert "runs step 1, then step 2's snapshot before any dispatch" in inp
+    assert "Never skipped, on this route too" in inp
+    assert "then enters at step 6" in inp
+
+
+def test_g4_a_build_finishes_in_one_turn():
+    t = flat(RUN)
+    assert ("**One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never "
+            "end the turn with a next round announced: dispatch it.") in t
+    assert "I'll re-dispatch with the same prompt" in flat(SKILL)
+
+
+def test_minor4_trace_runs_before_the_close_commit():
+    close = flat(RUN).split("8. **Close.**", 1)[1]
+    assert "Run the trace before the close commit" in close
+    assert "`prd-trace-exit=2` stops the build like `1`" in close
+    assert "reverts those blocks to `built`" in close
+    lines = RUN.read_text(encoding="utf-8").split("8. **Close.**", 1)[1].splitlines()
+    trace = next(i for i, l in enumerate(lines) if "prd_trace.py" in l)
+    commit = next(i for i, l in enumerate(lines) if l.strip().startswith("git commit"))
+    assert trace < commit
+
+
+def test_minor5_failed_round_rules_apply_with_isolation_only():
+    step4 = flat(RUN).split("4. **Check the state.**", 1)[1].split("5. **Run.**", 1)[0]
+    assert "With worktree isolation, a failed round merges nothing" in step4
+    assert "Without worktree isolation, a failed builder check stops the build instead" in step4
+    assert ("Without worktree isolation, `<base>` does not move on a UNIT-failure round: the range keeps the "
+            "earlier commits, and the check covers them all.") in step4
+
+
+def test_minor6_prose_lines_are_wrapped():
+    inside = False
+    for n, line in enumerate(RUN.read_text(encoding="utf-8").splitlines(), 1):
+        if line.strip().startswith("```"):
+            inside = not inside
+            continue
+        if inside or line.lstrip().startswith("|"):
+            continue
+        assert len(line) <= 100, (n, len(line))

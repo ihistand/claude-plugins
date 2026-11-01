@@ -23,26 +23,34 @@ block at `approved`, or at `built` when a stopped build resumes. A draft goes to
 there", "the PRD can follow") is a change: send it to `prd-toolkit:changing-prds` and build only
 the approved IDs. "It's tiny" changes nothing: a change that skips the build earns no `built` and
 no `verified`. A failing test reported outside a build (a test that cites a T-id of an approved
-requirement fails against the code, "the tester's test is wrong, fix it") runs steps 1 and 2, then
-enters at step 6: reconcile it by quote and route it. Never fix the code or the test yourself.
+requirement fails against the code, "the tester's test is wrong, fix it") runs step 1, then step
+2's snapshot before any dispatch (Never skipped, on this route too: a round without its `-before`
+files fails), then enters at step 6: reconcile it by quote and route it. Never fix the code or the
+test yourself.
 
 Both agents must be in the Agent tool's list: `prd-toolkit:prd-builder` and
 `prd-toolkit:prd-tester`. When either is missing, or you cannot dispatch subagents, report the
 build as not run. A build has no fallback: never write the code or the tests yourself.
 
-**Rounds.** Round 1 is a T-id's first builder dispatch (for a tester's T-id, its first `write`).
-Each later dispatch that carries the T-id (a builder round, a test-misread round, a dispatch again
-after a failed check) is its next round, and a step 4 check failure counts as a round and is
-recorded by its finding lines. The build stops when a T-id's third round fails. After three rounds
-on one T-id the build stops and reports it to the user. The stop report carries every round's
-RECONCILE record or failure line for that T-id.
+**Rounds.** Each T-id gets at most three rounds. Round 1 is a T-id's first builder dispatch (for a
+tester's T-id, its first `write`). Each later dispatch that carries the T-id (a builder round, a
+test-misread round, a dispatch again after a failed check) is its next round, and a step 4 check
+failure counts as a round and is recorded by its finding lines. The build stops when a T-id's third
+round fails. After a third failed round on one T-id the build stops and reports it to the user. The
+stop report carries every round's RECONCILE record or failure line for that T-id.
 
 **Stops.** A build stops on a PRD gap (a QUESTIONS line that is not a test dispute, a tester
 QUESTION the PRD does not answer, or step 6's PRD-gap row), on a failing test that cites no T-id,
-on a failed state check, on a `prd-trace-exit=` other than `0` in step 7 or the close, and on the
-third failed round on a T-id. Any stop after the builder's merge writes `built` for each block
+on a failed tester state check (`dispatching.md` step 4), on a failed builder state check only
+without worktree isolation; with it, a failed builder check is a failed round (**Rounds**), on a
+`prd-trace-exit=` other than `0` in step 7 or the close, and on the third failed round on a T-id.
+Any stop after the builder's merge writes `built` for each block
 whose unit T-ids pass, never `verified`. A stop before the merge writes no status. Either way,
 report the stop to the user with its records; a PRD gap also goes to `/prd-change`.
+
+**One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never end
+the turn with a next round announced: dispatch it. You end the turn only after the close's report,
+or after a stop's.
 
 1. **Preflight.** Run each line as its own call:
 
@@ -53,16 +61,17 @@ report the stop to the user with its records; a PRD gap also goes to `/prd-chang
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
    ```
 
-   `prd-lint-exit=` must be `0`. Grep `^status:` with the path `docs/prd/<slug>/prd.md`: it must
-   be `status: Approved`. The status output must be empty: a dirty tree stops the build, and you
-   ask the user what to do with it. On the repository's default branch, ask the user before
-   branching. When there is no one to ask (a headless run, or "do not ask questions"), run
+   `prd-lint-exit=` must be `0`. Grep `^status:` with the path `docs/prd/<slug>/prd.md`: it must be
+   `status: Approved`. The status output must be empty: a dirty tree stops the build, and you ask
+   the user what to do with it. On the repository's default branch, ask the user before branching.
+   When there is no one to ask (a headless run, or "do not ask questions"), run
    `git switch -c <branch>` as its own call with the branch `prd-build/<area>-<IDs>`, the IDs
-   joined by `-`, and say so in the report. Every build runs on its own branch; never merge onto the default branch. From the
-   pack, check each block's `Status:`, then split the T-ids on each block's `Tests:` line by the
-   pack's Levels part: **unit** (level `unit`) for the builder, and **build-gate non-unit** (a
-   level whose `Gate` is `build`) for the tester. Deploy-gate T-ids are not run in 0.4. Then run
-   `git rev-parse HEAD` as its own call and paste the SHA it prints wherever `<base>` appears.
+   joined by `-`, and say so in the report. Every build runs on its own branch; never merge onto
+   the default branch. From the pack, check each block's `Status:`, then split the T-ids on each
+   block's `Tests:` line by the pack's Levels part: **unit** (level `unit`) for the builder, and
+   **build-gate non-unit** (a level whose `Gate` is `build`) for the tester. Deploy-gate T-ids are
+   not run in 0.4. Then run `git rev-parse HEAD` as its own call and paste the SHA it prints
+   wherever `<base>` appears.
 2. **Snapshot**, as `dispatching.md` step 2: a new `<SNAP>` directory outside the repository and
    the five commands into `-before` files, each its own call, with its check that the harness
    caches are git-ignored. A build has no dry-run directory. Never skipped: without the
@@ -97,14 +106,18 @@ report the stop to the user with its records; a PRD gap also goes to `/prd-chang
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
      one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
-     stops the build, before any merge. A test dispute,
+     stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. A test
+     dispute,
      `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`, does not
      stop it: the caller reconciles each test dispute by quote at step 6, as a test misread or a
      code bug. A UNIT line that is not `pass` fails the round, and the next builder round
      carries it as its `Failure:`, with the quote of that T-id's test case and its unit test as
-     `Failing test:`. A failed round merges nothing; dispatch the builder again, as the next
-     round of each of its unit T-ids. A failed round's builder branch is kept and listed in the
-     report; never delete one with `-D`.
+     `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
+     builder again, as the next round of each of its unit T-ids. A failed round's builder branch
+     is kept and listed in the report; never delete one with `-D`. Without worktree isolation, a
+     failed builder check stops the build instead, as step 3 says. Without worktree isolation,
+     `<base>` does not move on a UNIT-failure round: the range keeps the earlier commits, and the
+     check covers them all.
    - **The tester.** `dispatching.md` step 4: the five commands into `-after` files and the
      diffs, each its own call. A write's check exempts the test roots. If the Agent tool placed
      the builder's worktree inside the repository, that one new path is the builder's, not the
@@ -206,25 +219,32 @@ report the stop to the user with its records; a PRD gap also goes to `/prd-chang
    `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
 
    A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the
-   PRD status stays `Approved`. Leave `version` and `updated` as they are. Then run each line as
-   its own call:
+   PRD status stays `Approved`. Leave `version` and `updated` as they are. Run the trace before
+   the close commit, so a `verified` commit is never followed by a revert. Run each line as its
+   own call:
 
    ```bash
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
-   git add docs/prd/<slug>
-   git commit -m "docs(prd): <IDs> <built or verified>" -m "Refs: <IDs>"
    ```
 
    `prd-context-exit=` must be `0`: a STALE code item for a block you just wrote means a wrong
    line or SHA, so fix it. `prd-lint-exit=` must be `0`. `prd-trace-exit=1` after writing
-   `verified` reverts those blocks to `built` and stops the build: rewrite the status words,
-   then commit. On a stopped build's `built` close, give the trace findings to the user with the
-   stop. Then remove each worktree a passed round left, `git worktree remove <worktree path>`
-   and `git branch -d <builder branch>`, each its own call; a failed round's branch stays.
-   Report to the user: the build branch, each block's status, each T-id's result, every
-   reconcile record and every kept branch.
+   `verified` reverts those blocks to `built` and stops the build: rewrite the status words
+   before you commit. `prd-trace-exit=2` stops the build like `1`: the blocks stay `built`. On a
+   stopped build's `built` close, give the trace findings to the user with the stop. Then, each
+   its own call:
+
+   ```bash
+   git add docs/prd/<slug>
+   git commit -m "docs(prd): <IDs> <built or verified>" -m "Refs: <IDs>"
+   ```
+
+   Then remove each worktree a passed round left, `git worktree remove <worktree path>` and
+   `git branch -d <builder branch>`, each its own call; a failed round's branch stays. Report to
+   the user: the build branch, each block's status, each T-id's result, every reconcile record
+   and every kept branch.
 
 ## Prompts
 

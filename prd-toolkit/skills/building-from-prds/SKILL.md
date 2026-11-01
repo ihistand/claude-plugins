@@ -119,7 +119,8 @@ QUESTIONS holds two kinds of line, and nothing else:
 - a **test dispute**, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
   which the caller reconciles by quote as a test misread or a code bug; the build goes on;
 - a **PRD gap**: a thing the PRD does not say that you needed, naming the ID and the file that
-  should have said it. A PRD gap stops the build before any merge.
+  should have said it. A PRD gap stops the build: `built` for the blocks an earlier round merged,
+  otherwise no status (the caller's **Stops**).
 
 Write `none` only if you met neither.
 
@@ -157,6 +158,9 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   only check on what the tester changed; a round without them fails.
 - "I did not run the full build-gate harness myself. The test results come from the builder and
   tester reports". (With the skill, rerun.) Without the full run there is no `verified`.
+- "Next builder round: I'll re-dispatch with the same prompt." and then the turn ends, the build
+  unfinished. (With the skill, rerun.) A build runs to its close or to a stop in the same turn:
+  dispatch the round you announce.
 - "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
   add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
@@ -208,9 +212,10 @@ step whose gate is open.**
 
 ## Related skills
 
-- **prd-toolkit:changing-prds** takes every gap and every QUESTION; its step 5 hands an approved
+- **prd-toolkit:changing-prds** takes every PRD gap; its step 5 hands an approved
   change to `/prd-build`.
 - **prd-toolkit:testing-from-prds** is what `prd-tester` follows; its `dispatching.md` steps 2 and
-  4 are the build's snapshot and state check.
+  4 are the snapshot and state check for the tester's rounds; the builder's state check is
+  running-a-build.md step 4.
 - **superpowers:writing-plans** is optional: it splits a large change into tasks that each run a
   build.
