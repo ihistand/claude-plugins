@@ -32,6 +32,17 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--until", metavar="ENV", help="stop after the last step on this environment")
         if name == "run":
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
+    for name, text in (("resume", "continue a run after its confirmed human step"), ("confirm", "record the reply to the human step a run stopped at"),
+                       ("rollback", "run a failed step's Rollback")):
+        p = sub.add_parser(name, help=text)
+        p.add_argument("prd_dir")
+        p.add_argument("--run", required=True, metavar="ID")
+        if name != "resume":
+            p.add_argument("--step", required=True, type=int, metavar="N")
+        if name == "confirm":
+            p.add_argument("--reply", required=True, metavar="TEXT")
+        else:
+            p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
     return parser
 
 
@@ -49,12 +60,67 @@ def _steps_or_message(prd: model.Prd, until: str | None):
     return steps, None
 
 
+def _run_and_report(prd: model.Prd, repo_root, run_id: str, steps, start: int, timeout: int) -> int:
+    try:
+        state, number = deploy.run_steps(prd, repo_root, run_id, steps, start, timeout)
+    except Exception as e:  # the run has started: say so and fail it
+        print(f"prd_deploy: internal error: {type(e).__name__}: {e}", file=sys.stderr)
+        state, number = "failed", 0
+    print(f"prd-deploy: {state} step={number} run={run_id}")
+    return deploy.EXIT[state]
+
+
+def _refuse(reasons: list[str], step: int, run_id: str) -> int:
+    for r in reasons:
+        print(f"refused: {r}")
+    print(f"prd-deploy: refused step={step} run={run_id}")
+    return deploy.EXIT["refused"]
+
+
+def _existing_run(args, prd: model.Prd) -> int:
+    """confirm, resume and rollback: work on a run that has a log."""
+    try:
+        repo_root = model.repo_root(prd.root)
+        if args.command == "confirm":
+            deploy.confirm(repo_root, args.run, args.step, args.reply)
+            print(f"confirmed: step {args.step} run={args.run}")
+            return 0
+        if args.command == "rollback":
+            try:
+                code = deploy.rollback(prd, repo_root, args.run, args.step, args.timeout)
+            except deploy.Refused as e:
+                return _refuse(e.reasons, args.step, args.run)
+            state = "rolled-back" if code == 0 else "rollback-failed"
+            print(f"prd-deploy: {state} step={args.step} run={args.run}")
+            return 0 if code == 0 else deploy.EXIT["failed"]
+        # resume: the checks come first, because the runbook is read from the PRD as it is now
+        confirmed, until = deploy.resume_point(repo_root, args.run)
+        reasons = deploy.resume_problems(prd, repo_root, args.run)
+        if reasons:
+            return _refuse(reasons, confirmed, args.run)
+        steps, problem = _steps_or_message(prd, until)
+        if problem:
+            return _fail(problem)
+        step = next((s for s in steps if s.number == confirmed), None)
+        if step is None or step.actor != "human":
+            return _refuse([f"step {confirmed} is not a human step of the runbook"], confirmed, args.run)
+        print(f"resume: {args.run}", flush=True)
+        if confirmed == steps[-1].number:
+            print(f"prd-deploy: done step={confirmed} run={args.run}")
+            return deploy.EXIT["done"]
+        return _run_and_report(prd, repo_root, args.run, steps, confirmed + 1, args.timeout)
+    except ValueError as e:
+        return _fail(str(e))
+    except Exception as e:
+        return _fail(f"internal error: {type(e).__name__}: {e}")
+
+
 def main(argv: list[str]) -> int:
     try:
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else deploy.EXIT["usage"]
-    if args.command == "run" and args.timeout < 1:
+    if args.command in ("run", "resume", "rollback") and args.timeout < 1:
         return _fail("--timeout must be at least 1")
     try:
         prd = model.load(Path(args.prd_dir))
@@ -64,6 +130,8 @@ def main(argv: list[str]) -> int:
         return _fail(f"internal error: {type(e).__name__}: {e}")
     if prd.adoption_unmigrated:
         return _fail(f"{prd.root.as_posix()}/prd.md: {model.UNMIGRATED}")
+    if args.command in ("confirm", "resume", "rollback"):
+        return _existing_run(args, prd)
     steps, problem = _steps_or_message(prd, args.until)
     if problem:
         return _fail(problem)
@@ -86,13 +154,7 @@ def main(argv: list[str]) -> int:
             (deploy.log_dir(repo_root) / f"{run_id}.jsonl").unlink(missing_ok=True)
             raise
         print(f"run: {run_id}", flush=True)
-        try:
-            state, number = deploy.run_steps(prd, repo_root, run_id, steps, 1, args.timeout)
-        except Exception as e:  # the run has started: say so and fail it
-            print(f"prd_deploy: internal error: {type(e).__name__}: {e}", file=sys.stderr)
-            state, number = "failed", 0
-        print(f"prd-deploy: {state} step={number} run={run_id}")
-        return deploy.EXIT[state]
+        return _run_and_report(prd, repo_root, run_id, steps, 1, args.timeout)
     except Exception as e:
         return _fail(f"internal error: {type(e).__name__}: {e}")
 

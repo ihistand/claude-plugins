@@ -325,3 +325,298 @@ def test_environment_variables(repo, monkeypatch):
     assert r.returncode == 0, r.stdout + r.stderr
     assert (repo / ".deploy/agent.env").read_text().strip() == "staging|unset"
     assert (repo / ".deploy/tests/system.env").read_text().strip() == "staging|staging"
+
+
+# ---- confirm, resume and rollback ----
+
+def run_id_of(r) -> str:
+    return r.stdout.splitlines()[0].removeprefix("run: ")
+
+
+def stopped_run(repo) -> str:
+    """A run stopped at human step 3; returns its id."""
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 3, r.stdout + r.stderr
+    return run_id_of(r)
+
+
+def confirm(repo, run_id, step="3", reply="deploy production"):
+    return deploy_cli(repo, "confirm", "--run", run_id, "--step", step, "--reply", reply)
+
+
+def resume(repo, run_id):
+    return deploy_cli(repo, "resume", "--run", run_id)
+
+
+def rollback(repo, run_id, step):
+    return deploy_cli(repo, "rollback", "--run", run_id, "--step", str(step))
+
+
+def edit_header(repo, run_id, **fields):
+    path = deploy.log_dir(repo) / f"{run_id}.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = {**json.loads(lines[0]), **fields}
+    path.write_text("\n".join([json.dumps(header), *lines[1:]]) + "\n", encoding="utf-8")
+
+
+def test_confirm_then_resume_to_done(repo):
+    run_id = stopped_run(repo)
+    reply = 'deploy "production" — now\n'
+    c = confirm(repo, run_id, reply=reply)
+    assert c.returncode == 0 and c.stdout == f"confirmed: step 3 run={run_id}\n", c.stdout + c.stderr
+    assert not (repo / ".deploy/production").exists()
+    r = resume(repo, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+    lines = r.stdout.splitlines()
+    assert lines[0] == f"resume: {run_id}"
+    assert lines[1:-1] == ["step 4 agent production: pass", "step 5 agent production: pass"]
+    assert lines[-1] == f"prd-deploy: done step=5 run={run_id}"
+    assert (repo / ".deploy/production/greeting").read_text() == "Hello\n"
+    recs = deploy.read_log(repo, run_id)
+    confirms = [x for x in recs if x["kind"] == "confirm"]
+    assert len(confirms) == 1 and confirms[0]["reply"] == reply and confirms[0]["step"] == 3 and "at" in confirms[0]
+    assert [x["step"] for x in recs if x["kind"] == "step"] == [1, 2, 3, 4, 5]  # earlier steps were not run again
+    assert recs.index(confirms[0]) == 4  # header, steps 1-3, then the confirm, then steps 4 and 5
+
+
+def test_resume_without_confirm(repo):
+    run_id = stopped_run(repo)
+    r = resume(repo, run_id)
+    assert r.returncode == 1
+    assert "refused: step 3 has no confirm record" in r.stdout.splitlines()
+    assert r.stdout.splitlines()[-1] == f"prd-deploy: refused step=3 run={run_id}"
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_confirm_wrong_step(repo):
+    run_id = stopped_run(repo)
+    r = confirm(repo, run_id, step="2")
+    assert r.returncode == 2 and r.stdout == "" and "step 2 is not the human step this run stopped at" in r.stderr
+    assert confirm(repo, run_id, step="9").returncode == 2
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"]
+
+
+@pytest.mark.parametrize("reply", ["", "   ", "\n\t"])
+def test_confirm_refuses_an_empty_reply(repo, reply):
+    run_id = stopped_run(repo)
+    r = confirm(repo, run_id, reply=reply)
+    assert r.returncode == 2 and r.stdout == "" and r.stderr
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"]
+
+
+def test_confirm_unknown_run_and_unsafe_run_id(repo):
+    for bad in ("20990101T000000Z-all", "../../config", "a/b", ""):
+        r = confirm(repo, bad)
+        assert r.returncode == 2 and r.stdout == "", bad
+    assert not (repo / ".git/config.jsonl").exists()
+
+
+def test_confirm_twice(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    r = confirm(repo, run_id, reply="again")
+    assert r.returncode == 2 and r.stdout == ""
+    assert [x["reply"] for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"] == ["deploy production"]
+
+
+def test_confirm_a_failed_run(repo):
+    change(repo, OPS, "prints `Hi`", "prints `Nope`")
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 4
+    assert confirm(repo, run_id_of(r), step="1").returncode == 2
+
+
+def test_resume_after_head_moved(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    change(repo, "tools/gate.sh", "exit 0", "exit 0\n# later")
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: HEAD moved since the run started" in r.stdout.splitlines()
+    assert r.stdout.splitlines()[-1].startswith("prd-deploy: refused step=3 run=")
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_resume_head_check_stands_alone(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    edit_header(repo, run_id, head="0" * 40)
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and r.stdout.splitlines()[:-1] == ["refused: HEAD moved since the run started"]
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_resume_after_version_changed(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    edit_header(repo, run_id, version="0.9.0")
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and r.stdout.splitlines()[:-1] == ["refused: the PRD version changed since the run started"]
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_resume_after_a_committed_version_bump(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    change(repo, "docs/prd/orders/prd.md", "version: 1.0.0", "version: 1.0.1")
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: the PRD version changed since the run started" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_resume_refuses_a_dirty_tree(repo):
+    """Resume reads the runbook as it is now, so an uncommitted runbook edit must not run."""
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace("echo Hello > .deploy/production/greeting", "touch .deploy/evil"), encoding="utf-8")
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: the tracked tree has changes" in r.stdout.splitlines()
+    assert not (repo / ".deploy/evil").exists() and not (repo / ".deploy/production").exists()
+
+
+def test_resume_after_failure(repo):
+    change(repo, OPS, "prints `Hi`", "prints `Nope`")
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 4
+    r = resume(repo, run_id_of(r))
+    assert r.returncode == 1 and "refused: step 1 failed; a failed run ends (start a new run)" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists() and not (repo / ".deploy/tests").exists()
+
+
+def test_resume_a_done_run(repo):
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0
+    r = resume(repo, run_id_of(r))
+    assert r.returncode == 1 and "refused: the run is done" in r.stdout.splitlines()
+
+
+def test_resume_a_second_time_after_it_finished(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0 and resume(repo, run_id).returncode == 0
+    n = len(deploy.read_log(repo, run_id))
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and len(deploy.read_log(repo, run_id)) == n
+
+
+def test_resume_older_run(repo):
+    first = stopped_run(repo)
+    second = stopped_run(repo)
+    assert first != second
+    assert confirm(repo, first).returncode == 0
+    r = resume(repo, first)
+    assert r.returncode == 0 and r.stdout.splitlines()[-1] == f"prd-deploy: done step=5 run={first}"
+    assert not [x for x in deploy.read_log(repo, second) if x["kind"] == "confirm"]
+    assert resume(repo, second).returncode == 1
+
+
+def test_resume_stops_again_at_a_later_failure(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    (repo / ".deploy/production").mkdir(parents=True)
+    (repo / ".deploy/production").chmod(0o500)
+    try:
+        r = resume(repo, run_id)
+    finally:
+        (repo / ".deploy/production").chmod(0o700)
+    assert r.returncode == 4 and r.stdout.splitlines()[-1] == f"prd-deploy: failed step=4 run={run_id}"
+    assert "rollback: `mkdir -p .deploy/production && touch .deploy/production/rolled-back`" in r.stdout
+    assert deploy.read_log(repo, run_id)[-1]["step"] == 4
+
+
+def failed_run(repo, step=1) -> str:
+    """Fail step 1 (its Check) or step 2 (a failing harness level)."""
+    if step == 1:
+        change(repo, OPS, "prints `Hi`", "prints `Nope`")
+    else:
+        change(repo, "tools/gate.sh", "exit 0", "exit 1")
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 4, r.stdout + r.stderr
+    return run_id_of(r)
+
+
+def test_rollback_runs_only_that_step(repo):
+    run_id = failed_run(repo)
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == ["rollback step 1 staging: pass", f"prd-deploy: rolled-back step=1 run={run_id}"]
+    assert (repo / ".deploy/staging/rolled-back").exists()
+    assert not (repo / ".deploy/production").exists() and not (repo / ".deploy/tests").exists()
+    rec = deploy.read_log(repo, run_id)[-1]
+    assert rec["kind"] == "rollback" and rec["step"] == 1 and rec["exit"] == 0
+    assert rec["command"] == "mkdir -p .deploy/staging && touch .deploy/staging/rolled-back"
+    assert {"stdout", "stderr", "started", "ended"} <= set(rec)
+    r = rollback(repo, run_id, 1)  # once only
+    assert r.returncode == 2 and r.stdout == "" and "already" in r.stderr
+    assert len([x for x in deploy.read_log(repo, run_id) if x["kind"] == "rollback"]) == 1
+
+
+def test_rollback_needs_failed_step(repo):
+    run_id = failed_run(repo, step=2)  # step 1 passed, step 2 failed
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 2 and r.stdout == "" and "step 1" in r.stderr
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+    r = rollback(repo, run_id, 2)  # step 2 is the failed step but has no Rollback
+    assert r.returncode == 2 and r.stdout == "" and "Rollback" in r.stderr
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "rollback"]
+
+
+def test_rollback_a_run_stopped_at_a_human_step(repo):
+    run_id = stopped_run(repo)
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 2 and r.stdout == ""
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_rollback_after_head_moved(repo):
+    run_id = failed_run(repo)
+    change(repo, "tools/gate.sh", "exit 0", "exit 0\n# later")
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 1 and "refused: HEAD moved since the run started" in r.stdout.splitlines()
+    assert r.stdout.splitlines()[-1] == f"prd-deploy: refused step=1 run={run_id}"
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "rollback"]
+
+
+def test_rollback_after_version_changed(repo):
+    run_id = failed_run(repo)
+    edit_header(repo, run_id, version="0.9.0")
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 1 and r.stdout.splitlines()[0] == "refused: the PRD version changed since the run started"
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_rollback_failure_exits_4_and_is_logged(repo):
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", "echo oops >&2; exit 7`")
+    run_id = failed_run(repo)
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 4
+    assert r.stdout.splitlines() == ["rollback step 1 staging: fail", f"prd-deploy: rollback-failed step=1 run={run_id}"]
+    rec = deploy.read_log(repo, run_id)[-1]
+    assert rec["kind"] == "rollback" and rec["exit"] == 7 and "oops" in rec["stderr"]
+    assert rollback(repo, run_id, 1).returncode == 2
+
+
+def test_rollback_uses_the_step_environment_and_a_closed_stdin(repo, monkeypatch):
+    monkeypatch.setenv("TEST_ENV", "inherited")
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", 'echo "$PRD_ENV|${TEST_ENV-unset}" > .deploy/rb.env; read x`')
+    run_id = failed_run(repo)
+    r = rollback(repo, run_id, 1)  # `read` returns at once at end of input; exit 1 from it is fine
+    assert (repo / ".deploy/rb.env").read_text().strip() == "staging|unset"
+    assert r.returncode == 4
+
+
+def test_rollback_times_out(repo):
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", "sleep 5`")
+    run_id = failed_run(repo)
+    started = time.monotonic()
+    r = deploy_cli(repo, "rollback", "--run", run_id, "--step", "1", "--timeout", "1")
+    assert r.returncode == 4 and time.monotonic() - started < 4.5
+    assert deploy.read_log(repo, run_id)[-1]["stderr"].endswith("timed out after 1 s")
+
+
+def test_rollback_usage_errors_print_nothing_on_stdout(repo):
+    run_id = failed_run(repo)
+    for argv in (["rollback", "--run", run_id], ["rollback", "--step", "1"], ["rollback", "--run", "nope", "--step", "1"],
+                 ["rollback", "--run", run_id, "--step", "x"], ["resume"], ["confirm", "--run", run_id, "--step", "1"]):
+        r = deploy_cli(repo, *argv)
+        assert r.returncode == 2 and r.stdout == "", argv

@@ -5,6 +5,7 @@ stdin closed, in their own process group so a timeout kills the whole tree.
 """
 import json
 import os
+import re
 import signal
 import sys
 import subprocess
@@ -214,3 +215,127 @@ def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: 
                 print(f"rollback: `{step.rollback}`", flush=True)
             return "failed", step.number
     return "done", reached
+
+
+class Refused(Exception):
+    """A resume or rollback condition failed; `reasons` are printed one per `refused:` line."""
+
+    def __init__(self, reasons: list[str]):
+        super().__init__("; ".join(reasons))
+        self.reasons = reasons
+
+
+def check_run_id(run_id: str) -> str:
+    """A run id names a log file under the deploys folder, so it may not name a path."""
+    if not RUN_ID.fullmatch(run_id):
+        raise ValueError(f"not a run id: {run_id!r}")
+    return run_id
+
+
+RUN_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]*")
+
+
+def _load_log(repo_root: Path, run_id: str) -> tuple[dict, list[dict]]:
+    """The header and the records after it; ValueError when the run has no usable log."""
+    check_run_id(run_id)
+    try:
+        recs = read_log(repo_root, run_id)
+    except FileNotFoundError:
+        raise ValueError(f"no log for run {run_id}") from None
+    except (ValueError, OSError) as e:
+        raise ValueError(f"cannot read the log of run {run_id}: {e}") from None
+    if not recs or recs[0].get("kind") != "header":
+        raise ValueError(f"the log of run {run_id} has no header")
+    return recs[0], recs[1:]
+
+
+def _last_step(recs: list[dict]) -> dict | None:
+    steps = [r for r in recs if r.get("kind") == "step"]
+    return steps[-1] if steps else None
+
+
+def _confirmed(recs: list[dict], step: int) -> bool:
+    return any(r.get("kind") == "confirm" and r.get("step") == step for r in recs)
+
+
+def confirm(repo_root: Path, run_id: str, step: int, reply: str) -> None:
+    """Record the reply to the human step the run stopped at. ValueError (a usage error) when it cannot."""
+    _, recs = _load_log(repo_root, run_id)
+    last = _last_step(recs)
+    if last is None or last.get("step") != step or last.get("result") != "human":
+        raise ValueError(f"step {step} is not the human step this run stopped at")
+    if not reply.strip():
+        raise ValueError("the reply is empty")
+    if _confirmed(recs, step):
+        raise ValueError(f"step {step} already has a confirm record")
+    append(repo_root, run_id, {"kind": "confirm", "step": step, "reply": reply, "at": _iso()})
+
+
+def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
+    """Why the run no longer matches the repo; empty when it still does. Check this before reading the runbook."""
+    reasons = []
+    if _git(repo_root, "rev-parse", "HEAD").strip() != header.get("head"):
+        reasons.append("HEAD moved since the run started")
+    if prd.frontmatter.get("version") != header.get("version"):
+        reasons.append("the PRD version changed since the run started")
+    if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
+        reasons.append("the tracked tree has changes")  # the runbook is read from the working tree
+    return reasons
+
+
+def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
+    """Reasons the run may not continue; empty when it may. ValueError when the run has no usable log."""
+    header, recs = _load_log(repo_root, run_id)
+    reasons = _moved(prd, repo_root, header)
+    failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
+    last = _last_step(recs)
+    if failed is not None:
+        reasons.append(f"step {failed['step']} failed; a failed run ends (start a new run)")
+    elif last is None:
+        reasons.append("the run has no step records")
+    elif last.get("result") == "human":
+        if not _confirmed(recs, last["step"]):
+            reasons.append(f"step {last['step']} has no confirm record")
+    else:
+        try:
+            final = plan_steps(prd, header.get("until"))[-1].number
+        except (ValueError, IndexError):
+            final = None
+        reasons.append("the run is done" if last["step"] == final else f"the run did not stop at a human step (last step {last['step']})")
+    return reasons
+
+
+def resume_point(repo_root: Path, run_id: str) -> tuple[int, str | None]:
+    """The confirmed human step to continue after, and the run's `until`."""
+    header, recs = _load_log(repo_root, run_id)
+    last = _last_step(recs)
+    return (last["step"] if last else 0), header.get("until")
+
+
+def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) -> int:
+    """Run failed step `step`'s Rollback once and log it; returns the command's exit code (-1 when it never ran to an exit).
+
+    ValueError for a usage problem, Refused when HEAD or the PRD version moved.
+    """
+    header, recs = _load_log(repo_root, run_id)
+    last = _last_step(recs)
+    if last is None or last.get("step") != step or last.get("result") != "fail":
+        raise ValueError(f"step {step} is not the failed step of this run")
+    reasons = _moved(prd, repo_root, header)
+    if reasons:
+        raise Refused(reasons)
+    target = next((s for s in prd.operations.steps if s.number == step), None)
+    if target is None or not target.rollback:
+        raise ValueError(f"step {step} has no Rollback")
+    if any(r.get("kind") == "rollback" and r.get("step") == step for r in recs):
+        raise ValueError(f"step {step} was already rolled back")
+    started = _iso()
+    try:
+        r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, timeout)
+        rec = {"exit": r["exit"], "stdout": r["stdout"], "stderr": r["stderr"], "ok": r["exit"] == 0 and not r["timed_out"]}
+    except Exception as e:  # the command could not even start
+        rec = {"exit": None, "stdout": "", "stderr": f"{type(e).__name__}: {e}", "ok": False}
+    ok = rec.pop("ok")
+    append(repo_root, run_id, {"kind": "rollback", "step": step, "command": target.rollback, **rec, "started": started, "ended": _iso()})
+    print(f"rollback step {step} {target.env}: {'pass' if ok else 'fail'}", flush=True)
+    return 0 if ok else (rec["exit"] if rec["exit"] not in (None, 0) else -1)
