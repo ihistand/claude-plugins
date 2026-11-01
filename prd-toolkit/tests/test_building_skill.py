@@ -443,3 +443,29 @@ def test_g5_red_flag_and_rationalization():
     assert "\"The tests pass when I run them, so the suite round isn't needed.\"" in s
     assert ("| \"I ran pytest myself and it's green.\" | Your run is step 7. RESULTS for a tester's T-id come "
             "only from the tester's suite round; without it the block stays `built`. |") in s
+
+
+def test_g5_step5_states_the_snapshot_and_dispatch_once():
+    step5 = flat(RUN).split("5. **Run.**", 1)[1].split("6. **Reconcile**", 1)[0]
+    assert step5.count("the build's non-unit build-gate T-ids") == 1
+    assert "Take step 2's snapshot again" not in step5 and "on the same T-ids" not in step5
+
+
+def test_g5_no_tester_tids_skips_step5():
+    t = flat(RUN)
+    assert ("When the build has no non-unit build-gate T-ids, step 5 is skipped: there is nothing to dispatch, "
+            "and the close's `verified` needs only the builder's UNIT lines, your step 7 run and "
+            "`prd-trace-exit=0`.") in t
+    step3 = t.split("3. **Dispatch both in one message**", 1)[1].split("4. **Check the state.**", 1)[0]
+    assert "With no non-unit build-gate T-ids, dispatch the builder alone: the tester has no `write`." in step3
+
+
+THREE_SOURCES = ("every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the "
+                 "tester's suite RESULTS, every build-gate T-id in the caller's step 7 run, and `prd-trace-exit=0`")
+
+
+def test_g5_skill_rows_use_the_three_source_rule():
+    s = flat(SKILL)
+    assert "when every build-gate T-id passes and `prd-trace-exit=0`" not in s
+    assert "every build-gate T-id `pass` and `prd-trace-exit=0`" not in s
+    assert s.count(THREE_SOURCES) == 2

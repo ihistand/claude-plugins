@@ -84,6 +84,8 @@ or after a stop's.
    - `prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and the
      build-gate non-unit T-ids, each with its test-case file.
 
+   With no non-unit build-gate T-ids, dispatch the builder alone: the tester has no `write`.
+
    When the Agent tool offers no worktree isolation, dispatch the builder first and the tester
    after it returns, each followed by its step 4 check. The builder then commits on the build
    branch itself, so there is no merge: its commits land on the build branch, and its range is
@@ -143,10 +145,11 @@ or after a stop's.
 5. **Run.** On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md`
    step 2) and then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids. Its
    RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. The
-   caller's own harness run is step 7 and never replaces step 5. Take step 2's snapshot again, into
-   a new `<SNAP>`. Dispatch `prd-toolkit:prd-tester`
-   with the tester prompt as `Mode: suite`, on the same T-ids. Save its whole report, verbatim,
-   with the Write tool to `<SNAP>/suite-report.md`, then run:
+   caller's own harness run is step 7 and never replaces step 5. The snapshot goes into a new
+   `<SNAP>`, and the dispatch takes the tester prompt below. When the build has no non-unit
+   build-gate T-ids, step 5 is skipped: there is nothing to dispatch, and the close's `verified`
+   needs only the builder's UNIT lines, your step 7 run and `prd-trace-exit=0`. Save the tester's
+   whole report, verbatim, with the Write tool to `<SNAP>/suite-report.md`, then run:
 
    ```bash
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_build_check.py" docs/prd/<slug> --results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"
