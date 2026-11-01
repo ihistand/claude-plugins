@@ -469,3 +469,46 @@ def test_g5_skill_rows_use_the_three_source_rule():
     assert "when every build-gate T-id passes and `prd-trace-exit=0`" not in s
     assert "every build-gate T-id `pass` and `prd-trace-exit=0`" not in s
     assert s.count(THREE_SOURCES) == 2
+
+
+# --- fix round 4: the caller reads running-a-build.md before anything else (G6) ---
+
+READ_RUN = "Read of `${CLAUDE_PLUGIN_ROOT}/skills/building-from-prds/running-a-build.md`"
+
+
+def test_g6_skill_opens_with_the_callers_read():
+    text = SKILL.read_text(encoding="utf-8")
+    body = text.split("\n---\n", 1)[1]
+    first = " ".join(body.split("## Overview\n", 1)[1].lstrip("\n").split("\n\n", 1)[0].split())
+    assert body.split("## Overview\n", 1)[0].strip() == "# Building from PRDs"  # the block is the body's first text
+    assert first.startswith("If you are not running as the `prd-toolkit:prd-builder` agent, you are the caller.")
+    for s in (f"Your next tool call is a {READ_RUN}, whole (no offset, no limit)",
+              "follow it step by step",
+              "Do not run a test, read the code or the PRD, or dispatch any agent before you have read it.",
+              "The builder's rules below are not yours to follow"):
+        assert s in first, s
+
+
+def test_g6_caller_red_flag_quotes_the_skipped_procedure():
+    caller = flat(SKILL).split("**The caller:**", 1)[1].split("## Common Rationalizations", 1)[0]
+    assert "Dispatching `prd-toolkit:prd-builder` straight from the skill" in caller
+    assert "\"Not done: the tester's suite round, the merge, and moving FR-003 …\"" in caller
+    assert "running-a-build.md never read" in caller
+
+
+def test_g6_command_reads_running_a_build_first():
+    body = COMMAND.read_text(encoding="utf-8").split("\n---\n", 1)[1]
+    steps = re.findall(r"^\d+\. ", body, re.M)
+    assert steps[0] == "1. "
+    one = " ".join(body.split("\n1. ", 1)[1].split("\n2. ", 1)[0].split())
+    assert one.startswith(f"Before anything else, make a {READ_RUN}, whole (no offset, no limit).")
+    flat_body = " ".join(body.split())
+    assert flat_body.index(READ_RUN) < flat_body.index("Invoke the prd-toolkit:building-from-prds skill")
+
+
+def test_g6_running_a_build_opens_with_the_checklist():
+    text = RUN.read_text(encoding="utf-8")
+    first = " ".join(text.split("# Running a build\n", 1)[1].lstrip("\n").split("\n\n", 1)[0].split())
+    assert first == ("**Steps:** 1 Preflight, 2 Snapshot, 3 Dispatch, 4 Check the state, 5 Run (the tester's "
+                     "suite), 6 Reconcile, 7 Full run, 8 Close. The build is not done until step 8's report or a "
+                     "stop under **Stops**: run every step, in this turn.")

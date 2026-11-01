@@ -7,9 +7,12 @@ description: Use when building or implementing an approved change in a repo that
 
 ## Overview
 
-If you are not running as the `prd-toolkit:prd-builder` agent, do not write this code yourself: you
-are the caller. Run the build as `${CLAUDE_PLUGIN_ROOT}/skills/building-from-prds/running-a-build.md`
-says, and treat the caller's Red Flags below as yours.
+If you are not running as the `prd-toolkit:prd-builder` agent, you are the caller. Your next tool
+call is a Read of `${CLAUDE_PLUGIN_ROOT}/skills/building-from-prds/running-a-build.md`, whole (no
+offset, no limit), and you follow it step by step, steps 1 to 8, in this turn. Do not run a test,
+read the code or the PRD, or dispatch any agent before you have read it. The builder's rules below
+are not yours to follow, and you never write the code or a test yourself; the caller's Red Flags
+below are yours.
 
 **You build what the PRD approved, and nothing else.** A build has three roles. The builder (you)
 writes the code and its unit tests from the `implement` pack. The black-box `prd-tester` writes
@@ -151,6 +154,12 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
 
 **The caller:**
 
+- Dispatching `prd-toolkit:prd-builder` straight from the skill, after a test run, a grep of the
+  PRD and a read of the code, with running-a-build.md never read; then ending the turn on the
+  builder's report: "Not done: the tester's suite round, the merge, and moving FR-003 …". (With
+  the skill, rerun: no branch, no snapshot, no `--diff` check, no suite round, no full run, no
+  close.) Stop: Read running-a-build.md whole and run its steps; a report that lists steps not
+  done is a build you have not finished.
 - "I merged straight onto `base` instead of asking about a feature branch, because you said not to
   ask questions." (With the skill, rerun.) With no one to ask, branch to `prd-build/<area>-<IDs>`;
   never merge onto the default branch.

@@ -1,5 +1,9 @@
 # Running a build
 
+**Steps:** 1 Preflight, 2 Snapshot, 3 Dispatch, 4 Check the state, 5 Run (the tester's suite),
+6 Reconcile, 7 Full run, 8 Close. The build is not done until step 8's report or a stop under
+**Stops**: run every step, in this turn.
+
 For the caller only: `/prd-build`, `prd-toolkit:changing-prds` step 5's hand-off, or any session
 asked to implement an approved change or to make a failing PRD test go green. The counterpart of
 `testing-from-prds/dispatching.md`.
