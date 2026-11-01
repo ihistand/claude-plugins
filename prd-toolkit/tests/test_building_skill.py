@@ -513,3 +513,12 @@ def test_g6_running_a_build_opens_with_the_checklist():
     assert first == ("**Steps:** 1 Preflight, 2 Snapshot, 3 Dispatch, 4 Check the state, 5 Run (the tester's "
                      "suite), 6 Reconcile, 7 Full run, 8 Close. The build is not done until step 8's report or a "
                      "stop under **Stops**: run every step, in this turn.")
+
+
+def test_r26_block_with_only_deploy_gate_tests_closes_verified():
+    close = flat(RUN).split("8. **Close.**", 1)[1].split("Run `git rev-parse", 1)[0]
+    for s in ["A block with no unit and no build-gate T-ids moves to `verified` at a clean close",
+              "its deploy-gate tests run at `/prd-deploy`",
+              "Never leave it `built`",
+              "refuses a deploy while any block is `built`"]:
+        assert s in close, s
