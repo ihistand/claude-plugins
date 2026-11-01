@@ -212,7 +212,9 @@ or after a stop's.
    uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
-   `prd-trace-exit=` must be `0`; anything else stops the build, as **Stops** says.
+   `prd-trace-exit=` must be `0`; anything else stops the build, as **Stops** says. Trace asks a
+   citation for each unit and build-gate T-id of a `built` or `verified` block; deploy-gate T-ids
+   wait for `live`.
 8. **Close.** Write each block's status in the block and its §11 index row together:
 
    | Move | When |

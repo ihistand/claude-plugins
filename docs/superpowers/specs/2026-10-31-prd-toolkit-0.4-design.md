@@ -7,10 +7,21 @@
 > and `2026-10-30-prd-toolkit-0.3-design.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.4.
 
-> **Revisions.** Two corrections from the implementation plan, which is their source
-> (`docs/superpowers/plans/2026-10-31-prd-toolkit-0.4.md`):
+> **Revisions.** Corrections from the implementation plan, which is their source
+> (`docs/superpowers/plans/2026-10-31-prd-toolkit-0.4.md`), and from its final review:
 > - §7 Installation: the hook shims are five lines, not two, and with `core.hooksPath` set install writes no shim.
 > - §3.1: a non-empty QUESTIONS no longer always stops the build; a quoted test dispute is reconciled at step 6 and only a PRD gap stops it.
+> - §3 step 7, §5 Trace and §11 (final review): trace is gate-aware. `t-implemented` skips `approved`
+>   blocks; a `built`, `verified` or `as-built` block needs a citation for each unit and build-gate
+>   T-id only (a level with no Gate row counts as build); a `live` block needs all. `status-current`
+>   follows the same split. Without it, a deploy-gate T-id (0.4 writes none) or another `approved`
+>   FR kept `verified` unreachable and the generated `prd-trace` job red.
+> - §7 Installation (final review): a shim, and the line printed for an existing hook, skips with a
+>   message and exit 0 on a branch with no `.prd-toolkit/` copy or no PRD folder; the uv guard still
+>   blocks when the copy is present. `install` also writes `.prd-toolkit/.gitignore`.
+> - §8 and §12 (final review): job ids are sanitized, the GitHub workflow reads with
+>   `permissions: contents: read`, and a `test-<level>` job red while a `known-failing` case exists
+>   is a known limit until 0.6.
 
 ## 1. Scope
 
@@ -104,7 +115,8 @@ block at `approved`, or at `built` when a stopped build resumes.
    A classification without its quote does not count. Each round repeats steps 4 and 5 for the
    agent that ran. After three rounds on one T-id the build stops and reports it to the user.
 7. **Full run.** Run every build-gate Levels harness command. Every test passes except cases
-   `known-failing` on an open `E-nnn`. `prd_trace.py` exits `0`.
+   `known-failing` on an open `E-nnn`. `prd_trace.py` exits `0` (it asks a citation for each unit
+   and build-gate T-id of a `built` or `verified` block; deploy-gate T-ids wait for `live`).
 8. **Close** (section 5), then commit the PRD with `Refs: <IDs>`.
 
 ### 3.1 The builder's report
@@ -174,8 +186,13 @@ a pointer for a built one. At close the caller writes `Source: <path>:<line> @<s
 SOURCES line, so the block's next `implement` pack holds its code. Lint keeps `Source:` optional
 outside `as-built`.
 
-**Trace.** `status-current` extends to `built`: a `built` block whose unit T-id has no citing test is
-a finding. `commit-refs` (section 7) changes with the hook.
+**Trace.** Trace is gate-aware. `t-implemented` skips `approved` blocks (nothing is built yet); for a
+`built`, `verified` or `as-built` block it asks a citation for each unit and build-gate T-id only,
+and a T-id whose level has no Gate row counts as build, so trace fails closed; a `live` block needs
+every T-id cited. `status-current` follows the same split and extends to `built`: a `built` block
+whose unit T-id has no citing test is a finding, a `verified` block missing a unit or build-gate
+citation is one, and a `live` block missing any citation is one. `commit-refs` (section 7) changes
+with the hook.
 
 ## 6. `prd_status.py` and `/prd-status`
 
@@ -208,7 +225,9 @@ installed and leaves the copy.
 shims (shebang, marker, a uv guard that blocks the commit when uv is missing, `top=`, `exec`) that run the vendored hook with `uv run --script`. It never sets `core.hooksPath` (with it set, install writes no shim and prints the lines to add) and never
 overwrites a hook: when a hook of that name exists, it writes nothing for it and prints the one line
 to add to that hook. Each clone runs `install` once (git does not clone hooks); the managed block
-says so.
+says so. On a branch where `.prd-toolkit/prd_git_hook.py` or the PRD folder is absent, a shim
+prints `prd-toolkit: no .prd-toolkit/ (or no PRD folder) on this branch; hook skipped` and exits
+`0`: hooks are per clone, the copy is per branch, and CI is the gate.
 
 **`commit-msg`.** The **Boundary** is the union of the `adopted` areas' Boundaries in `adoption.md`;
 with no `adoption.md`, it is every path outside the PRD folder and `.prd-toolkit/`. A commit that
@@ -302,7 +321,7 @@ standard-library project, run locally.
    touches FR-001's code.
 
 **Pass:** lint and trace exit 0; FR-001 and FR-002 are `verified`; `/prd-status` shows both with
-every T-id `cited`; a deliberate commit inside the Boundary with no `Refs:` is refused; each
+every unit and build-gate T-id `cited`; a deliberate commit inside the Boundary with no `Refs:` is refused; each
 generated CI job's commands exit 0 when run locally; no PRD file is read outside the pack and the
 files edited; no reconcile classification lacks its quote. The acceptance note,
 `docs/superpowers/plans/2026-10-31-prd-toolkit-0.4-acceptance.md`, records the run, every gap and
@@ -314,6 +333,10 @@ its disposition. It names no hosts, users, platform objects or people.
   the mode.
 - changing-prds rule 6 still binds the caller by text alone (0.3's later item 5).
 - A build runs in one repository; a change across repositories waits for 0.7.
+- A generated `test-<level>` job runs the whole harness command, so it fails while any case is
+  `known-failing` on an open `E-nnn`, until 0.6's error handling.
+- A `commit --amend` that only rewrites the message stages no file, so the `commit-msg` hook does
+  not check it; CI's `commit-refs` does.
 
 ## 13. Out of scope for 0.4
 

@@ -103,10 +103,10 @@ uv run --script prd-toolkit/scripts/prd_trace.py docs/prd/<slug> --range BASE..H
 
 | Rule | Finding |
 |---|---|
-| `t-implemented` | a T-id of a requirement that is not `removed` is cited by no test (in an adopted area, where the PRD has an adoption map) |
+| `t-implemented` | a T-id is cited by no test: a unit or build-gate T-id of a `built`, `verified` or `as-built` requirement, or any T-id of a `live` one (in an adopted area, where the PRD has an adoption map). `approved` requirements are skipped; a level with no Gate row counts as build |
 | `test-cites-live` | a test cites a T-id that does not exist in the PRD or belongs to a removed requirement |
 | `commit-refs` | with `--range`, a commit touches a file inside an adopted Boundary and has no `Refs:` trailer (`Refs: none (no behaviour change)` counts) |
-| `status-current` | a requirement is `verified` or `live` but a T-id has no citing test |
+| `status-current` | a requirement's status claims a test that nothing cites: a `built` block's unit T-id, a `verified` block's unit or build-gate T-id, or any T-id of a `live` block |
 
 Where the PRD has an adoption map, `t-implemented` and `status-current` cover `adopted` areas
 only. Output and exit codes match lint: `<file>:<line>: <rule>: <message>`; exit 0 clean, 1 on

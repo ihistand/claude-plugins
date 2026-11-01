@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .findings import Finding
-from .model import Prd
+from .model import Prd, gate_of
 
 TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-current")
 
@@ -162,6 +162,11 @@ def _commits(repo_root: Path, rng: str) -> list[tuple[str, str, list[str]]]:
     return commits
 
 
+def build_side(prd: Prd, level: str) -> bool:
+    """A unit or build-gate level; a level with no Gate row counts as build, so trace fails closed."""
+    return level == "unit" or gate_of(prd, level) != "deploy"
+
+
 def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]:
     scope = _in_scope(prd)
     cited = citations(prd, repo_root)
@@ -176,13 +181,15 @@ def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]
                 findings.append(Finding(_rel(prd, repo_root / file), line, "test-cites-live", f"cites {tid}, which {why}"))
 
     for b in prd.blocks:
-        if b.status == "removed":
-            continue
+        if b.status in ("removed", "approved"):
+            continue  # approved: nothing is built yet, so nothing need cite it
         for tid, level, line in b.tests:
             if tid in cited:
                 continue
             if scope is not None and area(b.file) not in scope:
                 continue
+            if b.status != "live" and not build_side(prd, level):
+                continue  # a deploy-gate test is cited by the time the block is live (0.5)
             findings.append(Finding(b.file, line, "t-implemented", f"{tid} ({b.id}) is cited by no test; add `@prd {tid}` to the test that proves it"))
             if b.status in ("verified", "live") or (b.status == "built" and level == "unit"):
                 findings.append(Finding(b.file, line, "status-current", f"{b.id} is {b.status} but {tid} has no citing test"))
