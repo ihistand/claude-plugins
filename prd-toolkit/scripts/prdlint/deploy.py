@@ -4,6 +4,7 @@ The only code that runs a runbook's commands. Commands run with `bash -c` at the
 stdin closed, in their own process group so a timeout kills the whole tree.
 """
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -57,7 +58,13 @@ def plan_steps(prd: Prd, until: str | None) -> list[Step]:
     if not ends:
         envs = list(dict.fromkeys(s.env for s in steps if s.env))
         raise ValueError(f"no step runs on {until}; environments with steps: {', '.join(envs) or 'none'}")
-    return steps[: ends[-1] + 1]
+    cut = steps[: ends[-1] + 1]
+    prod = production_envs(prd)
+    if until not in prod:
+        first = next((s for s in cut if s.env in prod), None)
+        if first is not None:  # a staging step after production would carry production along
+            raise ValueError(f"--until {until} would include production step {first.number}")
+    return cut
 
 
 def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
@@ -116,10 +123,28 @@ def append(repo_root: Path, run_id: str, record: dict) -> None:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def prd_rel(prd: Prd, repo_root: Path) -> str:
+    """The PRD folder relative to the repo root, as the log header records it."""
+    return Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
+
+
+def runbook_hash(prd_root: Path) -> str:
+    """sha256 of the PRD folder's operations.md and testing.md as they are on disk: what a run reads its commands from."""
+    h = hashlib.sha256()
+    for name in ("operations.md", "testing.md"):
+        try:
+            data = (Path(prd_root) / name).read_bytes()
+        except FileNotFoundError:
+            data = b""
+        h.update(name.encode() + b"\0" + str(len(data)).encode() + b"\0" + data)
+    return h.hexdigest()
+
+
 def start_run(prd: Prd, repo_root: Path, run_id: str, until: str | None) -> None:
-    """Write the log header: the commit and PRD version the run is for."""
+    """Write the log header: the commit, PRD folder, PRD version and runbook the run is for."""
     append(repo_root, run_id, {
         "kind": "header", "run": run_id, "head": _git(repo_root, "rev-parse", "HEAD").strip(),
+        "prd": prd_rel(prd, repo_root), "runbook": runbook_hash(prd.root),
         "version": prd.frontmatter.get("version"), "until": until, "started": _iso(),
     })
 
@@ -286,11 +311,23 @@ def _confirmed(recs: list[dict], step: int) -> bool:
     return any(r.get("kind") == "confirm" and r.get("step") == step for r in recs)
 
 
-def confirm(repo_root: Path, run_id: str, step: int, reply: str) -> None:
+def other_prd(prd: Prd, repo_root: Path, run_id: str, header: dict) -> str | None:
+    """Why the run is not this PRD's, or None when it is. A log with no PRD folder predates the field and is never trusted."""
+    recorded = header.get("prd")
+    if not isinstance(recorded, str) or not recorded:
+        return f"run {run_id}'s log names no PRD folder; start a new run"
+    here = prd_rel(prd, repo_root)
+    return None if recorded == here else f"run {run_id} is for {recorded}, not {here}"
+
+
+def confirm(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> None:
     """Record the reply to the human step the run stopped at. ValueError (a usage error) when it cannot."""
     try:
         with run_lock(repo_root, run_id):
-            _, recs = _load_log(repo_root, run_id)
+            header, recs = _load_log(repo_root, run_id)
+            wrong = other_prd(prd, repo_root, run_id, header)
+            if wrong:
+                raise ValueError(wrong)
             last = _last_step(recs)
             if last is None or last.get("step") != step or last.get("result") != "human":
                 raise ValueError(f"step {step} is not the human step this run stopped at")
@@ -312,6 +349,8 @@ def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
         reasons.append("the PRD version changed since the run started")
     if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
         reasons.append("the tracked tree has changes")  # the runbook is read from the working tree
+    if runbook_hash(prd.root) != header.get("runbook"):
+        reasons.append("the runbook changed since the run started")  # an untracked or assume-unchanged PRD moves no HEAD
     return reasons
 
 
@@ -324,15 +363,23 @@ def _used_or_unfinished(recs: list[dict]) -> list[str]:
         idx = [i for i, r in enumerate(recs) if r.get("kind") == "confirm" and r.get("step") == n]
         if idx and any(r.get("kind") == "resume" and r.get("step") == n for r in recs[idx[-1] + 1:]):
             reasons.append(f"step {n}'s confirm was already used")
+    unfinished = unfinished_starts(recs)
+    if unfinished:
+        reasons.append(f"step {unfinished[0].get('step')} started and did not finish; check the environment, then start a new run")
+    return list(dict.fromkeys(reasons))
+
+
+def unfinished_starts(recs: list[dict]) -> list[dict]:
+    """The step `start` records (not rollback ones) that no later record of the same step and level completes."""
+    out = []
     for i, r in enumerate(recs):
         if r.get("kind") != "start" or r.get("rollback"):
             continue
         done = any(x.get("kind") == "step" and x.get("step") == r.get("step") and (r.get("level") is None or x.get("level") in (None, r.get("level")))
                    for x in recs[i + 1:])
         if not done:
-            reasons.append(f"step {r.get('step')} started and did not finish; check the environment, then start a new run")
-            break
-    return list(dict.fromkeys(reasons))
+            out.append(r)
+    return out
 
 
 @contextmanager
@@ -360,6 +407,29 @@ def run_lock(repo_root: Path, run_id: str):
         f.close()  # closing releases the lock
 
 
+@contextmanager
+def repo_lock(repo_root: Path):
+    """An exclusive, non-waiting lock on `<log dir>/.active`, held while run, resume or rollback executes commands.
+
+    Raises Refused when another prd_deploy holds it. A run stopped at a human step has exited, so it holds none.
+    """
+    path = log_dir(repo_root) / ".active"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "a+", encoding="utf-8")
+    try:
+        try:
+            if fcntl is not None:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            raise Refused(["another prd_deploy command is running in this repository"]) from None
+        yield
+    finally:
+        f.close()  # closing releases the lock
+
+
 def start_resume(prd: Prd, repo_root: Path, run_id: str, extra=None) -> tuple[int, str | None, list[str]]:
     """Check that the run may continue and, under the run lock, use up the confirm in the same breath.
 
@@ -379,6 +449,9 @@ def start_resume(prd: Prd, repo_root: Path, run_id: str, extra=None) -> tuple[in
 def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
     """Reasons the run may not continue; empty when it may. ValueError when the run has no usable log."""
     header, recs = _load_log(repo_root, run_id)
+    wrong = other_prd(prd, repo_root, run_id, header)
+    if wrong:
+        return [wrong]  # another PRD's run: nothing else about it applies here
     reasons = _moved(prd, repo_root, header)
     reasons += _used_or_unfinished(recs)
     failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
@@ -409,10 +482,13 @@ def resume_point(repo_root: Path, run_id: str) -> tuple[int, str | None]:
 def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) -> int:
     """Run failed step `step`'s Rollback once and log it; returns the command's exit code (-1 when it never ran to an exit).
 
-    ValueError for a usage problem, Refused when HEAD or the PRD version moved.
+    ValueError for a usage problem, Refused when the run is another PRD's, or HEAD, the PRD version, the tree or the runbook moved.
     """
     with run_lock(repo_root, run_id):
         header, recs = _load_log(repo_root, run_id)
+        wrong = other_prd(prd, repo_root, run_id, header)
+        if wrong:
+            raise Refused([wrong])
         last = _last_step(recs)
         if last is None or last.get("step") != step or last.get("result") != "fail":
             raise ValueError(f"step {step} is not the failed step of this run")
@@ -448,7 +524,6 @@ ONLY = "only Deployed rows and Status: lines may change"
 # templates/prd/errors.md's placeholder; the close that adds the ledger's first entry may remove it
 LEDGER_PLACEHOLDER = "No entries yet. Add `### E-001 <title>` when the first error is diagnosed."
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_DEPLOYED = re.compile(r"^##\s+Deployed\s*$", re.I)
 
 
 def finished_envs(log: list[dict], prd: Prd) -> list[str]:
@@ -549,12 +624,15 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         raise BadRange(f"bad range {rng}: expected <base>..<head>")
     base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
     header, recs = _load_log(repo_root, run_id)
+    wrong = other_prd(prd, repo_root, run_id, header)
+    if wrong:
+        return [f"refused: {wrong}"]
     run_head = str(header.get("head"))
     if base != run_head:
         return [f"the range must start at the run's HEAD {run_head[:7]}"]
     if subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=repo_root, capture_output=True, timeout=60).returncode != 0:
         return ["the range's head does not descend from the run's HEAD"]
-    prefix = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
+    prefix = prd_rel(prd, repo_root)
     with tempfile.TemporaryDirectory(prefix="prd-deploy-check-") as tmp:
         try:
             b_prd, h_prd = (load(_tree(repo_root, rev, prefix, Path(tmp) / name)) for rev, name in ((base, "base"), (head, "head")))

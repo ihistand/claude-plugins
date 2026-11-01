@@ -86,46 +86,71 @@ def _existing_run(args, prd: model.Prd) -> int:
     try:
         repo_root = model.repo_root(prd.root)
         if args.command == "confirm":
-            deploy.confirm(repo_root, args.run, args.step, args.reply)
+            deploy.confirm(prd, repo_root, args.run, args.step, args.reply)
             print(f"confirmed: step {args.step} run={args.run}")
             return 0
-        if args.command == "rollback":
-            try:
-                code = deploy.rollback(prd, repo_root, args.run, args.step, args.timeout)
-            except deploy.Refused as e:
-                return _refuse(e.reasons, args.step, args.run)
-            state = "rolled-back" if code == 0 else "rollback-failed"
-            print(f"prd-deploy: {state} step={args.step} run={args.run}")
-            return 0 if code == 0 else deploy.EXIT["failed"]
-        # resume: the checks come first, because the runbook is read from the PRD as it is now
-        plan = {}
-
-        def extra(confirmed: int, until) -> list[str]:
-            steps, problem = _steps_or_message(prd, until)
-            if problem:
-                raise ValueError(problem)
-            step = next((s for s in steps if s.number == confirmed), None)
-            if step is None or step.actor != "human":
-                return [f"step {confirmed} is not a human step of the runbook"]
-            plan["steps"] = steps
-            return []
-
+        deploy.check_run_id(args.run)
         try:
-            confirmed, until, reasons = deploy.start_resume(prd, repo_root, args.run, extra)  # records the resume before any command runs
+            with deploy.repo_lock(repo_root):  # held through the final record; a second run, resume or rollback is refused
+                return _rollback(args, prd, repo_root) if args.command == "rollback" else _resume(args, prd, repo_root)
         except deploy.Refused as e:
-            return _refuse(e.reasons, 0, args.run)
-        if reasons:
-            return _refuse(reasons, confirmed, args.run)
-        steps = plan["steps"]
-        print(f"resume: {args.run}", flush=True)
-        if confirmed == steps[-1].number:
-            print(f"prd-deploy: done step={confirmed} run={args.run}")
-            return deploy.EXIT["done"]
-        return _run_and_report(prd, repo_root, args.run, steps, confirmed + 1, args.timeout)
+            return _refuse(e.reasons, args.step if args.command == "rollback" else 0, args.run)
     except ValueError as e:
         return _fail(str(e))
     except Exception as e:
         return _fail(f"internal error: {type(e).__name__}: {e}")
+
+
+def _rollback(args, prd: model.Prd, repo_root) -> int:
+    try:
+        code = deploy.rollback(prd, repo_root, args.run, args.step, args.timeout)
+    except deploy.Refused as e:
+        return _refuse(e.reasons, args.step, args.run)
+    state = "rolled-back" if code == 0 else "rollback-failed"
+    print(f"prd-deploy: {state} step={args.step} run={args.run}")
+    return 0 if code == 0 else deploy.EXIT["failed"]
+
+
+def _resume(args, prd: model.Prd, repo_root) -> int:
+    """The checks come first, because the runbook is read from the PRD as it is now."""
+    plan = {}
+
+    def extra(confirmed: int, until) -> list[str]:
+        steps, problem = _steps_or_message(prd, until)
+        if problem:
+            raise ValueError(problem)
+        step = next((s for s in steps if s.number == confirmed), None)
+        if step is None or step.actor != "human":
+            return [f"step {confirmed} is not a human step of the runbook"]
+        plan["steps"] = steps
+        return []
+
+    try:
+        confirmed, until, reasons = deploy.start_resume(prd, repo_root, args.run, extra)  # records the resume before any command runs
+    except deploy.Refused as e:
+        return _refuse(e.reasons, 0, args.run)
+    if reasons:
+        return _refuse(reasons, confirmed, args.run)
+    steps = plan["steps"]
+    print(f"resume: {args.run}", flush=True)
+    if confirmed == steps[-1].number:
+        print(f"prd-deploy: done step={confirmed} run={args.run}")
+        return deploy.EXIT["done"]
+    return _run_and_report(prd, repo_root, args.run, steps, confirmed + 1, args.timeout)
+
+
+def _new_run(args, prd: model.Prd, repo_root, steps) -> int:
+    reasons = deploy.preflight(prd, repo_root, args.until)
+    if reasons:
+        raise deploy.Refused(reasons)
+    run_id = deploy.new_run_id(repo_root, args.until)
+    try:
+        deploy.start_run(prd, repo_root, run_id, args.until)
+    except Exception:
+        (deploy.log_dir(repo_root) / f"{run_id}.jsonl").unlink(missing_ok=True)
+        raise
+    print(f"run: {run_id}", flush=True)
+    return _run_and_report(prd, repo_root, run_id, steps, 1, args.timeout)
 
 
 def main(argv: list[str]) -> int:
@@ -164,20 +189,15 @@ def main(argv: list[str]) -> int:
                 print(f"{s.number} {s.actor} {s.env}: {s.title}" + (f" — {deploy.step_command(s)}" if s.actor == "agent" else ""))
             return 0
         repo_root = model.repo_root(prd.root)
-        reasons = deploy.preflight(prd, repo_root, args.until)
-        if reasons:
-            for r in reasons:
-                print(f"refused: {r}")
-            print("prd-deploy: refused step=0 run=none")
-            return deploy.EXIT["refused"]
-        run_id = deploy.new_run_id(repo_root, args.until)
         try:
-            deploy.start_run(prd, repo_root, run_id, args.until)
-        except Exception:
-            (deploy.log_dir(repo_root) / f"{run_id}.jsonl").unlink(missing_ok=True)
-            raise
-        print(f"run: {run_id}", flush=True)
-        return _run_and_report(prd, repo_root, run_id, steps, 1, args.timeout)
+            with deploy.repo_lock(repo_root):  # pre-flight through the final record
+                return _new_run(args, prd, repo_root, steps)
+        except deploy.Refused as e:
+            reasons = e.reasons
+        for r in reasons:
+            print(f"refused: {r}")
+        print("prd-deploy: refused step=0 run=none")
+        return deploy.EXIT["refused"]
     except Exception as e:
         return _fail(f"internal error: {type(e).__name__}: {e}")
 

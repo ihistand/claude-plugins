@@ -58,9 +58,10 @@ def _open_errors(prd: Prd) -> list[StatusItem]:
 
 
 def _stopped(prd: Prd, repo_root: Path, env: str, after: str | None) -> str | None:
-    """`run <id> stopped (<state>) at step <N>` for the newest usable log that touches `env` and did not finish it."""
+    """`run <id> stopped (<state>) at step <N>` for the newest usable log of this PRD that touches `env` and did not finish it."""
     try:
         run_ids = sorted((p.stem for p in deploy.log_dir(repo_root).glob("*.jsonl")), reverse=True)
+        mine = deploy.prd_rel(prd, repo_root)
     except Exception:
         return None
     for run_id in run_ids:
@@ -68,8 +69,8 @@ def _stopped(prd: Prd, repo_root: Path, env: str, after: str | None) -> str | No
             break
         try:
             log = deploy.read_log(repo_root, run_id)
-            if not log or log[0].get("kind") != "header":
-                continue
+            if not log or log[0].get("kind") != "header" or log[0].get("prd") != mine:
+                continue  # another PRD's run, or a log too old to name its PRD
             touched = [r for r in log if r.get("kind") in ("start", "step") and r.get("env") == env]
             if not touched:
                 continue

@@ -176,7 +176,7 @@ def test_refuses_dirty_tree(repo):
     r = deploy_cli(repo, "run")
     assert r.returncode == 1 and "refused: the tracked tree has changes" in r.stdout.splitlines()
     assert last(r) == "prd-deploy: refused step=0 run=none"
-    assert not (repo / ".git/prd-toolkit").exists()
+    assert not list((repo / ".git/prd-toolkit").glob("**/*.jsonl"))  # no run log; the repo lock file may exist
 
 
 def test_untracked_files_do_not_dirty_the_tree(repo):
@@ -210,7 +210,7 @@ def test_log_shape(repo):
     r = deploy_cli(repo, "run")
     recs = records(repo, r)
     header, steps = recs[0], [x for x in recs[1:] if x["kind"] == "step"]
-    assert set(header) == {"kind", "run", "head", "version", "until", "started"}
+    assert set(header) == {"kind", "run", "head", "prd", "runbook", "version", "until", "started"}
     assert header["kind"] == "header" and header["run"] == r.stdout.splitlines()[0].removeprefix("run: ")
     assert header["head"] == git(repo, "rev-parse", "HEAD").strip() and header["version"] == "1.0.0" and header["until"] is None
     assert [s["step"] for s in steps] == [1, 2, 3]
@@ -920,3 +920,243 @@ def test_the_lock_is_released_before_a_command_runs(repo):
     assert confirm(repo, run_id).returncode == 0
     assert resume(repo, run_id).returncode == 0
     assert (repo / ".deploy/lock-free").exists()
+
+
+# ---- final review: the log names its PRD and runbook (finding 1) ----
+
+OTHER = "docs/prd/other"
+
+
+def other_prd(repo, tracked: bool) -> None:
+    """A second PRD whose production deploy leaves a marker; tracked ones are committed before any run."""
+    import shutil
+    shutil.copytree(repo / "docs/prd/orders", repo / OTHER)
+    p = repo / OTHER / "operations.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("echo Hello > .deploy/production/greeting",
+                                                       "echo OTHER > .deploy/other-marker; echo Hello > .deploy/production/greeting"), encoding="utf-8")
+    if tracked:
+        commit(repo, "A second PRD", OTHER)
+
+
+def other_cli(repo, *args):
+    env = {**os.environ, "PRD_PLUGINS_FILE": str(PLUGINS_FILE)}
+    return subprocess.run([sys.executable, "-B", str(SCRIPT), args[0], str(repo / OTHER), *args[1:]],
+                          capture_output=True, text=True, encoding="utf-8", env=env, cwd=repo)
+
+
+def test_header_names_the_prd_and_the_runbook_hash(repo):
+    import hashlib
+    r = deploy_cli(repo, "run", "--until", "staging")
+    header = records(repo, r)[0]
+    assert header["prd"] == "docs/prd/orders"
+    prd = repo / "docs/prd/orders"
+    assert header["runbook"] == deploy.runbook_hash(prd) and len(header["runbook"]) == 64
+    assert header["runbook"] != hashlib.sha256(b"").hexdigest()
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_resume_refuses_another_prds_run(repo, tracked):
+    if tracked:
+        other_prd(repo, True)
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    if not tracked:
+        other_prd(repo, False)
+    r = other_cli(repo, "resume", "--run", run_id)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert f"refused: run {run_id} is for docs/prd/orders, not {OTHER}" in r.stdout.splitlines()
+    assert not (repo / ".deploy/other-marker").exists() and not (repo / ".deploy/production").exists()
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "resume"]
+    assert resume(repo, run_id).returncode == 0  # the confirm was not used up
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_confirm_refuses_another_prds_run(repo, tracked):
+    if tracked:
+        other_prd(repo, True)
+    run_id = stopped_run(repo)
+    if not tracked:
+        other_prd(repo, False)
+    r = other_cli(repo, "confirm", "--run", run_id, "--step", "3", "--reply", "deploy production")
+    assert r.returncode == 2 and r.stdout == "" and f"run {run_id} is for docs/prd/orders, not {OTHER}" in r.stderr
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"]
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_rollback_refuses_another_prds_run(repo, tracked):
+    if tracked:
+        other_prd(repo, True)
+    run_id = failed_run(repo)
+    if not tracked:
+        other_prd(repo, False)
+    r = other_cli(repo, "rollback", "--run", run_id, "--step", "1")
+    assert r.returncode == 1 and f"refused: run {run_id} is for docs/prd/orders, not {OTHER}" in r.stdout.splitlines(), r.stdout + r.stderr
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] in ("rollback", "start") and x.get("rollback")]
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_check_refuses_another_prds_run(repo, tracked):
+    if tracked:
+        other_prd(repo, True)
+    r = deploy_cli(repo, "run", "--until", "staging")
+    run_id = run_id_of(r)
+    if not tracked:
+        other_prd(repo, False)
+    base = deploy.read_log(repo, run_id)[0]["head"]
+    git(repo, "commit", "-q", "--allow-empty", "-m", "Close")
+    r = other_cli(repo, "check", "--run", run_id, "--diff", f"{base}..HEAD")
+    assert r.returncode == 1 and r.stdout.splitlines() == [f"refused: run {run_id} is for docs/prd/orders, not {OTHER}"], r.stdout + r.stderr
+
+
+def strip_header(repo, run_id, *keys):
+    path = deploy.log_dir(repo) / f"{run_id}.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = {k: v for k, v in json.loads(lines[0]).items() if k not in keys}
+    path.write_text("\n".join([json.dumps(header), *lines[1:]]) + "\n", encoding="utf-8")
+
+
+def test_a_header_without_a_prd_is_refused(repo):
+    """A log written before the header named its PRD cannot be resumed, rolled back or checked."""
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    strip_header(repo, run_id, "prd", "runbook")
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and f"refused: run {run_id}'s log names no PRD folder; start a new run" in r.stdout.splitlines(), r.stdout
+    assert not (repo / ".deploy/production").exists()
+    failed = failed_run(repo)
+    strip_header(repo, failed, "prd", "runbook")
+    r = rollback(repo, failed, 1)
+    assert r.returncode == 1 and f"refused: run {failed}'s log names no PRD folder; start a new run" in r.stdout.splitlines()
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+    base = deploy.read_log(repo, failed)[0]["head"]
+    r = deploy_cli(repo, "check", "--run", failed, "--diff", f"{base}..HEAD")
+    assert r.returncode == 1 and r.stdout.splitlines() == [f"refused: run {failed}'s log names no PRD folder; start a new run"]
+
+
+def test_resume_refuses_a_changed_runbook(repo):
+    """A runbook edit git does not see (assume-unchanged) leaves HEAD and the tree as they were."""
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    git(repo, "update-index", "--assume-unchanged", OPS)
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace("echo Hello > .deploy/production/greeting", "touch .deploy/evil; echo Hello > .deploy/production/greeting"), encoding="utf-8")
+    assert git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: the runbook changed since the run started" in r.stdout.splitlines(), r.stdout + r.stderr
+    assert not (repo / ".deploy/evil").exists()
+
+
+def test_resume_refuses_a_changed_testing_md(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    edit_header(repo, run_id, runbook="0" * 64)
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and r.stdout.splitlines()[:-1] == ["refused: the runbook changed since the run started"]
+
+
+def test_rollback_refuses_a_changed_runbook(repo):
+    run_id = failed_run(repo)
+    edit_header(repo, run_id, runbook="0" * 64)
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 1 and "refused: the runbook changed since the run started" in r.stdout.splitlines()
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_runbook_hash_covers_operations_and_testing(repo):
+    prd = repo / "docs/prd/orders"
+    before = deploy.runbook_hash(prd)
+    (prd / "testing.md").write_text((prd / "testing.md").read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    after_testing = deploy.runbook_hash(prd)
+    (prd / "operations.md").write_text((prd / "operations.md").read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    assert len({before, after_testing, deploy.runbook_hash(prd)}) == 3
+
+
+# ---- final review: one prd_deploy command at a time per repository (finding 5) ----
+
+REPO_BUSY = "refused: another prd_deploy command is running in this repository"
+
+
+@pytest.fixture
+def repo_locked(repo):
+    import fcntl
+    path = deploy.log_dir(repo) / ".active"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "a", encoding="utf-8")
+    yield lambda: fcntl.flock(f, fcntl.LOCK_EX)
+    f.close()
+
+
+def test_run_refuses_while_the_repo_is_locked(repo, repo_locked):
+    repo_locked()
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 1 and REPO_BUSY in r.stdout.splitlines(), r.stdout + r.stderr
+    assert last(r) == "prd-deploy: refused step=0 run=none"
+    assert not (repo / ".deploy").exists() and not list(deploy.log_dir(repo).glob("*.jsonl"))
+
+
+def test_resume_refuses_while_the_repo_is_locked(repo, repo_locked):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    repo_locked()
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and REPO_BUSY in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+    assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "resume"]
+
+
+def test_rollback_refuses_while_the_repo_is_locked(repo, repo_locked):
+    run_id = failed_run(repo)
+    repo_locked()
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 1 and REPO_BUSY in r.stdout.splitlines()
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_plan_confirm_and_check_take_no_repo_lock(repo, repo_locked):
+    run_id = stopped_run(repo)
+    repo_locked()
+    assert deploy_cli(repo, "plan").returncode == 0
+    assert confirm(repo, run_id).returncode == 0
+    base = deploy.read_log(repo, run_id)[0]["head"]
+    assert deploy_cli(repo, "check", "--run", run_id, "--diff", f"{base}..HEAD").returncode in (0, 1)
+
+
+def test_a_stopped_run_holds_no_repo_lock(repo):
+    stopped_run(repo)
+    assert deploy_cli(repo, "run").returncode == 3  # a second run may start while the first waits for its reply
+
+
+def test_the_repo_lock_is_held_while_a_command_runs(repo):
+    probe = ("python3 -c \"import fcntl; fcntl.flock(open('.git/prd-toolkit/deploys/.active', 'a'), fcntl.LOCK_EX | fcntl.LOCK_NB)\""
+             " || touch .deploy/repo-locked")
+    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", f"Run: `mkdir -p .deploy && {probe}; mkdir -p .deploy/staging && echo Hi")
+    assert deploy_cli(repo, "run", "--until", "staging").returncode == 0
+    assert (repo / ".deploy/repo-locked").exists()
+
+
+# ---- final review: --until never takes a production step with it (finding 11) ----
+
+def staging_after_production(repo):
+    p = repo / OPS
+    text = p.read_text(encoding="utf-8")
+    p.write_text(text.replace("\n## Drift", "6. Tidy staging (actor: agent) (env: staging)\n   Run: `true`\n   Check: `true`\n\n## Drift", 1), encoding="utf-8")
+    commit(repo, "Staging after production", OPS)
+
+
+def test_until_refuses_a_cut_that_includes_production(repo):
+    staging_after_production(repo)
+    r = deploy_cli(repo, "plan", "--until", "staging")
+    assert r.returncode == 2 and r.stdout == "" and "--until staging would include production step 3" in r.stderr, r.stderr
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 2 and r.stdout == "" and not (repo / ".deploy").exists()
+    assert deploy_cli(repo, "plan", "--until", "production").returncode == 0
+
+
+def test_plan_steps_until_production_env_unit(repo):
+    from prdlint import model
+    staging_after_production(repo)
+    prd = model.load(Path(prd_dir(repo)))
+    with pytest.raises(ValueError, match=r"^--until staging would include production step 3$"):
+        deploy.plan_steps(prd, "staging")
+    assert [s.number for s in deploy.plan_steps(prd, "production")] == [1, 2, 3, 4, 5]

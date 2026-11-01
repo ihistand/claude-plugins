@@ -136,16 +136,22 @@ def build(prd_repo):
     return status.build_status(model.load(prd_repo / "docs/prd/orders"), prd_repo)
 
 
-def write_log(repo, run_id, *recs, header=True):
+def write_log(repo, run_id, *recs, header=True, prd="docs/prd/orders"):
     from prdlint import deploy
     if header:
-        deploy.append(repo, run_id, {"kind": "header", "run": run_id, "head": "x", "version": "1.0.0", "until": None, "started": "t"})
+        h = {"kind": "header", "run": run_id, "head": "x", "version": "1.0.0", "until": None, "started": "t"}
+        deploy.append(repo, run_id, h if prd is None else {**h, "prd": prd})
     for r in recs:
         deploy.append(repo, run_id, r)
 
 
 def step(n, env, result):
     return {"kind": "step", "step": n, "env": env, "actor": "agent", "result": result}
+
+
+def levels(n, env, *names, result="pass"):
+    """A tests step's records, one per level."""
+    return [{**step(n, env, result), "level": lv} for lv in names]
 
 
 def add_staging_row(prd_repo):
@@ -222,3 +228,24 @@ def test_no_git_repo_skips_logs(prd_repo, tmp_path_factory):
     shutil.copytree(prd_repo / "docs/prd/orders", bare / "orders")
     got = status.build_status(model.load(bare / "orders"), bare)
     assert deployed(got) == ["production: 1.0.0 at 3f2c1a9, 2026-11-02"]
+
+
+# --- final review: only this PRD's runs (finding 1) ---
+
+def test_another_prds_stopped_run_is_not_shown(prd_repo):
+    run = "20261103T000000Z-staging"
+    write_log(prd_repo, run, step(1, "staging", "pass"), step(2, "staging", "fail"), prd="docs/prd/other")
+    assert deployed(build(prd_repo)) == ["production: 1.0.0 at 3f2c1a9, 2026-11-02"]
+
+
+def test_a_log_without_a_prd_is_not_shown(prd_repo):
+    run = "20261103T000000Z-staging"
+    write_log(prd_repo, run, step(1, "staging", "pass"), step(2, "staging", "fail"), prd=None)
+    assert deployed(build(prd_repo)) == ["production: 1.0.0 at 3f2c1a9, 2026-11-02"]
+
+
+def test_another_prds_newer_run_does_not_hide_this_prds(prd_repo):
+    mine, other = "20261103T000000Z-staging", "20261104T000000Z-staging"
+    write_log(prd_repo, mine, step(1, "staging", "fail"))
+    write_log(prd_repo, other, step(1, "staging", "pass"), *levels(2, "staging", "system", "e2e"), prd="docs/prd/other")
+    assert deployed(build(prd_repo))[0] == f"staging: run {mine} stopped (failed) at step 1"
