@@ -364,6 +364,10 @@ at a `human` step the deployer stops and hands off. A step that fails, or a situ
 runbook does not cover, is not improvised around: it becomes an `E-nnn`. Requirements move to
 `live` with the PRD version running.
 
+> Revised in prd-toolkit 0.5: `prd-deployer` is replaced by `prd_deploy.py` and `running-a-deploy.md`
+> (the caller runs the runbook through the script; there is no deployer agent). Each step now
+> carries an environment, and a production deploy needs a human step before it.
+
 ### 5.6 The gap rule
 
 Any agent that meets something the PRD does not say (a missing error code, an unknown URL, an
@@ -415,6 +419,9 @@ A recurring error gets a new entry pointing to the earlier one, so repeat failur
    | `test-unit`, `test-integration`, `test-component` | per `testing.md` |
    | `test-system`, `test-e2e` | against staging after the staging deploy |
    | `drift` | `prd_drift.py`: live schema vs `schema.sql` (introspection command from `operations.md`), deployed config vs `config.yaml` |
+
+   > Revised in prd-toolkit 0.5: the `drift` row loses its `schema.sql` half until 0.6; `prd_drift.py`
+   > checks version and config.
 
    A nightly scheduled run repeats `drift` and the smoke suite against production; each failure
    opens a `prd-error` issue, which `handling-errors` starts from.

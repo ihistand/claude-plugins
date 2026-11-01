@@ -15,10 +15,19 @@ by the user, before a line of code moves.
 reuse the number" and "the PRD can follow" change nothing below.
 
 Grammar (blocks, removed IDs, test cases): `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`.
-Read it before editing. Lint, the mechanical gate:
+Read it before editing. **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
+directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
+root is two directories above the skill's base directory (Claude Code shows it as "Base
+directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
+Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
+A script that is not found is a tool error: report it, never guess another path.
+
+Lint, the mechanical gate:
 
 ```bash
-uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
+uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
 ```
 
 The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `2` usage or internal error. Ignore the Bash call's own success; the trailing echo always succeeds. Use this form every time you run lint.
@@ -87,7 +96,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
 1. **Restate the change** in one sentence, then list everything it touches: FR, NFR and AC IDs,
    T-ids, error codes, `openapi.yaml` operations and responses, permissions, schema columns,
    fixtures, Observability rows. Then, as your first look at the PRD, run the pack for the area and the IDs the change touches, one command per Bash call:
-   `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
+   `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs>; echo "prd-context-exit=$?"`.
    If you do not know the area, run the repo pack first (no `--area`); if you do not know the
    IDs, run the area pack (`--area` only) and list the touched IDs from it. Each is its own Bash
    call, with the same `prd-context-exit=` gate. Pass only the UJ, FR and NFR IDs, and a bug fix's `E-nnn`: map an AC, test case or error code to its requirement.
@@ -138,7 +147,7 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    with neither. Then show the user the restatement, the changes by ID, the new version and why
    that level, the decisions from step 1, the lint result and the dry-run report. Wait for
    explicit approval. Then: status `Approved`; the `prd-lint-exit=` value is `0`; rerun
-   `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
+   `uv run --script <scripts>/prd_block.py docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md with the trailer
    `Refs: none (no behaviour change)`. Only now may code change, and each

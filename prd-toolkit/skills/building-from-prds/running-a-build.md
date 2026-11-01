@@ -14,6 +14,18 @@ and you write no status the close does not earn. The caller edits the PRD only a
 block's `Status:`, its §11 status and its `Source:`. A test case, a `known-failing:` marker, an AC
 or a contract change goes through `/prd-change`. The caller's Red Flags in `SKILL.md` are yours.
 
+**Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
+directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
+root is two directories above the skill's base directory (Claude Code shows it as "Base
+directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
+Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
+A script that is not found is a tool error: report it, never guess another path.
+
+The builder prompt carries `<scripts>` as its `Scripts:` line, as an absolute path (the repository
+root joined to `.prd-toolkit` when vendored).
+
 **One command per Bash call, with literal paths.** As in `dispatching.md`: each command below is
 its own Bash call, and every path and SHA in it is typed out in full: paste what a command printed,
 never a variable that holds it or a `$(…)`. The gate form `; echo "<script>-exit=$?"` is the one
@@ -62,10 +74,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 1. **Preflight.** Run each line as its own call:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
+   uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
    git status --porcelain --untracked-files=all
    git branch --show-current
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
+   uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
    ```
 
    `<IDs>` is joined with commas for `--req`, as `--req FR-006,FR-001`, never space-separated: a
@@ -108,7 +120,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    - **The builder.** Take the branch from its COMMIT line and run:
 
      ```bash
-     uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_build_check.py" docs/prd/<slug> --diff <base>..<builder branch>; echo "prd-build-check-exit=$?"
+     uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..<builder branch>; echo "prd-build-check-exit=$?"
      git log --format=%B <base>..<builder branch>
      ```
 
@@ -160,7 +172,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    whole report, verbatim, with the Write tool to `<SNAP>/suite-report.md`, then run:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_build_check.py" docs/prd/<slug> --results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"
+   uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"
    git status --porcelain --untracked-files=all
    ```
 
@@ -213,7 +225,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    T-id stops the build. Then:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
+   uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
    `prd-trace-exit=` must be `0`; anything else stops the build, as **Stops** says. Trace asks a
@@ -229,8 +241,8 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    A clean build writes `verified` directly. A stopped build closes by **Stops**: `built` for
    each block whose unit T-ids pass after the merge, nothing before it. A `known-failing` result
    is not a pass, so its block stays `built`. Never write `live`: it means deployed, and a build
-   deploys nothing. Change only the status word; keep any `(since X.Y.Z)` and the index row's
-   Since cell as they are. Edit nothing else in the PRD.
+   deploys nothing; deploy-gate tests run at `/prd-deploy`. Change only the status word; keep any
+   `(since X.Y.Z)` and the index row's Since cell as they are. Edit nothing else in the PRD.
 
    Run `git rev-parse --short HEAD` as its own call, after the last merge. From each SOURCES line
    of the builder's latest report for a block, write the block's
@@ -242,9 +254,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    own call:
 
    ```bash
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"
-   uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_trace.py" docs/prd/<slug>; echo "prd-trace-exit=$?"
+   uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"
+   uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
+   uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
    `prd-context-exit=` must be `0`: a STALE code item for a block you just wrote means a wrong
@@ -274,6 +286,7 @@ PRD: docs/prd/<slug>/
 Area: <area>
 IDs: <UJ, FR and NFR IDs>
 Unit T-ids: <one per line, with its test-case file>
+Scripts: <scripts directory, as an absolute path>
 ```
 
 A code-bug round adds three lines after those:

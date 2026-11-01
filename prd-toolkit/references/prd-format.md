@@ -279,9 +279,80 @@ refer to (levels, environments, fixtures).
 
 ## operations.md
 
-`## Runbook` holds numbered steps, each with `(actor: agent)` or `(actor: human)` on the step's
-first line. Other
-headings (Environments, Secrets by name) are free.
+Three tables and a runbook. Other headings (Secrets by name) are free. The `runbook-steps`,
+`runbook-env`, `production-gate`, `runbook-tests` and `drift-rows` rules check what follows.
+
+```
+## Environments
+
+| Environment | URL | Production |
+|---|---|---|
+| staging | file:.deploy/staging | no |
+| production | file:.deploy/production | yes |
+
+## Runbook
+
+1. Deploy to staging (actor: agent) (env: staging)
+   Run: `uv run scripts/deploy.py staging`
+   Check: `.deploy/staging/bin/hello World` prints `Hi, World!`
+   Rollback: `uv run scripts/deploy.py staging --previous`
+2. System tests on staging (actor: agent) (env: staging)
+   Run: tests system
+3. Approve production (actor: human) (env: production)
+   Do: read the staging results and reply "deploy production"
+   Check: the reply says "deploy production"
+4. Deploy to production (actor: agent) (env: production)
+   Run: `uv run scripts/deploy.py production`
+   Check: `.deploy/production/bin/hello World` prints `Hello, World!`
+5. Smoke on production (actor: agent) (env: production)
+   Run: tests smoke
+```
+
+- Environments: `Production` is `yes` or `no`, and at least one row is `yes`. Every environment is
+  also a row of `testing.md` Environments (`runbook-env`).
+- A step line is `N. <title> (actor: agent|human) (env: <environment>)`, numbered from 1 without
+  gaps. Labelled lines follow, indented, in any order. An agent step takes `Run:` (required),
+  `Check:` (required unless `Run:` is a `tests` step) and `Rollback:` (optional); a human step
+  takes `Do:` and `Check:` (both required, prose) and never `Run:` or `Rollback:`. Other indented
+  lines are prose and ignored (`runbook-steps`).
+- An agent `Run:` is one backticked command, or `tests <level>[, <level>]`. An agent `Check:` is
+  one backticked command, optionally followed by `` prints `<text>` ``. `Rollback:` is one
+  backticked command. A `tests` step has no `Check:`: the suite is its check. Each level it names
+  exists in `testing.md` Levels with Gate `deploy` and a Harness command (`runbook-tests`).
+  A value that is still a `[NEEDS CLARIFICATION: …]` marker is left to the markers rule.
+- The first step on a production environment is `(actor: human)` or directly preceded by a human
+  step (`production-gate`). There is no opt-out.
+- A `smoke` level in `testing.md` is an ordinary level with Gate `deploy`: its cases are T-ids run
+  by its Harness command, and a runbook step runs them with `Run: tests smoke`.
+
+Two optional tables follow the runbook.
+
+```
+## Deployed
+
+| Environment | PRD version | Commit | Date | Run |
+|---|---|---|---|---|
+| production | 1.0.0 | 3f2c1a9 | 2026-11-02 | 20261102T103000Z-production |
+
+## Drift
+
+| Environment | Check | Introspection command |
+|---|---|---|
+| production | version | `.deploy/production/bin/hello --prd-version` |
+| production | config | `.deploy/production/bin/hello --settings-json` |
+```
+
+`## Deployed` is the PRD's record of what each environment runs: the caller writes one row per
+environment at a deploy run's close, replacing that environment's earlier row. A missing table
+means nothing is deployed yet. `## Drift` lists the checks run against a live environment; `Check`
+is `version` or `config` (`drift-rows`; a `schema` row is reported as arriving in prd-toolkit 0.6,
+and a `config` row needs `contracts/config.yaml`). Without the table there is no drift check. A
+Deployed or Drift row's environment must be in both Environments tables (`runbook-env`).
+
+**Migration from 0.4.** A 0.4 runbook (`(actor: …)` only) fails `runbook-steps` until each step
+carries `(env: …)` and its labelled lines, and fails `runbook-env` until Environments has the
+`Production` column. The migration is a patch bump with the §14 row
+`format: runbook steps (prd-toolkit 0.5)`.
 
 ## errors.md
 
@@ -290,7 +361,7 @@ One entry per error, newest last:
 ```
 ### E-001 <title>
 Detected: <date>, <source>
-Classification: code bug | spec gap | invalid requirement | environment | standard
+Classification: code bug | spec gap | invalid requirement | environment | standard | unclassified
 Touches: <requirement IDs or ->
 Diagnosis: <why>
 Resolution: <the AC, T-id and version that fixed it>
@@ -300,6 +371,9 @@ Recurrence of: <E-nnn or ->
 `Touches:` is optional. It lists the requirement IDs (`UJ-nn`, `FR-nnn`, `NFR-nnn`) the error
 concerns, comma-separated, and `-` means none. `index-consistent` reports a `Touches:` ID that no
 block defines. The context pack's Known defects part reads it.
+
+`unclassified` is allowed only on an open entry: a deploy failure is recorded as `unclassified`
+until it is diagnosed, and `index-consistent` reports `unclassified` on a resolved entry.
 
 An entry is **open** when it has no `Resolution:` line, or the value after `Resolution:` is
 empty, `-`, or starts with `open` (case-insensitive); otherwise it is resolved. Headings inside

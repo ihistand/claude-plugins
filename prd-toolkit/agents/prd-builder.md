@@ -15,8 +15,9 @@ report format (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT).
 
 If the skill's text is not in your context, say so as the first line under QUESTIONS, and keep to
 these rules:
-- Run the implement pack first, as its own Bash call, before you open any PRD file:
-  `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_context.py" docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
+- `<scripts>` in the command below is the `Scripts:` line of your prompt; without that line, say so
+  under QUESTIONS and run nothing. Run the implement pack first, as its own Bash call, before you open any PRD file:
+  `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
   On `1`, re-read each region marked STALE. Never pipe or filter it.
 - Write the unit tests first, one per unit T-id in your prompt, each citing `@prd <T-id>`, in a
   file that cites only unit T-ids; see them fail with the `unit` Levels harness command; then

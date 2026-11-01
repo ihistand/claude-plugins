@@ -118,7 +118,7 @@ def test_gate_forms_in_both_files():
         for line in t.splitlines():
             for script, gate in (("prd_context.py", "prd-context-exit"), ("prd_lint.py", "prd-lint-exit"),
                                  ("prd_trace.py", "prd-trace-exit"), ("prd_build_check.py", "prd-build-check-exit")):
-                if f'"${{CLAUDE_PLUGIN_ROOT}}/scripts/{script}"' in line:
+                if f"<scripts>/{script}" in line:
                     assert f'echo "{gate}=$?"' in line, (path.name, line)
     t = RUN.read_text(encoding="utf-8")
     assert '--diff <base>..<builder branch>; echo "prd-build-check-exit=$?"' in t

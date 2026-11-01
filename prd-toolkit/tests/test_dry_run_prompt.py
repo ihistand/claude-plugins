@@ -48,7 +48,7 @@ def test_both_skills_flag_a_dismissal_without_a_quote():
 
 
 LINT_SKILLS = [Path(__file__).parent.parent / f"skills/{n}/SKILL.md" for n in ("authoring-prds", "changing-prds")]
-LINT_CMD = 'prd_lint.py" docs/prd/<slug>; echo "prd-lint-exit=$?"'
+LINT_CMD = 'prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"'
 
 
 @pytest.mark.parametrize("skill", LINT_SKILLS, ids=lambda p: p.parent.name)

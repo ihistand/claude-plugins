@@ -11,8 +11,9 @@ AUTHORING = SKILLS / "authoring-prds/SKILL.md"
 ADOPTING = SKILLS / "adopting-prds/SKILL.md"
 README = ROOT / "README.md"
 
-INSTALL = 'uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>'
+INSTALL = 'uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" install docs/prd/<slug>'  # the README: no Bash tool there
 CI = 'uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_hooks.py" ci --github docs/prd/<slug>'
+SKILL_INSTALL = "uv run --script <scripts>/prd_hooks.py install docs/prd/<slug>"  # skills: R21
 
 
 def flat(path: Path) -> str:
@@ -45,14 +46,14 @@ def test_readme_hooks_and_ci_section():
 def test_authoring_phase_7_offers_hooks_and_ci_on_a_yes():
     row = flat(AUTHORING).split("| 7 | **Approval.**", 1)[1].split("| Explicit user approval |", 1)[0]
     assert "offer to install the hooks and generate CI" in row
-    assert INSTALL in row and "ci --github docs/prd/<slug>" in row and "--gitlab" in row
+    assert SKILL_INSTALL in row and "ci --github docs/prd/<slug>" in row and "--gitlab" in row
     assert "only on the user's explicit yes" in row
 
 
 def test_adopting_step_5_offers_hooks_and_ci_on_a_yes():
     step = " ".join(between(ADOPTING.read_text(encoding="utf-8"), "### 5. Gate and approve", "## When the user pushes").split())
     assert "offer to install the hooks and generate CI" in step
-    assert INSTALL in step and "ci --github docs/prd/<slug>" in step and "--gitlab" in step
+    assert SKILL_INSTALL in step and "ci --github docs/prd/<slug>" in step and "--gitlab" in step
     assert "only on the user's explicit yes" in step
 
 
