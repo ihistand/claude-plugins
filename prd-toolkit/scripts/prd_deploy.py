@@ -164,7 +164,7 @@ def main(argv: list[str]) -> int:
                 print(f"{s.number} {s.actor} {s.env}: {s.title}" + (f" — {deploy.step_command(s)}" if s.actor == "agent" else ""))
             return 0
         repo_root = model.repo_root(prd.root)
-        reasons = deploy.preflight(prd, repo_root)
+        reasons = deploy.preflight(prd, repo_root, args.until)
         if reasons:
             for r in reasons:
                 print(f"refused: {r}")

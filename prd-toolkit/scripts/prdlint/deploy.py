@@ -24,7 +24,7 @@ except ImportError:  # Windows
 from . import registry, trace
 from .buildcheck import _resolve, _show
 from .markdown import sections
-from .model import Prd, Step, load, production_envs
+from .model import Prd, Step, gate_of, load, production_envs
 from .trace import BadRange
 
 EXIT = {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
@@ -60,7 +60,7 @@ def plan_steps(prd: Prd, until: str | None) -> list[Step]:
     return steps[: ends[-1] + 1]
 
 
-def preflight(prd: Prd, repo_root: Path) -> list[str]:
+def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
     """Reasons a run must not start; empty when clear."""
     reasons: list[str] = []
     if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
@@ -72,6 +72,15 @@ def preflight(prd: Prd, repo_root: Path) -> list[str]:
     for b in prd.blocks:
         if b.status == "built":
             reasons.append(f"{b.id} is built; its tests have not passed (run /prd-build)")
+    if any(s.env in production_envs(prd) for s in plan_steps(prd, until)):
+        # trace lets a verified block lack deploy-gate citations, but `live` needs every one: such a run cannot close
+        cited = trace.citations(prd, repo_root)
+        for b in prd.blocks:
+            if b.status != "verified":
+                continue
+            for tid, level, _ in b.tests:
+                if tid not in cited and gate_of(prd, level) == "deploy":
+                    reasons.append(f"{b.id}: {tid} (deploy gate) has no citing test; it cannot go live")
     return reasons
 
 
@@ -117,7 +126,8 @@ def start_run(prd: Prd, repo_root: Path, run_id: str, until: str | None) -> None
 
 def read_log(repo_root: Path, run_id: str) -> list[dict]:
     text = _log_path(repo_root, run_id).read_text(encoding="utf-8")
-    return [json.loads(line) for line in text.splitlines() if line.strip()]
+    # split on "\n" only: splitlines() also splits on \x1c-\x1e, \x85, U+2028/9, which a raw tail may hold
+    return [json.loads(line) for line in text.split("\n") if line.strip()]
 
 
 def _iso() -> str:

@@ -232,6 +232,40 @@ def test_big_binary_output(repo):
     assert 1000 < len(out) <= 4096
 
 
+def test_log_records_survive_line_separator_characters(repo):
+    """json.dumps(ensure_ascii=False) writes U+0085, U+2028 and U+2029 raw; str.splitlines() splits a record on them."""
+    run_id = deploy.new_run_id(repo, None)
+    tail = "a\x85b\u2028c\u2029d"
+    deploy.append(repo, run_id, {"kind": "header", "run": run_id})
+    deploy.append(repo, run_id, {"kind": "step", "step": 1, "stdout": tail})
+    recs = deploy.read_log(repo, run_id)
+    assert len(recs) == 2 and recs[1]["stdout"] == tail
+
+
+def uncite(repo: Path, tid: str) -> None:
+    change(repo, "tests/test_cases.py", f"@prd {tid}", "no citation")
+
+
+def test_production_run_refused_when_a_deploy_gate_test_is_uncited(repo):
+    uncite(repo, "T-004.1")
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 1
+    assert "refused: NFR-004: T-004.1 (deploy gate) has no citing test; it cannot go live" in r.stdout.splitlines(), r.stdout
+    assert last(r) == "prd-deploy: refused step=0 run=none"
+    assert not (repo / ".deploy").exists()
+
+
+def test_staging_run_ignores_an_uncited_deploy_gate_test(repo):
+    uncite(repo, "T-004.1")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / ".deploy/staging/version").is_file()
+
+
+def test_production_run_with_all_citations_still_runs(repo):
+    assert deploy_cli(repo, "run").returncode == 3  # stops at the human approval, not at pre-flight
+
+
 def test_run_id_collision(repo, monkeypatch, capsys):
     from prd_deploy import main
 
