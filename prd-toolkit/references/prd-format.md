@@ -141,10 +141,14 @@ Traces: UJ-02; `orders.order_key` UNIQUE; fixture orders/one_existing
 
 An optional `Source: <path>:<line> @<sha>` field line (continuation lines allowed) records the
 code a block was read from when an existing system is adopted. An `as-built` block must have one
-(`index-consistent`).
+(`index-consistent`). `Source:` means where the code that implements the block is: provenance for
+an `as-built` block, a pointer for a built one (`/prd-build` writes it at close). It is optional
+outside `as-built`.
 
 - `Status:` is `approved`, `built`, `verified`, `live`, `as-built` or `removed`, optionally
-  followed by `(since X.Y.Z)`. `live` always carries `since`.
+  followed by `(since X.Y.Z)`. `live` always carries `since`. Status moves go
+  `approved → built → verified`. A status move is progress, not behaviour: no version bump, no
+  §14 row, no re-approval. The block and its §11 row move together, written at a build's close.
 - `Acceptance (EARS):` lists `- AC-nnn.n <text>` items. `nnn` equals the parent's number. The
   text starts with When, While, If, Where or "The <thing> shall"; extra lines are indented.
 - A removed AC keeps its line, with `(removed in X.Y.Z)` between the ID and its original

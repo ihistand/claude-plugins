@@ -140,8 +140,10 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md. Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
-   to its requirement): write the code from `/prd-context <area> <changed IDs> implement`.
-   After the code commit, run the implement pack again (its own Bash call, the same gate), then
+   to its requirement): build with `/prd-build <area> <changed IDs>`. Its close writes the status
+   moves and each `Source:` line, so there is no refresh to do. Code written outside `/prd-build`
+   is written from `/prd-context <area> <changed IDs> implement`. After the code commit, run the
+   implement pack again (its own Bash call, the same gate), then
    rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit
    the PRD. A `Source:` refresh is provenance, not behaviour: it takes no version bump and no
    §14 row, and the status stays Approved with no re-approval.

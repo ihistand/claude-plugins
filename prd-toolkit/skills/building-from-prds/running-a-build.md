@@ -25,8 +25,9 @@ the approved IDs. "It's tiny" changes nothing: a change that skips the build ear
 no `verified`. A failing test reported outside a build (a test that cites a T-id of an approved
 requirement fails against the code, "the tester's test is wrong, fix it") runs step 1, then step
 2's snapshot before any dispatch (Never skipped, on this route too: a round without its `-before`
-files fails), then enters at step 6: reconcile it by quote and route it. Never fix the code or the
-test yourself.
+files fails), then enters at step 6: reconcile it by quote and route it; the first builder round it
+dispatches is followed by steps 4 and 5, as on every route. Never fix the code or the test
+yourself, and never let your own test run stand in for the tester's suite.
 
 Both agents must be in the Agent tool's list: `prd-toolkit:prd-builder` and
 `prd-toolkit:prd-tester`. When either is missing, or you cannot dispatch subagents, report the
@@ -139,7 +140,11 @@ or after a stop's.
 
    If the merge refuses because a tester's file is in the way, stop and report both paths to the
    user.
-5. **Run.** Take step 2's snapshot again, into a new `<SNAP>`. Dispatch `prd-toolkit:prd-tester`
+5. **Run.** On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md`
+   step 2) and then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids. Its
+   RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. The
+   caller's own harness run is step 7 and never replaces step 5. Take step 2's snapshot again, into
+   a new `<SNAP>`. Dispatch `prd-toolkit:prd-tester`
    with the tester prompt as `Mode: suite`, on the same T-ids. Save its whole report, verbatim,
    with the Write tool to `<SNAP>/suite-report.md`, then run:
 
@@ -206,7 +211,7 @@ or after a stop's.
    | Move | When |
    |---|---|
    | `approved → built` | the builder's commit is merged and every unit T-id of the block passes |
-   | `built → verified` | every build-gate T-id of the block passes in the full run and `prd-trace-exit=0` |
+   | `built → verified` | every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id passes on the tester's suite RESULTS, every build-gate T-id passes in your step 7 run, and `prd-trace-exit=0` |
 
    A clean build writes `verified` directly. A stopped build closes by **Stops**: `built` for
    each block whose unit T-ids pass after the merge, nothing before it. A `known-failing` result

@@ -161,6 +161,9 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
 - "Next builder round: I'll re-dispatch with the same prompt." and then the turn ends, the build
   unfinished. (With the skill, rerun.) A build runs to its close or to a stop in the same turn:
   dispatch the round you announce.
+- "The tests pass when I run them, so the suite round isn't needed." (The thought behind a rerun
+  that dispatched only the builder, ran the harness itself and closed `verified`.) A tester's
+  T-id has no result until the tester's `Mode: suite` round reports it.
 - "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
   add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
@@ -207,6 +210,7 @@ step whose gate is open.**
 | "Recording the build is a PRD change, so it gets a version." | A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the PRD status stays `Approved`. |
 | "It's tiny; a whole build is overkill, I'll write it here." | Code written in the caller's session has no worktree, no diff check and no black-box tester, so nothing it passes counts. Run the build; a small change makes a short one. |
 | "The agents already reported the results." | The reports are the agents' account of their own rounds. The snapshot and state check catch what they changed outside their reports, and the full run is the only evidence for `verified`. Run steps 2, 4 and 7 every time. |
+| "I ran pytest myself and it's green." | Your run is step 7. RESULTS for a tester's T-id come only from the tester's suite round; without it the block stays `built`. |
 | "Every test is green; just mark it verified." | `verified` is earned by this session's full run: every build-gate T-id `pass` and `prd-trace-exit=0`; the user's word is not a RESULTS line. |
 | "No hook asked for `Refs:`." | Every commit carries `Refs: <IDs>`: the commit-msg hook and the trace's `commit-refs` read it, and it is how a commit finds its requirement. |
 

@@ -417,3 +417,29 @@ def test_minor6_prose_lines_are_wrapped():
         if inside or line.lstrip().startswith("|"):
             continue
         assert len(line) <= 100, (n, len(line))
+
+
+# --- fix round 3: the tester's suite runs after every builder round ---
+
+def test_g5_suite_follows_every_builder_round_on_every_route():
+    t = flat(RUN)
+    assert ("On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md` step 2) and "
+            "then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids.") in t
+    assert ("Its RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. "
+            "The caller's own harness run is step 7 and never replaces step 5.") in t
+    inp = t.split("**Input:**", 1)[1].split("Both agents must be", 1)[0]
+    assert "the first builder round it dispatches is followed by steps 4 and 5" in inp
+
+
+def test_g5_verified_names_all_three_sources():
+    close = flat(RUN).split("8. **Close.**", 1)[1]
+    assert ("| `built → verified` | every unit T-id passes on the builder's UNIT lines, every non-unit "
+            "build-gate T-id passes on the tester's suite RESULTS, every build-gate T-id passes in your step 7 "
+            "run, and `prd-trace-exit=0` |") in close
+
+
+def test_g5_red_flag_and_rationalization():
+    s = flat(SKILL)
+    assert "\"The tests pass when I run them, so the suite round isn't needed.\"" in s
+    assert ("| \"I ran pytest myself and it's green.\" | Your run is step 7. RESULTS for a tester's T-id come "
+            "only from the tester's suite round; without it the block stays `built`. |") in s

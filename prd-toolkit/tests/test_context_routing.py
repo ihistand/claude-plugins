@@ -11,8 +11,7 @@ ROOT = Path(__file__).parent.parent
 CHANGING = ROOT / "skills/changing-prds/SKILL.md"
 
 BULLET = ("To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD\n"
-          "  files only to edit them. Before writing code for an approved change, run `/prd-context <area>\n"
-          "  <IDs> implement`; after the code commit, run it again and refresh each STALE `Source:`. Code\n"
+          "  files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code\n"
           "  implements the PRD; it never defines behaviour the PRD lacks.")
 
 
@@ -52,9 +51,9 @@ def test_changing_step_1_runs_the_decide_pack():
     assert "the area's own test cases are opened only to revise them in step 2" in rule6
 
 
-def test_changing_step_5_hands_off_the_implement_pack():
+def test_changing_step_5_hands_off_to_prd_build():
     step5 = section(CHANGING, "5. **Approval, then commit.**", "## Red Flags")
-    assert "/prd-context <area> <changed IDs> implement" in step5
+    assert "/prd-build <area> <changed IDs>" in step5 and "Code written outside `/prd-build`" in step5
 
 
 def test_adopting_previews_come_from_the_implement_pack():
@@ -148,10 +147,20 @@ def test_pack_output_is_never_filtered():
         assert NO_FILTER in text and "the filter's status" in text
 
 
-def test_changing_step_5_refreshes_sources_after_the_code_commit():
+def test_changing_step_5_keeps_the_refresh_for_code_outside_prd_build():
     step5 = " ".join(section(CHANGING, "5. **Approval, then commit.**", "## Red Flags").split())
-    after = step5[step5.index("/prd-context <area> <changed IDs> implement"):]
+    after = step5[step5.index("Code written outside `/prd-build`"):]
+    assert "/prd-context <area> <changed IDs> implement" in after
     assert "After the code commit, run the implement pack again" in after
     assert "rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit the PRD" in after
     assert "provenance, not behaviour" in after and "no version bump and no §14 row" in after
     assert "the status stays Approved with no re-approval" in after
+
+
+def test_block_names_hook_install():
+    assert "Run `.prd-toolkit/prd_hooks.py install` once per clone" in (ROOT / "templates/claude-block.md").read_text()
+
+
+def test_format_source_and_statuses():
+    t = " ".join((ROOT / "references/prd-format.md").read_text().split())
+    assert "where the code that implements the block is" in t and "A status move is progress, not behaviour" in t
