@@ -140,7 +140,8 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    explicit approval. Then: status `Approved`; the `prd-lint-exit=` value is `0`; rerun
    `uv run --script "${CLAUDE_PLUGIN_ROOT}/scripts/prd_block.py" docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
-   needing an update; commit the PRD folder and CLAUDE.md with the trailer `Refs: none (no behaviour change)`. Only now may code change, and each
+   needing an update; commit the PRD folder and CLAUDE.md with the trailer
+   `Refs: none (no behaviour change)`. Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
    to its requirement): build with `/prd-build <area> <changed IDs>`. Its close writes the status
    moves and each `Source:` line, so there is no refresh to do. Code written outside `/prd-build`

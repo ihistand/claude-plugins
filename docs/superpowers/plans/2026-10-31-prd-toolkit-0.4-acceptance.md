@@ -2,12 +2,15 @@
 
 > **Date:** 2026-10-31
 > **Plan:** `2026-10-31-prd-toolkit-0.4.md`, Task 14
-> **Result:** pass, adapted by two rulings. A new PRD went from ticket to `Approved` 1.0.0, a
-> partial build verified one requirement, a major change added a second, and a final build verified
-> the changed requirement and the two it touched. Lint exited 0, trace exited 0 over the branch
-> range, the hook refused a commit with no `Refs:`, and every generated CI job exited 0 locally.
-> The run found three small defects in toolkit text (F1 to F3), fixed with pins afterward, and
-> three pack gaps, dispositioned below. No reconcile classification was needed.
+> **Result:** pass on every pass-line item except two, adapted by R35 and R41. The implement-pack
+> `Source:` item failed (F1, fixed in `9fb7c76`, not yet re-run). The no-reads-outside-the-pack item
+> is partial (three caller reads, G1 and G2; rule 6 binds the caller by text only). A new PRD went
+> from ticket to `Approved` 1.0.0, a partial build verified one requirement, a major change added a
+> second, and a final build verified the changed requirement and the two it touched. Lint exited 0,
+> trace exited 0 in CI form (`main..HEAD`) but 1 over the full range (commit `0fd78fc`, F3), the
+> hook refused a commit with no `Refs:`, and every generated CI job exited 0 locally. The run found
+> three small defects in toolkit text (F1 to F3), fixed with pins afterward, and gaps G1 and G2,
+> dispositioned below. No reconcile classification was needed.
 >
 > **Scope.** A one-command Python project, run locally. Deploy gates, `live` and staging jobs are
 > 0.5 and are not exercised.
@@ -40,7 +43,7 @@
 | S3 | `/prd-change` add a `--shout` option | Major bump to 2.0.0, justified in the session: `--shout` was a valid name before, so FR-001's and FR-003's ACs and UJ-01 changed. FR-006 added; FR-001, FR-003 and UJ-01 back to `approved`. Dry run on the new and revised integration T-ids: 0 open questions, 2 dismissed by quote. See F1 | `540009d` PRD change |
 | S4 | `/prd-build core FR-006 FR-001 FR-003` | FR-001, FR-003 and FR-006 `verified`, each with a `Source:` line. All T-ids passed in round 1. T-006.1 failed before the code and passed after (unit tests first, as the builder skill requires). The tester found T-001.2 to T-001.4 already written and kept them. See F2 | `9ec6739` code; `e5d31a3` tests; `8af6fc7` three requirements verified |
 
-S1 took 33 turns and about 280 s. S2 and S4 each ran in several turns because the builder and
+S1's `result` record gives `num_turns` 33 and `duration_ms` 280341. S2 and S4 each ran in several turns because the builder and
 tester ran as background subagents.
 
 ## Pass line
@@ -51,13 +54,13 @@ R41 (FR-006 for FR-002, the rest `approved`):
 | Item | Evidence | Result |
 |---|---|---|
 | Lint exit 0 | `prd-lint-exit=0` at S1 approval, S2 close, S3 approval, S4 close and the final check | pass |
-| Trace exit 0 | `prd-trace-exit=0` in S2 and S4 at close, and in CI form over `main..HEAD` in the local CI run. See the note under "Findings" on the full-range trace (F3) | pass |
+| Trace exit 0 | `prd-trace-exit=0` in S2 and S4 at close. CI form (`main..HEAD`) 0; full range 1 (commit `0fd78fc`, F3) | pass (CI form) |
 | Verified blocks and `/prd-status` | FR-001, FR-003 and FR-006 `verified`. `/prd-status` at version 2.0.0 shows `core: approved 2, verified 3`, `nfr: approved 2`, and not built: UJ-01, FR-002, NFR-004, NFR-005. Not verified: none. Open errors: none. Matrix: every build-gate T-id of FR-001 (T-001.1 to T-001.5), FR-003 (T-003.1 to T-003.3) and FR-006 (T-006.1 to T-006.6) is `cited`; only the `approved` blocks' T-ids are `missing` | pass, as adapted |
 | A commit inside the Boundary with no `Refs:` is refused | Two refusals. S1's own approval-time commit of the hook include, with no `Refs:`, was refused by the installed hook, then repeated with `Refs: none (no behaviour change)` (`c22450a`). The deliberate probe, a file under `src/` committed with no trailer, printed "no `Refs:` trailer (`Refs: FR-001`, or `Refs: none (no behaviour change)`)" and the accepted forms, and exited 1 (`proof/refused-commit.txt`) | pass |
 | Each generated CI job's commands exit 0 locally | `prd-lint` (CI form) 0; `prd-trace` (CI form, `main..HEAD`) 0; `standards-1` 0; `test-unit` 3 passed, 0; `test-integration` 11 passed, 0 (`proof/ci-jobs-local.txt`) | pass |
-| No PRD file read outside the pack and the files edited | Three reads by the caller sessions were outside both (the first three rows of the table below), and each has a disposition | pass with gaps recorded |
+| No PRD file read outside the pack and the files edited | Three reads by the caller sessions were outside both (the first three rows of the table below), and each has a disposition. Rule 6 binds the caller by text only | partial |
 | No reconcile classification lacks its quote | No build failure needed reconciling: every tester run passed in round 1, so no classification was made and none lacked a quote. The two dry-run dismissals in S3 and the five in S1 each carry a quoted PRD line | pass |
-| The `implement` pack shows FR-001's `Source:` excerpt where the change touches FR-001's code | **Failed in the run** (F1): S3 dropped FR-001's `Source:` line, so S4's first implement pack carried no code excerpt for FR-001. Fixed afterward and pinned | fail, fixed |
+| The `implement` pack shows FR-001's `Source:` excerpt where the change touches FR-001's code | **Failed in the run** (F1): S3 dropped FR-001's `Source:` line, so S4's first implement pack carried no code excerpt for FR-001. Fixed afterward and pinned by text | fail, fixed (not re-run) |
 
 ### Reads of PRD files by the caller sessions
 
@@ -96,7 +99,7 @@ plugin files.
 | F3 | The full-range trace flagged S1's approval commit `0fd78fc`, which touches CLAUDE.md inside the Boundary and carries no `Refs:` trailer. The hooks did not exist yet, so nothing refused it. Local CI form (`main..HEAD`) is 0, because the CI range excludes it; a full-range run flags it | `proof/step5-checks.txt` | fixed in `9fb7c76`: authoring phase 7 and `changing-prds` step 5 commit the PRD folder and CLAUDE.md with `Refs: none (no behaviour change)`. Pinned by `test_f3_*`. The scratch repo's `0fd78fc` is left as the proof's record |
 | G1 | S3 greps `testing.md`, `operations.md`, `nfr.md` and `test-cases/nfr.yaml` to learn the project's option wording and which requirements the NFRs cite, which the decide pack did not carry | S3 call 5 | Later: measure on a real area whether the decide pack should list the NFRs that cite the touched FRs |
 | G2 | The close step greps the whole PRD folder for block headings and `Source:` lines to find the lines to edit | S4 call 85 | Later: the close step should name the block's file from the pack, so the grep is one file |
-| G3 | The scaffold's refuse-non-empty test checks only a non-zero exit (from the Task 14 step (a) review) | Task 14 step (a) | Later: assert the refusal message |
+| G3 | The scaffold's refuse-non-empty test checks only a non-zero exit (from the Task 14 step (a) review) | Task 14 step (a) | fixed: the test now asserts the refusal message |
 
 No toolkit code or text was changed during the run; F1 to F3 were fixed after it, from the
 transcripts, and the suite grew by five tests (788 pass).

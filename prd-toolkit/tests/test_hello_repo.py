@@ -25,4 +25,5 @@ def test_hello_repo_refuses_a_non_empty_destination(tmp_path):
     (tmp_path / "x.txt").write_text("x", encoding="utf-8")
     r = subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path)], capture_output=True, text=True)
     assert r.returncode != 0
+    assert "refusing a non-empty destination" in r.stderr
     assert not (tmp_path / "TICKET.md").exists()
