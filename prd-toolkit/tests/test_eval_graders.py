@@ -73,3 +73,119 @@ def test_the_dry_run_glob_grader_counts_test_root_listings_only():
         assert _glob_counts(ti), ti
     for ti in exempt:
         assert not _glob_counts(ti), ti
+
+
+# --- the 0.4 building evals, and a structural check over every eval ---
+
+import json  # noqa: E402
+
+import yaml  # noqa: E402
+
+EVALS = ROOT / "evals"
+BUILDING = ["building-trigger", "building-not-for-plain-code", "builder-stays-out-of-prd", "build-gap-stops", "build-close-no-bump"]
+
+
+def _grader(case: str, name: str) -> dict:
+    text = (EVALS / case / "graders" / f"{name}.md").read_text(encoding="utf-8")
+    cfg = yaml.safe_load(text.split("---\n")[1])
+    cfg["body"] = text.split("---\n", 2)[2].strip()
+    return cfg
+
+
+def _tool_input_counts(case: str, name: str, tool_input: dict) -> bool:
+    return bool(re.search(_grader(case, name)["input_match"], json.dumps(tool_input, separators=(",", ":"))))
+
+
+def test_every_eval_is_well_formed():
+    cases = sorted(p.parent for p in EVALS.glob("*/prompt.md"))
+    assert {c.name for c in cases} >= set(BUILDING)
+    for case in cases:
+        fm = yaml.safe_load((case / "prompt.md").read_text(encoding="utf-8").split("---\n")[1])
+        assert fm["max_turns"] and fm["allowed_tools"], case
+        graders = sorted((case / "graders").glob("*.md"))
+        assert graders, case
+        if (case / "case.yaml").exists():
+            cy = yaml.safe_load((case / "case.yaml").read_text(encoding="utf-8"))
+            assert cy["name"] == case.name
+            script = case / cy["context"]["scaffold_script"]
+            assert script.is_file() and script.stat().st_mode & 0o111, script
+        for g in graders:
+            cfg = yaml.safe_load(g.read_text(encoding="utf-8").split("---\n")[1])
+            assert cfg["type"] in {"tool_used", "regex", "file_exists"}, g
+            if cfg["type"] == "tool_used":
+                re.compile(cfg.get("input_match", ""))
+                if cfg.get("max") == 0:
+                    assert cfg.get("min") == 0, f"{g}: a lone max: 0 reads as expected 1..0"
+            if cfg["type"] == "regex":
+                re.compile(cfg["pattern"])
+                assert cfg.get("match", "contains") in {"contains", "not_contains"}, g
+
+
+def test_the_building_evals_use_the_committed_scaffold():
+    assert not (EVALS / "scaffolds/build_repo.sh").exists()
+    for case in ("building-trigger", "builder-stays-out-of-prd", "build-gap-stops", "build-close-no-bump"):
+        assert 'scaffolds/build_repo.py" "$PWD"' in (EVALS / case / "scaffold.sh").read_text(encoding="utf-8")
+
+
+def test_the_builder_graders_see_the_callers_close_but_not_a_prd_edit():
+    n = "no-prd-edit-beyond-status"
+    base = "/w/docs/prd/notes/features/notes.md"
+    close = [{"replace_all": False, "file_path": base, "old_string": "### FR-003 Count notes\nStatus: approved\n",
+              "new_string": "### FR-003 Count notes\nStatus: verified\nSource: src/notes/app.py:20 @abc1234\n"},
+             {"file_path": "/w/docs/prd/notes/prd.md", "old_string": "| FR-003 | Count notes | approved |",
+              "new_string": "| FR-003 | Count notes | verified |"},
+             {"file_path": base, "old_string": "Status: approved", "new_string": "Status: built"}]
+    prd_edits = [{"file_path": base, "old_string": "return the number of stored notes.", "new_string": "return the number of live notes."},
+                 {"file_path": "/w/docs/prd/notes/test-cases/notes.yaml", "old_string": "output: 0", "new_string": "output: 1"}]
+    for ti in close:
+        assert not _tool_input_counts("builder-stays-out-of-prd", n, ti), ti
+    for ti in prd_edits:
+        assert _tool_input_counts("builder-stays-out-of-prd", n, ti), ti
+    assert not _tool_input_counts("builder-stays-out-of-prd", n, {"file_path": "/w/src/notes/app.py", "old_string": "a", "new_string": "b"})
+    w = "no-prd-write"
+    assert _tool_input_counts("builder-stays-out-of-prd", w, {"file_path": "/w/docs/prd/notes/features/x.md", "content": "x"})
+    assert not _tool_input_counts("builder-stays-out-of-prd", w, {"file_path": "/w/tests/test_notes_unit.py", "content": "x"})
+
+
+def test_the_tester_file_graders_catch_a_unit_case_in_it_and_pass_the_testers_own_edits():
+    t = "/w/tests/test_notes.py"
+    for name in ("no-tester-file-edit", "no-tester-file-write"):
+        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@prd T-003.1"""'})
+        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "content": '"""@prd T-003.1"""'})
+        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@prd T-003.2"""'})
+        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": "/w/tests/test_notes_unit.py", "content": '"""@prd T-003.1"""'})
+
+
+def test_the_file_graders_hold_on_the_start_repo_and_catch_a_reworded_ac(tmp_path):
+    import subprocess
+    import sys
+
+    dst = tmp_path / "repo"
+    subprocess.run([sys.executable, "-B", str(EVALS / "scaffolds/build_repo.py"), str(dst)], check=True, capture_output=True)
+    feature = (dst / "docs/prd/notes/features/notes.md").read_text(encoding="utf-8")
+    cases = (dst / "docs/prd/notes/test-cases/notes.yaml").read_text(encoding="utf-8")
+    assert re.search(_grader("builder-stays-out-of-prd", "ac-and-cases-unchanged")["pattern"], feature)
+    assert re.search(_grader("builder-stays-out-of-prd", "test-cases-unchanged")["pattern"], cases)
+    assert not re.search(_grader("builder-stays-out-of-prd", "ac-and-cases-unchanged")["pattern"], feature.replace("stored notes", "live notes"))
+    assert not re.search(_grader("builder-stays-out-of-prd", "test-cases-unchanged")["pattern"], cases.replace("output: 0", "output: 1"))
+    assert re.search(_grader("build-close-no-bump", "fr003-verified")["pattern"], feature.replace("Status: approved", "Status: verified"))
+    assert not re.search(_grader("build-close-no-bump", "fr003-verified")["pattern"], feature)
+    gap = _grader("build-gap-stops", "fr003-still-approved")["pattern"]
+    assert not re.search(gap, feature) and not re.search(gap, feature.replace("Status: approved", "Status: built"))
+    assert re.search(gap, feature.replace("Status: approved", "Status: verified"))
+    prd = (dst / "docs/prd/notes/prd.md").read_text(encoding="utf-8")
+    assert re.search(_grader("build-close-no-bump", "no-version-bump")["pattern"], prd)
+    assert not re.search(_grader("build-close-no-bump", "no-new-changelog-row")["pattern"], prd)
+    assert re.search(_grader("build-close-no-bump", "no-new-changelog-row")["pattern"], prd + "| 1.2.0 | 2026-11-01 | x | y |\n")
+
+
+def test_the_gap_graders_allow_built_and_catch_a_guessed_count():
+    ed = "no-status-edit"
+    mk = lambda s: {"file_path": "/w/docs/prd/notes/features/notes.md", "old_string": "x", "new_string": s}  # noqa: E731
+    assert _tool_input_counts("build-gap-stops", ed, mk("### FR-003 Count notes\nStatus: verified\n"))
+    assert not _tool_input_counts("build-gap-stops", ed, mk("### FR-003 Count notes\nStatus: built\n"))
+    pat = _grader("build-gap-stops", "no-guessed-archive-count")["pattern"]
+    guess = 'notes.app.archive_note(2)\n    assert notes.app.count_notes() == 2'
+    assert re.search(pat, guess) and re.search(pat, "archive_note(2)\n    assert count_notes() == len(_NOTES)")
+    assert not re.search(pat, "archive_note(2)\n    assert isinstance(result, int)")
+    assert not re.search(pat, "def archive_note(note_id: int) -> None:\n    assert add_note('a') == 1")

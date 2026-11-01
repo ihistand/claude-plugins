@@ -1,5 +1,74 @@
 # `prd-toolkit` eval baseline
 
+## 0.4 baseline (2026-11-01, `--runs 3`)
+
+Recorded **2026-11-01** on branch `feat/prd-toolkit-0.4` at `--runs 3`, model `sonnet`, on Claude Code
+2.1.316. `suite.plugins[].path` is the worktree's `prd-toolkit` (confirmed in every `--json`; the
+user-scope 0.1.0 install did not shadow it). The manifest still says 0.3.0, because the version
+bump is a later task. Five new `building-from-prds` cases, plus the five cases 0.3 ran, run again
+because the skills they touch (changing-prds hand-off, dispatching) sit next to the build.
+
+Command (from the repo root): the 0.2 command above, with `--case <glob>` added once per group
+(`build*`, `chang*`, `adopt*`; the groups ran at the same time, each with its own `--json`). The
+`--allow-tools` grants are `Write Edit Bash Agent` plus the two pypi `WebFetch` grants.
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `building-trigger` (new) | 1.00 | 0.00 | +1.00 | `FR-003 ... approved; build it.` The skill fired 3/3 and `prd-toolkit:prd-builder` was dispatched (by `subagent_type`) 3/3. Without the plugin no builder exists, so `builder-dispatched` fails 3/3. |
+| `building-not-for-plain-code` (new) | 1.00 | 1.00 | 0.00 | Must-not-trigger case; Δ 0 is by design. A repo with no `docs/prd/`, "add a `--version` flag": the skill fired in neither arm (0/6) and the flag was written 6/6. |
+| `builder-stays-out-of-prd` (new) | 1.00 | 0.75 | +0.25 | With: no Write under `docs/prd/`, no Edit there except the caller's close (a `Status: built`/`verified` move or a `Source:` line), AC-003 and T-003.2 unchanged in the working tree, no `T-003.1` in the tester's `tests/test_notes.py`. Without: the agent builds with no builder (`builder-dispatched` fails 3/3) and appends its unit test to `tests/test_notes.py` (`unit-test-not-in-tester-file` fails 3/3). |
+| `build-gap-stops` (new) | 1.00 | 0.67 | +0.33 | First run: with 1.00/1.00/0.00 and Δ -0.33 (see the two rulings below). Re-run after the grader changes: with 3/3 at 1.00, without 0.67 x3. Runs 1 and 2 stopped at the tester's QUESTION before the builder ran (no status written); run 3 stopped on the builder's QUESTION after its commit was on the build branch and wrote `built`, as **Stops** says. No skill-text change was needed. |
+| `build-close-no-bump` (new) | 1.00 | 0.67 | +0.33 | With: the block and the §11 row read `verified`, `version: 1.1.0`, no later §14 row, no Edit of a `version:` line, the PRD still `Approved`. Without: the agent never writes `verified` (`fr003-verified`, `index-verified` fail 3/3). |
+| `change-uses-context-pack` | 1.00 | 0.67 | +0.33 | As 0.3: `ran-pack` fails 3/3 without the plugin. |
+| `adoption-second-area-minor` | 1.00 | 0.60 | +0.40 | As 0.3: `tester-dispatched` and `suite-mode` fail 3/3 without it. |
+| `adopting-trigger` | 1.00 | 0.00 | +1.00 | As 0.3. |
+| `changing-major-bump` | 1.00 | 0.00 | +1.00 | As 0.3. |
+| `changing-new-id-not-reused` | 1.00 | 0.00 | +1.00 | As 0.3. |
+
+### Rulings on `build-gap-stops`
+
+- **`no-status-edit` and `fr003-still-approved` forbid `verified` and `live`, not `built`.** As first
+  written (no Edit of any block `Status:` line) the grader failed run 3 of the first run, which is
+  what the skill text asks for: `running-a-build.md` **Stops** writes `built` for a block whose unit
+  T-ids pass when a stop comes after the builder's merge. The eval harness has no worktree isolation
+  (`Cannot create agent worktree`), so the builder's commit is already on the build branch when its
+  QUESTIONS line raises the gap, and `built` is the specified close. The controller's brief and the
+  skill text disagreed; the grader follows the skill. The invariant kept is that a stopped build is
+  never `verified` or `live`.
+- **`no-guessed-archive-count` was added because the without arm passed everything.** The first run's
+  Δ was -0.33: with no plugin the agent never touches a status, so every grader but the `with-only`
+  Skill ones passed. The new trace grader fails a run in which a test asserts an exact count after
+  `archive_note(<n>)`. All three without runs do (`== 2`, `== len(_NOTES)`); the with runs assert only
+  the type, or write no such test. It matched the start repo's own `archive_note` definition
+  followed by an unrelated `assert ... == 1` in a first draft, so it now needs a literal
+  `archive_note(<digits>)` call; both forms are checked in `tests/test_eval_graders.py`.
+
+### Notes on the builder graders
+
+- **A tool call carries no agent id.** `tool_used` graders see the caller's, the builder's and the
+  tester's calls alike, so `builder-stays-out-of-prd` cannot forbid "any Edit of `tests/test_notes.py`"
+  (the tester edits it for T-003.2) or "any Edit under `docs/prd/`" (the caller's close does). It
+  forbids what only the builder would write: a PRD edit that is not a status or `Source:` move, and a
+  `T-003.1` case in the tester's file. A builder edit of the tester's import line with no T-id, or a
+  PRD edit through Bash `sed`, passes the tool graders; the two PRD file graders and the
+  `T-003.1` file grader read the result and catch what changes content.
+- **No worktree isolation in the eval harness.** Every with-arm run saw `Cannot create agent
+  worktree`, then took the no-isolation path (builder first, tester after).
+- **Bash writes.** The without arm writes code and tests with Bash heredocs, which `tool_used: Write`
+  and `Edit` never see; the discriminating graders read files or the trace.
+- `tests/test_eval_graders.py` now checks every eval's shape (frontmatter, scaffold script
+  executable, lone `max: 0` with `min: 0`, regexes compile) and the new graders' hand-made inputs.
+
+### Gate verdict (0.4, ten cases run)
+
+- **Tier 1, every `skill-fired` passes in the with arm: PASS.** `building-trigger`,
+  `builder-stays-out-of-prd`, `build-gap-stops` and `build-close-no-bump` 3/3 each; the 0.3 cases
+  unchanged at 3/3. `building-not-for-plain-code` correctly fires nothing.
+- **Tier 2, no triggering case at Δ <= 0: PASS.** Lowest triggering Δ is +0.25
+  (`builder-stays-out-of-prd`); `building-not-for-plain-code` is Δ 0 by design.
+- `suite.plugins[].path` is the worktree: PASS.
+- No skill-text fix was needed, so no pin was added.
+
 ## 0.3 baseline (2026-10-30, `--runs 3`)
 
 Recorded **2026-10-30** on branch `feat/prd-toolkit-0.3` at `--runs 3`, model `sonnet`, on Claude Code
