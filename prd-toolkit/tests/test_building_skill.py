@@ -614,3 +614,38 @@ def test_tester_only_round_finds_missing_tids_exactly():
             "`refused:` lines") in para
     assert r"Grep the anchored pattern `@prd\s+<T-id>\b` (dots escaped: `@prd\s+T-004\.1\b`)" in para
     assert "When none is missing, report that and commit nothing." in para
+
+
+# --- 0.6: a stopped build records an entry; /prd-build --fixes E-nnn ---
+
+def test_stops_name_the_three_that_record_an_entry():
+    t = flat(RUN)
+    stops = t.split("**Stops.**", 1)[1].split("**A tester-only round.**", 1)[0]
+    for s in ("Stops that record an entry", "the third failed round on a T-id", "a failing test that cites no T-id",
+              "a harness overlap", "prd_error.py new", "--touches", "--evidence-file",
+              "A PRD gap, a dirty tree and a failed state check record none"):
+        assert s in stops, s
+    assert 'echo "prd-error-exit=$?"' in RUN.read_text(encoding="utf-8")
+
+
+def test_fixes_flag_in_command_and_preflight():
+    c = flat(COMMAND)
+    assert "--fixes E-nnn" in c and "also goes to `--req`" in c
+    r = flat(RUN)
+    for s in ("prd_error.py list docs/prd/<slug> --open",
+              "refused: E-nnn is <state>; a fix starts from a confirmed entry"):
+        assert s in r, s
+
+
+def test_fixes_close_edit_is_one_line_only():
+    r = flat(RUN)
+    for s in ("known-failing: E-nnn` line whose T-id is `pass`", "and no other test-case line",
+              "every other test-case edit still goes through `/prd-change`",
+              "the T-ids whose test cases carry `known-failing: E-nnn`"):
+        assert s in r, s
+    assert "--fixes" in flat(ROOT / "references/prd-format.md")
+
+
+def test_caller_never_resolves_the_entry():
+    assert "The caller never resolves the entry: the build reports, and `handling-errors` resolves" in flat(RUN)
+    assert "never resolves an entry" in flat(SKILL)

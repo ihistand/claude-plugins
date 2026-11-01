@@ -2,7 +2,7 @@
 description: Build an approved PRD change with prd-builder and prd-tester, reconcile each failure by quote, and move its requirements to built and verified (prd-toolkit)
 ---
 
-Build an approved PRD change. Arguments, `<area> <IDs>`: $ARGUMENTS
+Build an approved PRD change. Arguments, `<area> <IDs> [--fixes E-nnn]`: $ARGUMENTS
 
 1. Before anything else, make a Read of
    `${CLAUDE_PLUGIN_ROOT}/skills/building-from-prds/running-a-build.md`, whole (no offset, no
@@ -18,5 +18,7 @@ Build an approved PRD change. Arguments, `<area> <IDs>`: $ARGUMENTS
    space-separated list is a usage error (exit 2). With no area, find the
    area each ID's block lives in from the repo pack, or ask. With no IDs, ask: a build never
    guesses its scope.
+   `--fixes E-nnn` builds the fix for a confirmed entry. The E-nnn also goes to `--req`; step 1 of
+   the procedure runs `prd_error.py list <prd> --open` and refuses unless the entry is `confirmed`.
 5. Follow `${CLAUDE_PLUGIN_ROOT}/skills/building-from-prds/running-a-build.md` exactly, steps 1 to
    8, and report as its close says.

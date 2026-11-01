@@ -190,6 +190,11 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
   add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
   else goes through `/prd-change`.
+- Resolving the entry after a `--fixes` build, or writing a stop's entry by hand. (Pressure, not
+  observed.) The caller never resolves an entry: the build reports, and `handling-errors`
+  resolves; a stop's entry is written with `prd_error.py new`, never typed into `errors.md`.
+- Removing a `known-failing:` line for a T-id that is not `pass`, or on a build without
+  `--fixes E-nnn`. (Pressure, not observed.)
 - Writing the code or a test in the caller's session because "it's tiny" or "no need for agents".
   (Pressure, not observed.) A change built outside the build earns no `built` and no `verified`.
 - "Classification: code bug → route to the builder. (I went ahead and applied the fix myself.)"

@@ -223,6 +223,7 @@ T-012.2:
   entry must be in `errors.md` and still open; a resolved or unknown entry is a `test-refs`
   violation. The test for such a case is a strict expected failure in the harness's own way (pytest
   `xfail(strict=True)`, jest `test.failing`) and its citation reads `@prd <T-id> known-failing <E-nnn>`.
+  A `/prd-build --fixes E-nnn` close removes the line once its T-id passes; no other close edits one.
 - A custom contract type whose files are YAML mappings makes `<type>:<name>` resolvable: `<name>`
   must be a top-level key of one of the type's `.yaml` files under `contracts/` (`test-refs`). A
   type whose files are not YAML mappings there is not checked. A custom type whose glob matches no file is a `contracts-valid`
