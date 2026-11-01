@@ -127,7 +127,9 @@ report each finding, and return to the phase it belongs to. Never commit an `App
 - **Levels:** fill each row's harness command and environment, and in a clarify round ask the
   user which Gate (`build` or `deploy`) each level runs at; never keep the template's Gate
   silently. `build` runs in every build and in merge CI; `deploy` runs against a deployed
-  environment.
+  environment. A build-gate Harness command never collects a deploy-gate level's test path
+  (`pytest tests` collects `tests/system`): give each level its own path. Lint reports an overlap
+  (`test-level`).
 - **Refs and acceptance:** a test case that depends on something outside its contracts (a
   component contract, an architecture fact, a Harness slot) cites it in `refs:`. An acceptance
   case follows the acceptance rules in `test-levels.md`: observable results only, fresh data on

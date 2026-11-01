@@ -139,6 +139,8 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
         if s.number != expected:
             yield out(s.line, f"step {n}: expected step {expected}")
         expected = s.number + 1
+        for label, line in s.repeated:
+            yield out(line, f"step {n}: label {label} appears twice")
         if s.actor is None:
             yield out(s.line, f"step {n}: the step line needs (actor: agent|human) (env: <environment>)")
             continue

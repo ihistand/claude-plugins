@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import re
+import shlex
 from collections.abc import Iterator
 
 from ..findings import Finding
@@ -149,6 +150,62 @@ def test_cases_consistent(prd: Prd):
             yield Finding(tc.file, tc.line, "test-cases-consistent", f"{tc.id} is cited by no Tests line naming {tc.file}")
 
 
+_SHELL_OPS = {"&&", "||", ";", "|", "&"}
+
+
+def _norm(path: str) -> str:
+    while path.startswith("./"):
+        path = path[2:]
+    return path.rstrip("/") or "."
+
+
+def harness_path(command: str, roots: set[str]) -> str | None:
+    """The first path-like argument of a Harness command, normalized: a token holding `/`, `.`, or a test root's name.
+
+    Program names (each simple command's first word), options, `VAR=value` prefixes and files with an
+    extension (a runner script like `tools/gate.sh`, a module like `x.py`) are never paths. A heuristic.
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    want_program = True
+    for tok in tokens:
+        if tok in _SHELL_OPS:
+            want_program = True
+            continue
+        if want_program:
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
+                continue
+            want_program = False
+            continue
+        if tok.startswith("-"):
+            continue
+        name = _norm(tok)
+        if name in (".", "..") or name in roots:
+            return name
+        if "/" in tok and "." not in name.rsplit("/", 1)[-1]:
+            return name
+    return None
+
+
+def _overlaps(prd: Prd):
+    """(build level, deploy level, deploy path) where the build level's path is the deploy level's or a parent of it."""
+    t = prd.testing
+    roots = {_norm(r) for r in t.harness.test_roots or []}
+    paths = {lvl: harness_path(cmd, roots) for lvl, cmd in t.commands.items()}
+    for b in t.levels:
+        if t.gates.get(b) != "build" or not paths.get(b):
+            continue
+        for d in t.levels:
+            dp = paths.get(d)
+            if t.gates.get(d) != "deploy" or not dp:
+                continue
+            bp = paths[b]
+            if bp == dp or bp == "." or dp.startswith(bp + "/"):
+                yield b, d, dp
+
+
 @rule("test-level")
 def test_level(prd: Prd):
     t = prd.testing
@@ -159,6 +216,8 @@ def test_level(prd: Prd):
             for lvl, g in t.gates.items():
                 if g not in model.GATES:
                     yield Finding("testing.md", t.levels[lvl], "test-level", f"level '{lvl}': Gate '{g}' is not one of {', '.join(model.GATES)}")
+            for b, d, path in _overlaps(prd):  # a build run, local or in CI, would run deploy-gate tests with no environment
+                yield Finding("testing.md", t.levels[b], "test-level", f"level '{b}' (Gate build) would collect level '{d}' (Gate deploy) tests: {path}")
     for tc in _cases(prd):
         level = tc.data.get("level")
         if _blank(level):

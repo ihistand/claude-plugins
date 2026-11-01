@@ -252,3 +252,21 @@ def test_tests_step_rollback_shape(prd):
 def test_production_envs_exact_yes(prd):
     edit(prd, "operations.md", "| https://orders.example.com | yes |", "| https://orders.example.com | YES |")
     assert model.production_envs(model.load(prd)) == set()
+
+
+# ---- final review: a repeated label is reported (finding 10) ----
+
+def test_repeated_label_is_reported_and_the_first_is_used(prd):
+    edit(prd, "operations.md", "   Run: `./deploy.sh staging`\n", "   Run: `./deploy.sh staging`\n   Run: `./deploy.sh other`\n")
+    s1 = model.load(prd).operations.steps[0]
+    assert s1.run == "./deploy.sh staging"
+    found = [f for f in lint(prd) if f.rule == "runbook-steps"]
+    assert [f.message for f in found] == ["step 1: label Run appears twice"]
+    text = (prd / "operations.md").read_text(encoding="utf-8").split("\n")
+    assert text[found[0].line - 1] == "   Run: `./deploy.sh other`"
+
+
+def test_repeated_label_on_a_human_step(prd):
+    edit(prd, "operations.md", '   Check: the reply says "deploy production"\n',
+         '   Check: the reply says "deploy production"\n   Check: the reply says "yes"\n')
+    assert ("runbook-steps", "step 3: label Check appears twice") in msgs(prd)

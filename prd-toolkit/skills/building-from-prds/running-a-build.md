@@ -62,17 +62,20 @@ a PRD gap (a QUESTIONS line that is not a test dispute, a tester QUESTION the PR
 or step 6's PRD-gap row), on a failing test that cites no T-id, on a failed tester state check
 (`dispatching.md` step 4), on a failed builder state check only without worktree isolation; with
 it, a failed builder check is a failed round (**Rounds**), on a `prd-trace-exit=` other than `0`
-in step 7 or the close, and on the third failed round on a T-id. Any stop after the builder's
-merge writes `built` for each block whose unit T-ids pass, never `verified`. A stop before the
-merge writes no status. Either way, report the stop to the user with its records; a PRD gap also
-goes to `/prd-change`.
+in step 7 or the close, on a harness overlap in step 7, and on the third failed round on a
+T-id. Any stop after the builder's merge writes `built` for each block whose unit T-ids pass,
+never `verified`. A stop before the merge writes no status. Either way, report the stop to the
+user with its records; a PRD gap also goes to `/prd-change`.
 
 **A tester-only round.** A block already `verified` whose deploy-gate T-ids no test cites comes
 here as `/prd-build <area> <IDs>`, sent by the deploy pre-flight's refusal
 `<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`. It takes a tester-only write
-round, with no builder and no status change. Run step 1, then step 2's snapshot. For each
-deploy-gate T-id on the block's `Tests:` line, Grep `@prd <T-id>` with the path of each test root
-(testing.md Layout, `Test roots:`): one with no match in any root is missing. Dispatch
+round, with no builder and no status change. Run step 1, then step 2's snapshot. When the round
+comes from a refusal, the missing T-ids are the T-ids of the pre-flight's `refused:` lines for the
+block. Otherwise, for each deploy-gate T-id on the block's `Tests:` line, Grep the anchored pattern
+`@prd\s+<T-id>\b` (dots escaped: `@prd\s+T-004\.1\b`) with the path of each test root
+(testing.md Layout, `Test roots:`): one with no match in any root is missing. When none is
+missing, report that and commit nothing. Dispatch
 `prd-toolkit:prd-tester` alone, `Mode: write`, with those T-ids only, each with its test-case file.
 Check it as step 4's tester bullet says, then run each line as its own call, the tester's paths
 typed out from its TESTS and HARNESS CHOICES, the IDs being the blocks':
@@ -246,9 +249,12 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    your own. Run every Levels harness command whose `Gate` is `build`, exactly as testing.md
    writes it, each its own call. Every test passes except cases `known-failing` on an open `E-nnn`
    (Grep `known-failing` with the path `docs/prd/<slug>/test-cases/` to see which). A failure
-   here is a `fail` line for its T-id: reconcile it in step 6, against that T-id's own test case
-   even when it lies outside this build, as that T-id's next round. A failing test that cites no
-   T-id stops the build. Then:
+   here of a test that cites a unit or build-gate T-id is a `fail` line for its T-id: reconcile it
+   in step 6, against that T-id's own test case even when it lies outside this build, as that
+   T-id's next round. A failing test that cites no T-id stops the build. A failure here of a test
+   that cites a deploy-gate T-id is a harness overlap: a build-gate command collected a
+   deploy-gate test. It stops the build with a report: never reconcile it, and never change code
+   for it. The report names the command and the test; the Levels fix goes to `/prd-change`. Then:
 
    ```bash
    uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"

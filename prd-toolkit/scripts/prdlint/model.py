@@ -113,6 +113,7 @@ class Step:
     env: str | None
     line: int
     labels: dict[str, tuple[str, int]] = field(default_factory=dict)  # Run | Check | Rollback | Do -> (raw value, line)
+    repeated: list[tuple[str, int]] = field(default_factory=list)  # (label, line) of each label after its first; the first is used
     run: str | None = None  # the unwrapped backticked command of Run
     tests: list[str] | None = None  # the levels of a `Run: tests <level>[, <level>]` step
     check: str | None = None
@@ -332,7 +333,10 @@ def _step(m: re.Match, n: int, body: list[tuple[int, str]]) -> Step:
     for ln, text in body:
         lm = _LABEL.match(text)
         if lm:
-            s.labels.setdefault(lm.group(1), (lm.group(2), ln))
+            if lm.group(1) in s.labels:
+                s.repeated.append((lm.group(1), ln))
+            else:
+                s.labels[lm.group(1)] = (lm.group(2), ln)
     if "Run" in s.labels:
         raw = s.labels["Run"][0]
         tm = _TESTS.match(raw)

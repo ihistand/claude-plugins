@@ -247,7 +247,12 @@ Level-2 headings with those names; the first column of each table is the name th
 refer to (levels, environments, fixtures).
 
 - Levels: `Gate` is `build` (the level runs before deploy, on the code alone) or `deploy` (it needs the
-  deployed system); `test-level` reports a missing column once and any other value per row.
+  deployed system); `test-level` reports a missing column once and any other value per row. It
+  also reports a build-gate level whose Harness command's first path argument equals, or is a
+  parent of, a deploy-gate level's (`pytest tests` and `pytest tests/system`): a build would run
+  deploy-gate tests with no environment. The path is the first argument that holds a `/` or names a
+  test root, skipping program names, options and files with an extension, so a shared runner
+  script (`bash tools/gate.sh <level>`) is not one.
 - Levels: each `Harness command` is **one simple command** in backticks, such as
   `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
   first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or
@@ -311,7 +316,7 @@ Three tables and a runbook. Other headings (Secrets by name) are free. The `runb
 - Environments: `Production` is `yes` or `no`, and at least one row is `yes`. Every environment is
   also a row of `testing.md` Environments (`runbook-env`).
 - A step line is `N. <title> (actor: agent|human) (env: <environment>)`, numbered from 1 without
-  gaps. Labelled lines follow, indented, in any order, one per label; a repeated label is ignored. An agent step takes `Run:` (required),
+  gaps. Labelled lines follow, indented, in any order, one per label; lint reports a repeated label (`runbook-steps`), and the first is used. An agent step takes `Run:` (required),
   `Check:` (required unless `Run:` is a `tests` step) and `Rollback:` (optional); a human step
   takes `Do:` and `Check:` (both required, prose) and never `Run:` or `Rollback:`. Other indented
   lines are prose and ignored (`runbook-steps`).

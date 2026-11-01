@@ -119,3 +119,10 @@ def test_web_testing_skill_names_write():
 def test_tester_agent_description_comma_before_write():
     t = (ROOT / "agents/prd-tester.md").read_text(encoding="utf-8")
     assert "and not run), a write (" in t and "and not run) a write" not in t
+
+
+def test_levels_build_gate_never_collects_deploy_gate_paths():
+    for path in (AUTHORING, ADOPTING):
+        t = flat(path)
+        assert ("A build-gate Harness command never collects a deploy-gate level's test path (`pytest tests` "
+                "collects `tests/system`): give each level its own path. Lint reports an overlap (`test-level`).") in t, path.name

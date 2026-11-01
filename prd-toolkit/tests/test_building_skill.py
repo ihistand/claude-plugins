@@ -585,7 +585,8 @@ def test_r28_tester_only_round_for_verified_blocks():
               "`<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`",
               "`/prd-build <area> <IDs>`",
               "no builder and no status change",
-              "Grep `@prd <T-id>`",
+              "the T-ids of the pre-flight's `refused:` lines",
+              r"Grep the anchored pattern `@prd\s+<T-id>\b`",
               "Dispatch `prd-toolkit:prd-tester` alone, `Mode: write`, with those T-ids only",
               "step 4's tester bullet",
               '`git commit -m "test(<area>): <T-ids> from the PRD" -m "Refs: <IDs>"`',
@@ -593,3 +594,23 @@ def test_r28_tester_only_round_for_verified_blocks():
               "the block stays `verified`",
               "its `Status:`, `Source:` and §11 row are untouched"]:
         assert s in para, s
+
+
+# --- final review: harness overlap (finding 3) and the tester-only search (finding 6) ---
+
+def test_step7_deploy_gate_failure_is_a_harness_overlap():
+    seven = flat(RUN).split("7. **Full run.**", 1)[1].split("8. **Close.**", 1)[0]
+    assert ("A failure here of a test that cites a deploy-gate T-id is a harness overlap: a build-gate "
+            "command collected a deploy-gate test.") in seven
+    assert "It stops the build with a report: never reconcile it, and never change code for it." in seven
+    stops = flat(RUN).split("**Stops.**", 1)[1].split("Any stop after the builder's merge", 1)[0]
+    assert "a harness overlap in step 7" in stops
+
+
+def test_tester_only_round_finds_missing_tids_exactly():
+    para = flat(RUN).split("**A tester-only round.**", 1)[1].split("1. **Preflight.**", 1)[0]
+    assert "Grep `@prd <T-id>` with" not in para
+    assert ("When the round comes from a refusal, the missing T-ids are the T-ids of the pre-flight's "
+            "`refused:` lines") in para
+    assert r"Grep the anchored pattern `@prd\s+<T-id>\b` (dots escaped: `@prd\s+T-004\.1\b`)" in para
+    assert "When none is missing, report that and commit nothing." in para

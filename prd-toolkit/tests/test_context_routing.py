@@ -300,8 +300,9 @@ def test_gap_rule_keeps_its_end():
     assert "Do not guess or read the code to fill the gap." in " ".join((ROOT / "templates/claude-block.md").read_text().split())
 
 
-def test_format_repeated_label_ignored():
-    assert "one per label; a repeated label is ignored" in flat(FORMAT)
+def test_format_repeated_label_reported():
+    assert "one per label; a repeated label is ignored" not in flat(FORMAT)
+    assert "one per label; lint reports a repeated label (`runbook-steps`), and the first is used" in flat(FORMAT)
 
 
 def test_04_spec_notes_the_scripts_line():

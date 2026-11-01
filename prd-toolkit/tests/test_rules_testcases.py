@@ -253,3 +253,46 @@ def test_custom_items_maps_types_to_top_level_keys(prd):
     assert custom_items(model.load(prd)) == {}
     _looker(prd)
     assert custom_items(model.load(prd)) == {"looker": {"orders_summary"}}
+
+
+# ---- final review: a build-gate command must not collect deploy-gate tests (finding 3) ----
+
+def _harness(level: str, command: str):
+    import re
+
+    def go(prd):
+        p = prd / "testing.md"
+        text = p.read_text(encoding="utf-8")
+        new, n = re.subn(rf"^(\| {level} \| )`[^`]*`", lambda m: m.group(1) + f"`{command}`", text, flags=re.M)
+        assert n == 1, level
+        p.write_text(new, encoding="utf-8")
+    return go
+
+
+def overlap(prd):
+    return [f for f in lint(prd) if f.rule == "test-level" and "would collect" in f.message]
+
+
+@pytest.mark.parametrize("command,path", [("pytest tests", "tests/system"), ("pytest tests/", "tests/system"),
+                                          ("uv run pytest .", "tests/system"), ("pytest ./tests/system", "tests/system"),
+                                          ("TEST_ENV=ci python -m pytest -q tests", "tests/system")])
+def test_build_level_that_collects_a_deploy_level(prd, command, path):
+    _harness("unit", command)(prd)
+    found = overlap(prd)
+    assert f"level 'unit' (Gate build) would collect level 'system' (Gate deploy) tests: {path}" in [f.message for f in found]
+    assert all(f.file == "testing.md" for f in found)
+    lines = (prd / "testing.md").read_text(encoding="utf-8").split("\n")
+    assert all(lines[f.line - 1].startswith("| unit |") for f in found)
+
+
+@pytest.mark.parametrize("command", ["pytest tests/unit", "pytest tests/systematic", "bash tools/gate.sh unit",
+                                     "cd tools && bash gate.sh unit", "./node_modules/.bin/jest"])
+def test_build_level_that_does_not_collect_a_deploy_level(prd, command):
+    _harness("unit", command)(prd)
+    assert overlap(prd) == []
+
+
+def test_deploy_levels_sharing_a_runner_script_are_not_an_overlap(prd):
+    for level in ("unit", "system", "smoke"):
+        _harness(level, f"bash tools/gate.sh {level}")(prd)
+    assert overlap(prd) == []
