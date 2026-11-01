@@ -64,7 +64,13 @@ pipe, filter or truncate a gated command's output (no `| head`, no `| grep`).
 
 A refusal is final. A step that started and did not finish, a confirm already used, a second
 rollback and a resume of a failed run are refused by the script: report the refusal and stop;
-never work around it with another command.
+never work around it with another command. A run id of another PRD (`run <id> is for <folder>,
+not <folder>`) and a runbook changed since the run started are refused the same way.
+`another prd_deploy command is running in this repository` means a `run`, `resume` or `rollback`
+is still working in this repository: report it and wait for the user, never retry it in a loop.
+An `--until` whose cut would take a production step along exits 2: the runbook runs a step on
+that environment after production. Report it and stop; the order is a gap for
+`prd-toolkit:changing-prds`.
 
 **Input:** a PRD at `docs/prd/<slug>/` with a `## Runbook` in `operations.md`, and the user's
 request. "Deploy to production" or "deploy everything" is a run with no `--until`; "deploy to
@@ -135,8 +141,8 @@ step 3 for a finished run they ask you to record.
      uv run --script <scripts>/prd_deploy.py resume docs/prd/<slug> --run <id>; echo "prd-deploy-exit=$?"
      ```
 
-     `resume` refuses when HEAD, the PRD version or the tracked tree moved since the run
-     started, when the confirm was already used, or when a step started and did not finish.
+     `resume` refuses when HEAD, the PRD version, the tracked tree or the runbook moved since the
+     run started, when the confirm was already used, or when a step started and did not finish.
 
      With no one to ask, the run stays stopped: a headless session, "do not ask questions" or
      "I'm away" leaves nobody to reply, so confirm nothing and resume nothing. Go to step 5 and
@@ -150,7 +156,9 @@ step 3 for a finished run they ask you to record.
      `<that dir>/prd-toolkit/deploys/<run id>.jsonl`: the failed step's record holds its command,
      exit code and the stdout and stderr tails (a `check` inside it for a failed `Check:`). Show
      the user the failed step, those output tails and its `Rollback:` command (the run printed it
-     as `` rollback: `<command>` ``; a step without one has none to offer). Ask whether to roll
+     as `` rollback: `<command>` ``; a step without one has none to offer). A step with a `start`
+     record and no step record (the run printed `could not write the log`) is the failed step:
+     show its `start` record instead. Ask whether to roll
      back, and run `prd_deploy.py rollback` only on the user's yes in their own words, given after
      they saw the failure; a message of theirs that names the run and asks for the rollback is
      one. Never run it unasked, and never run the `Rollback:` command by hand:
@@ -193,7 +201,9 @@ step 3 for a finished run they ask you to record.
    `version` the run's PRD version, and its `step` records give each step's result.
 
    An environment is reached when the runbook's last step on it passed in this run (a human last
-   step: confirmed and resumed, with no later failure). Write each reached environment's row in
+   step: confirmed and resumed, with no later failure), every level of its `tests` steps has a
+   `pass` record, and no step on it started without finishing; `check` requires a row for each
+   one. Write each reached environment's row in
    `## Deployed` of `docs/prd/<slug>/operations.md`, replacing that environment's earlier row and
    keeping every other row: the environment, the run's PRD version, the first seven characters
    of `<base>`, the run's date (the run id's first eight digits, as `YYYY-MM-DD`) and the run id.
@@ -247,12 +257,13 @@ step 3 for a finished run they ask you to record.
 
    `prd_deploy.py check` compares the run's HEAD with the close. Exit 0 is clean. Exit 1 prints
    one finding per line: a range that does not start at the run's HEAD, a change outside the
-   `## Deployed` rows and `Status:` lines, a row the log does not support, a status move the run
-   did not earn, a block still `verified` after a production finish, or a failed run with no
-   open unclassified entry. A failing close check is fixed and the check rerun before the
-   report. Fix the PRD files, commit the fix the same way (a new commit, never an amend), and
-   run the check again on the same range. Exit 2 is a usage error (a malformed range, a run id
-   with no log): fix the command.
+   `## Deployed` rows and `Status:` lines, a row the log does not support, a reached environment
+   with no row, a row dated other than the run's date, a status move the run did not earn, a
+   block still `verified` after a production finish, or a failed run with no open unclassified
+   entry; a run of another PRD prints one `refused:` line instead: check the run id. A failing
+   close check is fixed and the check rerun before the report. Fix the PRD files, commit the fix
+   the same way (a new commit, never an amend), and run the check again on the same range. Exit 2
+   is a usage error (a malformed range, a run id with no log): fix the command.
 5. **Report.** The run id; each step's result; every human reply, quoted verbatim; a run left
    stopped at a human step, with its `Do:`; the rollback offered and its result, or that it was
    not run and its command; the Deployed rows written; the IDs moved to `live`; any `E-nnn`

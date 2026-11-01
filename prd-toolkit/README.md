@@ -232,21 +232,35 @@ never deploy; deploying is done from a session.
 **What `prd_deploy.py` refuses.** Exit 1 (`refused`), with each reason printed:
 
 - `run`: the tracked working tree is dirty; `prd_lint` or `prd_trace` finds anything; any
-  requirement is still `built` (a deploy starts from `verified`); or the run reaches a production
+  requirement is still `built` (a deploy starts from `verified`); the run reaches a production
   environment while a `verified` requirement has a deploy-gate T-id that no test cites (it could
-  never go `live`);
-- `resume`: HEAD or the PRD version moved since the run started, or the tree changed; the run's
-  human step has no `confirm`, or its `confirm` was already used; a step started and did not
-  finish (a killed or timed-out call); or the run failed, since a failure ends the run and
-  `resume` never goes past it;
-- `rollback`: HEAD or the PRD version moved since the run started.
+  never go `live`); or another `prd_deploy` command is running in this repository;
+- `resume`: the run is another PRD's run (`run <id> is for <folder>, not <folder>`), or its log
+  names no PRD folder (written before the header named it); HEAD or the PRD version moved since
+  the run started, the tree changed, or the runbook changed (`operations.md` or `testing.md`); the
+  run has no step records, is done, or did not stop at a human step, or the step it stopped at is
+  not a human step of the runbook; the run's human step has no `confirm`, or its `confirm` was
+  already used; a step started and did not finish (a killed or timed-out call); the run failed,
+  since a failure ends the run and `resume` never goes past it; or another `prd_deploy` command
+  is working on this run or running in this repository;
+- `rollback`: the run is another PRD's run, or its log names no PRD folder; HEAD or the PRD
+  version moved since the run started, the tracked tree is dirty, or the runbook changed; or
+  another `prd_deploy` command is working on this run or running in this repository;
+- `check`: the run is another PRD's run, or its log names no PRD folder, as its only line; every
+  other exit 1 of `check` prints close-check findings.
 
 Exit 2 (usage error, nothing run), with the reason printed:
 
-- a second rollback of the same step, or a rollback of a step that is not the run's failed step or
-  has no `Rollback:`;
-- a `confirm` for a step that already has a `confirm` record, that is not the human step the run
-  stopped at, or with an empty reply.
+- `plan` or `run`: an `--until <env>` whose cut would take a production step along (a step on
+  `<env>` after a production one), unless `<env>` is production itself;
+- `rollback`: a second rollback of the same step, or a rollback of a step that is not the run's
+  failed step or has no `Rollback:`;
+- `confirm`: another PRD's run, or another `prd_deploy` command working on this run; a step that
+  already has a `confirm` record, or that is not the human step the run stopped at; or an empty
+  reply.
+
+`run`, `resume` and `rollback` hold a repository-wide lock while they run commands; a run stopped
+at a human step holds none, and `plan`, `check` and `confirm` take none.
 
 A failed step exits 4 and prints its `Rollback:` command; the script never runs it unasked.
 
@@ -272,6 +286,7 @@ the user cannot state.
   - A `smoke` level in `testing.md`. Five lint rules: `runbook-steps`, `runbook-env`, `production-gate`, `runbook-tests` and `drift-rows`.
   - Generated CI adds manual `drift-<env>` and `test-deploy-<env>` jobs, outside the merge gate; they never deploy. `/prd-status` shows each environment's deployed version.
   - The README's shell commands name a real path (`.prd-toolkit/<script>.py`, or the plugin's install path for the first install) instead of `${CLAUDE_PLUGIN_ROOT}`, which a shell does not set.
+  - After upgrading the plugin, run `prd_hooks.py install` from it again, so `.prd-toolkit/` gains `prd_deploy.py`, `prd_drift.py`, `prd_block.py` and the block template (`templates/claude-block.md`), then `prd_hooks.py ci` again for the manual deploy jobs. Until then `prd_hooks.py check` reports the stale copy.
   - Upgrading a 0.4 PRD: lint fails `runbook-steps` until each runbook step carries `(env: …)` and its labels, and `runbook-env` until Environments has a Production column; a patch bump with the §14 row `format: runbook steps (prd-toolkit 0.5)`. `## Deployed` and `## Drift` are optional. The 0.4 runbook and its 0.5 form:
 
     ```

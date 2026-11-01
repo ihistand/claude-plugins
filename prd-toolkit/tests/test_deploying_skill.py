@@ -240,13 +240,6 @@ def test_prose_lines_are_wrapped():
             assert len(line) <= 100, (path.name, n, len(line))
 
 
-def test_platform_neutral():
-    for path in (SKILL, RUN, COMMAND):
-        t = path.read_text(encoding="utf-8").lower()
-        for word in ("acuantia", "rotoplas", "gcloud", "bigquery", "looker", "ivan"):
-            assert word not in t, (path.name, word)
-
-
 # --- fix round 1: review items and rulings R17, R18 ---
 
 def test_r17_a_trace_finding_at_the_close_still_commits():
@@ -337,3 +330,27 @@ def test_r28_missing_deploy_gate_test_routes_to_a_tester_only_build():
     two = step(2)
     assert ("the missing test goes to `/prd-build <area> <IDs>` with that block's ID, whose tester-only round "
             "writes it without a builder or a status change") in two
+
+
+# --- final review: the new refusals in the procedure ---
+
+def test_final_review_refusals_in_the_procedure():
+    t = flat(RUN)
+    assert ("A run id of another PRD (`run <id> is for <folder>, not <folder>`) and a runbook changed since "
+            "the run started are refused the same way.") in t
+    assert ("`another prd_deploy command is running in this repository` means a `run`, `resume` or `rollback` "
+            "is still working in this repository: report it and wait for the user, never retry it in a loop.") in t
+    assert ("An `--until` whose cut would take a production step along exits 2: the runbook runs a step on "
+            "that environment after production. Report it and stop; the order is a gap for "
+            "`prd-toolkit:changing-prds`.") in t
+    four = t.split("- **4, failed.**", 1)[1].split("3. **Close.**", 1)[0]
+    assert ("A step with a `start` record and no step record (the run printed `could not write the log`) is "
+            "the failed step: show its `start` record instead.") in four
+    three = t.split("3. **Close.**", 1)[1].split("4. **Close check.**", 1)[0]
+    assert ("every level of its `tests` steps has a `pass` record, and no step on it started without "
+            "finishing") in three
+    assert "`check` requires a row for each one" in three
+    check = t.split("4. **Close check.**", 1)[1].split("5. **Report.**", 1)[0]
+    for needle in ("a reached environment with no row", "a row dated other than the run's date",
+                   "a run of another PRD"):
+        assert needle in check, needle

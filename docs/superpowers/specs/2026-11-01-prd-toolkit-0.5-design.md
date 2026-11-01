@@ -22,6 +22,18 @@
 >   `verified` at a clean close, since the `built → verified` conditions hold vacuously; it is never
 >   left `built` at a clean close, because pre-flight refuses a deploy while any block is `built`. On
 >   a stopped build it stays `built`, and the next clean build closes it `verified`.
+> - §4 (R7): besides the header and the step, confirm and rollback records, the log holds a `start`
+>   record written before each command runs, a `resume` record written before a resume runs
+>   anything, and a rollback `start` record written before a rollback runs. A started command with
+>   no completion record is never run again.
+> - §4 (final review): the header also records the PRD folder, relative to the repository root, and
+>   a sha256 of `operations.md` and `testing.md` at run start. `confirm` (exit 2), `resume`,
+>   `rollback` and `check` (exit 1) refuse a run of another PRD, and `resume`, `rollback` and
+>   `check` refuse a log whose header names no PRD folder; `resume` and `rollback` refuse a runbook
+>   whose hash changed. `/prd-status` shows only its own PRD's runs.
+> - §4 (final review): `run`, `resume` and `rollback` hold a repository-wide, non-waiting lock on
+>   `<log dir>/.active` from pre-flight through the final record; a second one is refused. A run
+>   stopped at a human step holds none; `plan`, `check`, `confirm` and `/prd-status` take none.
 
 ## 1. Scope
 
@@ -185,6 +197,11 @@ A 0.4 runbook fails `runbook-steps` until each step carries `(env: …)` and its
 the §14 row `format: runbook steps (prd-toolkit 0.5)`. `## Deployed` and `## Drift` are optional.
 The README's upgrade note shows a 0.4 runbook beside its 0.5 form.
 
+After upgrading the plugin, run `prd_hooks.py install` from it again, so `.prd-toolkit/` gains
+`prd_deploy.py`, `prd_drift.py`, `prd_block.py` and the block template
+(`templates/claude-block.md`), then `prd_hooks.py ci` again for the manual deploy jobs. Until then
+`prd_hooks.py check` reports the stale copy.
+
 ## 4. `prd_deploy.py`
 
 Usage: `prd_deploy.py <command> <prd-dir> …`. Exit codes follow the shared model (0 clean,
@@ -304,7 +321,8 @@ step:
 
 - `drift-<env>`: `prd_drift.py --env <env>`;
 - `test-deploy-<env>`: the Harness commands of the levels the runbook's `tests` steps name for that
-  environment, with `TEST_ENV=<env>`.
+  environment, each line `export PRD_ENV=<env> TEST_ENV=<env>; <command>` so a compound command
+  keeps both.
 
 They start by hand (`workflow_dispatch` on GitHub, `when: manual` on GitLab), stay out of the merge
 gate, and never deploy. The generated file lists the secret names from `operations.md` Secrets those
@@ -371,6 +389,8 @@ The verdict goes to `docs/superpowers/plans/2026-11-01-prd-toolkit-0.5-acceptanc
 - Steps run in a shell on the session's machine with its credentials; the toolkit adds no sandbox.
 - A partially deployed environment after a failure is recorded in the log and an E-nnn, not in
   `## Deployed`; recovering it is the user's call until 0.6.
+- A step killed between its `start` record and its completion cannot be rolled back through the
+  tool: `rollback` needs the step's `fail` record. Recovering it is 0.6.
 
 ## 13. Out of scope for 0.5
 
