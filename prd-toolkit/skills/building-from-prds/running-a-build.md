@@ -241,9 +241,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    A clean build writes `verified` directly. A block with no unit and no build-gate T-ids moves
    to `verified` at a clean close, since the `built → verified` conditions hold vacuously for it
    (an NFR whose only test is a deploy-gate `[system]` check, say); its deploy-gate tests run at
-   `/prd-deploy`. Never leave it `built`: `prd_deploy.py` pre-flight refuses a deploy while any
-   block is `built`, so it could never reach `live`. A stopped build closes by **Stops**:
-   `built` for each block whose unit T-ids pass after the merge, nothing before it. A
+   `/prd-deploy`. Never leave it `built` at a clean close: `prd_deploy.py` pre-flight refuses a
+   deploy while any block is `built`, so it could never reach `live`. On a stopped build it
+   stays `built`, and the next clean build closes it `verified`. A stopped build closes by
+   **Stops**: `built` for each block whose unit T-ids pass after the merge, nothing before it. A
    `known-failing` result is not a pass, so its block stays `built`. Never write `live`: it
    means deployed, and a build deploys nothing; deploy-gate tests run at `/prd-deploy`. Change
    only the status word; keep any `(since X.Y.Z)` and the index row's Since cell as they are.

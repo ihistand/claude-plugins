@@ -522,3 +522,9 @@ def test_r26_block_with_only_deploy_gate_tests_closes_verified():
               "Never leave it `built`",
               "refuses a deploy while any block is `built`"]:
         assert s in close, s
+
+
+def test_r26_never_built_is_scoped_to_a_clean_close():
+    close = flat(RUN).split("8. **Close.**", 1)[1].split("Run `git rev-parse", 1)[0]
+    assert "Never leave it `built` at a clean close" in close
+    assert "On a stopped build it stays `built`, and the next clean build closes it `verified`" in close
