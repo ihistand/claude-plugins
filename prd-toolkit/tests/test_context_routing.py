@@ -1,4 +1,5 @@
 """Routing: /prd-context, the changing-prds and adopting-prds wording, and the managed block."""
+import re
 from pathlib import Path
 
 from conftest import edit
@@ -195,6 +196,10 @@ def test_authoring_interview_asks_for_deploying():
 
 def test_adoption_writes_the_runbook_as_built():
     t = flat(ADOPTING)
+    step0 = " ".join(section(ADOPTING, "- **Fill the project-wide sections from the repo**", "- **Test roots:**").split())
+    assert "writes the runbook as-built, from the repo's deploy scripts, CI files and docs" in step0
+    assert "Environments with the `Production` column" in step0 and "offer the `## Drift` table" in step0
+    assert "from the deploy scripts, CI files and docs the extractor read" not in t
     assert "writes the runbook as-built" in t and "`[NEEDS CLARIFICATION]` for a command it cannot find" in t
     assert "offer the `## Drift` table" in t
 
@@ -261,17 +266,53 @@ def test_r21_each_file_says_which_script():
 
 def test_r21_adopted_repos_use_the_vendored_copy_and_unadopted_the_plugin():
     for rel in ("skills/changing-prds/SKILL.md", "skills/building-from-prds/SKILL.md",
-                "skills/building-from-prds/running-a-build.md", "commands/prd-context.md", "commands/prd-status.md"):
+                "skills/building-from-prds/running-a-build.md", "skills/adopting-prds/SKILL.md",
+                "commands/prd-context.md", "commands/prd-status.md"):
         t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
         assert "`<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/` directory" in t, rel
-    for rel in ("skills/authoring-prds/SKILL.md", "skills/adopting-prds/SKILL.md"):
+    t = " ".join((ROOT / "skills/adopting-prds/SKILL.md").read_text(encoding="utf-8").split())
+    assert "A first adoption has no `.prd-toolkit/` until the hooks install, so it uses the plugin path" in t
+    for rel in ("skills/authoring-prds/SKILL.md",):
         t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
         assert "has no `.prd-toolkit/` until the hooks install" in t, rel
         assert "`<scripts>` is the plugin's `scripts` directory" in t, rel
+
+
+def test_r21_command_wording_and_load_only_for_the_path():
+    for rel in ("commands/prd-context.md", "commands/prd-status.md"):
+        t = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "when a prd-toolkit skill loads" in t and "when the skill loads a prd-toolkit skill" not in t, rel
+        assert "loaded only to read its base directory" in t and "none of its steps are followed" in t, rel
+
+
+def test_r21_every_scripts_call_is_vendored():
+    """Scan, do not list: a script a text calls through <scripts> must be one the hooks vendor."""
+    from prdlint import hooks
+    called = set()
+    for rel in R21_FILES:
+        called |= set(re.findall(r"<scripts>/(\w+\.py)", (ROOT / rel).read_text(encoding="utf-8")))
+    called |= set(re.findall(r"<scripts>/(\w+\.py)", (ROOT / "skills/deploying-from-prds/running-a-deploy.md").read_text(encoding="utf-8")))
+    assert called and "prd_block.py" in called
+    assert called <= set(hooks.VENDORED), called - set(hooks.VENDORED)
+
+
+def test_gap_rule_keeps_its_end():
+    assert "Do not guess or read the code to fill the gap." in " ".join((ROOT / "templates/claude-block.md").read_text().split())
+
+
+def test_format_repeated_label_ignored():
+    assert "one per label; a repeated label is ignored" in flat(FORMAT)
+
+
+def test_04_spec_notes_the_scripts_line():
+    t = " ".join((ROOT.parent / "docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md").read_text(encoding="utf-8").split())
+    assert "Revised in prd-toolkit 0.5 (R21): the dispatch also carries a `Scripts:` line" in t
 
 
 def test_r21_builder_gets_the_scripts_path_in_its_prompt():
     for rel in ("agents/prd-builder.md", "skills/building-from-prds/SKILL.md", "skills/building-from-prds/running-a-build.md"):
         t = (ROOT / rel).read_text(encoding="utf-8")
         assert "Scripts: <scripts directory, as an absolute path>" in t or rel.startswith("agents"), rel
-    assert "the `Scripts:` line of your prompt" in " ".join((ROOT / "agents/prd-builder.md").read_text(encoding="utf-8").split())
+    b = " ".join((ROOT / "agents/prd-builder.md").read_text(encoding="utf-8").split())
+    assert "the `Scripts:` line when your prompt has one; otherwise the Which-script rule of the `building-from-prds` skill" in b
+    assert "run nothing" not in b

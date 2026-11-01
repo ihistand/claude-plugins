@@ -15,8 +15,9 @@ report format (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT).
 
 If the skill's text is not in your context, say so as the first line under QUESTIONS, and keep to
 these rules:
-- `<scripts>` in the command below is the `Scripts:` line of your prompt; without that line, say so
-  under QUESTIONS and run nothing. Run the implement pack first, as its own Bash call, before you open any PRD file:
+- `<scripts>` in the command below is the `Scripts:` line when your prompt has one; otherwise the
+  Which-script rule of the `building-from-prds` skill decides it. Run the implement pack first,
+  as its own Bash call, before you open any PRD file:
   `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
   On `1`, re-read each region marked STALE. Never pipe or filter it.
 - Write the unit tests first, one per unit T-id in your prompt, each citing `@prd <T-id>`, in a

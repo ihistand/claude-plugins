@@ -311,7 +311,7 @@ Three tables and a runbook. Other headings (Secrets by name) are free. The `runb
 - Environments: `Production` is `yes` or `no`, and at least one row is `yes`. Every environment is
   also a row of `testing.md` Environments (`runbook-env`).
 - A step line is `N. <title> (actor: agent|human) (env: <environment>)`, numbered from 1 without
-  gaps. Labelled lines follow, indented, in any order. An agent step takes `Run:` (required),
+  gaps. Labelled lines follow, indented, in any order, one per label; a repeated label is ignored. An agent step takes `Run:` (required),
   `Check:` (required unless `Run:` is a `tests` step) and `Rollback:` (optional); a human step
   takes `Do:` and `Check:` (both required, prose) and never `Run:` or `Rollback:`. Other indented
   lines are prose and ignored (`runbook-steps`).

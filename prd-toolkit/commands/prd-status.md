@@ -9,7 +9,9 @@ In every command below, `<scripts>` is `.prd-toolkit` when the repository has a 
 directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
 directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
 root is two directories above the skill's base directory (Claude Code shows it as "Base
-directory for this skill" when the skill loads a prd-toolkit skill; none has loaded when you run this command alone, so load `prd-toolkit:changing-prds` first), and `<scripts>` is `<plugin root>/scripts`.
+directory for this skill" when a prd-toolkit skill loads; when none has, load `prd-toolkit:changing-prds`, which is
+loaded only to read its base directory: none of its steps are followed), and `<scripts>` is
+`<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
 

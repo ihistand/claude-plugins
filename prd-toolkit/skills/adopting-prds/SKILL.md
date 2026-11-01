@@ -24,12 +24,15 @@ nothing below.
 Grammar: `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`: the adoption map (`adoption.md`, `| Area | State | Boundary |`; §8 holds only `See adoption.md.`),
 `as-built` blocks with `Source: <file>:<line> @<commit>`, the `errors.md` ledger and
 `known-failing: E-nnn`. Read it before writing. **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
-A PRD that is not adopted yet has no `.prd-toolkit/` until the hooks install, so in every command
-below `<scripts>` is the plugin's `scripts` directory, written as a literal absolute path (in
-double quotes if it holds a space): the plugin root is two directories above the skill's base
-directory (Claude Code shows it as "Base directory for this skill" when the skill loads), and
-`<scripts>` is `<plugin root>/scripts`. A script that is not found is a tool error: report it,
-never guess another path.
+In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
+directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
+directory, written as a literal absolute path (in double quotes if it holds a space): the plugin
+root is two directories above the skill's base directory (Claude Code shows it as "Base
+directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
+Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
+A script that is not found is a tool error: report it, never guess another path.
+A first adoption has no `.prd-toolkit/` until the hooks install, so it uses the plugin path; a later
+area in an adopted repo uses the vendored copy, so lint and trace match what CI runs.
 
 Lint, the mechanical gate:
 
@@ -113,6 +116,14 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   (`build` or `deploy`) each level runs at, and never keep the template's Gate silently.
   Anything only the user knows (the owner, intent, environments, secrets) stays a
   `[NEEDS CLARIFICATION: …]` marker.
+- **Operations** (`operations.md` is project-wide, so this is read from the repo, not from the
+  extractor's report): the adopter writes the runbook as-built, from the repo's deploy scripts, CI
+  files and docs, in the grammar of `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md` (Environments
+  with the `Production` column, and `(actor: …) (env: …)` steps with their labelled lines), and
+  writes `[NEEDS CLARIFICATION]` for a command it cannot find; it invents no deploy command. When
+  the repo has deployed environments, offer the `## Drift` table (a `version` row, and a `config`
+  row when `contracts/config.yaml` exists) with the introspection command the code already has,
+  and write it only on the user's yes.
 - **Test roots:** list every directory that already holds the project's tests (find them with
   Glob: test files, test configs, a test framework's own folder), each backticked, then any new
   directory the characterization suite needs. Never leave an existing test directory out: the
@@ -161,14 +172,6 @@ Then write what it returns, yourself:
   and see the behaviour there. A Source that does not show it is dropped, and the block with it.
 - Check that no block or `expect` encodes an APPARENT BUGS entry. One that does is rewritten to
   the behaviour not in question, or dropped.
-
-**Operations.** The adopter writes the runbook as-built, from the deploy scripts, CI files and
-docs the extractor read, in the grammar of `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`
-(`(actor: …) (env: …)` steps with their labelled lines, and Environments with the `Production`
-column), and writes `[NEEDS CLARIFICATION]` for a command it cannot find; it invents no
-deploy command. When the area has deployed environments, offer the `## Drift` table (a `version` row, and a `config` row when
-`contracts/config.yaml` exists) with the introspection command the code already has, and
-write it only on the user's yes.
 
 Set the area's row to `extracted` and run lint.
 
