@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VENDOR_DIR = ".prd-toolkit"
-VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py")
+VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"

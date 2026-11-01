@@ -86,8 +86,7 @@ def test_not_built_and_not_verified(prd_repo):
 
 
 def test_open_errors_list_touches(items_with_error):
-    assert any(i.part == "Open errors" and i.id == "E-002" and "Duplicate check ignores case" in i.text
-               and "Touches: FR-001" in i.text for i in items_with_error)
+    assert any(i.part == "Open errors" and i.id == "E-002" and i.text == "E-002 proposed code bug — Duplicate check ignores case" for i in items_with_error)
     assert not any(i.id == "E-001" for i in items_with_error if i.part == "Open errors")
 
 

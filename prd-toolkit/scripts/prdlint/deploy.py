@@ -628,6 +628,11 @@ def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> lis
     return out
 
 
+def detected_names_failure(detected: str | None, run_id: str, step) -> bool:
+    """A failure entry's `Detected:` line names the run id and `step N`."""
+    return bool(detected and re.search(rf"\bstep\s+{step}\b", detected) and run_id in detected)
+
+
 def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
     """Findings for a run's close commit(s); BadRange for a bad range, ValueError for an unusable log."""
     m = re.match(r"^([^.\s][^\s]*?)\.\.([^.\s][^\s]*)$", rng)
@@ -721,7 +726,7 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         e = new[0]
         etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
         detected = re.search(r"^Detected:.*$", etext, re.M)
-        step_ok = detected and re.search(rf"\bstep\s+{failed.get('step')}\b", detected.group(0)) and run_id in detected.group(0)
+        step_ok = detected_names_failure(detected.group(0) if detected else None, run_id, failed.get("step"))
         if not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))
