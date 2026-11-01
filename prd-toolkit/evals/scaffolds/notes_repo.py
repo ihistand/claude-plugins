@@ -252,6 +252,7 @@ T-002.1:
 | Environment | Purpose | Access | Base URL | Database | Logs |
 |---|---|---|---|---|---|
 | local | Developer machine | Developer | none | none | none |
+| production | Tagged release; nothing runs | Callers | none | none | none |
 
 ## Leak checks
 

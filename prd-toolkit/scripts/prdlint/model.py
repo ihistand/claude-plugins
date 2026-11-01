@@ -80,6 +80,7 @@ class ErrorEntry:
     line: int
     open: bool
     touches: list[tuple[str, int]] = field(default_factory=list)  # (requirement ID, line) from `Touches:`
+    classification: str = ""  # the trimmed value after `Classification:`; empty when absent
     end: int = 0  # last line of the entry
 
 
@@ -95,6 +96,7 @@ class Testing:
     levels: dict[str, int] = field(default_factory=dict)
     gates: dict[str, str] = field(default_factory=dict)
     commands: dict[str, str] = field(default_factory=dict)  # level -> first backticked span of its Harness command cell
+    command_cells: dict[str, str] = field(default_factory=dict)  # level -> raw Harness command cell
     has_gate: bool = False
     levels_line: int = 0
     environments: dict[str, int] = field(default_factory=dict)
@@ -179,6 +181,8 @@ _NA = re.compile(r"^\s*[-*]\s*Not applicable:\s*`([^`]+)`\s+[—–-]+\s+(.*?)\s
 _ERROR_HEAD = re.compile(r"^### (E-\d+)\b")
 _RESOLUTION = re.compile(r"^Resolution:\s*(.*?)\s*$")
 _TOUCHES = re.compile(r"^Touches:\s*(.*?)\s*$")
+_CLASSIFICATION = re.compile(r"^Classification:\s*(.*?)\s*$")
+DRIFT_CHECKS = ("version", "config")
 _TOUCH_ID = re.compile(r"\b(?:UJ|FR|NFR)-\d+\b")
 _SLOT = re.compile(r"^- \*\*([^*]+?)\.\*\*")
 _MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]*\]")
@@ -301,6 +305,9 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
         if rm:
             v = rm.group(1).lower()
             cur.open = v in ("", "-") or v.startswith("open")
+        cm = _CLASSIFICATION.match(orig) if cur else None
+        if cm:
+            cur.classification = cm.group(1)
         tm = _TOUCHES.match(orig) if cur else None
         if tm:
             cur.touches.extend((i, n) for i in _TOUCH_ID.findall(tm.group(1)))
@@ -397,7 +404,7 @@ def _operations(text: str) -> Operations:
 
 def production_envs(prd: Prd) -> set[str]:
     """The environments whose Production cell is `yes`."""
-    return {e for e, v in prd.operations.production.items() if v.lower() == "yes"}
+    return {e for e, v in prd.operations.production.items() if v == "yes"}
 
 
 def _harness(body: list[tuple[int, str]]) -> Harness:
@@ -480,6 +487,7 @@ def load(prd_dir: Path) -> Prd:
             testing.levels_line = lv.line
             for r in lv.rows:
                 cm = re.search(r"`([^`]*)`", r.cells[1]) if len(r.cells) > 1 else None
+                testing.command_cells[r.cells[0].strip("`")] = r.cells[1] if len(r.cells) > 1 else ""
                 if cm and cm.group(1).strip():
                     testing.commands[r.cells[0].strip("`")] = cm.group(1).strip()
             hdr = [h.strip().strip("`").lower() for h in lv.header]

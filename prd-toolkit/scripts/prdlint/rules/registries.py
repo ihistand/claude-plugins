@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..findings import Finding
 from ..markdown import sections, tables
-from ..model import Prd, repo_root
+from ..model import DRIFT_CHECKS, Prd, gate_of, production_envs, repo_root
 from ..registry import rule
 
 STANDARDS_DECISIONS = {"enforced", "declined", "proposed"}
@@ -159,6 +159,8 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
         if s.tests is not None:
             if "Check" in labels:
                 yield out(labels["Check"][1], f"step {n}: a tests step has no Check:")
+            if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
+                yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
             continue
         if "Check" not in labels:
             yield out(s.line, f"step {n}: an agent step needs Check:")
@@ -166,3 +168,78 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
             yield out(labels["Check"][1], f"step {n}: Check: must be one backticked command, optionally followed by prints `<text>`; got '{labels['Check'][0]}'")
         if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
             yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
+
+
+@rule("runbook-env")
+def runbook_env(prd: Prd) -> Iterator[Finding]:
+    if "operations.md" not in prd.docs:
+        return
+    ops = prd.operations
+    testing = prd.testing.environments
+
+    def unknown(env: str) -> str:
+        near = next((e for e in ops.environments if e.lower() == env.lower()), None)
+        return f"environment '{env}' is not in operations.md Environments" + (f" (did you mean '{near}'?)" if near else "")
+
+    def check(env: str, line: int, prefix: str) -> Iterator[Finding]:
+        if env not in ops.environments:
+            yield Finding("operations.md", line, "runbook-env", prefix + unknown(env))
+        elif env not in testing:
+            yield Finding("operations.md", line, "runbook-env", f"{prefix}environment '{env}' is not in testing.md Environments")
+
+    for env, line in ops.environments.items():
+        if env not in testing:
+            yield Finding("operations.md", line, "runbook-env", f"environment '{env}' is in operations.md but not in testing.md Environments")
+        if ops.has_production and ops.production.get(env) not in ("yes", "no"):
+            yield Finding("operations.md", line, "runbook-env", f"environment '{env}': Production '{ops.production.get(env)}' is not yes or no")
+    if ops.environments:
+        first = min(ops.environments.values())
+        if not ops.has_production:
+            yield Finding("operations.md", first, "runbook-env", "operations.md Environments has no Production column")
+        elif not production_envs(prd):
+            yield Finding("operations.md", first, "runbook-env", "operations.md Environments: no environment has Production yes")
+    for s in ops.steps:
+        if s.env is not None:
+            yield from check(s.env, s.line, f"step {s.number}: ")
+    for d in ops.deployed:
+        yield from check(d.env, d.line, "Deployed row: ")
+    for d in ops.drift:
+        yield from check(d.env, d.line, "Drift row: ")
+
+
+@rule("production-gate")
+def production_gate(prd: Prd) -> Iterator[Finding]:
+    steps = prd.operations.steps
+    for env in sorted(production_envs(prd)):
+        i = next((i for i, s in enumerate(steps) if s.env == env), None)
+        if i is None:
+            continue
+        if steps[i].actor != "human" and not (i > 0 and steps[i - 1].actor == "human"):
+            yield Finding("operations.md", steps[i].line, "production-gate",
+                          f"step {steps[i].number} deploys {env} with no human step at or just before it")
+
+
+@rule("runbook-tests")
+def runbook_tests(prd: Prd) -> Iterator[Finding]:
+    for s in prd.operations.steps:
+        for level in s.tests or []:
+            line = s.labels["Run"][1]
+            if level not in prd.testing.levels:
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' is not in testing.md Levels")
+                continue
+            gate = gate_of(prd, level)
+            if gate != "deploy":
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' has Gate {gate or 'none'}; a tests step runs deploy-gate levels")
+            elif not prd.testing.commands.get(level) and "[NEEDS CLARIFICATION:" not in prd.testing.command_cells.get(level, ""):
+                yield Finding("operations.md", line, "runbook-tests", f"step {s.number}: level '{level}' has no Harness command")
+
+
+@rule("drift-rows")
+def drift_rows(prd: Prd) -> Iterator[Finding]:
+    for d in prd.operations.drift:
+        if d.check == "schema":
+            yield Finding("operations.md", d.line, "drift-rows", "check 'schema': schema drift arrives in prd-toolkit 0.6")
+        elif d.check not in DRIFT_CHECKS:
+            yield Finding("operations.md", d.line, "drift-rows", f"check '{d.check}' is not version or config")
+        elif d.check == "config" and not (prd.root / "contracts/config.yaml").is_file():
+            yield Finding("operations.md", d.line, "drift-rows", "a config drift row needs contracts/config.yaml")

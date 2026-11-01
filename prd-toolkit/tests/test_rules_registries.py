@@ -21,6 +21,10 @@ CASES: list[Case] = [
     Case("registries", "decision-proposed-while-approved", _edit("prd.md", SKILL_ROW, "| plans | superpowers:writing-plans | proposed |")),
     Case("registries", "decision-outside-enum", _edit("prd.md", "| code, schema.sql | enforced |", "| code, schema.sql | maybe |")),
     Case("runbook-steps", "step-without-actor", _edit("operations.md", "3. Approve production (actor: human) (env: production)", "3. Approve production (env: production)")),
+    Case("runbook-env", "env-not-in-operations", _edit("operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: qa)\n   Run: `./deploy.sh staging`")),
+    Case("production-gate", "deploy-without-human", _edit("operations.md", "3. Approve production (actor: human)", "3. Approve production (actor: agent)")),
+    Case("runbook-tests", "unknown-level", _edit("operations.md", "Run: tests system, e2e", "Run: tests system, nope")),
+    Case("drift-rows", "schema-row", _edit("operations.md", "| production | version |", "| production | schema |")),
 ]
 
 

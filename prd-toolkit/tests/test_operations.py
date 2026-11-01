@@ -92,7 +92,8 @@ DEPLOYED_DRIFT = """
 def test_deployed_and_drift_rows(prd):
     p = prd / "operations.md"
     before = p.read_text()
-    p.write_text(before + DEPLOYED_DRIFT)
+    head, rest = before.split("## Deployed")  # drop the fixture's own tables
+    p.write_text(head + DEPLOYED_DRIFT.lstrip("\n") + "\n## Secrets" + rest.split("## Secrets")[1])
     ops = model.load(prd).operations
     ln = lambda needle: next(i for i, t in enumerate(p.read_text().split("\n"), 1) if needle in t)
     (d,) = ops.deployed
@@ -111,3 +112,143 @@ def test_human_step_missing_do(prd):
 def test_tests_step_may_roll_back(prd):
     edit(prd, "operations.md", "   Run: tests system, e2e\n", "   Run: tests system, e2e\n   Rollback: `./deploy.sh staging --previous`\n")
     assert not [m for m in msgs(prd) if m[0] == "runbook-steps"]
+
+
+# --- runbook-env, production-gate, runbook-tests, drift-rows, unclassified ---
+
+def test_fixture_drift_and_deployed(prd):
+    ops = model.load(prd).operations
+    assert [(d.env, d.check) for d in ops.drift] == [("production", "version"), ("production", "config")]
+    assert all(d.command for d in ops.drift) and [(d.env, d.version) for d in ops.deployed] == [("production", "1.0.0")]
+    assert not {"runbook-env", "production-gate", "runbook-tests", "drift-rows"} & {r for r, _ in msgs(prd)}
+
+
+def test_env_missing_from_testing(prd):
+    edit(prd, "testing.md", "| production | Live service", "| prod | Live service")
+    assert ("runbook-env", "environment 'production' is in operations.md but not in testing.md Environments") in msgs(prd)
+
+
+def test_env_case_differs(prd):
+    edit(prd, "operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: Staging)\n   Run: `./deploy.sh staging`")
+    assert ("runbook-env", "step 1: environment 'Staging' is not in operations.md Environments (did you mean 'staging'?)") in msgs(prd)
+
+
+def test_env_unknown_no_suggestion(prd):
+    edit(prd, "operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: qa)\n   Run: `./deploy.sh staging`")
+    assert ("runbook-env", "step 1: environment 'qa' is not in operations.md Environments") in msgs(prd)
+
+
+def test_empty_env_reported(prd):
+    edit(prd, "operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: )\n   Run: `./deploy.sh staging`")
+    assert ("runbook-env", "step 1: environment '' is not in operations.md Environments") in msgs(prd)
+
+
+def test_backticked_env_matches(prd):
+    edit(prd, "operations.md", "(env: staging)\n   Run: `./deploy.sh staging`", "(env: `staging`)\n   Run: `./deploy.sh staging`")
+    assert not [m for m in msgs(prd) if m[0] == "runbook-env"]
+
+
+def test_deployed_and_drift_envs(prd):
+    edit(prd, "operations.md", "| production | 1.0.0 |", "| prod | 1.0.0 |")
+    edit(prd, "operations.md", "| production | version |", "| Production | version |")
+    m = msgs(prd)
+    assert ("runbook-env", "Deployed row: environment 'prod' is not in operations.md Environments") in m
+    assert ("runbook-env", "Drift row: environment 'Production' is not in operations.md Environments (did you mean 'production'?)") in m
+
+
+def test_step_env_not_in_testing(prd):
+    edit(prd, "testing.md", "| production | Live service", "| prod | Live service")
+    assert ("runbook-env", "step 3: environment 'production' is not in testing.md Environments") in msgs(prd)
+
+
+def test_production_value(prd):
+    edit(prd, "operations.md", "| staging | https://orders-staging.example.com | no |", "| staging | https://orders-staging.example.com | maybe |")
+    assert ("runbook-env", "environment 'staging': Production 'maybe' is not yes or no") in msgs(prd)
+
+
+def test_production_value_case_sensitive(prd):
+    edit(prd, "operations.md", "| https://orders.example.com | yes |", "| https://orders.example.com | Yes |")
+    m = msgs(prd)
+    assert ("runbook-env", "environment 'production': Production 'Yes' is not yes or no") in m
+    assert ("runbook-env", "operations.md Environments: no environment has Production yes") in m
+
+
+def test_no_production_row(prd):
+    edit(prd, "operations.md", "| https://orders.example.com | yes |", "| https://orders.example.com | no |")
+    assert ("runbook-env", "operations.md Environments: no environment has Production yes") in msgs(prd)
+
+
+def test_no_production_column(prd):
+    edit(prd, "operations.md", "| Environment | URL | Production |\n|---|---|---|", "| Environment | URL |\n|---|---|")
+    assert [m for m in msgs(prd) if m[0] == "runbook-env" and "no Production column" in m[1]]
+
+
+def swap_steps_3_and_4(prd):
+    text = (prd / "operations.md").read_text()
+    head, rest = text.split("3. Approve production", 1)
+    approve, rest = rest.split("4. Deploy to production", 1)
+    deploy, tail = rest.split("5. Smoke on production", 1)
+    (prd / "operations.md").write_text(head + "3. Deploy to production" + deploy + "4. Approve production" + approve + "5. Smoke on production" + tail)
+
+
+def test_production_gate(prd):
+    swap_steps_3_and_4(prd)
+    m = msgs(prd)
+    assert ("production-gate", "step 3 deploys production with no human step at or just before it") in m
+    assert len([x for x in m if x[0] == "production-gate"]) == 1
+
+
+def test_production_gate_human_first_is_fine(prd):
+    assert not [m for m in msgs(prd) if m[0] == "production-gate"]
+
+
+def test_runbook_tests_level(prd):
+    edit(prd, "operations.md", "Run: tests system, e2e", "Run: tests system, nope")
+    assert ("runbook-tests", "step 2: level 'nope' is not in testing.md Levels") in msgs(prd)
+
+
+def test_runbook_tests_gate(prd):
+    edit(prd, "operations.md", "Run: tests system, e2e", "Run: tests unit")
+    assert ("runbook-tests", "step 2: level 'unit' has Gate build; a tests step runs deploy-gate levels") in msgs(prd)
+
+
+def test_runbook_tests_command(prd):
+    edit(prd, "testing.md", "| e2e | `pytest tests/e2e` |", "| e2e | pytest tests/e2e |")
+    assert ("runbook-tests", "step 2: level 'e2e' has no Harness command") in msgs(prd)
+
+
+def test_drift_schema_row(prd):
+    edit(prd, "operations.md", "| production | config | `curl -fsS https://orders.example.com/settings` |",
+         "| production | config | `curl -fsS https://orders.example.com/settings` |\n| production | schema | `true` |")
+    assert ("drift-rows", "check 'schema': schema drift arrives in prd-toolkit 0.6") in msgs(prd)
+
+
+def test_drift_unknown_check(prd):
+    edit(prd, "operations.md", "| production | version |", "| production | vers |")
+    assert ("drift-rows", "check 'vers' is not version or config") in msgs(prd)
+
+
+def test_drift_config_needs_contract(prd):
+    (prd / "contracts/config.yaml").unlink()
+    assert ("drift-rows", "a config drift row needs contracts/config.yaml") in msgs(prd)
+
+
+def test_unclassified_only_open(prd):
+    edit(prd, "errors.md", "Classification: code bug", "Classification: unclassified")
+    assert ("index-consistent", "E-001: unclassified is allowed only on an open entry") in msgs(prd)
+
+
+def test_unclassified_open_is_fine(prd):
+    edit(prd, "errors.md", "Classification: code bug", "Classification: unclassified")
+    edit(prd, "errors.md", "Resolution: the importer returns status `empty` before reading rows; T-001.3 passes", "Resolution: -")
+    assert not [m for m in msgs(prd) if "unclassified" in m[1]]
+
+
+def test_tests_step_rollback_shape(prd):
+    edit(prd, "operations.md", "   Run: tests system, e2e\n", "   Run: tests system, e2e\n   Rollback: undo it\n")
+    assert ("runbook-steps", "step 2: Rollback: must be one backticked command; got 'undo it'") in msgs(prd)
+
+
+def test_production_envs_exact_yes(prd):
+    edit(prd, "operations.md", "| https://orders.example.com | yes |", "| https://orders.example.com | YES |")
+    assert model.production_envs(model.load(prd)) == set()

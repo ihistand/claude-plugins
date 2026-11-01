@@ -4,7 +4,7 @@ SPEC_RULES = {"frontmatter","sections","id-format","id-unique","id-removed-reuse
   "fr-has-ac","ac-has-test","ac-ears","test-cases-consistent","test-level","sufficiency","test-refs",
   "nfr-bound","deny-tested","error-codes","classified-fixtures","markers-open","assumption-indexed",
   "placeholder","vague-word","glossary-synonym","contracts-valid","schema-refs","registries",
-  "runbook-steps","open-questions-empty"}
+  "runbook-steps","runbook-env","production-gate","runbook-tests","drift-rows","open-questions-empty"}
 
 
 def test_rule_set_matches_spec():

@@ -27,6 +27,19 @@
 5. Smoke on production (actor: agent) (env: production)
    Run: tests smoke
 
+## Deployed
+
+| Environment | PRD version | Commit | Date | Run |
+|---|---|---|---|---|
+| production | 1.0.0 | 3f2c1a9 | 2026-11-02 | 20261102T103000Z-production |
+
+## Drift
+
+| Environment | Check | Introspection command |
+|---|---|---|
+| production | version | `curl -fsS https://orders.example.com/version` |
+| production | config | `curl -fsS https://orders.example.com/settings` |
+
 ## Secrets
 
 - GEOCODER_API_KEY: Secret Manager, mounted as an environment variable by `deploy.sh`.
