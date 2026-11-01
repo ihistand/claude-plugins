@@ -209,7 +209,7 @@ def test_refuses_trace(repo):
 def test_log_shape(repo):
     r = deploy_cli(repo, "run")
     recs = records(repo, r)
-    header, steps = recs[0], recs[1:]
+    header, steps = recs[0], [x for x in recs[1:] if x["kind"] == "step"]
     assert set(header) == {"kind", "run", "head", "version", "until", "started"}
     assert header["kind"] == "header" and header["run"] == r.stdout.splitlines()[0].removeprefix("run: ")
     assert header["head"] == git(repo, "rev-parse", "HEAD").strip() and header["version"] == "1.0.0" and header["until"] is None
@@ -228,7 +228,7 @@ def test_big_binary_output(repo):
     change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `head -c 2000000 /dev/urandom; mkdir -p .deploy/staging && echo Hi")
     r = deploy_cli(repo, "run", "--until", "staging")
     assert r.returncode == 0, r.stdout + r.stderr
-    out = records(repo, r)[1]["stdout"]
+    out = [x for x in records(repo, r) if x["kind"] == "step"][0]["stdout"]
     assert 1000 < len(out) <= 4096
 
 
@@ -376,7 +376,10 @@ def test_confirm_then_resume_to_done(repo):
     confirms = [x for x in recs if x["kind"] == "confirm"]
     assert len(confirms) == 1 and confirms[0]["reply"] == reply and confirms[0]["step"] == 3 and "at" in confirms[0]
     assert [x["step"] for x in recs if x["kind"] == "step"] == [1, 2, 3, 4, 5]  # earlier steps were not run again
-    assert recs.index(confirms[0]) == 4  # header, steps 1-3, then the confirm, then steps 4 and 5
+    kinds = [x["kind"] for x in recs]
+    assert kinds.index("confirm") > max(i for i, x in enumerate(recs) if x.get("step") == 3 and x["kind"] == "step")
+    assert kinds.index("resume") > kinds.index("confirm") and recs[kinds.index("resume")]["step"] == 3
+    assert [x["step"] for x in recs[kinds.index("resume") + 1:] if x["kind"] == "start"] == [4, 4, 5]  # step 4's Run and Check, then smoke
 
 
 def test_resume_without_confirm(repo):
@@ -404,11 +407,21 @@ def test_confirm_refuses_an_empty_reply(repo, reply):
     assert not [x for x in deploy.read_log(repo, run_id) if x["kind"] == "confirm"]
 
 
-def test_confirm_unknown_run_and_unsafe_run_id(repo):
-    for bad in ("20990101T000000Z-all", "../../config", "a/b", ""):
+def test_confirm_unknown_run(repo):
+    for bad in ("20990101T000000Z-all", "a/b", ""):
         r = confirm(repo, bad)
         assert r.returncode == 2 and r.stdout == "", bad
-    assert not (repo / ".git/config.jsonl").exists()
+
+
+def test_confirm_refuses_a_run_id_that_names_a_path(repo):
+    """`../../x` from the deploys folder is `.git/x.jsonl`: a well-formed log that must not be touched."""
+    stopped_run(repo)
+    target = repo / ".git/x.jsonl"
+    target.write_text(json.dumps({"kind": "header", "run": "x", "head": "0", "version": "1.0.0", "until": None, "started": "t"}) + "\n"
+                      + json.dumps({"kind": "step", "step": 3, "result": "human"}) + "\n", encoding="utf-8")
+    before = target.read_text(encoding="utf-8")
+    r = confirm(repo, "../../x")
+    assert r.returncode == 2 and r.stdout == "" and target.read_text(encoding="utf-8") == before
 
 
 def test_confirm_twice(repo):
@@ -596,13 +609,30 @@ def test_rollback_failure_exits_4_and_is_logged(repo):
     assert rollback(repo, run_id, 1).returncode == 2
 
 
-def test_rollback_uses_the_step_environment_and_a_closed_stdin(repo, monkeypatch):
+def test_rollback_uses_the_step_environment(repo, monkeypatch):
     monkeypatch.setenv("TEST_ENV", "inherited")
-    change(repo, OPS, "touch .deploy/staging/rolled-back`", 'echo "$PRD_ENV|${TEST_ENV-unset}" > .deploy/rb.env; read x`')
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", 'echo "$PRD_ENV|${TEST_ENV-unset}" > .deploy/rb.env`')
     run_id = failed_run(repo)
-    r = rollback(repo, run_id, 1)  # `read` returns at once at end of input; exit 1 from it is fine
+    assert rollback(repo, run_id, 1).returncode == 0
     assert (repo / ".deploy/rb.env").read_text().strip() == "staging|unset"
-    assert r.returncode == 4
+
+
+def test_rollback_stdin_is_closed(repo):
+    """Open-pipe approach of test_stdin_closed: an inherited stdin would block `read`."""
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", "read x`")
+    run_id = failed_run(repo)
+    env = {**os.environ, "PRD_PLUGINS_FILE": str(PLUGINS_FILE)}
+    out_file = repo.parent / "rb-stdin.out"
+    with open(out_file, "w", encoding="utf-8") as sink:
+        proc = subprocess.Popen([sys.executable, "-B", str(SCRIPT), "rollback", prd_dir(repo), "--run", run_id, "--step", "1", "--timeout", "30"],
+                                stdin=subprocess.PIPE, stdout=sink, stderr=subprocess.STDOUT, text=True, env=env, cwd=repo)
+        started = time.monotonic()
+        try:
+            code = proc.wait(timeout=20)
+        finally:
+            proc.kill()
+            proc.stdin.close()
+    assert code == 4 and time.monotonic() - started < 15, out_file.read_text(encoding="utf-8")
 
 
 def test_rollback_times_out(repo):
@@ -620,3 +650,129 @@ def test_rollback_usage_errors_print_nothing_on_stdout(repo):
                  ["rollback", "--run", run_id, "--step", "x"], ["resume"], ["confirm", "--run", run_id, "--step", "1"]):
         r = deploy_cli(repo, *argv)
         assert r.returncode == 2 and r.stdout == "", argv
+
+
+# ---- a confirm is used once; a started command is never run again ----
+
+def hand_append(repo, run_id, *records_):
+    path = deploy.log_dir(repo) / f"{run_id}.jsonl"
+    with open(path, "a", encoding="utf-8") as f:
+        for rec in records_:
+            f.write(json.dumps(rec) + "\n")
+
+
+def test_resume_refuses_a_used_confirm(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    hand_append(repo, run_id, {"kind": "resume", "step": 3, "at": "t"})
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: step 3's confirm was already used" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_resume_refuses_an_unfinished_start(repo):
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    hand_append(repo, run_id, {"kind": "start", "step": 4, "command": "x", "at": "t"})
+    r = resume(repo, run_id)
+    assert r.returncode == 1
+    assert "refused: step 4 started and did not finish; check the environment, then start a new run" in r.stdout.splitlines()
+    assert not (repo / ".deploy/production").exists()
+
+
+def test_a_finished_start_does_not_block_resume(repo):
+    """The unfinished-start check must be able to pass: starts that have a step record after them are finished."""
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0 and resume(repo, run_id).returncode == 0
+    assert any(x["kind"] == "start" for x in deploy.read_log(repo, run_id))
+
+
+def test_a_killed_resume_cannot_be_resumed_again(repo, monkeypatch, capsys):
+    """The completion record of step 4 cannot be written: the log ends with confirm, resume and a start."""
+    from prd_deploy import main
+
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    real = deploy.append
+
+    def flaky(repo_root, rid, record):
+        if record.get("kind") == "step" and record.get("step") == 4:
+            raise OSError("disk full")
+        return real(repo_root, rid, record)
+
+    monkeypatch.setattr(deploy, "append", flaky)
+    assert main(["resume", prd_dir(repo), "--run", run_id]) == 4
+    monkeypatch.setattr(deploy, "append", real)
+    capsys.readouterr()
+    shutil_rm = repo / ".deploy/production"
+    import shutil
+    shutil.rmtree(shutil_rm)
+    r = resume(repo, run_id)
+    assert r.returncode == 1 and "refused: step 3's confirm was already used" in r.stdout.splitlines()
+    assert "refused: step 4 started and did not finish; check the environment, then start a new run" in r.stdout.splitlines()
+    assert not shutil_rm.exists()
+
+
+def test_rollback_refuses_a_started_rollback(repo):
+    run_id = failed_run(repo)
+    hand_append(repo, run_id, {"kind": "start", "step": 1, "rollback": True, "command": "x", "at": "t"})
+    r = rollback(repo, run_id, 1)
+    assert r.returncode == 2 and r.stdout == "" and "step 1's rollback was already started" in r.stderr
+    assert not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_rollback_writes_its_start_first(repo):
+    run_id = failed_run(repo)
+    assert rollback(repo, run_id, 1).returncode == 0
+    recs = deploy.read_log(repo, run_id)
+    assert [x["kind"] for x in recs[-2:]] == ["start", "rollback"] and recs[-2]["rollback"] is True and recs[-2]["step"] == 1
+
+
+def test_start_record_failure_runs_no_command(repo, monkeypatch, capsys):
+    from prd_deploy import main
+
+    real = deploy.append
+
+    def flaky(repo_root, rid, record):
+        if record.get("kind") == "start":
+            raise OSError("disk full")
+        return real(repo_root, rid, record)
+
+    monkeypatch.setattr(deploy, "append", flaky)
+    assert main(["run", prd_dir(repo)]) == 4
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[-1].startswith("prd-deploy: failed step=1 run=")
+    assert not (repo / ".deploy").exists()
+
+
+def test_start_record_failure_runs_no_rollback(repo, monkeypatch, capsys):
+    from prd_deploy import main
+
+    run_id = failed_run(repo)
+    real = deploy.append
+
+    def flaky(repo_root, rid, record):
+        if record.get("kind") == "start":
+            raise OSError("disk full")
+        return real(repo_root, rid, record)
+
+    monkeypatch.setattr(deploy, "append", flaky)
+    assert main(["rollback", prd_dir(repo), "--run", run_id, "--step", "1"]) == 2
+    assert capsys.readouterr().out == "" and not (repo / ".deploy/staging/rolled-back").exists()
+
+
+def test_resume_record_failure_runs_no_command(repo, monkeypatch, capsys):
+    from prd_deploy import main
+
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    real = deploy.append
+
+    def flaky(repo_root, rid, record):
+        if record.get("kind") == "resume":
+            raise OSError("disk full")
+        return real(repo_root, rid, record)
+
+    monkeypatch.setattr(deploy, "append", flaky)
+    assert main(["resume", prd_dir(repo), "--run", run_id]) == 2
+    assert capsys.readouterr().out == "" and not (repo / ".deploy/production").exists()

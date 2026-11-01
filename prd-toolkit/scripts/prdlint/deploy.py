@@ -146,13 +146,15 @@ def _prints_ok(out: bytes, text: str) -> bool:
     return any(line.strip() == want for line in out.decode("utf-8", errors="replace").splitlines())
 
 
-def _agent_record(step: Step, repo_root: Path, timeout: int) -> dict:
+def _agent_record(step: Step, repo_root: Path, timeout: int, mark) -> dict:
     env = {"PRD_ENV": step.env or ""}
     rec = {"command": step.run, "started": _iso()}
+    mark(command=step.run)  # written before the command starts; if it fails the command does not run
     first = _execute(step.run, repo_root, env, timeout)
     rec.update(exit=first["exit"], stdout=first["stdout"], stderr=first["stderr"])
     ok = first["exit"] == 0 and not first["timed_out"]
     if ok and step.check is not None:
+        mark(command=step.check, check=True)
         c = _execute(step.check, repo_root, env, timeout)
         rec["check"] = {"command": step.check, "exit": c["exit"], "stdout": c["stdout"], "stderr": c["stderr"]}
         ok = c["exit"] == 0 and not c["timed_out"] and (step.prints is None or _prints_ok(c["out"], step.prints))
@@ -163,7 +165,7 @@ def _agent_record(step: Step, repo_root: Path, timeout: int) -> dict:
     return rec
 
 
-def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int) -> list[dict]:
+def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) -> list[dict]:
     """One record per level, stopping at the first failure."""
     recs = []
     if not step.tests:
@@ -175,6 +177,7 @@ def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int) -> list[
         if not command:
             rec.update(exit=None, stdout="", stderr=f"no Harness command for level {level}", result="fail")
         else:
+            mark(level=level, command=command)
             r = _execute(command, repo_root, {"PRD_ENV": step.env or "", "TEST_ENV": step.env or ""}, timeout)
             rec.update(exit=r["exit"], stdout=r["stdout"], stderr=r["stderr"], result="pass" if r["exit"] == 0 and not r["timed_out"] else "fail")
         rec["ended"] = _iso()
@@ -197,8 +200,11 @@ def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: 
             append(repo_root, run_id, {**base, "command": None, "exit": None, "stdout": "", "stderr": "", "started": now, "ended": now, "result": "human"})
             print(f"step {step.number} human {step.env}: human", flush=True)
             return "human", step.number
+        def mark(**extra):
+            append(repo_root, run_id, {"kind": "start", "step": step.number, "env": step.env, **extra, "at": _iso()})
+
         try:
-            recs = _tests_records(prd, step, repo_root, timeout) if step.tests is not None else [_agent_record(step, repo_root, timeout)]
+            recs = _tests_records(prd, step, repo_root, timeout, mark) if step.tests is not None else [_agent_record(step, repo_root, timeout, mark)]
         except Exception as e:  # a command could not even start: record it as a failed step
             now = _iso()
             recs = [{"command": step_command(step), "exit": None, "stdout": "", "stderr": f"{type(e).__name__}: {e}", "started": now, "ended": now, "result": "fail"}]
@@ -283,10 +289,33 @@ def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
     return reasons
 
 
+def _used_or_unfinished(recs: list[dict]) -> list[str]:
+    """A confirm is used once, and a command that was started is never run again."""
+    reasons = []
+    last_confirm = {}
+    for i, r in enumerate(recs):
+        if r.get("kind") == "confirm":
+            last_confirm[r.get("step")] = i
+    for n, i in last_confirm.items():
+        if any(r.get("kind") == "resume" and r.get("step") == n for r in recs[i + 1:]):
+            reasons.append(f"step {n}'s confirm was already used")
+    for i, r in enumerate(recs):
+        if r.get("kind") == "start" and not r.get("rollback") and not any(x.get("kind") == "step" for x in recs[i + 1:]):
+            reasons.append(f"step {r.get('step')} started and did not finish; check the environment, then start a new run")
+            break
+    return list(dict.fromkeys(reasons))
+
+
+def begin_resume(repo_root: Path, run_id: str, step: int) -> None:
+    """Use up the confirm of `step`; nothing may run if this fails."""
+    append(repo_root, run_id, {"kind": "resume", "step": step, "at": _iso()})
+
+
 def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
     """Reasons the run may not continue; empty when it may. ValueError when the run has no usable log."""
     header, recs = _load_log(repo_root, run_id)
     reasons = _moved(prd, repo_root, header)
+    reasons += _used_or_unfinished(recs)
     failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
     last = _last_step(recs)
     if failed is not None:
@@ -327,9 +356,15 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
     target = next((s for s in prd.operations.steps if s.number == step), None)
     if target is None or not target.rollback:
         raise ValueError(f"step {step} has no Rollback")
+    if any(r.get("kind") == "start" and r.get("rollback") and r.get("step") == step for r in recs):
+        raise ValueError(f"step {step}'s rollback was already started")
     if any(r.get("kind") == "rollback" and r.get("step") == step for r in recs):
         raise ValueError(f"step {step} was already rolled back")
     started = _iso()
+    try:
+        append(repo_root, run_id, {"kind": "start", "step": step, "env": target.env, "rollback": True, "command": target.rollback, "at": started})
+    except Exception as e:
+        raise ValueError(f"could not record the rollback start, so it was not run: {e}") from None
     try:
         r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, timeout)
         rec = {"exit": r["exit"], "stdout": r["stdout"], "stderr": r["stderr"], "ok": r["exit"] == 0 and not r["timed_out"]}

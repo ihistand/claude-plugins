@@ -104,6 +104,7 @@ def _existing_run(args, prd: model.Prd) -> int:
         step = next((s for s in steps if s.number == confirmed), None)
         if step is None or step.actor != "human":
             return _refuse([f"step {confirmed} is not a human step of the runbook"], confirmed, args.run)
+        deploy.begin_resume(repo_root, args.run, confirmed)  # uses up the confirm before any command runs
         print(f"resume: {args.run}", flush=True)
         if confirmed == steps[-1].number:
             print(f"prd-deploy: done step={confirmed} run={args.run}")
