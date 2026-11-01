@@ -7,6 +7,11 @@
 > and `2026-10-30-prd-toolkit-0.3-design.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.4.
 
+> **Revisions.** Two corrections from the implementation plan, which is their source
+> (`docs/superpowers/plans/2026-10-31-prd-toolkit-0.4.md`):
+> - §7 Installation: the hook shims are five lines, not two, and with `core.hooksPath` set install writes no shim.
+> - §3.1: a non-empty QUESTIONS no longer always stops the build; a quoted test dispute is reconciled at step 6 and only a PRD gap stops it.
+
 ## 1. Scope
 
 0.3 gives a task a focused pack. 0.4 takes an **approved PRD change to verified code**: a builder
@@ -112,7 +117,7 @@ QUESTIONS   each gap the PRD left; an empty list is written as `none`
 COMMIT      the worktree branch and its commit SHAs
 ```
 
-A non-empty QUESTIONS stops the build at step 6's PRD-gap row before any merge.
+A QUESTIONS line of the form `<T-id>: test dispute: "<assertion>" vs "<quote>"` is reconciled by quote at step 6. Any other QUESTIONS line is a PRD gap and stops the build: `built` for blocks an earlier round merged, otherwise no status.
 
 ### 3.2 `prd_build_check.py`
 
@@ -199,8 +204,8 @@ committed. `check` exits 1 when `VERSION` differs from the running plugin's or a
 differs from its source, naming each; `install` refreshes the copy. `uninstall` removes the hooks it
 installed and leaves the copy.
 
-**Installation.** `install` writes `.git/hooks/commit-msg` and `.git/hooks/pre-commit` as two-line
-shims that run the vendored hook with `uv run --script`. It never sets `core.hooksPath` and never
+**Installation.** `install` writes `.git/hooks/commit-msg` and `.git/hooks/pre-commit` as five-line
+shims (shebang, marker, a uv guard that blocks the commit when uv is missing, `top=`, `exec`) that run the vendored hook with `uv run --script`. It never sets `core.hooksPath` (with it set, install writes no shim and prints the lines to add) and never
 overwrites a hook: when a hook of that name exists, it writes nothing for it and prints the one line
 to add to that hook. Each clone runs `install` once (git does not clone hooks); the managed block
 says so.
