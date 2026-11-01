@@ -227,17 +227,24 @@ uv run --script .prd-toolkit/prd_drift.py docs/prd/<slug> --env production
 with `TEST_ENV=<env>`). Both start by hand (`workflow_dispatch` on GitHub, `when: manual` on
 GitLab), stay out of the merge gate, and never deploy; deploying is done from a session.
 
-**What `prd_deploy.py` refuses.** Exit 1 (`refused`) with each reason printed, when:
+**What `prd_deploy.py` refuses.** Exit 1 (`refused`), with each reason printed:
 
-- the tracked working tree is dirty;
-- `prd_lint` or `prd_trace` finds anything;
-- any requirement is still `built` (a deploy starts from `verified`);
-- a `tests` step runs a deploy-gate test, before production, that no requirement cites;
-- a human step has no `confirm`, so a `resume` would pass it unconfirmed;
-- a `confirm` was already used, or HEAD or the PRD version moved since the run started;
-- a step started and did not finish (a killed or timed-out call), or the run failed: a failure ends
-  the run, and `resume` never goes past it;
-- a second rollback of the same step.
+- `run`: the tracked working tree is dirty; `prd_lint` or `prd_trace` finds anything; any
+  requirement is still `built` (a deploy starts from `verified`); or the run reaches a production
+  environment while a `verified` requirement has a deploy-gate T-id that no test cites (it could
+  never go `live`);
+- `resume`: HEAD or the PRD version moved since the run started, or the tree changed; the run's
+  human step has no `confirm`, or its `confirm` was already used; a step started and did not
+  finish (a killed or timed-out call); or the run failed, since a failure ends the run and
+  `resume` never goes past it;
+- `rollback`: HEAD or the PRD version moved since the run started.
+
+Exit 2 (usage error, nothing run), with the reason printed:
+
+- a second rollback of the same step, or a rollback of a step that is not the run's failed step or
+  has no `Rollback:`;
+- a `confirm` for a step that already has a `confirm` record, that is not the human step the run
+  stopped at, or with an empty reply.
 
 A failed step exits 4 and prints its `Rollback:` command; the script never runs it unasked.
 

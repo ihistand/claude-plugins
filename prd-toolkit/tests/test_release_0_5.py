@@ -56,3 +56,26 @@ def test_changelog_and_command_row():
 
 def test_root_readme_lists_deploy():
     assert "/prd-deploy" in ROOT_README and "deploying-from-prds" in ROOT_README
+
+
+def test_refusals_split_by_exit_code():
+    s = flat(section("Deploying"))
+    assert "Exit 2" in s and "second rollback" in s and "already has a `confirm` record" in s
+    assert "reaches a production environment" in s and "no test cites" in s
+    assert "a `tests` step runs a deploy-gate test" not in s
+
+
+def test_readmes_rule_counts_match_registry():
+    import subprocess
+    out = subprocess.run(["uv", "run", "--script", str(ROOT / "scripts/prd_lint.py"), "--list-rules"],
+                         capture_output=True, text=True, check=True).stdout
+    n = len(out.split())
+    found = 0
+    for text in (README, ROOT_README):
+        for line in text.splitlines():
+            if "**0.1.0:**" in line:
+                continue  # history
+            for m in re.finditer(r"(\d+)[- ]rules?\b", line):
+                found += 1
+                assert int(m.group(1)) == n, line
+    assert found >= 4

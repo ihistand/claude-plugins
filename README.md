@@ -6,7 +6,7 @@ Claude Code plugins for data engineering (sqlanvil-toolkit), 3D printing workflo
 
 ### prd-toolkit
 
-A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 27-rule linter, standards and skills registries, and skills to author and change it, plus a builder that takes an approved change to verified code and a deploy script that takes it live.
+A living PRD as the single authority agents build, test and deploy from: a PRD folder in the repo with contracts and black-box test cases, a 31-rule linter, standards and skills registries, and skills to author and change it, plus a builder that takes an approved change to verified code and a deploy script that takes it live.
 
 **Features:**
 - **authoring-prds skill** - Interviews to `docs/prd/<project>/`, lints it, dry-runs it with prd-tester, and approves it
