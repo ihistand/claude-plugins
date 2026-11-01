@@ -152,3 +152,8 @@ def test_cli_pre_commit_skips_deleted_paths(repo):
     git(repo, "commit", "-q", "-m", "seed", "--no-verify")
     git(repo, "rm", "-q", "src/gone.py")
     assert run(repo, "pre-commit", "docs/prd/orders").returncode == 0 and log(repo) == []
+
+
+def test_pre_commit_passes_dash_paths_as_dot_slash(repo):
+    """Minor 9: a staged path starting with `-` must not read as an option to the linter."""
+    assert githook.pre_commit(p(repo), repo, ["-x.py", "src/a.py"]) == [] and log(repo) == ["./-x.py", "src/a.py"]

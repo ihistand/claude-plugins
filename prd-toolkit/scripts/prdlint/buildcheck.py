@@ -57,6 +57,9 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
         if prefix == "." or path == prefix or path.startswith(prefix + "/"):
             findings.append(f"{path}: the builder may not edit the PRD folder")
             continue
+        if path == ".prd-toolkit" or path.startswith(".prd-toolkit/"):
+            findings.append(f"{path}: the builder may not edit the vendored .prd-toolkit/ copy")
+            continue
         cited: dict[str, None] = {}
         for rev in (base, head):
             for m in CITE.finditer(_show(repo_root, rev, path)):

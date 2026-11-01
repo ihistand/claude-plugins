@@ -90,10 +90,12 @@ def registries(prd: Prd) -> Iterator[Finding]:
             continue
         if decision == "proposed" and approved:
             yield Finding("prd.md", r.line, "registries", "standards row is still 'proposed' but the PRD is Approved")
-        if decision == "enforced" and not ci:
+        if decision == "enforced":
             cmd = _command(cells[1])
-            if cmd is None or shutil.which(cmd) is None:
-                yield Finding("prd.md", r.line, "registries", f"enforced linter command '{cmd or cells[1]}' is not on PATH")
+            if cmd is None:  # no command at all is a finding anywhere, CI included
+                yield Finding("prd.md", r.line, "registries", f"enforced standards row has no linter command ('{cells[1]}'); put it in backticks")
+            elif not ci and shutil.which(cmd) is None:  # --ci skips only the on-PATH lookup
+                yield Finding("prd.md", r.line, "registries", f"enforced linter command '{cmd}' is not on PATH")
     root = None
     for r in _registry_rows(prd, 6):
         cells = [c.strip() for c in r.cells] + [""] * 3

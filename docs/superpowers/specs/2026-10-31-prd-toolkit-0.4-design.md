@@ -16,7 +16,7 @@
 >   T-id only (a level with no Gate row counts as build); a `live` block needs all. `status-current`
 >   follows the same split. Without it, a deploy-gate T-id (0.4 writes none) or another `approved`
 >   FR kept `verified` unreachable and the generated `prd-trace` job red.
-> - §7 Installation (final review): a shim, and the line printed for an existing hook, skips with a
+> - §7 Installation (final review): the shims gain a sixth line. A shim, and the line printed for an existing hook, skips with a
 >   message and exit 0 on a branch with no `.prd-toolkit/` copy or no PRD folder; the uv guard still
 >   blocks when the copy is present. `install` also writes `.prd-toolkit/.gitignore`.
 > - §8 and §12 (final review): job ids are sanitized, the GitHub workflow reads with
@@ -221,8 +221,8 @@ committed. `check` exits 1 when `VERSION` differs from the running plugin's or a
 differs from its source, naming each; `install` refreshes the copy. `uninstall` removes the hooks it
 installed and leaves the copy.
 
-**Installation.** `install` writes `.git/hooks/commit-msg` and `.git/hooks/pre-commit` as five-line
-shims (shebang, marker, a uv guard that blocks the commit when uv is missing, `top=`, `exec`) that run the vendored hook with `uv run --script`. It never sets `core.hooksPath` (with it set, install writes no shim and prints the lines to add) and never
+**Installation.** `install` writes `.git/hooks/commit-msg` and `.git/hooks/pre-commit` as six-line
+shims (shebang, marker, `top=`, the skip below, a uv guard that blocks the commit when uv is missing, `exec`) that run the vendored hook with `uv run --script`. It never sets `core.hooksPath` (with it set, install writes no shim and prints the lines to add) and never
 overwrites a hook: when a hook of that name exists, it writes nothing for it and prints the one line
 to add to that hook. Each clone runs `install` once (git does not clone hooks); the managed block
 says so. On a branch where `.prd-toolkit/prd_git_hook.py` or the PRD folder is absent, a shim

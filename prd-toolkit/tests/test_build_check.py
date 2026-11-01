@@ -193,3 +193,11 @@ def test_head_side_unreadable_rev_is_not_silently_absent(repo):
     prd = model.load(repo / "docs/prd/orders")
     with pytest.raises(Exception):
         buildcheck.diff_findings(prd, repo, "base..deadbeef")
+
+
+def test_vendored_toolkit_edit_fails(repo):
+    """Minor 5: the builder may not change the vendored .prd-toolkit/ copy."""
+    (repo / ".prd-toolkit").mkdir()
+    (repo / ".prd-toolkit/prd_lint.py").write_text("# changed\n")
+    commit(repo, "edit")
+    assert diff(repo) == [".prd-toolkit/prd_lint.py: the builder may not edit the vendored .prd-toolkit/ copy"]

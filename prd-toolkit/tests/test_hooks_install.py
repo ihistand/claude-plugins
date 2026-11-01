@@ -124,22 +124,31 @@ def test_vendored_check_exits_2(repo):
 GUARD = 'command -v uv >/dev/null 2>&1 || { echo "prd-toolkit: uv is not on PATH; install uv to run this hook" >&2; exit 1; }'
 
 
+SKIP = "prd-toolkit: no .prd-toolkit/ (or no PRD folder) on this branch; hook skipped"
+TOP = 'prd_top="$(git rev-parse --show-toplevel)" || exit 1; '
+
+
+def appended(lines):
+    line = next(x for x in lines if "add this line" in x)
+    return line[line.index(TOP):]
+
+
 def test_printed_line_is_appendable_sh(repo):
     (repo / ".git/hooks/commit-msg").write_text("#!/bin/sh\necho mine\n")
     lines = hooks.install(repo, PRD)
     line = next(x for x in lines if "add this line" in x)
     assert "exec" not in line and "before any `exit 0`" in line and "sh hook" in line
-    top = '"$(git rev-parse --show-toplevel)'
+    hook = '"$prd_top/.prd-toolkit/prd_git_hook.py"'
     assert line.endswith(
-        f'{GUARD}; uv run --script {top}/.prd-toolkit/prd_git_hook.py" commit-msg {top}/{PRD}" "$@" || exit $?')
+        f'{TOP}if [ -f {hook} ] && [ -d "$prd_top/{PRD}" ]; then {GUARD}; '
+        f'uv run --script {hook} commit-msg "$prd_top/{PRD}" "$@" || exit $?; else echo "{SKIP}" >&2; fi')
 
 
 def test_appended_line_runs_and_propagates_failure(repo):
     log = repo / "log"
     (repo / ".git/hooks/commit-msg").write_text(f"#!/bin/sh\necho mine >> {log}\n")
     lines = hooks.install(repo, PRD)
-    line = next(x for x in lines if "add this line" in x)
-    line = line[line.index(GUARD):]
+    line = appended(lines)
     hook = repo / ".git/hooks/commit-msg"
     hook.write_text(f"#!/bin/sh\necho mine >> {log}\n{line}\necho after >> {log}\n")
     hook.chmod(0o755)
@@ -203,3 +212,48 @@ def test_hook_run_leaves_no_pycache(repo):
     git(repo, "add", "src/app.py")
     subprocess.run(["git", "commit", "-q", "-m", "Add x"], cwd=repo, capture_output=True, text=True)
     assert not list((repo / ".prd-toolkit").rglob("__pycache__"))
+
+
+def test_commit_on_branch_without_vendored_copy_is_skipped(repo):
+    """R36: hooks are per clone, the copy is per branch: a branch with no .prd-toolkit/ commits, with a message."""
+    hooks.install(repo, PRD)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--no-verify", "-m", "Start")
+    git(repo, "switch", "-q", "-c", "no-toolkit")
+    git(repo, "rm", "-r", "-q", ".prd-toolkit")
+    (repo / "src/app.py").write_text("x = 2\n")
+    git(repo, "add", "src/app.py")
+    r = subprocess.run(["git", "commit", "-q", "-m", "Change x"], cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stderr.count(SKIP) == 2  # pre-commit and commit-msg
+
+
+def test_commit_without_prd_folder_is_skipped(repo):
+    hooks.install(repo, PRD)
+    git(repo, "rm", "-r", "-q", "--cached", "docs", check=False)
+    import shutil
+    shutil.rmtree(repo / "docs")
+    git(repo, "add", "src/app.py")
+    r = subprocess.run(["git", "commit", "-q", "-m", "Change x"], cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0 and SKIP in r.stderr
+
+
+def test_appended_line_skips_without_copy_and_blocks_without_uv(repo):
+    log = repo / "log"
+    (repo / ".git/hooks/commit-msg").write_text("#!/bin/sh\necho mine\n")
+    line = appended(hooks.install(repo, PRD))
+    hook = repo / ".git/hooks/commit-msg"
+    hook.write_text(f"#!/bin/sh\n{line}\necho after >> {log}\n")
+    hook.chmod(0o755)
+    (repo / "m").write_text("Add x\n")
+    r = subprocess.run([str(hook), str(repo / "m")], cwd=repo, env={"PATH": "/usr/bin:/bin"}, capture_output=True, text=True)
+    assert r.returncode != 0 and "prd-toolkit: uv is not on PATH" in r.stderr and not log.exists()
+    (repo / ".prd-toolkit").rename(repo / "elsewhere")
+    r = subprocess.run([str(hook), str(repo / "m")], cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0 and SKIP in r.stderr and log.read_text().split() == ["after"]
+
+
+def test_install_writes_gitignore_for_pycache(repo):
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/.gitignore").read_text() == "__pycache__/\n"
+    assert hooks.check(repo, PLUGIN_ROOT) == []

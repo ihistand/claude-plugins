@@ -46,7 +46,18 @@ def test_lint_job_runs_ci_mode(prd):
 
 def test_standards_job_uses_git_glob_pathspec(prd):
     job = next(j for j in jobs(prd) if j.name == "standards-1")
-    assert job.script == ["git ls-files -z -- ':(glob)**/*.sql' | xargs -0 -r python3 -m json.tool"]
+    assert job.script == ["git ls-files -z --format='./%(path)' -- ':(glob)**/*.sql' | xargs -0 -r python3 -m json.tool"]
+
+
+def test_standards_job_passes_dash_paths_as_dot_slash(repo):
+    """Minor 9: a path starting with `-` reaches the linter as `./-…`, never as an option."""
+    (repo / "-x.sql").write_text("{}\n")
+    (repo / "a b.sql").write_text("{}\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    job = next(j for j in jobs(repo / PRD) if j.name == "standards-1")
+    cmd = job.script[0].replace("python3 -m json.tool", "printf '[%s]\\n'")
+    out = subprocess.run(cmd, shell=True, cwd=repo, capture_output=True, text=True, check=True).stdout
+    assert "[./-x.sql]" in out and "[./a b.sql]" in out
 
 
 def test_test_job_runs_the_harness_command(prd):
@@ -147,3 +158,31 @@ def test_lint_cli_ci_flag(prd):
     cmd = [sys.executable, str(PLUGIN_ROOT / "scripts/prd_lint.py")]
     assert "is not on PATH" in subprocess.run([*cmd, str(prd)], capture_output=True, text=True).stdout
     assert subprocess.run([*cmd, "--ci", str(prd)], capture_output=True, text=True).stdout == ""
+
+
+def test_ci_mode_still_reports_enforced_row_with_no_command(prd, monkeypatch):
+    """Minor 7: --ci skips only the on-PATH lookup; an enforced row with no command is a finding anywhere."""
+    edit(prd, "prd.md", "| `**/*.sql` | `python3 -m json.tool` |", "| `**/*.sql` | none |")
+    monkeypatch.setenv("PRD_LINT_CI", "1")
+    assert any("enforced" in f.message and "none" in f.message for f in lint(prd) if f.rule == "registries")
+
+
+def test_job_ids_are_sanitized_and_deduped(prd):
+    """Minor 8: a Levels name may hold characters a CI job id may not; ids match ^[_A-Za-z][\\w-]*$ and stay unique."""
+    import re
+    rows = ("| a b | `true` | local | build |\n| a-b | `true` | local | build |\n| a.b | `true` | local | build |\n"
+            "| 9x | `true` | local | build |\n")
+    text = (prd / "testing.md").read_text()
+    head = text.index("|---|---|---|---|\n") + len("|---|---|---|---|\n")
+    (prd / "testing.md").write_text(text[:head] + rows + text[head:])
+    names = [j.name for j in jobs(prd)]
+    assert all(re.fullmatch(r"[_A-Za-z][A-Za-z0-9_-]*", n) for n in names), names
+    assert len(set(names)) == len(names)
+    assert names[names.index("test-a-b"):names.index("test-a-b") + 4] == ["test-a-b", "test-a-b-2", "test-a-b-3", "test-9x"]
+    assert hooks.ci_jobs(model.load(prd), PRD) == jobs(prd)  # deterministic
+    assert hooks.job_id("9 x") == "_9-x" and hooks.job_id("ok_1") == "ok_1"
+
+
+def test_github_workflow_reads_only(prd):
+    data = yaml.safe_load(hooks.render_github(jobs(prd)))
+    assert data["permissions"] == {"contents": "read"}

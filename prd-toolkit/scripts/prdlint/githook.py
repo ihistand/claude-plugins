@@ -26,7 +26,8 @@ def pre_commit(prd: Prd, repo_root: Path, staged: list[str]) -> list[str]:
         if row.decision != "enforced" or not row.command:
             continue
         rx = trace.glob_re(row.glob)
-        files = [f for f in staged if rx.match(f)]
+        # a path starting with `-` would read as an option: pass it as ./<path>
+        files = [("./" + f) if f.startswith("-") else f for f in staged if rx.match(f)]
         if not files:
             continue
         try:
