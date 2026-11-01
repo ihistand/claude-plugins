@@ -71,3 +71,43 @@ def test_old_runbook_names_the_migration(prd):
     fs = [f for f in lint(prd) if f.rule == "runbook-steps"]
     assert len(fs) >= 2 and fs[0].message.endswith("(prd-toolkit 0.5 runbook format)")
     assert not fs[1].message.endswith("(prd-toolkit 0.5 runbook format)")
+
+
+DEPLOYED_DRIFT = """
+## Deployed
+
+| Environment | PRD version | Commit | Date | Run |
+|---|---|---|---|---|
+| staging | 1.0.0 | 3f2c1a9 | 2026-11-02 | 20261102T101500Z-staging |
+
+## Drift
+
+| Environment | Check | Introspection command |
+|---|---|---|
+| production | version | `./app --prd-version` |
+| production | config | none |
+"""
+
+
+def test_deployed_and_drift_rows(prd):
+    p = prd / "operations.md"
+    before = p.read_text()
+    p.write_text(before + DEPLOYED_DRIFT)
+    ops = model.load(prd).operations
+    ln = lambda needle: next(i for i, t in enumerate(p.read_text().split("\n"), 1) if needle in t)
+    (d,) = ops.deployed
+    assert (d.env, d.version, d.commit, d.date, d.run) == ("staging", "1.0.0", "3f2c1a9", "2026-11-02", "20261102T101500Z-staging")
+    assert d.line == ln("| staging | 1.0.0")
+    v, c = ops.drift
+    assert (v.env, v.check, v.command, v.line) == ("production", "version", "./app --prd-version", ln("| production | version"))
+    assert (c.env, c.check, c.command, c.line) == ("production", "config", None, ln("| production | config"))
+
+
+def test_human_step_missing_do(prd):
+    edit(prd, "operations.md", '   Do: read the staging results and reply "deploy production"\n', "")
+    assert ("runbook-steps", "step 3: a human step needs Do: and Check:") in msgs(prd)
+
+
+def test_tests_step_may_roll_back(prd):
+    edit(prd, "operations.md", "   Run: tests system, e2e\n", "   Run: tests system, e2e\n   Rollback: `./deploy.sh staging --previous`\n")
+    assert not [m for m in msgs(prd) if m[0] == "runbook-steps"]

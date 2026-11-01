@@ -145,9 +145,10 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
         labels = s.labels
         if s.actor == "human":
             bad = [k for k in ("Run", "Rollback") if k in labels]
-            if bad or "Do" not in labels or "Check" not in labels:
-                line = labels[bad[0]][1] if bad else s.line
-                yield out(line, f"step {n}: a human step takes Do: and Check:, not {' or '.join(k + ':' for k in bad) or 'Run:'}")
+            if bad:
+                yield out(labels[bad[0]][1], f"step {n}: a human step takes Do: and Check:, not {' or '.join(k + ':' for k in bad)}")
+            elif "Do" not in labels or "Check" not in labels:
+                yield out(s.line, f"step {n}: a human step needs Do: and Check:")
             continue
         if "Do" in labels:
             yield out(labels["Do"][1], f"step {n}: an agent step takes Run:, Check: and Rollback:, not Do:")
@@ -158,8 +159,6 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
         if s.tests is not None:
             if "Check" in labels:
                 yield out(labels["Check"][1], f"step {n}: a tests step has no Check:")
-            if "Rollback" in labels:
-                yield out(labels["Rollback"][1], f"step {n}: a tests step has no Rollback:")
             continue
         if "Check" not in labels:
             yield out(s.line, f"step {n}: an agent step needs Check:")
