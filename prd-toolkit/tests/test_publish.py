@@ -25,10 +25,27 @@ def test_golden(prd):
     assert render(prd) == GOLDEN.read_text(encoding="utf-8")
 
 
+def assert_loads_nothing(page):
+    import re
+    for tag in ("<img", "<iframe", "<object", "<embed", "<script", "<link", "@import"):
+        assert tag not in page, tag
+    assert "url(" not in page.split("</style>")[0]
+    assert " src=" not in page
+    for href in re.findall(r'href="([^"]*)"', page):
+        assert href.startswith(("#", "http://", "https://", "mailto:")), href
+
+
 def test_loads_nothing(prd):
     page = render(prd, {"version": "1.0.0", "areas": {"import": {"text": "Files come in.", "ids": ["FR-001"]}}})
-    for s in ("<script", "<link", "@import", "url("):
-        assert s not in page
+    assert_loads_nothing(page)
+
+
+def test_images_are_text(prd):
+    edit(prd, "features/import.md", "- AC-001.1 When", "- AC-001.1 ![x](https://evil.example/a.png) ![d](data:image/png;base64,AAAA) When")
+    edit(prd, "prd.md", "| customer |", "| ![x](https://evil.example/a.png) |")
+    page = render(prd)
+    assert_loads_nothing(page)
+    assert '!<a href="https://evil.example/a.png">x</a>' in page  # a plain link, not an image
 
 
 def test_markup_in_prd_is_text(prd):
@@ -88,6 +105,12 @@ def test_summary_problems(prd):
     assert problems(prd, {"version": "1.0.0", "areas": {"import": {"text": "x", "ids": ["FR-002"]}}}) == ["summaries: import: FR-002 belongs to area 'api'"]
     assert problems(prd, {"version": "1.0.0", "areas": {"import": {"text": "y" * 600, "ids": []}}}) == []
     assert problems(prd, {"version": "1.0.0", "areas": {"import": {"text": "y" * 601, "ids": []}}}) == ["summaries: import: text is 601 characters; at most 600"]
+
+
+def test_summary_ids_not_strings(prd):
+    for ids in ([["FR-001"]], [1], "FR-001"):
+        assert problems(prd, {"version": "1.0.0", "areas": {"import": {"text": "x", "ids": ids}}}) == [
+            "summaries: import: ids must be a list of requirement IDs"]
 
 
 def test_summary_malformed(prd):

@@ -18,7 +18,8 @@ markdown_it = require("markdown_it", "markdown-it-py")
 TEMPLATE = Path(__file__).resolve().parent.parent.parent / "templates/publish/page.html"
 MAX_SUMMARY = 600
 NO_COMMIT = "no commit"
-_MD = markdown_it.MarkdownIt("commonmark", {"html": False}).enable("table")
+_MD = markdown_it.MarkdownIt("commonmark", {"html": False}).enable("table").disable("image")
+_MD.validateLink = lambda url: url.strip().lower().startswith(("#", "http://", "https://", "mailto:"))  # no data: or relative targets
 _ID = re.compile(r"^([A-Z]+)-(\d+)$")
 
 
@@ -92,8 +93,12 @@ def summary_problems(prd: Prd, summaries: dict) -> list[str]:
         if name not in areas:
             out.append(f"summaries: area '{name}' does not exist")
             continue
-        if not isinstance(entry, dict) or not isinstance(entry.get("text"), str) or not isinstance(entry.get("ids", []), list):
+        if not isinstance(entry, dict) or not isinstance(entry.get("text"), str):
             out.append(f"summaries: {name}: must be an object with text and ids")
+            continue
+        ids = entry.get("ids", [])
+        if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+            out.append(f"summaries: {name}: ids must be a list of requirement IDs")
             continue
         for i in entry.get("ids", []):
             if i not in owner:
