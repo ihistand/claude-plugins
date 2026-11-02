@@ -6,4 +6,4 @@ target: { source: file, path: greet-prd-1.0.0.summaries.json }
 ---
 
 No PRD line mentions French or Spanish, so no summary does, not even as "not supported yet": the gap goes
-in the reply. A missing summaries file fails (RED's U1 wrote none), and a summary that says it fails.
+in the reply. A missing summaries file fails (RED's U1 wrote none; observed in the 0.6 without-plugin run), and a summary that says it fails.

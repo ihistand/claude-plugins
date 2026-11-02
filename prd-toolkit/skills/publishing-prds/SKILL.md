@@ -60,9 +60,9 @@ this skill" when the skill loads).
 1. **Find the PRD and the script.** Glob `docs/prd/*/prd.md`; with more than one, ask which.
    Read its frontmatter for `prd:` (the project) and `version:`. Glob `<scripts>/prd_publish.py`;
    not found is a tool error (rule 1).
-2. **Read each area.** Read `features/<area>.md` for each area, and `nfr.md`, in the PRD folder.
-   These are the summaries' only source, so read them whole. An area with no FR or NFR block
-   gets no summary. Read no code, no log and no file outside the PRD folder.
+2. **Read each area.** Read `features/<area>.md` for each area, and `nfr.md` (`nfr.md`'s area key
+   is `nfr`), in the PRD folder, whole: they are the summaries' only source. An area with no FR or
+   NFR block gets no summary. Read no code, no log and no file outside the PRD folder.
 3. **Write the summaries.** With the Write tool, the whole file, fresh for this publish, to
    `<project>-prd-<version>.summaries.json` in the repository root:
 
@@ -70,11 +70,12 @@ this skill" when the skill loads).
    {"version": "<PRD version>", "areas": {"<area>": {"text": "<2 to 4 sentences>", "ids": ["FR-001", "FR-002"]}}}
    ```
 
-   `version` is the PRD's `version:`. Each area's text is 2 to 4 sentences, at most 600
-   characters, in the language the user asks for (with none named, the language of the request),
-   plain text (no markdown: the page shows it as typed). Its `ids` are only its own area's block
-   IDs, never an `AC-` or `T-` ID. Before writing, hold each sentence against the line it
-   restates; a sentence with no such line comes out.
+   `features/<area>.md` is keyed `<area>`, and `nfr.md`'s area key is `nfr`. `version` is the
+   PRD's `version:`. Each area's text is 2 to 4 sentences, at most 600 characters, in the
+   language the user asks for (with none named, the language of the request), plain text (no
+   markdown: the page shows it as typed). Its `ids` are only its own area's block IDs, never an
+   `AC-` or `T-` ID. Before writing, hold each sentence against the line it restates; a sentence
+   with no such line comes out.
 4. **Render.** `<out>` is the path the user named, or `<project>-prd-<version>.html`:
 
    ```bash
@@ -98,10 +99,9 @@ this skill" when the skill loads).
 Quoted from runs without this skill (evals/baselines/publishing-prds.md), except where marked.
 
 - "I stopped without publishing anything, and I didn't change any files." (U1) A whole page
-  refused over one claim. Publish it with the claim left out, and say so.
+  refused over one claim.
 - "The publisher can't run in this repo. The vendored `.prd-toolkit` has `prdlint/publish.py`,
-  but it reads `.prd-toolkit/templates/publish/page.html`, which isn't there." (U1) The renderer
-  is the plugin's script, never the vendored copy.
+  but it reads `.prd-toolkit/templates/publish/page.html`, which isn't there." (U1)
 - `find / -name page.html -path "*publish*"` over the whole disk. (U1)
 - "I used a minimal stand-in template kept outside the repo, in `/tmp/prdpub`, so the layout is
   plain." (U2) A driver of your own calling `publish.render_page(...)` makes your own page.

@@ -178,6 +178,22 @@ def test_a_summary_says_only_what_its_area_says():
     assert "An area with no FR or NFR block gets no summary" in two
 
 
+def test_area_keys_are_the_file_stems_and_nfr():
+    for n in (2, 3):
+        assert "`nfr.md`'s area key is `nfr`" in step(n), n
+    assert "`features/<area>.md` is keyed `<area>`" in step(3)
+
+
+def test_baseline_rows_are_filled_and_the_green_record_appended():
+    baseline = (EVALS / "BASELINE.md").read_text(encoding="utf-8")
+    assert "| `publishing-trigger` (`bug`) | 1.00 | 0.00 | +1.00 |" in baseline
+    assert "| `publish-summary-cites-area` (`bug`) | 1.00 | 0.50 | +0.50 |" in baseline
+    assert "Results pending." not in baseline.split("## 0.6 baseline (publishing-prds cases)", 1)[1].split("## 0.5", 1)[0]
+    record = (EVALS / "baselines/publishing-prds.md").read_text(encoding="utf-8")
+    assert "## Results with the skill (GREEN)" in record
+    assert record.index("## Failure patterns the skill must name") < record.index("## Results with the skill (GREEN)")
+
+
 def test_summaries_never_in_the_prd_folder():
     s = flat(SKILL)
     assert "`<project>-prd-<version>.summaries.json` in the repository root" in s

@@ -73,3 +73,20 @@ logs, and wrote a stand-in template and the page outside the toolkit's conventio
    its template.
 5. The page carries ledger text that was never checked against what may be shown: E-001's detected-line with a deploy
    run id went on the page (U2). The skill must name what stays off: evidence, logs, secrets.
+
+## Results with the skill (GREEN)
+
+Same scenarios, same start states, headless with the branch plugin (`--plugin-dir`, the installed copy disabled),
+skill at `95d95e7`.
+
+| ID | Result | What it did |
+|---|---|---|
+| U1 | pass | Loaded `publishing-prds`, ran the plugin's `prd_publish.py render docs/prd/greet --out greet-prd-1.0.0.html --summaries greet-prd-1.0.0.summaries.json`, and published the page without the claim: "I published the PRD as a page, but it does not say French and Spanish are supported. The PRD has no line that says so, so I left that claim out." It named the route for the claim: "start with `/prd-change` (new requirement and version bump), then republish". |
+| U2 | pass | Rendered the page and kept the logs off it: "logs, evidence and secrets never go on a published page. The page shows the error ledger (`errors.md`) as the PRD holds it, so E-001 appears. The renderer drops its `Evidence:` lines." |
+
+In both, the page and the summaries file sat in the repository root, untracked and uncommitted, nothing under
+`docs/prd/` was written, and with no Artifact tool in the session the skill gave the path instead of offering one.
+
+**Evals** (`claude plugin eval`, one run each, Sonnet, with and without the plugin): `publishing-trigger` 1.00 / 0.00,
+`publish-summary-cites-area` 1.00 / 0.50. Without the plugin no page was rendered with summaries; a grader on the
+missing summaries file fails, so the case does not pass a run that writes none.
