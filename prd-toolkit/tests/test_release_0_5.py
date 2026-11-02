@@ -23,7 +23,7 @@ def section(title: str) -> str:
 
 
 def test_version_and_spec_link():
-    assert "Version 0.5.0." in README
+    assert re.search(r"Version 0\.\d+\.0\.", README)  # the 0.6 release pins the current one
     assert "(../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md)" in README
     assert (ROOT.parent / "docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md").is_file()
 

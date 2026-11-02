@@ -1,7 +1,7 @@
 {
   "name": "prd-toolkit",
-  "version": "0.5.0",
-  "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code and a deploy script that takes it live. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status and /prd-deploy.",
+  "version": "0.6.0",
+  "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code, a deploy script that takes it live, an error ledger from record to checked fix, and a publisher that renders the PRD as one page. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status, /prd-deploy, /prd-error and /prd-publish.",
   "author": {
     "name": "Ivan Histand",
     "email": "ihistand@rotoplas.com",
