@@ -9,6 +9,7 @@ import datetime
 import heapq
 import os
 import re
+import tempfile
 from pathlib import Path
 
 from . import model
@@ -22,6 +23,10 @@ FIELDS = ("branch", "version", "ids", "state")
 _RECORD = re.compile(r"CS-(\d{3})\.md")
 _BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 _ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
+_ENV = r"[A-Za-z0-9_.-]+"  # an environment name the table can hold: no `|`, `;`, blank or backtick
+_STATE = re.compile(rf"(?:proposed|approved|built|verified|live in {_ENV})")
+_NEED = re.compile(rf"(?:verified|live in {_ENV})")
+_UNSAFE = re.compile(r"[|`\n\r]")  # what a backticked table cell cannot hold
 
 
 # ---------------------------------------------------------------- small rules
@@ -98,6 +103,8 @@ def _members(prd: model.Prd, given: list[str]) -> dict[str, tuple[model.Prd, str
             other = side.load(None)
             name = side.slug
             rel = f"`{Path(os.path.relpath(side.repo, here)).as_posix()}`"
+        if _UNSAFE.search(rel[1:-1]):
+            raise Refused(f"{rel} cannot be written into the record table")
         if name in out:
             if out[name][0].root != other.root:
                 raise Refused(f"two members hold PRD {name}: {out[name][1]} and {rel}")
@@ -142,7 +149,10 @@ def new(prd: model.Prd, title: str, members: list[str]) -> Path:
         member = found[d][0]
         for r in member.links.upstreams if member.links else []:
             if r.name in found and r.name != d:
-                need[(r.name, d)] = r.needs.strip() or default_needs(member)
+                value = r.needs.strip() or default_needs(member)
+                if not _NEED.fullmatch(value):
+                    raise Refused(f"{value} cannot be written into the record table")
+                need[(r.name, d)] = value
     down = {n: sorted(d for u, d in need if u == n) for n in names}
     for n in found:  # the start first, then the members as given
         if not any(n in pair for pair in need):
@@ -184,9 +194,7 @@ def new(prd: model.Prd, title: str, members: list[str]) -> Path:
     cs = model.ChangeSet(cid, f"{model.CHANGES_DIR}/{cid}.md", title, 1, started=f"{today()} in {prd.frontmatter.get('prd', '')}",
                          status="proposed", rows=rows)
     folder.mkdir(exist_ok=True)
-    path = folder / f"{cid}.md"
-    path.write_text(render(cs), encoding="utf-8")
-    return path
+    return _write(folder / f"{cid}.md", cs)
 
 
 # ---------------------------------------------------------------- the record
@@ -244,7 +252,22 @@ def _text(value: str, what: str) -> str:
 
 
 def _write(path: Path, cs: model.ChangeSet) -> Path:
-    path.write_text(render(cs), encoding="utf-8")
+    """Write the record whole: a temporary file beside it, then os.replace, so an interrupted write leaves the old one."""
+    if path.exists():
+        mode = path.stat().st_mode & 0o7777
+    else:
+        mask = os.umask(0)
+        os.umask(mask)
+        mode = 0o666 & ~mask
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(render(cs))
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
     return path
 
 
@@ -267,8 +290,9 @@ def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
             if not all(_ID.fullmatch(x) for x in ids):
                 raise BadArgument(f"ids {value!r}: must be comma-separated UJ-, FR- or NFR- IDs, or —")
             value = ", ".join(ids) or NONE
-        if key == "state" and not model._CS_STATE.fullmatch(value):
-            raise BadArgument(f"state {value!r}: must be proposed, approved, built, verified or live in <env>")
+        if key == "state" and not _STATE.fullmatch(value):
+            raise BadArgument(f"state {value!r}: must be proposed, approved, built, verified or live in <env>, "
+                              "the environment a name of letters, digits, `_`, `.` or `-`")
         parsed.append((key, value))
     path, cs = load(record)
     _open(cs)
@@ -298,7 +322,8 @@ def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
 
 
 def approve(record: str | Path, reply: str, amendment: bool = False) -> Path:
-    """Quote the reply on one Approval line; every proposed row and Status become approved."""
+    """Quote the reply on one Approval line; every proposed row and Status become approved (so an --amendment moves a
+    running or stopped record back to approved, until the next `set` of a State)."""
     reply = _text(reply, "--reply")
     path, cs = load(record)
     _open(cs)

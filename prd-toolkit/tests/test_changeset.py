@@ -372,3 +372,63 @@ def test_only_writer(tmp_path):
     clean(transform)
     edit(prd_of(transform), "changes/CS-002.md", "Status: abandoned", "Status: paused")
     assert [f.rule for f in lint(prd_of(transform)) if f.rule == "change-sets"]  # the check can fail
+
+
+# ---------------------------------------------------------------- fix round 1: what the table cannot hold, and the write
+
+def test_state_env_must_be_a_name(tmp_path):
+    _, cs = started(tmp_path)
+    ok("approve", cs, "--reply", "yes")
+    before = cs.read_bytes()
+    for bad in ("live in a|b", "live in a;", "live in my env", "live in `x`"):
+        r = run_links("changeset", "set", cs, "transform", f"state={bad}")
+        assert (r.code, r.out) == (2, ""), bad
+        assert bad in r.err
+        assert cs.read_bytes() == before
+    ok("set", cs, "transform", "state=live in stg-2.eu_west")
+
+
+def test_new_refuses_what_the_table_cannot_hold(tmp_path):
+    transform, _, _ = make_three_repos(tmp_path, {("dashboards", "transform"): "live in a;b"})
+    r = new(transform, "../reports", "../dashboards")
+    assert (r.code, r.out) == (1, "")
+    assert r.err.strip() == "refused: live in a;b cannot be written into the record table"
+    odd = tmp_path / "x|y"
+    odd.mkdir()
+    repo = _repo(odd, "orders")
+    commit(repo, "Add the PRD", "docs")
+    r = new(transform, "../reports", "../x|y/orders")
+    assert (r.code, r.out) == (1, "")
+    assert r.err.strip() == "refused: `../x|y/orders` cannot be written into the record table"
+    assert not changes(transform).exists()
+
+
+def test_new_refuses_a_default_needs_env_the_table_cannot_hold(tmp_path):
+    transform, reports, _ = make_three_repos(tmp_path)
+    p = prd_of(reports) / "testing.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("| `pytest tests/system` | staging |", "| `pytest tests/system` | my staging |"), encoding="utf-8")
+    r = new(transform, "../reports")
+    assert (r.code, r.err.strip()) == (1, "refused: live in my staging cannot be written into the record table")
+
+
+def test_writes_replace_the_file_whole(tmp_path, monkeypatch):
+    import os
+
+    from prdlint import changeset
+
+    _, cs = started(tmp_path)
+    mode = cs.stat().st_mode
+    ok("set", cs, "transform", "ids=FR-001")
+    assert sorted(p.name for p in cs.parent.iterdir()) == ["CS-001.md"]
+    assert cs.stat().st_mode == mode
+    before = cs.read_bytes()
+
+    def boom(*_):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(changeset.os, "replace", boom)
+    with pytest.raises(OSError):
+        changeset.log(cs, "lost")
+    assert cs.read_bytes() == before
+    assert sorted(p.name for p in cs.parent.iterdir()) == ["CS-001.md"]
+    assert os.path.exists(cs)
