@@ -52,9 +52,9 @@ words and any output they quote, a failed run's output tails, a stopped build's 
 run nothing to produce it; step 2's runs go in the diagnosis. Write it with the Write tool to
 `<TMP>/evidence.txt`, outside the repository: run `mktemp -d` as its own call and paste the path it
 prints wherever `<TMP>` appears. It holds at most 20 lines; never a secret value, a token, a
-password or a value classified `confidential` or `pii` (write `<redacted>` in its place); and never
-a code fence (a line of three backticks): a fence ends the ledger's parse, and the entries after it
-vanish.
+password or a value classified `confidential` or `pii` (write `<redacted>` in its place); and
+never a code fence (a line that starts with three backticks or tildes): a fence ends the ledger's
+parse and hides the entries after it, so `new` refuses one.
 
 **Where to enter.** Find the one `docs/prd/<slug>/prd.md` (ask which when there is more than one),
 then run, as its own call:

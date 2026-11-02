@@ -55,7 +55,9 @@ FR3_ACCEPTANCE = """Acceptance (EARS):
 FR2_STATUS = "### FR-002 Get an order\nStatus: live (since 1.0.0)"
 
 CASES: list[Case] = [
-    Case("error-entries", "Detected is not a date", _edit("errors.md", "Detected: 2026-10-29, test failure", "Detected: yesterday, test failure")),
+    # R23: Detected: is judged only on an entry that carries Confirmed: (a 0.6-loop entry)
+    Case("error-entries", "Detected is not a date", _edit("errors.md", "Detected: 2026-10-29, test failure in T-001.3\nClassification: code bug\n",
+                                                          'Detected: yesterday, test failure in T-001.3\nClassification: code bug\nConfirmed: 2026-10-29, "yes"\n')),
     Case("index-consistent", "adoption row without a feature file", _adoption("| ghost | extracted | `src/ghost/**` |")),
     Case("index-consistent", "as-built block without Source", _as_built),
     Case("index-consistent", "duplicate index row", _edit("prd.md", FR2_ROW, FR2_ROW + "\n" + FR2_ROW)),

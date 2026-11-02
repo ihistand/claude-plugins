@@ -143,6 +143,11 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     return lines
 
 
+def not_a_checkout(prd) -> str:
+    """Why the CI files cannot be checked: without a checkout, the CI files' place is unknown."""
+    return f"{prd.root.as_posix()} is not inside a git checkout"
+
+
 def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
     """One line per CI include present whose text differs from what `prd_hooks.py ci` would write now."""
     jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)

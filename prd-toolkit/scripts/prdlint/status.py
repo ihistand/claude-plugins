@@ -5,7 +5,7 @@ from itertools import groupby
 from pathlib import Path
 
 from . import deploy, errors, hooks, trace
-from .model import Prd, gate_of
+from .model import Prd, gate_of, git_toplevel
 
 PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "CI", "Deployed", "Matrix")
 
@@ -46,6 +46,8 @@ def _open_errors(prd: Prd) -> list[StatusItem]:
 
 
 def _ci(prd: Prd, repo_root: Path) -> list[StatusItem]:
+    if git_toplevel(prd.root) is None:
+        return [StatusItem("CI", None, hooks.not_a_checkout(prd))]
     lines = hooks.stale_ci(repo_root, prd, deploy.prd_rel(prd, repo_root))
     return [StatusItem("CI", None, line) for line in lines] or [StatusItem("CI", None, "None.")]
 

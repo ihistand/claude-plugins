@@ -25,6 +25,16 @@ def _one(text: str) -> str:
     return " ".join(text.split())
 
 
+_OPENS_FENCE = re.compile(r"^\s*(```|~~~)")
+_FENCE_FIX = "would open a code fence; drop it or put text before it"
+
+
+def _no_fence(flag: str, value: str) -> None:
+    """A value whose first characters open a code fence would end the ledger's parse; refuse it."""
+    if _OPENS_FENCE.match(value):
+        raise Refused([f"{flag} {_FENCE_FIX}"])
+
+
 def _path(prd: Prd) -> Path:
     return prd.root / "errors.md"
 
@@ -79,6 +89,7 @@ def new(prd: Prd, title: str, source: str, touches: list[str], evidence: list[st
     title, source = _one(title), _one(source)
     if not title or not source:
         raise ValueError("a title and a source are required")
+    _no_fence("--title", title)
     reasons = []
     known = {b.id for b in prd.blocks}
     unknown = [t for t in touches if t not in known]
@@ -89,6 +100,7 @@ def new(prd: Prd, title: str, source: str, touches: list[str], evidence: list[st
         evidence.pop()
     if len(evidence) > MAX_EVIDENCE:
         reasons.append(f"Evidence: is {len(evidence)} lines; at most {MAX_EVIDENCE}")
+    reasons += [f"Evidence: line {n} {_FENCE_FIX}" for n, ln in enumerate(evidence, 1) if _OPENS_FENCE.match(ln)]
     if reasons:
         raise Refused(reasons)
     text = _read(prd)
@@ -118,6 +130,7 @@ def propose(prd: Prd, eid: str, cls: str, diagnosis: str, recurrence: str | None
     diagnosis = _one(diagnosis)
     if not diagnosis:
         raise ValueError("a diagnosis is required")
+    _no_fence("--diagnosis", diagnosis)
     text = _read(prd)
     e = _entry(text, eid)
     if e.state in ("confirmed", "resolved"):
@@ -140,6 +153,7 @@ def confirm(prd: Prd, eid: str, reply: str, today: date, cls: str | None = None)
     reply = _one(reply)
     if not reply:
         raise ValueError("the reply is empty")
+    _no_fence("--reply", reply)
     if cls is not None:
         _check_class(cls)
     text = _read(prd)
@@ -163,6 +177,7 @@ def resolve(prd: Prd, eid: str, *, t: str | None, level: str | None, version: st
         why = _one(not_a_defect)
         if not why:
             raise ValueError("say why it is not a defect")
+        _no_fence("--not-a-defect", why)
         value = f"not a defect: {why}"
     else:
         if not _VERSION.fullmatch(version or ""):

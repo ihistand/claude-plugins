@@ -48,6 +48,9 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_hooks: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if args.action == "check" and args.ci and model.git_toplevel(prd.root) is None:
+        print(f"prd_hooks: {hooks.not_a_checkout(prd)}", file=sys.stderr)
+        return 2
     try:
         root = model.repo_root(prd.root).resolve()
         if args.action == "check" and not args.ci and not hooks.is_plugin():

@@ -154,6 +154,8 @@ differs is rewritten only with `--force`.
 The generated `prd-lint` job runs `prd_lint.py --ci` and then `prd_hooks.py check --ci`, which reports
 `stale: <path>: re-run prd_hooks.py ci --<forge> --force` when the PRD has since gained a level, an
 environment, a `tests` step or a Drift row. `check` and `/prd-status` print the same line.
+Outside a git checkout `check --ci` exits 2 (`prd_hooks: <path> is not inside a git checkout`), and
+`/prd-status`'s CI part says the same.
 
 ```
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --github docs/prd/<slug>
@@ -336,10 +338,15 @@ does, and the failure close records the entry.
   `Recurrence of:` that is not an entry, or a `--touches` ID the PRD does not define;
 - `confirm`: an `unclassified`, already `confirmed` or `resolved` entry;
 - `resolve`: an entry that is not `confirmed`, or is already resolved, or a `--t` with no test case or level;
+- `new`, `propose`, `confirm` and `resolve`: a value that would open a code fence (an `Evidence:` line,
+  or a title, diagnosis, reply or reason, whose first non-space characters are ```` ``` ```` or `~~~`),
+  which would end the ledger's parse (`refused: Evidence: line <n> would open a code fence; drop it or
+  put text before it`, or `refused: --reply would open a code fence; …`);
 - `new`, `propose`, `confirm` and `resolve`: a write that would add a lint finding located in
   `errors.md` (`refused: the entry would fail lint: <file>:<line>: <rule>: <message>`, one per finding,
   then the hint `put quoted output in backticks`); `errors.md` is left byte-identical. Lint's prose
-  rules skip `Evidence:` lines, so quoted output belongs there bare and in backticks elsewhere;
+  rules skip `Evidence:` and `Confirmed:` lines, and `schema-refs` skips `errors.md`, so quoted output
+  belongs in `Evidence:` bare and in backticks elsewhere;
 - any command naming an `E-nnn` that is not an entry; and `check`, whose exit 1 prints findings, one
   per line, as `errors.md: E-nnn: <finding>`.
 

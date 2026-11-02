@@ -569,13 +569,18 @@ def gate_of(prd: Prd, level: str) -> str | None:
     return prd.testing.gates.get(level) or None
 
 
-def repo_root(path: Path) -> Path:
-    """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
+def git_toplevel(path: Path) -> Path | None:
+    """`git rev-parse --show-toplevel` from `path`; None when git cannot find a checkout there (or git is missing)."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=10, check=True
         ).stdout.strip()
-        return Path(out) if out else path
+        return Path(out) if out else None
     except (OSError, subprocess.SubprocessError):
-        return path
+        return None
+
+
+def repo_root(path: Path) -> Path:
+    """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
+    return git_toplevel(path) or path
