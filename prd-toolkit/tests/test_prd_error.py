@@ -230,3 +230,42 @@ def test_cli_full_loop_and_list(prd, tmp_path):
     assert run(prd, "list", str(prd)).stdout.splitlines()[-1].startswith("E-002 resolved code bug")
     r = run(prd, "resolve", str(prd), "E-002", "--t", "T-999.9", "--version", "1.0.1", "--commit", "abcdef1")
     assert r.returncode == 1 and "T-999.9" in r.stderr
+
+
+def test_propose_touches_writes_canonical_order(prd):
+    new(prd, touches=[])
+    errors.propose(model.load(prd), "E-002", "code bug", "d", None, ["FR-001"])
+    errors.confirm(model.load(prd), "E-002", "ok", TODAY)
+    keys = [ln.split(":")[0] for ln in errors.entry_lines(model.load(prd), "E-002")[1:]]
+    assert keys == ["Detected", "Classification", "Confirmed", "Touches", "Evidence", "Diagnosis", "Resolution", "Recurrence of"]
+    assert ledger(prd)["E-002"].touches[0][0] == "FR-001"
+
+
+def test_propose_touches_replaces_an_existing_line(prd):
+    new(prd, touches=["FR-001"])
+    errors.propose(model.load(prd), "E-002", "code bug", "d", None, ["FR-001", "FR-002"])
+    entry = (prd / "errors.md").read_text().split("### E-002", 1)[1]
+    assert entry.count("Touches:") == 1 and "Touches: FR-001, FR-002\n" in entry
+    assert [t for t, *_ in ledger(prd)["E-002"].touches] == ["FR-001", "FR-002"]
+
+
+def test_propose_without_touches_leaves_the_line_alone(prd):
+    new(prd, touches=["FR-001"])
+    errors.propose(model.load(prd), "E-002", "code bug", "d", None)
+    assert [t for t, *_ in ledger(prd)["E-002"].touches] == ["FR-001"]
+
+
+def test_propose_refuses_unknown_touches_and_writes_nothing(prd):
+    new(prd, touches=[])
+    before = (prd / "errors.md").read_text()
+    assert refused(errors.propose, model.load(prd), "E-002", "code bug", "d", None, ["FR-999"]) == ["Touches: FR-999 is not defined in the PRD"]
+    assert (prd / "errors.md").read_text() == before
+
+
+def test_cli_propose_touches(prd):
+    run(prd, "new", str(prd), "--title", "T", "--source", "s")
+    r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "d", "--touches", "FR-999")
+    assert r.returncode == 1 and r.stderr.strip() == "refused: Touches: FR-999 is not defined in the PRD" and r.stdout == ""
+    r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "d", "--touches", "FR-001")
+    assert r.returncode == 0, r.stderr
+    assert "Touches: FR-001\n" in (prd / "errors.md").read_text().split("### E-002", 1)[1]

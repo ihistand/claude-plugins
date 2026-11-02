@@ -113,7 +113,7 @@ def new(prd: Prd, title: str, source: str, touches: list[str], evidence: list[st
     return eid
 
 
-def propose(prd: Prd, eid: str, cls: str, diagnosis: str, recurrence: str | None) -> None:
+def propose(prd: Prd, eid: str, cls: str, diagnosis: str, recurrence: str | None, touches: list[str] | None = None) -> None:
     _check_class(cls)
     diagnosis = _one(diagnosis)
     if not diagnosis:
@@ -124,7 +124,12 @@ def propose(prd: Prd, eid: str, cls: str, diagnosis: str, recurrence: str | None
         raise Refused([f"{eid} is {e.state}; its class is settled" if e.state == "confirmed" else f"{eid} is resolved"])
     if recurrence is not None and recurrence not in _errors_ledger(text):
         raise Refused([f"Recurrence of: {recurrence} is not an entry"])
+    unknown = [t for t in touches or [] if t not in {b.id for b in prd.blocks}]
+    if unknown:
+        raise Refused([f"Touches: {', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} not defined in the PRD"])
     text = _set(text, eid, "Classification", cls)
+    if touches:
+        text = _set(text, eid, "Touches", ", ".join(touches))
     text = _set(text, eid, "Diagnosis", diagnosis)
     if recurrence is not None:
         text = _set(text, eid, "Recurrence of", recurrence)

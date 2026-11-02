@@ -1,5 +1,6 @@
 """The deploy_repo eval scaffold: four start states of a greet repo with a runbook and a deploy script."""
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -88,3 +89,17 @@ def test_refuses_a_non_empty_destination(tmp_path):
     (tmp_path / "x/f").write_text("a")
     r = subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path / "x"), "ready"], capture_output=True, text=True)
     assert r.returncode != 0
+
+
+def test_smoke_expectation_follows_the_prd_version_not_a_literal(tmp_path):
+    """F-1: a patch bump of the PRD version must not break the deploy-gate smoke test (AC-002.2)."""
+    repo, _ = build(tmp_path, "ready")
+    case = (repo / PRD / "test-cases/greet.yaml").read_text(encoding="utf-8")
+    t22 = case.split("T-002.2:", 1)[1].split("\nT-", 1)[0]
+    assert '"1.0.0"' not in t22 and "prd.md" in t22
+    prd_md = repo / PRD / "prd.md"
+    prd_md.write_text(prd_md.read_text(encoding="utf-8").replace("\nversion: 1.0.0\n", "\nversion: 1.0.1\n", 1), encoding="utf-8")
+    assert "version: 1.0.1" in prd_md.read_text(encoding="utf-8")
+    assert subprocess.run([sys.executable, "scripts/deploy.py", "production"], cwd=repo, capture_output=True, text=True).returncode == 0
+    r = subprocess.run(["uv", "run", "pytest", "-q", "tests/smoke"], cwd=repo, capture_output=True, text=True, env={**os.environ, "TEST_ENV": "production"})
+    assert r.returncode == 0, r.stdout + r.stderr

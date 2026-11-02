@@ -120,7 +120,7 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    |---|---|
    | code bug | the code does not do what an AC says |
    | spec gap | the PRD says nothing about what happened: no AC, contract or test case covers it |
-   | invalid requirement | the code does what an AC says, and the AC is wrong |
+   | invalid requirement | the code does what an AC says, and the AC is wrong; or a test case or a contract that contradicts its own AC (the AC stands, the PRD's test case or contract is wrong) |
    | environment | the code and the PRD agree; an environment, its config or the runbook is wrong |
    | standard | the code or the PRD breaks a standard in the PRD's registries |
 
@@ -135,10 +135,13 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    An entry with the same `Touches:` and the same symptom is its `--recurrence`. Then:
 
    ```bash
-   uv run --script <scripts>/prd_error.py propose docs/prd/<slug> <E-nnn> --class "<class>" --diagnosis '<the root cause, with the AC quoted>' --recurrence <E-mmm>; echo "prd-error-exit=$?"
+   uv run --script <scripts>/prd_error.py propose docs/prd/<slug> <E-nnn> --class "<class>" --diagnosis '<the root cause, with the AC quoted>' --touches <IDs> --recurrence <E-mmm>; echo "prd-error-exit=$?"
    ```
 
-   Leave out `--recurrence` when there is none. The class is one of five strings, exactly:
+   `--touches` takes the blocks the diagnosis names, as `FR-001,FR-002`: an entry recorded before
+   diagnosis has no `Touches:` line, and the recurrence check needs it; it replaces a line already
+   there, and is left out only when the diagnosis names none. Leave out `--recurrence` when there
+   is none. The class is one of five strings, exactly:
    `code bug`, `spec gap`, `invalid requirement`, `environment`, `standard`; `code-bug` is a
    usage error. Then, each its own call:
 
@@ -186,7 +189,7 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    |---|---|
    | code bug | as **A code bug** below |
    | spec gap | `/prd-change` adds the AC and its T-ids (minor; major if existing behaviour changes), then `/prd-build <area> <IDs> --fixes <E-nnn>` |
-   | invalid requirement | `/prd-change` revises the AC and its test cases (major when existing behaviour changes), and the block returns to `approved`; then `/prd-build <area> <IDs> --fixes <E-nnn>` |
+   | invalid requirement | `/prd-change` revises the AC and its test cases (major when existing behaviour changes), or, when a test case or a contract contradicts its own AC, revises the test case or contract (a patch when no AC or behaviour changes: see the version rules in `prd-toolkit:changing-prds`), and the block returns to `approved`; then `/prd-build <area> <IDs> --fixes <E-nnn>` |
    | environment | `/prd-change` on `operations.md` or `contracts/config.yaml` when the PRD holds what is wrong, then a new `/prd-deploy` run: never a deploy by hand |
    | standard | the user chooses the side that changes, the registry row or the PRD, through `/prd-change`; then `/prd-build <area> <IDs> --fixes <E-nnn>` when code must follow |
    | not a defect | nothing changes |

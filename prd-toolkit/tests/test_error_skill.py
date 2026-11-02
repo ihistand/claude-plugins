@@ -565,3 +565,20 @@ def test_graders_ignore_a_prd_error_call_that_quotes_commands():
                        ("error-confirm-before-fix", "no-test-or-src-bash-write")):
         assert not _counts(case, name, {"command": PROPOSE_QUOTING}), (case, name)
         assert not _counts(case, name, {"command": PROPOSE_QUOTING.replace(".prd-toolkit/", "/abs/plugin/scripts/")}), (case, name)
+
+
+def test_r16_a_test_case_that_contradicts_its_ac_is_an_invalid_requirement():
+    """Proof R16: the class table and the route table both name the contradicting test case or contract."""
+    three, five = step(3), step(5)
+    row3 = three.split("| invalid requirement |", 1)[1].split("| environment |", 1)[0]
+    assert "a test case or a contract that contradicts its own AC" in row3
+    assert "the AC stands" in row3 and "the PRD's test case or contract is wrong" in row3
+    row5 = five.split("| invalid requirement |", 1)[1].split("| environment |", 1)[0]
+    assert "revises the test case or contract" in row5
+    assert "a patch when no AC or behaviour changes" in row5 and "changing-prds" in row5
+
+
+def test_r17_step_3_passes_touches_to_propose():
+    cmd = step(3).split("prd_error.py propose", 1)[1].split("; echo", 1)[0]
+    assert "--touches <IDs>" in cmd
+    assert "the blocks the diagnosis names" in step(3)

@@ -44,6 +44,7 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--class", dest="cls", required=True)
     c.add_argument("--diagnosis", required=True)
     c.add_argument("--recurrence")
+    c.add_argument("--touches", default="")
     c = cmd("confirm")
     c.add_argument("--reply", required=True)
     c.add_argument("--class", dest="cls")
@@ -76,7 +77,8 @@ def _run(args: argparse.Namespace, prd: model.Prd, today: date) -> list[str]:
     if args.cmd == "list":
         return errors.list_lines(prd, args.open)
     if args.cmd == "propose":
-        errors.propose(prd, args.eid, args.cls, args.diagnosis, args.recurrence)
+        touches = [t.strip() for t in args.touches.split(",") if t.strip()]
+        errors.propose(prd, args.eid, args.cls, args.diagnosis, args.recurrence, touches)
     elif args.cmd == "confirm":
         errors.confirm(prd, args.eid, args.reply, today, args.cls)
     else:

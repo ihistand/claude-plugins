@@ -11,6 +11,7 @@
 > - §3 (plan): lint's `error-entries` does not check a resolution's form. Entries resolved under 0.2
 >   to 0.5 hold free text, so a lint check would fail every existing ledger, against §14.
 >   `prd_error.py check` checks the form of each resolution added inside its range (§4).
+> - §4 (proof, R17): `propose` also takes `--touches`, because an entry recorded before diagnosis has no `Touches:` and the recurrence check needs it.
 
 ## 1. Scope
 

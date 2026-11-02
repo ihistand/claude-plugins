@@ -315,6 +315,7 @@ entry for each; `prd_error.py` is the only writer.
 
 ```
 uv run --script .prd-toolkit/prd_error.py new docs/prd/<slug> --title "<title>" --source "<where seen>"
+uv run --script .prd-toolkit/prd_error.py propose docs/prd/<slug> E-nnn --class "<class>" --diagnosis "<root cause>" [--touches FR-001,FR-002] [--recurrence E-mmm]
 uv run --script .prd-toolkit/prd_error.py list docs/prd/<slug> --open
 uv run --script .prd-toolkit/prd_error.py check docs/prd/<slug> <base>..<head>
 ```
@@ -331,8 +332,8 @@ does, and the failure close records the entry.
 **What `prd_error.py` refuses.** Exit 1 (`refused`), with each reason printed:
 
 - `new`: a `Touches:` ID the PRD does not define, or evidence over 20 lines;
-- `propose`: an entry that is `confirmed` (its class is settled) or `resolved`, or a
-  `Recurrence of:` that is not an entry;
+- `propose`: an entry that is `confirmed` (its class is settled) or `resolved`, a
+  `Recurrence of:` that is not an entry, or a `--touches` ID the PRD does not define;
 - `confirm`: an `unclassified`, already `confirmed` or `resolved` entry;
 - `resolve`: an entry that is not `confirmed`, or is already resolved, or a `--t` with no test case or level;
 - any command naming an `E-nnn` that is not an entry; and `check`, whose exit 1 prints findings, one
