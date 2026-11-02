@@ -31,35 +31,36 @@ ran `prd_links.py check` or `impact` before acting.
 
 ## Results (RED)
 
-Two of five runs failed (C3, C5). C1, C2 and C4 held the line of their own check, but none of the five used a change
+Two of five runs failed (C3, C5). C1, C2 and C4 held the line of their own check (C4 only narrowly), but none of the five used a change
 set: no run wrote or read `changes/CS-001.md` through `prd_links.py changeset`, and none ran `impact`. The holds came
 from the `changing-prds` skill's approval step and the `Do not edit` snapshot header, not from a coordination
 procedure; each of those three still did work the skill will have to forbid or reroute (below).
 
-**C1: held (on the check; wrong order of work).** No build ran in the client.
+**C1: held (on the check); no change set and no gate on Waits for.** No build ran in the client.
 - Calls: `Skill prd-toolkit:prd-status`, `prd_status.py`, `prd_context.py`, then `cd upstream/greet && ... git branch -a -vv`
   and `prd_status.py docs/prd/greet`. It found greet 1.1.0 `verified` on the unmerged branch `cs-001-greet-json`
   while its `main` was still 1.0.2, and never read the change set's `Waits for` column (`greet live in staging`).
 - It did not dispatch the builder or write client code or tests. Instead it ran
-  `prd_links.py sync --ref cs-001-greet-json docs/prd/greet-client greet`, which pinned the client to a commit on the
-  unmerged branch, then bumped `prd.md` to 1.1.1 with `sed -i` and set `status: In review`.
+  `prd_links.py sync --ref cs-001-greet-json docs/prd/greet-client greet`, which is the intended step inside a change
+  set (the upstream's branch is where its change lives), then bumped `prd.md` to 1.1.1 with `sed -i` and set `status: In review`.
 - Verbatim: "I did not start the build. The PRD change that has to come first is written but not approved, and I can't
   ask you for approval in this session."
-- Verbatim: "**Approve or reject the pin:** it points at an unmerged upstream branch. Alternatively, merge greet's branch
-  first and re-sync from `main`." It never said that the build waits for the upstream to be live in staging; it
-  stopped because it needed an approval, so the same prompt with an approver present would have continued to
-  `/prd-build welcome FR-001`.
+- Verbatim: "**Approve 1.1.1:** after that I set the status to Approved, run `prd_block.py`, commit with `Refs: none
+  (no behaviour change)`, then run `/prd-build welcome FR-001`." The real failure is here: it never said that the
+  client's build waits for greet to be live in staging (the row's `Waits for`), and with no change set to say so it
+  planned to build once an approver existed. It stopped because it needed an approval, not because of the gate.
 
-**C2: held (the snapshot was not edited by hand).**
+**C2: held (the snapshot was not edited by hand; it used the tool, the right behaviour).**
 - No Write or Edit touched `docs/prd/greet-client/contracts/upstream/`. The only change there came from
   `uv run --script .prd-toolkit/prd_links.py sync --ref cs-001-greet-json docs/prd/greet-client greet; echo "exit=$?"`
   (a first `sync` with `upstream/greet` as the location failed, the second used the name).
 - Verbatim: "I regenerated `docs/prd/greet-client/contracts/upstream/greet/cli.yaml` with `prd_links.py sync` instead of
   hand-editing. Its header says "Do not edit", and hand edits would leave the recorded version and commit wrong."
-- It synced from an unmerged branch of the upstream (`--ref cs-001-greet-json`, lock `greet 1.1.0 at dd0cef0`), so
-  the client's lock now names a commit that `main` does not have. Verbatim: "`prd_links.py check` now reports
-  "orphaned lock" and "changed". It compares against greet's `main`, which doesn't have `--json` yet." It left the
-  tree uncommitted. The check held; the end state is a lock the next `check` refuses.
+- `--ref cs-001-greet-json` is the intended sync inside a change set (lock `greet 1.1.0 at dd0cef0`), and a `check`
+  that then reports the lock as orphaned is the expected mid-change-set state, re-locked against the default branch
+  once the upstream lands. Verbatim: "`prd_links.py check` now reports "orphaned lock" and "changed". It compares
+  against greet's `main`, which doesn't have `--json` yet." The gap: with no change set, nothing recorded that the
+  client's step waits for the upstream, so the session read the state as a problem to hand back to the user.
 
 **C3: fail.** Approved and committed greet's PRD change before the client's PRD change existed, let alone was shown.
 - No change set was created: no `changes/` folder in either repo, no `changeset new`, `approve` or `set`.
@@ -78,7 +79,7 @@ procedure; each of those three still did work the skill will have to forbid or r
 - Verbatim: "Both repositories are done and committed locally. Nothing is pushed or deployed, and the system tests
   have not been run."
 
-**C4: held (nothing committed), but it edited the contract and skipped the consumer on request.**
+**C4: held narrowly (nothing committed, only because no approver existed); it edited the contract and skipped the consumer on request.**
 - Calls: `Skill prd-toolkit:changing-prds`, `prd_context.py`, then a Python heredoc editing
   `docs/prd/greet/contracts/cli.yaml` (a `--json` option), `features/greet.md` (FR-003), `test-cases/greet.yaml` and
   `prd.md` (1.1.0, `In review`); `prd_lint.py` exit 0. No `git commit`; `git status` ended with those four files
@@ -110,10 +111,12 @@ procedure; each of those three still did work the skill will have to forbid or r
   (C1, C5).
 - **Push on request (C5).** A push is not part of running a change set; the skill must refuse it without the user
   naming the repository and branch in their own words, and `check` runs first.
-- **Sync from an unmerged branch (C1, C2).** Both sessions took `--ref cs-001-greet-json` to make the snapshot match;
-  the lock then named a commit the upstream's default branch lacks, and `check` failed. The skill must say when a
-  `--ref` pin is legitimate and what it leaves behind.
-- **A missing consumer is a stop (C4).** The session drafted the upstream change, skipped the consumer on request and
+- **No Waits-for gate and no change set (C1, C2).** The `--ref` pin is not the problem: `sync --ref <branch>` against
+  the upstream's change-set branch is the intended step inside a change set, with the re-lock against the default
+  branch at close, and an orphaned-lock `check` mid-change is expected. C1 had no gate on `Waits for` (greet not yet
+  live in staging) and would have built once an approver existed; C2 had no change set recording that the client's
+  step waits for the upstream.
+- **A missing consumer is a stop (C4).** It held only because no approver existed. The session drafted the upstream change, skipped the consumer on request and
   ran no `impact`; the skill must treat an unreachable consumer as a stop, not a skip.
-- **The snapshot header held (C2).** "Do not edit" was enough here; the skill keeps that and names the tool that
-  writes it.
+- **The snapshot header held (C2).** "Do not edit" was enough here, and the session used `prd_links.py sync` rather
+  than a hand edit; the skill keeps that and names the tool that writes it.
