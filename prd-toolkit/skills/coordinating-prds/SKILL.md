@@ -67,7 +67,7 @@ open.**
 
 | Excuse | Reality |
 |---|---|
-| "The upstream is basically done; start the downstream build." | Done is a State in the record. A row starts when its Waits for holds, and `changeset set` refuses it before. |
+| "The upstream is basically done; start the downstream build." | Done is a State in the record. A row starts when its Waits for holds; before that the build does not start, and `changeset set` would refuse its State. |
 | "Just edit the snapshot to match." | Only `prd_links.py sync` writes it; a hand edit leaves the lock wrong. Inside a change set it is `sync --ref <branch>`. |
 | "Approve each repository as we go." | One approval for every member's diff, shown together. A per-repository approval lands one before the other's diff exists. |
 | "That consumer isn't cloned here; skip it." | An unreachable consumer is a stop. The user makes the clone available, or replies, after seeing it, that it stays out. |

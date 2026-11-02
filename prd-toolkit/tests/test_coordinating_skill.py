@@ -230,7 +230,7 @@ def test_step_3_one_approval():
 def test_step_4_build_in_order():
     four = step(4)
     assert "once its Waits for holds" in four
-    assert four.index("prd_links.py sync") < four.index("/prd-build")
+    assert four.index("/prd-build") < four.index("prd_links.py sync --ref <branch>")  # the build runs it (Important 3)
     assert "/prd-deploy --until <env>" in four and "deploying-from-prds" in four
     assert "prd_links.py changeset set" in four and "state=" in four
     assert "refuses a State that skips its Waits for" in four
@@ -414,3 +414,89 @@ def test_block_with_links_stays_small(prd):
     adopt(prd, "".join(f"| area-{i:02} | adopted | `src/a{i}/**` |\n" for i in range(20)))
     add_required_skills(prd, 4)
     assert len(prd_block.render_block(model.load(prd), "docs/prd/orders").encode()) < 1536
+
+
+# --- fix round 1 (review of 5094a60; rulings R-11b, R-11c, R-11d) ---
+
+def test_r11b_each_members_edit_is_committed_in_review_before_a_downstream_syncs():
+    two = step(2)
+    commit = ('git -C <root> commit -m "PRD: <prd> <version> for CS-<nnn> (in review)" '
+              '-m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"')
+    assert commit in two and "git -C <root> add docs/prd/<prd>" in two
+    assert "`sync` reads committed content" in two and "`status: In review`" in two
+    assert two.index(commit) < two.index("prd_links.py sync")
+    assert ("A sync refused after the upstream's in-review commit means the downstream cites something the "
+            "upstream's edit does not have: fix the edit in whichever member is wrong") in two
+    assert "never the snapshot" in two
+    three = step(3)
+    assert "git -C <root> diff <default branch>...<branch> -- docs/prd/<prd>" in three
+    assert "status `In review` to `Approved`" in three
+
+
+def test_r11c_one_record_drives_agent_steps_run_from_the_members_root():
+    t = flat(RUN)
+    para = t.split("**One record drives a change set.**", 1)[1].split("**One command per Bash call", 1)[0]
+    assert "Record writes, `impact`, `sync`, `check` and deploys run for any member from this session" in para
+    assert "`git -C <root>`, never a `cd`" in para
+    assert "(`prd_deploy.py` dispatches no agent)" in para
+    assert ("Anything that dispatches an agent runs in a session started in that member's root: `changing-prds` "
+            "step 4's dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the "
+            "session's own repository.") in para
+    assert "changeset log <record> '<prd>: continue from <root> at step <n>'" in para
+    assert '"Continue with `/prd-change-set CS-<nnn>` from `<root>`"' in para
+    assert "`prd-toolkit:coordinating-prds`" in para
+    assert "A build or a deploy dispatches" not in t and "A build or deploy of a member" not in t
+    assert "for a dry run or a build that runs from another member's root" in t
+    assert "The dry run dispatches an agent, so it runs from that member's root" in step(2)
+    four = step(4)
+    assert "from a session started in its root" in four
+    assert "`/prd-deploy --until <env>` runs before it, from this session" in four
+    assert "A build of a member other than this session's repository stops here" in four
+
+
+def test_important3_step_4_leaves_the_sync_to_the_build():
+    four = step(4)
+    assert "This step runs no sync of its own" in four
+    assert "`running-a-build.md` runs the `prd_links.py sync --ref <branch>`" in four
+    assert "commits the re-lock before its clean-tree preflight" in four
+    assert sum(1 for line in bash_lines(RUN) if "prd_links.py sync" in line and "--ref <branch>" in line) == 1  # step 2's
+    b = flat(BUILD_RUN)
+    assert "it is the change set's only sync before a build (`running-a-change-set.md` step 4 leaves it here)" in b
+
+
+def test_r11d_builder_commits_carry_the_trailer():
+    t = BUILD_RUN.read_text(encoding="utf-8")
+    prompts = t.split("## Prompts", 1)[1]
+    assert "On a change-set branch the builder prompt adds one line after those" in " ".join(prompts.split())
+    assert "```\nChange-set: <start-prd>/CS-<nnn>\n```" in prompts
+    assert "the builder prompt carries the line `Change-set: <start-prd>/CS-<nnn>`" in flat(BUILD_RUN)
+    agent = flat(ROOT / "agents/prd-builder.md")
+    assert ("When the prompt has a `Change-set:` line, every commit adds it as a trailer: "
+            "`-m \"Change-set: <start-prd>/CS-<nnn>\"`") in agent
+    assert "on a change-set branch a `Change-set:` line" in agent
+
+
+def test_deploy_commits_carry_no_trailer():
+    assert "A deploy's commits on a change-set branch carry no `Change-set:` trailer" in step(4)
+
+
+def test_upstream_is_the_slug_not_the_location():
+    assert "`<upstream>` is an upstream member's PRD slug (its Upstreams row's name in `links.md`, never its Location)" in flat(RUN)
+    assert "`<upstream>` that row's PRD slug (the Upstreams row's name, never its Location)" in flat(BUILD_RUN)
+
+
+def test_dirty_tree_allows_the_new_record():
+    assert "only the change's own edits and the record `new` just wrote" in step(1)
+
+
+def test_changing_prds_missing_links_script_and_no_second_hand_off():
+    t = flat(CHANGING)
+    assert "A repository whose `.prd-toolkit/` holds no `prd_links.py` predates 0.7: stop" in t
+    assert "re-run `prd_hooks.py install docs/prd/<slug>`" in t
+    assert "When this change already runs inside `/prd-change-set`, hand nothing back to it" in t
+
+
+def test_rationalization_waits_row():
+    rat = flat(SKILL).split("## Common Rationalizations", 1)[1]
+    assert "before that the build does not start, and `changeset set` would refuse its State" in rat
+    assert "`changeset set` refuses it before" not in rat

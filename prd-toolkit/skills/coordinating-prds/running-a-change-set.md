@@ -3,7 +3,7 @@
 **Steps:** 1 Scope, 2 Edit, 3 One approval, 4 Build in order, 5 Stops, 6 Close. A change set is
 not done until step 6's close: run every step, in order. The turn ends before it only to wait for
 the user: for the members in step 1, the one approval in step 3, a human step's reply or a stop's
-answer in steps 4 and 5, and for a build or deploy that runs from another member's root.
+answer in steps 4 and 5, and for a dry run or a build that runs from another member's root.
 
 For the caller: `/prd-change-set`, `prd-toolkit:changing-prds` when its `impact` run stops a
 change, or any session asked to change something across repositories or to resume a `CS-nnn`.
@@ -29,13 +29,25 @@ commit `.prd-toolkit/`. A script that is not found is a tool error: report it, n
 path.
 
 **Names.** `<start>` and `<start-prd>` are the starting repository's root and PRD slug; `<root>`
-and `<prd>` a member's. `<record>` is `<start>/docs/prd/<start-prd>/changes/CS-<nnn>.md`, and
-`<branch>` the record's Branch, `cs-<nnn>-<slug>`, the same in every member. Git commands take
-`-C <root>`, never a `cd`. A member skill runs its own commands: in another member,
-`changing-prds`' `<scripts>` is `<root>/.prd-toolkit` and its PRD folder `<root>/docs/prd/<prd>`.
-A build or a deploy dispatches its agents from the session's own repository, so it never runs
-here for another member: stop, and tell the user to run `/prd-change-set CS-<nnn>` (headless:
-`prd-toolkit:prd-change-set`) from that member's root, where it resumes from the record.
+and `<prd>` a member's. `<upstream>` is an upstream member's PRD slug (its Upstreams row's name in
+`links.md`, never its Location). `<record>` is `<start>/docs/prd/<start-prd>/changes/CS-<nnn>.md`,
+and `<branch>` the record's Branch, `cs-<nnn>-<slug>`, the same in every member.
+
+**One record drives a change set.** Record writes, `impact`, `sync`, `check` and deploys run for
+any member from this session: the member's `<root>/.prd-toolkit/…` scripts, its PRD folder
+`<root>/docs/prd/<prd>`, and `git -C <root>`, never a `cd`. In another member, `changing-prds`'
+`<scripts>` is `<root>/.prd-toolkit` and its PRD folder `<root>/docs/prd/<prd>`; `/prd-deploy`'s
+likewise (`prd_deploy.py` dispatches no agent). Anything that dispatches an agent runs in a session
+started in that member's root: `changing-prds` step 4's dry run and `/prd-build`, because the
+builder's worktree and the tester's guard bind to the session's own repository. When that member
+is not this session's repository, log where the chain stops:
+
+```bash
+uv run --script <start>/.prd-toolkit/prd_links.py changeset log <record> '<prd>: continue from <root> at step <n>'; echo "prd-links-exit=$?"
+```
+
+then the record write, and stop with: "Continue with `/prd-change-set CS-<nnn>` from `<root>`"
+(headless: `prd-toolkit:coordinating-prds` with `CS-<nnn>`). That session resumes from the record.
 
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, ID and SHA in it is typed out in full: paste what a command printed, never a variable
@@ -100,9 +112,10 @@ Text with no record is a new change set: step 1.
    refuses a cycle and a member linked to no other member: report it. It prints `<record>`; Read
    it for the Order, Branch, Waits for and Target. In each member, `git -C <root> status
    --porcelain --untracked-files=all` must print nothing (in the starting repository, only the
-   change's own edits): a dirty tree stops, and you ask. Then cut the branch in each member, cut
-   from that member's default branch (`origin/HEAD` when set, else `main`), as its own call:
-   `git -C <root> switch -c <branch> <default branch>`. For each consumer the user left out:
+   change's own edits and the record `new` just wrote): a dirty tree stops, and you ask. Then cut
+   the branch in each member, cut from that member's default branch (`origin/HEAD` when set, else
+   `main`), as its own call: `git -C <root> switch -c <branch> <default branch>`. For each
+   consumer the user left out:
 
    ```bash
    uv run --script <start>/.prd-toolkit/prd_links.py changeset log <record> '<prd> stays out: "<the reply, verbatim>"'; echo "prd-links-exit=$?"
@@ -110,48 +123,64 @@ Text with no record is a new change set: step 1.
 
    Then the record write.
 2. **Edit.** In each member, in Order, on the record's branch, run `prd-toolkit:changing-prds` up
-   to its approval: restate, edit, bump, lint, dry run (its steps 1 to 4), never its step 5. In
-   every downstream member, right after its edit and before its lint, sync each upstream member it
-   links to, so lint checks the edits together:
+   to its approval: restate, edit, bump, lint, dry run (its steps 1 to 4), never its step 5. The
+   dry run dispatches an agent, so it runs from that member's root (**One record drives a change
+   set**). `sync` reads committed content, so once its dry run passes each member's edit is
+   committed on the branch, still `status: In review`, before any downstream member syncs it, each
+   its own call:
+
+   ```bash
+   git -C <root> add docs/prd/<prd>
+   git -C <root> commit -m "PRD: <prd> <version> for CS-<nnn> (in review)" -m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"
+   ```
+
+   In every downstream member, right after its edit and before its lint, sync each upstream member
+   it links to, from that upstream's in-review commit, so lint checks the edits together (the
+   downstream's own in-review commit follows its dry run):
 
    ```bash
    uv run --script <root>/.prd-toolkit/prd_links.py sync <root>/docs/prd/<prd> <upstream> --ref <branch>; echo "prd-links-exit=$?"
    ```
 
-   A sync refused for a cited item the upstream's branch lacks is the downstream's edit citing
-   what the upstream does not have: fix the edit, never the snapshot. A `check` now reports the
-   lock orphaned and items `changed` against the upstream's default branch: that is expected until
-   the upstream lands (step 6). Then set the row's Version and IDs (the IDs comma-joined, no
-   spaces), and the record write:
+   A sync refused after the upstream's in-review commit means the downstream cites something the
+   upstream's edit does not have: fix the edit in whichever member is wrong (an upstream fix is
+   committed in review again), never the snapshot. A `check` now reports the lock orphaned and
+   items `changed` against the upstream's default branch: that is expected until the upstream
+   lands (step 6). Then set the row's Version and IDs (the IDs comma-joined, no spaces), and the
+   record write:
 
    ```bash
    uv run --script <start>/.prd-toolkit/prd_links.py changeset set <record> <prd> version=<X.Y.Z> ids=<IDs>; echo "prd-links-exit=$?"
    ```
 3. **One approval.** Show every member's PRD diff together and stop. For each member, each its
-   own call: `git -C <root> diff -- docs/prd/<prd>` and `git -C <root> status --porcelain
-   --untracked-files=all -- docs/prd/<prd>` (Read each new file it lists), with what
-   `changing-prds` step 5 shows: the restatement, the changes by ID, the new version and why that
-   level, the decisions, the lint result and the dry-run report. One explicit reply approves the
+   own call: `git -C <root> diff <default branch>...<branch> -- docs/prd/<prd>` (the in-review
+   commit against the member's default branch), with what `changing-prds` step 5 shows: the
+   restatement, the changes by ID, the new version and why that level, the decisions, the lint
+   result and the dry-run report. One explicit reply approves the
    set. The request that started the change set is never a reply, nor "approve each repository as
-   we go", nor your own text; with no one to ask, nothing is approved and nothing committed. Then:
+   we go", nor your own text; with no one to ask, nothing is approved and every member stays
+   `In review`. Then:
 
    ```bash
    uv run --script <start>/.prd-toolkit/prd_links.py changeset approve <record> --reply '<the reply, verbatim>'; echo "prd-links-exit=$?"
    ```
 
    Then the record write, and in Order each member's approval commit as `changing-prds` step 5
-   makes it (status `Approved`, lint `0`, `prd_block.py`, the plans grep, the commit of the PRD
-   folder and CLAUDE.md), its message carrying the trailer too:
+   makes it (status `In review` to `Approved`, lint `0`, `prd_block.py`, the plans grep, the commit
+   of the PRD folder and CLAUDE.md), its message carrying the trailer too:
    `-m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"`.
 4. **Build in order.** For each row in Order, once its Waits for holds (a wait `<prd> verified`
    holds when that row is `verified` or `live in` any environment; `<prd> live in <env>` only when
-   it is `live in <env>`): `sync --ref <branch>` against each upstream member (step 2's
-   `prd_links.py sync` command; `running-a-build.md` runs it as its first act on a change-set
-   branch), then `/prd-build <area> <IDs>` in that member. When a downstream row waits for
-   `live in <env>`, the upstream's `/prd-deploy --until <env>` runs before it, its human steps
-   relayed as `deploying-from-prds` relays them: the question to the user, their reply verbatim,
-   never an answer of yours. `changeset set` each State as it is reached (the build's close reports
-   it; a deploy's close reached `live in <env>`), then the record write:
+   it is `live in <env>`): `/prd-build <area> <IDs>` in that member, from a session started in its
+   root (**One record drives a change set**). This step runs no sync of its own: on a change-set
+   branch `running-a-build.md` runs the `prd_links.py sync --ref <branch>` against each upstream
+   member and commits the re-lock before its clean-tree preflight. When a downstream row waits for
+   `live in <env>`, the upstream's `/prd-deploy --until <env>` runs before it, from this session,
+   its human steps relayed as `deploying-from-prds` relays them: the question to the user, their
+   reply verbatim, never an answer of yours. A deploy's commits on a change-set branch carry no
+   `Change-set:` trailer (`deploying-from-prds` is unchanged). `changeset set` each State as it is
+   reached (the build's close reports it; a deploy's close reached `live in <env>`), then the
+   record write:
 
    ```bash
    uv run --script <start>/.prd-toolkit/prd_links.py changeset set <record> <prd> 'state=<state>'; echo "prd-links-exit=$?"
@@ -159,8 +188,8 @@ Text with no record is a new change set: step 1.
 
    `changeset set` refuses a State that skips its Waits for: the row's upstream has not reached
    it, and the build waits. An upstream that is `verified` is not `live in staging`, and "basically
-   done" is not a State. A build or deploy of a member other than this session's repository stops
-   here, as **Names** says.
+   done" is not a State. A build of a member other than this session's repository stops here, as
+   **One record drives a change set** says.
 5. **Stops.** A failed build, a human step without a reply, or an error stops the chain:
 
    ```bash

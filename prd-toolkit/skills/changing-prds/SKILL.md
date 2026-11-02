@@ -143,11 +143,15 @@ cite the entry: `Refs: FR-001, E-004`.
    consumer was unreachable) stops this change: it crosses repositories, so hand it, the edits
    in the tree and nothing committed, to `/prd-change-set` (skill `prd-toolkit:coordinating-prds`);
    that is the only route for an edit to a cited item. Never skip a consumer the output names,
-   cloned or not. `2` is a usage error: fix the command. Inside a change set (its `cs-<nnn>-<slug>`
-   branch, with a record whose rows name this PRD), exit `1` is expected when every consumer it
-   names is a member, and `3` when each unreachable one is a consumer the record's Log leaves
-   out: go on, and step 5's approval is the change set's
-   (`running-a-change-set.md` step 3), its commit adding `-m "Change-set: <start-prd>/CS-<nnn>"`.
+   cloned or not. `2` is a usage error: fix the command. A repository whose `.prd-toolkit/` holds
+   no `prd_links.py` predates 0.7: stop, and tell the user to re-run `prd_hooks.py install
+   docs/prd/<slug>` from the plugin and commit `.prd-toolkit/`. When this change already runs
+   inside `/prd-change-set`, hand nothing back to it: before the record exists, its step 1 reads
+   this `impact` itself. Inside a change set (its `cs-<nnn>-<slug>` branch, with a record whose
+   rows name this PRD), exit `1` is expected when every consumer it names is a member, and `3`
+   when each unreachable one is a consumer the record's Log leaves out: go on, and step 5's
+   approval is the change set's (`running-a-change-set.md` step 3), its commit adding
+   `-m "Change-set: <start-prd>/CS-<nnn>"`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted

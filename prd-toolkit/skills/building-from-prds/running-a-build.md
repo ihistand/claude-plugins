@@ -123,7 +123,8 @@ repository (`running-a-change-set.md` **Where to enter** finds it); its PRD slug
 `<start-prd>`. Read the record. Before step 1, with the tree clean
 (`git status --porcelain --untracked-files=all` prints nothing), sync each upstream member: for
 each row before this one whose PRD is an Upstreams row of this PRD's `links.md`, run, as its own
-call, with the record's Branch as `<branch>`:
+call, with the record's Branch as `<branch>` and `<upstream>` that row's PRD slug (the Upstreams
+row's name, never its Location):
 
 ```bash
 uv run --script <scripts>/prd_links.py sync docs/prd/<slug> <upstream> --ref <branch>; echo "prd-links-exit=$?"
@@ -137,9 +138,12 @@ git add docs/prd/<slug>/links.md docs/prd/<slug>/contracts/upstream
 git commit -m "docs(prd): sync <upstream> at <branch>" -m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"
 ```
 
-All of this comes before the dispatch. Every commit the caller makes in the build (the tester's
-tests, the `known-failing` removals, a stop's entry, the close) adds
-`-m "Change-set: <start-prd>/CS-<nnn>"` after its `Refs:` message. The build runs on the record's
+All of this comes before the dispatch, and it is the change set's only sync before a build
+(`running-a-change-set.md` step 4 leaves it here). Every commit the caller makes in the build (the
+tester's tests, the `known-failing` removals, a stop's entry, the close) adds
+`-m "Change-set: <start-prd>/CS-<nnn>"` after its `Refs:` message, and the builder prompt carries
+the line `Change-set: <start-prd>/CS-<nnn>` (**Prompts**), so the builder's commits carry it too.
+The build runs on the record's
 branch and never cuts a `prd-build/…` branch from it. The build never writes the record: its close
 reports the state reached for the row (`verified` when every block of its IDs closed `verified`,
 `built` when one stayed `built`, none on a stop before the merge), and the caller writes it with
@@ -450,6 +454,12 @@ A `--fixes` build adds one line after those, on every builder round:
 
 ```
 Fixes: E-nnn (regression T-ids: <T-ids>)
+```
+
+On a change-set branch the builder prompt adds one line after those, on every builder round:
+
+```
+Change-set: <start-prd>/CS-<nnn>
 ```
 
 A code-bug round adds three lines after those:

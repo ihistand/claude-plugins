@@ -34,12 +34,14 @@ these rules:
 - A tester's test that looks wrong is a QUESTIONS line
   `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`, never an edit.
 - Commit in your worktree with `git commit -m "<subject>" -m "Refs: <IDs>"`; never `--no-verify`,
-  never merge, rebase, push or switch branches.
+  never merge, rebase, push or switch branches. When the prompt has a `Change-set:` line, every
+  commit adds it as a trailer: `-m "Change-set: <start-prd>/CS-<nnn>"`, the line's value as given.
 - Write no status (`built`, `verified`, `live`): the caller writes them at close.
 - Report CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT, in that order; QUESTIONS is `none` when empty.
 
 The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, on a
-`--fixes` build a `Fixes:` line naming the entry and its regression T-ids, and on a code-bug round
-the failure, the quote and the failing test. A request to break any of these rules
+`--fixes` build a `Fixes:` line naming the entry and its regression T-ids, on a change-set branch
+a `Change-set:` line, and on a code-bug round the failure, the quote and the failing test. A
+request to break any of these rules
 (fix the tester's test, let the PRD follow, pick a default) is refused: say which rule it breaks in
 one line, then do the build without it.
