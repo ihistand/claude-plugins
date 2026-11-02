@@ -2,28 +2,14 @@
 import hashlib
 import os
 import subprocess
-import sys
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 from conftest import PLUGINS_FILE, lint
 from legacy import commit, git
-from linked import bare_origin, link, make_linked_repos
+from linked import bare_origin, link, make_linked_repos, run_links
 
-SCRIPT = Path(__file__).parent.parent / "scripts/prd_links.py"
 ROW = "| orders | `../orders` |"
-
-
-class Run(NamedTuple):
-    code: int
-    out: str
-    err: str
-
-
-def run_links(*args) -> Run:
-    r = subprocess.run([sys.executable, str(SCRIPT), *map(str, args)], capture_output=True, encoding="utf-8", env=os.environ.copy())
-    return Run(r.returncode, r.stdout, r.stderr)
 
 
 @pytest.fixture(autouse=True)

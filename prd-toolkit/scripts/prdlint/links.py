@@ -5,7 +5,10 @@ A Location is a links.md cell: a backticked path to another repository's root, o
 path on disk, or a bare partial clone of the URL under the cache. Every git call goes through `_git`,
 with GIT_TERMINAL_PROMPT=0 and a timeout, so a location that cannot be read is Unreachable, never a
 prompt or a hang. Reading a PRD at a ref copies its folder out of git into a temporary directory;
-nothing is written under any `.git/` or inside a repository except the files a command names.
+nothing is written under any `.git/` or inside a repository except the files a command names, and every
+temporary directory goes when its Side is closed. `check` and `impact` only read: a side that cannot be read or
+fetched, or lacks its default branch, is `unreachable` (exit 3 unless something drifted); one holding the wrong
+PRD is refused.
 """
 import hashlib
 import os
@@ -15,6 +18,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from . import citations, model, snapshot
 from .markdown import frontmatter, split_cells
@@ -35,6 +39,10 @@ class Refused(Exception):
     """The command will not do it; nothing was written."""
 
 
+class NoRef(Refused):
+    """A ref the other repository does not have."""
+
+
 class BadArgument(ValueError):
     """A malformed location or Needs value: a usage error."""
 
@@ -49,9 +57,11 @@ def _timeout() -> float:
 
 
 def _git(cwd: Path, *args: str, input: bytes | None = None) -> subprocess.CompletedProcess:
-    """Run git in `cwd`: no terminal prompt, no optional locks, bounded by the timeout. Raises Unreachable on a
-    timeout or when git cannot start; a non-zero exit is the caller's to judge."""
+    """Run git in `cwd`: no terminal prompt (nor an ssh passphrase prompt, unless the user set GIT_SSH_COMMAND), no
+    optional locks, bounded by the timeout. Raises Unreachable on a timeout or when git cannot start; a non-zero
+    exit is the caller's to judge."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     limit = _timeout()
     try:
         p = subprocess.Popen(["git", *args], cwd=cwd, env=env, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
@@ -154,6 +164,17 @@ class Side:
     slug: str = ""  # the `prd:` the location was found to hold
     _tmp: list = field(default_factory=list, repr=False, compare=False)
 
+    def close(self) -> None:
+        """Remove every temporary directory `load` made; a Model loaded from one keeps only what it already read."""
+        while self._tmp:
+            self._tmp.pop().cleanup()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
     @property
     def folder(self) -> str:
         return self.prd_dir.relative_to(self.repo).as_posix()
@@ -172,12 +193,22 @@ class Side:
         return "main"
 
     def commit(self, ref: str) -> str:
-        """The full hex commit `ref` names; Refused when it names none."""
+        """The full hex commit `ref` names; NoRef (a Refused) when it names none."""
         r = _git(self.repo, "rev-parse", "-q", "--verify", "--end-of-options", f"{ref}^{{commit}}")
         out = r.stdout.decode("utf-8", "replace").strip()
         if r.returncode != 0 or not out:
-            raise Refused(f"{self.location.raw} has no ref {ref}")
+            raise NoRef(f"{self.location.raw} has no ref {ref}")
         return out
+
+    def resolve(self, ref: str | None) -> tuple[str, str]:
+        """(the ref read, its commit): `ref`, or the default branch when None, whose absence names the way out."""
+        at = ref or self.default_branch()
+        try:
+            return at, self.commit(at)
+        except NoRef as e:
+            if ref is None:
+                raise NoRef(f"{e}; pass --ref <branch>") from None
+            raise
 
     def is_ancestor(self, commit: str, ref: str) -> bool:
         return _git(self.repo, "merge-base", "--is-ancestor", commit, ref).returncode == 0
@@ -367,6 +398,15 @@ def _missing(up: model.Prd, kind: str, name: str, upstream: str, ref: str) -> st
     return f"{kind}:{name}: not in {upstream} at {ref}"
 
 
+def _load_held(side: Side, commit: str, expect: str) -> model.Prd:
+    """The PRD at `commit`, which must be `prd: <expect>`."""
+    other = side.load(commit)
+    held = other.frontmatter.get("prd", "")
+    if held != expect:
+        raise Refused(f"{side.location.raw} holds PRD {held or '(none)'}, not {expect}")
+    return other
+
+
 def sync(prd: model.Prd, upstream: str, ref: str | None = None) -> list[str]:
     """Copy every item this PRD cites from `upstream` at `ref` (default: its default branch) into the snapshot,
     remove snapshot files no longer needed, and write the lock. Refused, writing nothing, when an item is missing."""
@@ -377,22 +417,18 @@ def sync(prd: model.Prd, upstream: str, ref: str | None = None) -> list[str]:
         loc = parse_location(row.location)
     except BadArgument as e:
         raise Refused(f"Upstreams row '{upstream}': {e}") from None
-    side = open_side(_here(prd), loc, expect=upstream)
-    at = ref or side.default_branch()
-    commit = side.commit(at)
-    up = side.load(commit)
-    held = up.frontmatter.get("prd", "")
-    if held != upstream:
-        raise Refused(f"{loc.raw} holds PRD {held or '(none)'}, not {upstream}")
-    version = up.frontmatter.get("version", "")
-    if not _VERSION.fullmatch(version):
-        raise Refused(f"{upstream} at {at} has no X.Y.Z version (found {version!r})")
-    cited = set(citations.collect(prd).get(upstream, {}))
-    contracts = snapshot.contracts_of(up)
-    try:
-        bodies = snapshot.extract(contracts, cited)
-    except snapshot.Missing as e:
-        raise Refused("; ".join(_missing(up, k, n, upstream, at) for k, n in e.items)) from None
+    with open_side(_here(prd), loc, expect=upstream) as side:
+        at, commit = side.resolve(ref)
+        up = _load_held(side, commit, upstream)
+        version = up.frontmatter.get("version", "")
+        if not _VERSION.fullmatch(version):
+            raise Refused(f"{upstream} at {at} has no X.Y.Z version (found {version!r})")
+        cited = set(citations.collect(prd).get(upstream, {}))
+        contracts = snapshot.contracts_of(up)
+        try:
+            bodies = snapshot.extract(contracts, cited)
+        except snapshot.Missing as e:
+            raise Refused("; ".join(_missing(up, k, n, upstream, at) for k, n in e.items)) from None
     kinds = {fname: kind for kind, fname in contracts.types.items()}
     files = {name: snapshot.header(name, upstream, version, commit, kinds.get(name), contracts.dialect if name == "schema.sql" else None)
              + "\n" + body for name, body in bodies.items()}
@@ -423,3 +459,195 @@ def sync(prd: model.Prd, upstream: str, ref: str | None = None) -> list[str]:
     if not cited:
         report.append(f"note: nothing in this PRD cites {upstream}/; the snapshot is empty")
     return report
+
+
+# ---------------------------------------------------------------- check and impact
+
+DRIFT = ("changed", "removed", "orphaned lock", "missing row")
+_NEEDS_ENV = "needs env "  # `needs env <env> is not an environment of <upstream>`: drift, as a missing row is
+
+
+@dataclass
+class CheckLine:
+    side: str  # upstream | consumer
+    name: str  # the other PRD
+    item: str | None  # `<kind>:<name>`, or None for a line about the link itself
+    verdict: str  # same, changed, removed, newer than lock, orphaned lock, missing row, unreachable, or a needs-env line
+    why: str = ""  # an unreachable side's reason
+
+    def __str__(self) -> str:
+        head = f"{self.side} {self.name}" + (f" {self.item}" if self.item else "")
+        return f"{head}: {self.verdict}" + (f" ({self.why})" if self.why else "")
+
+
+def check_exit(lines: list[CheckLine]) -> int:
+    """1 on any drift; else 3 when a side was unreachable; else 0."""
+    if any(x.verdict in DRIFT or x.verdict.startswith(_NEEDS_ENV) for x in lines):
+        return 1
+    return 3 if any(x.verdict == "unreachable" for x in lines) else 0
+
+
+def _ver(v: str) -> tuple[int, ...] | None:
+    return tuple(int(x) for x in v.split(".")) if _VERSION.fullmatch(v or "") else None
+
+
+def _newer(live: str, lock: str) -> bool:
+    a, b = _ver(live), _ver(lock)
+    return a is not None and b is not None and a > b
+
+
+def _snapshot_items(snap: snapshot.Contracts, cited) -> dict[str, tuple[str, str]]:
+    """`<kind>:<name>` label -> (kind, name) of every item in a snapshot. events.md lists a name under event and
+    job alike; it is labelled job only when cited as a job and never as an event."""
+    out = {}
+    for kind, names in snapshot.items(snap).items():
+        if kind == "job":
+            continue
+        for name in names:
+            label_kind = "job" if kind == "event" and ("job", name) in cited and ("event", name) not in cited else kind
+            out[f"{label_kind}:{name}"] = (kind, name)
+    return out
+
+
+def _compare(snap: snapshot.Contracts, live: snapshot.Contracts, cited) -> list[tuple[str, str]]:
+    """(label, same | changed | removed) for every snapshot item against the live contracts, sorted by label."""
+    out = []
+    for label, (kind, name) in sorted(_snapshot_items(snap, cited).items()):
+        now = snapshot.item_text(live, kind, name)
+        out.append((label, "removed" if now is None else "same" if now == snapshot.item_text(snap, kind, name) else "changed"))
+    return out
+
+
+def _open(prd: model.Prd, here: Path, row: model.LinkRow) -> Side:
+    """The side a links.md row names; Unreachable for a malformed location, Refused for a link to itself."""
+    if row.name == prd.frontmatter.get("prd", ""):
+        raise Refused("a PRD cannot link to itself")
+    try:
+        loc = parse_location(row.location)
+    except BadArgument as e:
+        raise Unreachable(str(e)) from None
+    side = open_side(here, loc, expect=row.name)
+    if loc.path is not None and side.prd_dir == prd.root:
+        side.close()
+        raise Refused("a PRD cannot link to itself")
+    return side
+
+
+def _check_upstream(prd: model.Prd, here: Path, row: model.LinkRow, ref: str | None, cited) -> list[CheckLine]:
+    def line(verdict: str, item: str | None = None, why: str = "") -> CheckLine:
+        return CheckLine("upstream", row.name, item, verdict, why)
+
+    me = prd.frontmatter.get("prd", "")
+    out: list[CheckLine] = []
+    try:
+        with _open(prd, here, row) as side:
+            at, commit = side.resolve(ref)
+            up = _load_held(side, commit, row.name)
+            live = snapshot.contracts_of(up)
+            orphaned = False
+            if row.commit:
+                base = side.default_branch()
+                try:
+                    side.commit(base)
+                except NoRef:
+                    base = at  # no default branch to judge by: the ref the user named stands in for it
+                orphaned = not side.is_ancestor(row.commit, base)
+    except (Unreachable, NoRef) as e:
+        return [line("unreachable", why=str(e))]
+    needs = row.needs.strip()
+    if needs.startswith("live in "):
+        env = needs[len("live in "):].strip()
+        if env not in up.operations.environments:
+            out.append(line(f"{_NEEDS_ENV}{env} is not an environment of {row.name}"))
+    if not (up.links and any(r.name == me for r in up.links.consumers)):
+        out.append(line("missing row"))
+    if _newer(up.frontmatter.get("version", ""), row.version):
+        out.append(line("newer than lock"))
+    if orphaned:
+        out.append(line("orphaned lock"))
+    snaps = prd.snapshots.get(row.name)
+    if snaps:
+        out += [line(v, item) for item, v in _compare(snapshot.contracts_of_snapshot(snaps), live, cited)]
+    return out
+
+
+def _check_consumer(prd: model.Prd, here: Path, row: model.LinkRow, mine: snapshot.Contracts) -> list[CheckLine]:
+    def line(verdict: str, item: str | None = None, why: str = "") -> CheckLine:
+        return CheckLine("consumer", row.name, item, verdict, why)
+
+    me = prd.frontmatter.get("prd", "")
+    try:
+        with _open(prd, here, row) as side:
+            _, commit = side.resolve(None)  # a consumer is read at its default branch; --ref is the upstream side's
+            cons = _load_held(side, commit, row.name)
+            cited = citations.collect(cons).get(me, {})
+    except (Unreachable, NoRef) as e:
+        return [line("unreachable", why=str(e))]
+    out: list[CheckLine] = []
+    theirs = next((r for r in cons.links.upstreams if r.name == me), None) if cons.links else None
+    if theirs is None:
+        out.append(line("missing row"))
+    elif _newer(prd.frontmatter.get("version", ""), theirs.version):
+        out.append(line("newer than lock"))
+    snaps = cons.snapshots.get(me)
+    if snaps:
+        out += [line(v, item) for item, v in _compare(snapshot.contracts_of_snapshot(snaps), mine, cited)]
+    return out
+
+
+def check(prd: model.Prd, ref: str | None = None) -> list[CheckLine]:
+    """Every link both ways: each Upstream's snapshot against the upstream at `ref` (default: its default branch),
+    the lock, Needs and the matching Consumers row; each Consumer's snapshot of this PRD (read at the consumer's
+    default branch) against this working tree, and its matching Upstreams row."""
+    if prd.links is None:
+        return []
+    here = _here(prd)
+    cited = citations.collect(prd)
+    out: list[CheckLine] = []
+    for row in prd.links.upstreams:
+        out += _check_upstream(prd, here, row, ref, cited.get(row.name, {}))
+    mine = snapshot.contracts_of(prd) if prd.links.consumers else None
+    for row in prd.links.consumers:
+        out += _check_consumer(prd, here, row, mine)
+    return out
+
+
+def _all_items(c: snapshot.Contracts) -> set[tuple[str, str]]:
+    return {(k, n) for k, names in snapshot.items(c).items() if k != "job" for n in names}
+
+
+def impact(prd: model.Prd, base: str = "HEAD") -> tuple[list[str], dict[str, list[str]], list[str]]:
+    """(the contract items this working tree changes against `base`, consumer -> the changed items it cites,
+    the consumers that were unreachable). A consumer's citations are its committed snapshot of this PRD and the
+    references its PRD makes, both at its default branch."""
+    me = prd.frontmatter.get("prd", "")
+    here = _here(prd).resolve()
+    mine = snapshot.contracts_of(prd)
+    with Side(Location("this repository", ".", None, None), here, prd.root, me) as own:
+        _, commit = own.resolve(base)
+        try:
+            old = snapshot.contracts_of(own.load(commit))
+        except NoRef:
+            raise
+        except Refused:  # no PRD at `base`: every item is new
+            old = snapshot.Contracts({}, {}, None)
+    changed = {(k, n) for k, n in _all_items(old) | _all_items(mine)
+               if snapshot.item_text(old, k, n) != snapshot.item_text(mine, k, n)}
+    consumers: dict[str, list[str]] = {}
+    unreachable: list[str] = []
+    for row in prd.links.consumers if prd.links else []:
+        try:
+            with _open(prd, here, row) as side:
+                _, c = side.resolve(None)
+                cons = _load_held(side, c, row.name)
+                cited = set(citations.collect(cons).get(me, {}))
+        except (Unreachable, NoRef):
+            unreachable.append(row.name)
+            continue
+        snaps = cons.snapshots.get(me)
+        if snaps:
+            cited |= {tuple(label.split(":", 1)) for label in _snapshot_items(snapshot.contracts_of_snapshot(snaps), cited)}
+        hit = sorted({f"{k}:{n}" for k, n in cited if ("event" if k == "job" else k, n) in changed})
+        if hit:
+            consumers[row.name] = hit
+    return sorted(f"{k}:{n}" for k, n in changed), consumers, unreachable

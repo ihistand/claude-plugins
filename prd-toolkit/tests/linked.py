@@ -1,10 +1,28 @@
 """Two linked git repositories in a tmp dir, for the 0.7 tests: orders (the upstream) and reports (its consumer)."""
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
+from typing import NamedTuple
 
 from legacy import commit, git
 
 FIXTURE = Path(__file__).parent / "fixtures/valid/orders"
+SCRIPT = Path(__file__).parent.parent / "scripts/prd_links.py"
+
+
+class Run(NamedTuple):
+    code: int
+    out: str
+    err: str
+
+
+def run_links(*args, env: dict | None = None, timeout: float | None = None) -> Run:
+    """prd_links.py in a subprocess, with this process's environment (or `env`)."""
+    r = subprocess.run([sys.executable, str(SCRIPT), *map(str, args)], capture_output=True, encoding="utf-8",
+                       env=env if env is not None else os.environ.copy(), timeout=timeout)
+    return Run(r.returncode, r.stdout, r.stderr)
 
 
 def _repo(root: Path, name: str) -> Path:
