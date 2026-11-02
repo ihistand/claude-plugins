@@ -23,41 +23,53 @@ _EVENT_HEADING = re.compile(r"^###\s+`?([^`\s]+)`?\s*$")
 _METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 
+def parse_schema(text: str, dialect: str | None):
+    """The statements of a schema.sql text; None when it does not parse (or the dialect is unknown)."""
+    try:
+        return sqlglot.parse(text, read=dialect or None)
+    except Exception:  # sqlglot raises ParseError, TokenError or ValueError (unknown dialect)
+        return None
+
+
+def create_tables(statements) -> Iterator[tuple[str, "exp.Create"]]:
+    """(table name, statement) for each CREATE TABLE of parsed statements."""
+    for stmt in statements:
+        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "TABLE":
+            table = stmt.find(exp.Table)
+            if table is not None:
+                yield table.name, stmt
+
+
 def schema_tables(prd: Prd) -> dict[str, set[str]]:
     """Table name -> column names from contracts/schema.sql; {} when it is absent or does not parse."""
     path = prd.root / "contracts/schema.sql"
     if not path.is_file():
         return {}
-    dialect = prd.frontmatter.get("sql-dialect") or None
-    try:
-        statements = sqlglot.parse(path.read_text(encoding="utf-8"), read=dialect)
-    except Exception:  # sqlglot raises ParseError, TokenError or ValueError (unknown dialect)
-        return {}
+    statements = parse_schema(path.read_text(encoding="utf-8"), prd.frontmatter.get("sql-dialect") or None)
     tables: dict[str, set[str]] = {}
-    for stmt in statements:
-        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "TABLE":
-            table = stmt.find(exp.Table)
-            if table is not None:
-                tables.setdefault(table.name, set()).update(c.name for c in stmt.find_all(exp.ColumnDef))
+    for name, stmt in create_tables(statements or []):
+        tables.setdefault(name, set()).update(c.name for c in stmt.find_all(exp.ColumnDef))
     return tables
 
 
-def operation_ids(prd: Prd) -> set[str]:
-    """Every operationId in contracts/openapi.yaml (paths and webhooks)."""
-    data = prd.yaml.get("contracts/openapi.yaml")
-    out: set[str] = set()
+def operations_of(data) -> Iterator[tuple[str, str, str, str, dict]]:
+    """(operationId, section, path, method, operation) for each operation of an OpenAPI mapping."""
     if not isinstance(data, dict):
-        return out
+        return
     for section in ("paths", "webhooks"):
         items = data.get(section)
-        for item in items.values() if isinstance(items, dict) else []:
+        for path, item in items.items() if isinstance(items, dict) else []:
             if not isinstance(item, dict):
                 continue
             for method in _METHODS:
                 op = item.get(method)
                 if isinstance(op, dict) and isinstance(op.get("operationId"), str):
-                    out.add(op["operationId"])
-    return out
+                    yield op["operationId"], section, str(path), method, op
+
+
+def operation_ids(prd: Prd) -> set[str]:
+    """Every operationId in contracts/openapi.yaml (paths and webhooks)."""
+    return {oid for oid, *_ in operations_of(prd.yaml.get("contracts/openapi.yaml"))}
 
 
 def event_names(prd: Prd) -> set[str]:
@@ -379,7 +391,7 @@ def _check_dependency(rel: str, data: dict) -> Iterator[Finding]:
                     yield Finding(rel, _kl(fails, "failures"), "contracts-valid", f"failures: missing {k}")
 
 
-def _custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
+def custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
     """(type, validator command, matching files, row line) for each section-7 row with a validator other than built-in."""
     sec = next((s for s in prd.sections if s.number == 7), None)
     for t in tables(sec.body) if sec else []:
@@ -394,11 +406,14 @@ def _custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
             yield r.cells[0].strip("`").strip(), validator, files, r.line
 
 
+_custom_types = custom_types
+
+
 def custom_items(prd: Prd) -> dict[str, set[str]]:
     """Each custom type name -> the top-level keys of its YAML files. A type none of whose files is a
     YAML mapping is absent, so its `<type>:<name>` targets cannot be checked."""
     out: dict[str, set[str]] = {}
-    for kind, _, files, _ in _custom_types(prd):
+    for kind, _, files, _ in custom_types(prd):
         for f in files:
             data = prd.yaml.get(f)
             if isinstance(data, dict):
@@ -415,7 +430,7 @@ def _validator_timeout() -> int:
 
 def _check_custom(prd: Prd) -> Iterator[Finding]:
     timeout = _validator_timeout()
-    for kind, validator, files, line in _custom_types(prd):
+    for kind, validator, files, line in custom_types(prd):
         def bad(msg):
             return Finding("prd.md", line, "contracts-valid", f"custom type {kind}: {msg}")
 
