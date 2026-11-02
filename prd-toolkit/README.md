@@ -1,7 +1,7 @@
 # prd-toolkit
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
-repo with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent
+repo with contracts and black-box test cases, a 36-rule linter and trace checks, a test agent
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
@@ -57,7 +57,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
   other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
-- `--list-rules` prints the 32 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
+- `--list-rules` prints the 36 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 
@@ -411,7 +411,7 @@ the user cannot state.
 
 - **0.6.1:** `/prd-publish` writes again. 0.6.0 put the page and the summaries file under `.git/`, where Claude Code refuses writes, so nothing rendered. The page's default is `./<project>-prd-<version>.html` in the repository root again, untracked and never committed. The summaries file is written beside it and deleted after the render. Move the page out of the repository or delete it before the next `/prd-build`, whose clean-tree check stops on an untracked file.
 - **0.6.0:**
-  - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (32 rules) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
+  - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (its 32nd rule) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
   - Known-failing tests mark themselves as strict expected failures and tag their citation. A stopped build records an entry, and `/prd-build --fixes E-nnn` builds a fix from it. `prd_deploy.py recover` ends a killed step. The generated `prd-lint` job also runs `prd_hooks.py check --ci`, which reports stale CI.
   - `/prd-publish` and the `publishing-prds` skill: `prd_publish.py` renders the PRD as one self-contained HTML page (see Publishing).
   - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace's `known-failing-tags` reports it until `/prd-error E-nnn` takes its entry to the code-bug route, whose tester round marks the test a strict expected failure and tags its citation (the case and its `approved` block need no patch). An open 0.5 entry that carries a class now counts as `proposed`, so a code commit citing it is refused until `prd_error.py confirm` records your reply (`/prd-error E-nnn` asks for it). Existing entries need no edit: the new lines are optional, `error-entries` judges `Detected:` and `Recurrence of:` only on an entry that carries `Confirmed:`, and `check` judges only ranges. A `.prd-toolkit/` without `prd_error.py` predates 0.6, and the skills stop on it until `prd_hooks.py install` runs.

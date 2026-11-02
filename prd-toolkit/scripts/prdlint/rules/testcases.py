@@ -395,7 +395,7 @@ def test_refs(prd: Prd):
                 yield bad("known-failing", f"known-failing {kf} is resolved in errors.md; remove the line")
 
         target = d.get("target")
-        if isinstance(target, str) and ":" in target:
+        if isinstance(target, str) and ":" in target and model.parse_ref(target)[1] is None:  # a prefixed target is for upstream-refs
             kind, _, name = target.partition(":")
             if kind == "op" and name not in ops:
                 yield bad("target", f"target {target}: no operationId '{name}' in contracts/openapi.yaml")

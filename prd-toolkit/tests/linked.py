@@ -27,11 +27,22 @@ def make_linked_repos(dst: Path) -> tuple[Path, Path]:
 
 
 def link(reports: Path, cited: list[str]) -> None:
-    """Write reports' links.md with an `orders` Upstreams row (`../orders`) and one test case per cited target; uncommitted."""
+    """Write reports' links.md with an `orders` Upstreams row (`../orders`) and one test case per cited target (see add_cases); uncommitted."""
     prd = reports / "docs/prd/reports"
     (prd / "links.md").write_text(
         "# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n"
         "| orders | `../orders` | | | |\n\n## Consumers\n\n| Consumer | Location |\n|---|---|\n", encoding="utf-8")
-    cases = prd / "test-cases/links.yaml"
-    cases.write_text("".join(
-        f"T-090.{i}:\n  ac: AC-002.1\n  level: integration\n  target: {c}\n  environment: ci\n  identity: none\n" for i, c in enumerate(cited, 1)), encoding="utf-8")
+    add_cases(prd, cited)
+
+
+def add_cases(prd: Path, cited: list[str]) -> None:
+    """One passing integration case per cited target, T-002.3 onward, in api.yaml and AC-002's Tests line."""
+    cases = prd / "test-cases/api.yaml"
+    ids = [f"T-002.{i}" for i in range(3, 3 + len(cited))]
+    cases.write_text(cases.read_text(encoding="utf-8") + "".join(
+        f"\n{t}:\n  ac: AC-002.1\n  level: integration\n  target: {c}\n  environment: ci\n  identity: test-rep\n"
+        "  preconditions: []\n  input:\n    id: 1\n  expect:\n    output:\n      status: 200\n      body: {id: 1}\n"
+        "    effects: []\n    errors: []\n    leaks: none\n" for t, c in zip(ids, cited)), encoding="utf-8")
+    api = prd / "features/api.md"
+    old = "Tests: T-002.1 [integration], T-002.2 [integration]  (test-cases/api.yaml)"
+    api.write_text(api.read_text(encoding="utf-8").replace(old, old.replace("  (", "".join(f", {t} [integration]" for t in ids) + "  (")), encoding="utf-8")

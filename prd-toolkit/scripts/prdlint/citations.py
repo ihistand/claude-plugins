@@ -1,0 +1,85 @@
+"""Where a PRD cites an upstream PRD's items: test-case targets, Traces tokens and prefixed prose spans.
+
+A target or token `<kind>:<a>/<b>` is prefixed when `<a>` is a slug and `<kind>` is not `code`, and only the
+crossing kinds (op, table, event, job, a custom type) cite across repositories. A prose span
+`<a>/<t>.<c>` cites table `t` only when `<a>` is a name in the Upstreams table, so paths such as
+`src/importer.py` stay prose. `sync` and the `snapshot-cited` and `upstream-refs` rules share this.
+"""
+import re
+from typing import NamedTuple
+
+from .model import CROSSING, Prd, parse_ref
+
+_SPAN = re.compile(r"(`+)(.+?)\1")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_PROSE_REF = re.compile(r"([a-z][a-z0-9-]*)/([A-Za-z_]\w*)\.([A-Za-z_]\w*)")
+_QUOTES = "`'\".,;:)("
+
+
+class Cite(NamedTuple):
+    upstream: str
+    kind: str
+    name: str
+    file: str
+    line: int
+    label: str  # who cites: a T-id, a requirement ID, or the backticked prose span
+    ref: str  # the citation as written
+    column: str | None = None  # a prose span's column
+
+
+def _crossing(prd: Prd) -> set[str]:
+    from .rules.testcases import TARGET_KINDS, target_kinds
+
+    return set(CROSSING) | (target_kinds(prd) - TARGET_KINDS)  # the custom types of section 7
+
+
+def _upstream_names(prd: Prd) -> set[str]:
+    return {r.name for r in prd.links.upstreams} if prd.links else set()
+
+
+def cites(prd: Prd) -> list[Cite]:
+    from .rules.ids import _traces
+
+    crossing = _crossing(prd)
+    out: list[Cite] = []
+
+    def prefixed(ref: str):
+        kind, prefix, name = parse_ref(ref)
+        return (kind, prefix, name) if prefix is not None and kind in crossing else None
+
+    for tc in prd.test_cases:
+        target = tc.data.get("target") if isinstance(tc.data, dict) else None
+        p = prefixed(target) if isinstance(target, str) else None
+        if p:
+            out.append(Cite(p[1], p[0], p[2], tc.file, tc.data.key_lines.get("target", tc.line), tc.id, target))
+    for b in prd.blocks:
+        for n, text in _traces(b):
+            for tok in re.split(r"[;,\s]+", text):
+                tok = tok.strip(_QUOTES)
+                p = prefixed(tok) if re.fullmatch(r"[a-z][a-z0-9-]*:\S+", tok) else None
+                if p:
+                    out.append(Cite(p[1], p[0], p[2].strip(_QUOTES), b.file, n, b.id, tok))
+    names = _upstream_names(prd)
+    for rel, text in prd.docs.items():
+        if rel in ("errors.md", "links.md") or not names:
+            continue
+        on = False
+        for n, line in enumerate(text.split("\n"), 1):
+            if _FENCE.match(line):
+                on = not on
+                continue
+            if on:
+                continue
+            for m in _SPAN.finditer(line):
+                q = _PROSE_REF.fullmatch(m.group(2).strip())
+                if q and q.group(1) in names:
+                    out.append(Cite(q.group(1), "table", q.group(2), rel, n, f"`{q.group(0)}`", q.group(0), q.group(3)))
+    return out
+
+
+def collect(prd: Prd) -> dict[str, dict[tuple[str, str], list[tuple[str, int]]]]:
+    """Upstream name -> (kind, name) -> every (file, line) citing it."""
+    out: dict[str, dict[tuple[str, str], list[tuple[str, int]]]] = {}
+    for c in cites(prd):
+        out.setdefault(c.upstream, {}).setdefault((c.kind, c.name), []).append((c.file, c.line))
+    return out

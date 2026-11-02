@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from ..deps import require
 from ..findings import Finding
 from ..markdown import mask_quoted, strip_code, tables
-from ..model import ADOPTION_FILE, ADOPTION_STATES, UNMIGRATED, Prd
+from ..model import ADOPTION_FILE, ADOPTION_STATES, UNMIGRATED, UPSTREAM_DIR, Prd
 from ..registry import rule
 
 SECTION_TITLES = [
@@ -53,13 +53,13 @@ def all_lines(prd: Prd) -> Iterator[tuple[str, int, str]]:
 
     Markdown comes from prose() (code blanked); YAML, SQL and JSON files are read raw, so markers
     in their values and comments count. Fixture data under contracts/fixtures/, other file types,
-    and hidden or editor-backup files (`.x.swp`, `x~`, `x.bak`) are skipped, as are binary files."""
+    upstream snapshots (contracts/upstream/), and hidden or editor-backup files (`.x.swp`, `x~`, `x.bak`) are skipped, as are binary files."""
     yield from prose(prd)
     for p in sorted(prd.root.rglob("*")):
         if not p.is_file() or p.suffix not in _RAW_SUFFIXES:
             continue
         rel_parts = p.relative_to(prd.root).parts
-        if rel_parts[:2] == ("contracts", "fixtures") or any(part.startswith(".") for part in rel_parts):
+        if rel_parts[:2] in (("contracts", "fixtures"), tuple(UPSTREAM_DIR.split("/"))) or any(part.startswith(".") for part in rel_parts):
             continue
         try:
             raw = p.read_bytes()
