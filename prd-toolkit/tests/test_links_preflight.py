@@ -25,7 +25,7 @@ def test_preflight_refuses_on_drift(tmp_path):
     orders, reports = synced(tmp_path)
     assert drift_reasons(reports) == []
     change_orders(orders)
-    assert drift_reasons(reports) == ["prd_links check found drift: op:deleteOrder, table:orders"]
+    assert drift_reasons(reports) == ["prd_links check found drift: orders op:deleteOrder, orders table:orders"]
 
 
 def test_preflight_passes_on_unreachable(tmp_path):
@@ -123,6 +123,23 @@ def test_published_page_shows_both_links_tables_and_loads_nothing(tmp_path):
     assert "<th>Upstream</th>" in page and "<th>Consumer</th>" in page
     for tag in ("<script", "<link", "@import"):
         assert tag not in page
-    assert "url(" not in page.split("</style>")[0]
+    assert "url(" not in page
     again = publish.render_page(model.load(op(orders)), orders, None, date(2026, 11, 1))
     assert "<th>Consumer</th>" in again
+
+
+def test_status_url_upstream_makes_no_git_call(tmp_path):
+    orders, reports = synced(tmp_path)
+    links_md = rp(reports) / "links.md"
+    links_md.write_text(links_md.read_text(encoding="utf-8").replace("`../orders`", "`https://example.invalid/orders.git#docs/prd/orders`", 1), encoding="utf-8")
+    up = part(_items(reports), "Upstreams")
+    assert re.fullmatch(r"orders 1\.0\.0 at [0-9a-f]{40}, needs default, check: not run \(git URL; run prd_links.py check\)", up[0]), up
+    assert not (tmp_path / "cache").exists()
+
+
+def test_status_check_error_is_shown(tmp_path):
+    orders, reports = synced(tmp_path)
+    links_md = rp(reports) / "links.md"
+    links_md.write_text(links_md.read_text(encoding="utf-8").replace("| orders | `../orders` |", "| reports | `../orders` |", 1), encoding="utf-8")
+    up = part(_items(reports), "Upstreams")
+    assert up and ", check: error (a PRD cannot link to itself)" in up[0], up

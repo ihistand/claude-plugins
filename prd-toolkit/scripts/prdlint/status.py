@@ -1,6 +1,10 @@
-"""The status report: where every requirement of a PRD stands. Read-only and deterministic."""
+"""The status report: where every requirement of a PRD stands. Read-only and deterministic.
+
+It reads the working trees of other repositories named by path-location links (and nothing else outside the repo);
+git-URL links are not fetched here, so the report stays fast and offline.
+"""
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from collections import Counter
 from itertools import groupby
 from pathlib import Path
@@ -46,19 +50,34 @@ def _open_errors(prd: Prd) -> list[StatusItem]:
     return rows or [StatusItem("Open errors", None, "None.")]
 
 
-def _upstreams(prd: Prd, here: Path) -> list[StatusItem]:
+def _is_url(row) -> bool:
+    from . import links
+    try:
+        return links.parse_location(row.location).url is not None
+    except links.BadArgument:
+        return False  # malformed: the check reports it
+
+
+def _upstreams(prd: Prd) -> list[StatusItem]:
     if prd.links is None or not prd.links.upstreams:
         return [StatusItem("Upstreams", None, "None.")]
+    from . import links
+    # path locations only: status stays fast and offline; a git URL is left to prd_links.py check
+    local = replace(prd, links=replace(prd.links, upstreams=[r for r in prd.links.upstreams if not _is_url(r)],
+                                       consumers=[r for r in prd.links.consumers if not _is_url(r)]))
     try:
-        from . import links
-        lines = links.check(prd)
-    except Exception:  # a link that cannot be read is the check's finding, not the status report's
-        lines = None
+        lines, error = links.check(local), None
+    except (links.Refused, links.Unreachable, links.BadArgument) as e:
+        lines, error = [], str(e)
     out = []
     for row in prd.links.upstreams:
         text = f"{row.name} {row.version or '-'} at {row.commit or '-'}, needs {row.needs.strip() or 'default'}"
-        mine = [x for x in lines or [] if x.side == "upstream" and x.name == row.name]
-        if lines is not None and not any(x.verdict == "unreachable" for x in mine):
+        mine = [x for x in lines if x.side == "upstream" and x.name == row.name]
+        if _is_url(row):
+            text += ", check: not run (git URL; run prd_links.py check)"
+        elif error is not None:
+            text += f", check: error ({error})"
+        elif not any(x.verdict == "unreachable" for x in mine):
             counts = Counter(x.verdict for x in mine)
             text += ", check: " + (", ".join(f"{v} {counts[v]}" for v in sorted(counts)) or "no items")
         out.append(StatusItem("Upstreams", row.name, text))
@@ -138,7 +157,7 @@ def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusIte
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
     return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
-            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _upstreams(prd, repo_root)
+            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _upstreams(prd)
             + _consumers(prd) + _change_sets(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 
 

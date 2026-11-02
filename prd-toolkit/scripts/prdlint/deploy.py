@@ -83,7 +83,7 @@ def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
         from . import links  # lazy: links imports git machinery a plain deploy does not need
         lines = links.check(prd)
         if links.check_exit(lines) == 1:  # exit 3 (unreachable only) adds nothing; the run's report prints that line
-            drift = [x.item or f"{x.side} {x.name}" for x in lines if x.verdict in links.DRIFT or x.verdict.startswith("needs env ")]
+            drift = [f"{x.name} {x.item}" if x.item else f"{x.side} {x.name}" for x in lines if x.verdict in links.DRIFT or x.verdict.startswith("needs env ")]
             reasons.append("prd_links check found drift: " + ", ".join(dict.fromkeys(drift)))
     if any(s.env in production_envs(prd) for s in plan_steps(prd, until)):
         # trace lets a verified block lack deploy-gate citations, but `live` needs every one: such a run cannot close
