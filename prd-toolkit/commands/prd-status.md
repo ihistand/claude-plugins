@@ -20,6 +20,6 @@ A script that is not found is a tool error: report it, never guess another path.
    `uv run --script <scripts>/prd_status.py docs/prd/<slug>; echo "prd-status-exit=$?"`
    Add `--json` only when asked for JSON. Never pipe, filter or truncate the output (no `| head`,
    no `| grep`): `prd-status-exit=` then reports the filter's status, not the script's.
-3. Print the output as it is. The report has eight parts: Header, Requirements, Adoption map,
-   Not built, Not verified, Open errors, Deployed and Matrix. It is read-only.
+3. Print the output as it is. The report has nine parts: Header, Requirements, Adoption map,
+   Not built, Not verified, Open errors, CI, Deployed and Matrix. It is read-only.
 4. On `prd-status-exit=2`, the call was wrong and nothing printed: fix the path.

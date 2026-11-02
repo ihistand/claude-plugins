@@ -147,6 +147,10 @@ Generate the merge-gate CI file, then commit it. `--github` writes
 `include: '.gitlab/prd-toolkit.yml'` line to add to `.gitlab-ci.yml`. An existing file that
 differs is rewritten only with `--force`.
 
+The generated `prd-lint` job runs `prd_lint.py --ci` and then `prd_hooks.py check --ci`, which reports
+`stale: <path>: re-run prd_hooks.py ci --<forge> --force` when the PRD has since gained a level, an
+environment, a `tests` step or a Drift row. `check` and `/prd-status` print the same line.
+
 ```
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --github docs/prd/<slug>
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --gitlab docs/prd/<slug>

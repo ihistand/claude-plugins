@@ -4,10 +4,10 @@ from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
-from . import deploy, errors, trace
+from . import deploy, errors, hooks, trace
 from .model import Prd, gate_of
 
-PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Deployed", "Matrix")
+PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "CI", "Deployed", "Matrix")
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,11 @@ def _by_status(prd: Prd, part: str, status: str) -> list[StatusItem]:
 def _open_errors(prd: Prd) -> list[StatusItem]:
     rows = [StatusItem("Open errors", e.id, f"{e.id} {errors.summary(e)} — {e.title}") for e in prd.errors_ledger.values() if e.open]
     return rows or [StatusItem("Open errors", None, "None.")]
+
+
+def _ci(prd: Prd, repo_root: Path) -> list[StatusItem]:
+    lines = hooks.stale_ci(repo_root, prd, deploy.prd_rel(prd, repo_root))
+    return [StatusItem("CI", None, line) for line in lines] or [StatusItem("CI", None, "None.")]
 
 
 def _stopped(prd: Prd, repo_root: Path, env: str, after: str | None) -> str | None:
@@ -100,7 +105,7 @@ def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusIte
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
     return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
-            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
+            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 
 
 def render_text(items: list[StatusItem]) -> str:

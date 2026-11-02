@@ -25,6 +25,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--gitlab", action="store_true")
     parser.add_argument("--github", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--ci", action="store_true", help="check: compare only the generated CI files (works from the vendored copy)")
     try:
         args = parser.parse_args(argv)
     except SystemExit as e:
@@ -36,6 +37,9 @@ def main(argv: list[str]) -> int:
     elif args.gitlab or args.github or args.force:
         print("prd_hooks: --gitlab, --github and --force belong to ci", file=sys.stderr)
         return 2
+    if args.ci and args.action != "check":
+        print("prd_hooks: --ci belongs to check", file=sys.stderr)
+        return 2
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
@@ -46,7 +50,7 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         root = model.repo_root(prd.root).resolve()
-        if args.action == "check" and not hooks.is_plugin():
+        if args.action == "check" and not args.ci and not hooks.is_plugin():
             print("prd_hooks: run check from the plugin, not the vendored copy", file=sys.stderr)
             return 2
         if args.action == "ci":
@@ -67,7 +71,12 @@ def main(argv: list[str]) -> int:
                 return 2
             out = hooks.install(root, prd_rel)
         elif args.action == "check":
-            out = hooks.check(root, hooks.PLUGIN_ROOT)
+            try:
+                prd_rel = prd.root.resolve().relative_to(root).as_posix()
+            except ValueError:
+                print(f"prd_hooks: {prd.root} is not inside the repository at {root}", file=sys.stderr)
+                return 2
+            out = hooks.stale_ci(root, prd, prd_rel) if args.ci else hooks.check(root, hooks.PLUGIN_ROOT, prd, prd_rel)
         else:
             out = hooks.uninstall(root)
     except Exception as e:

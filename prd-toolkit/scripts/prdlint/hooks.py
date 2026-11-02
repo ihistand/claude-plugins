@@ -143,7 +143,18 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     return lines
 
 
-def check(repo_root: Path, plugin_root: Path) -> list[str]:
+def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
+    """One line per CI include present whose text differs from what `prd_hooks.py ci` would write now."""
+    jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)
+    out = []
+    for kind, rel in CI_FILES.items():
+        path = Path(repo_root) / rel
+        if path.is_file() and path.read_text(encoding="utf-8") != (render_gitlab if kind == "gitlab" else render_github)(jobs, prd.operations.secrets):
+            out.append(f"stale: {rel}: re-run prd_hooks.py ci --{kind} --force")
+    return out
+
+
+def check(repo_root: Path, plugin_root: Path, prd=None, prd_rel: str = "") -> list[str]:
     repo_root, plugin_root = Path(repo_root), Path(plugin_root)
     dest = repo_root / VENDOR_DIR
     if not dest.is_dir():
@@ -165,6 +176,8 @@ def check(repo_root: Path, plugin_root: Path) -> list[str]:
             rel = f.relative_to(dest).as_posix()
             if f.is_file() and "__pycache__" not in f.parts and rel not in sources:
                 problems.append(f"{VENDOR_DIR}/{rel} is not in the plugin")
+    if prd is not None:
+        problems += stale_ci(repo_root, prd, prd_rel)
     return problems
 
 
@@ -223,7 +236,7 @@ def ci_jobs(prd, prd_rel: str) -> list[CiJob]:
     from .rules.registries import standards_rows
 
     q = shlex.quote(prd_rel)
-    out = [CiJob("prd-lint", [f"uv run --script {VENDOR_DIR}/prd_lint.py --ci {q}"]),
+    out = [CiJob("prd-lint", [f"uv run --script {VENDOR_DIR}/prd_lint.py --ci {q}", f"uv run --script {VENDOR_DIR}/prd_hooks.py check --ci {q}"]),
            CiJob("prd-trace", [f"uv run --script {VENDOR_DIR}/prd_trace.py {q} --range {RANGE}"])]
     n = 0
     for row in standards_rows(prd):
