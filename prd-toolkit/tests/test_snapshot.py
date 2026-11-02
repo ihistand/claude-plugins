@@ -171,3 +171,30 @@ def test_mixed_key_reorder_is_same(prd):
     get["responses"] = dict(reversed(list(get["responses"].items())))
     (prd / "contracts/openapi.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
     assert snapshot.item_text(contracts(prd), "op", "getOrder") == a
+
+
+def sql_contracts(text):
+    return snapshot.Contracts({"schema.sql": text}, {}, None)
+
+
+def test_uncited_text_does_not_leak():
+    c = sql_contracts("-- file header\nCREATE TABLE a (id int); -- SECRET about a\nCREATE TABLE b (id int);\n")
+    assert snapshot.extract(c, {("table", "b")})["schema.sql"] == "CREATE TABLE b (id int);\n"
+
+
+def test_trailing_comment_on_uncited_comment_line_does_not_leak():
+    c = sql_contracts("CREATE TABLE a (id int);\nCOMMENT ON TABLE a IS 'x'; -- SECRET\nCREATE TABLE b (id int);\n")
+    out = snapshot.extract(c, {("table", "b")})["schema.sql"]
+    assert out == "CREATE TABLE b (id int);\n"
+
+
+def test_trailing_and_leading_comments_stay_with_cited():
+    c = sql_contracts("CREATE TABLE a (id int);\n\n-- unrelated\n\n-- about b\nCREATE TABLE b (id int); -- mine\n")
+    out = snapshot.extract(c, {("table", "b")})["schema.sql"]
+    assert out == "-- about b\nCREATE TABLE b (id int); -- mine\n"
+
+
+def test_extract_raises_on_untokenizable_schema():
+    c = sql_contracts("CREATE TABLE a (id int); SELECT 'unterminated\n")
+    with pytest.raises(Exception):
+        snapshot._chunks(c)

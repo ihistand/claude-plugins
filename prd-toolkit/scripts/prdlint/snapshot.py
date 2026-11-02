@@ -109,24 +109,40 @@ def _table_sql(c: Contracts, name: str) -> list[str] | None:
 
 
 def _chunks(c: Contracts):
-    """(source text, parsed statement) for each statement of schema.sql, the text exactly as written."""
+    """(source text, parsed statement) for each statement of schema.sql, the text exactly as written.
+
+    A same-line `--` comment after a statement's semicolon goes with that statement; of the text before
+    a statement only the `--` lines directly above it (no blank line between) go with it.
+    Raises when the file does not tokenize."""
     text = c.files.get("schema.sql")
     if text is None:
         return []
-    try:
-        tokens = Dialect.get_or_raise(c.dialect).tokenize(text)
-    except Exception:
-        return []
-    cuts = [t.end + 1 for t in tokens if t.token_type == TokenType.SEMICOLON]
-    if not cuts or cuts[-1] < len(text.rstrip()):
-        cuts.append(len(text))
-    out, prev = [], 0
-    for cut in cuts:
-        chunk = text[prev:cut].strip()
-        prev = cut
-        parsed = parse_schema(chunk, c.dialect) if chunk else None
+    tokens = Dialect.get_or_raise(c.dialect).tokenize(text)
+    out, prev, first, ended = [], 0, None, False
+    spans = []  # (start of first token, end of the semicolon, end including a same-line comment, has semicolon)
+    for t in tokens:
+        if first is None:
+            first = t.start
+        if t.token_type == TokenType.SEMICOLON:
+            semi = t.end + 1
+            eol = text.find("\n", semi)
+            eol = len(text) if eol < 0 else eol
+            rest = text[semi:eol].strip()
+            spans.append((first, semi, eol if rest.startswith("--") or not rest else semi, True))
+            first = None
+    if first is not None:
+        spans.append((first, len(text.rstrip()), len(text.rstrip()), False))
+    for start, semi, cut, has_semi in spans:
+        above = []
+        for line in reversed(text[prev:start].split("\n")[:-1]):
+            if not line.strip().startswith("--"):
+                break
+            above.insert(0, line.strip())
+        prev = max(cut, semi)
+        body = text[start:cut].rstrip()
+        parsed = parse_schema(text[start:semi], c.dialect)
         if parsed and parsed[0] is not None:
-            out.append((chunk if chunk.endswith(";") else chunk + ";", parsed[0]))
+            out.append(("\n".join(above + [body + ("" if has_semi else ";")]), parsed[0]))
     return out
 
 
