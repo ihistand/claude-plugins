@@ -207,7 +207,9 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    under the quoted AC, at the lowest level that reproduces the error (a patch: the AC is
    unchanged, and the T-id tests what it already says). When an existing T-id under that AC
    already fails on the error at that level (step 2 ran it red), it is the regression T-id, and
-   the change adds none. A non-unit regression
+   the change adds none. Prefer a build-gate level whenever one can reproduce the error, and
+   take the lowest level that reproduces it: a deploy-gate regression T-id's test runs only at
+   `/prd-deploy`, so the fix is proven only there. A non-unit regression
    T-id's case carries `known-failing: <E-nnn>`; a unit one is written failing by the builder in
    the `--fixes` build, as always. As with any change, the block returns to `approved`.
    For a non-unit regression T-id, a tester-only round comes next: dispatch `prd-toolkit:prd-tester`
@@ -229,7 +231,14 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
 6. **Close.** For a fix (code bug, spec gap, invalid requirement, standard), the rule is this.
    Resolve only when the `--fixes` build closed with every regression T-id `pass` (its suite
    RESULTS, or the builder's unit result) and the block `verified`; otherwise run `/prd-build <area>
-   <IDs> --fixes <E-nnn>` again. A unit regression T-id carries no marker to grep, so the build's
+   <IDs> --fixes <E-nnn>` again. A build-gate and a unit regression T-id are proven by that
+   build. A deploy-gate regression T-id is not run in it (its `known-failing:` line came off at
+   the clean close), so a deploy-gate regression T-id's entry is resolved only after a
+   `/prd-deploy` run whose `tests` step record passed that T-id's level: Read the run's log
+   (`<that dir>/prd-toolkit/deploys/<run id>.jsonl`, as in the deploy skill) and check that the
+   `tests` step record for that level is `pass` before resolving; with no such run, deploy first.
+   The resolution keeps the code-bug form (T-id, level, version, fix commit). A unit regression
+   T-id carries no marker to grep, so the build's
    close is its only proof. An environment fix resolves on the new run that finished; not a defect
    resolves at once. Before the resolve, Grep `known-failing: <E-nnn>` with the path
    `docs/prd/<slug>/test-cases/`, and `known-failing <E-nnn>` with each test root: a match means the

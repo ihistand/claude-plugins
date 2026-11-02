@@ -593,3 +593,19 @@ def test_quoted_output_goes_in_backticks_and_lint_refusal_is_fixed_by_rerun():
 
 def test_readme_lists_the_lint_refusal():
     assert "the entry would fail lint" in flat(ROOT / "README.md")
+
+
+# --- F-4 (proof, R21): a deploy-gate regression T-id resolves only after a deploy ---
+
+def test_r21_prefer_a_build_gate_regression_level():
+    s5 = step(5)
+    assert "Prefer a build-gate level whenever one can reproduce the error" in s5
+    assert "the lowest level that reproduces it" in s5
+
+
+def test_r21_deploy_gate_regression_resolves_only_after_a_passing_deploy_run():
+    s6 = step(6)
+    for s in ("a deploy-gate regression T-id's entry is resolved only after a `/prd-deploy` run whose `tests` step record passed that T-id's level",
+              "Read the run's log",
+              "form (T-id, level, version, fix commit)"):
+        assert s in s6, s

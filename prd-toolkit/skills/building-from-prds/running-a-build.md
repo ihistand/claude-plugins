@@ -335,8 +335,14 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    **`--fixes E-nnn` only:** the close also removes each test case's `known-failing: E-nnn` line
    whose T-id is `pass` (in the suite RESULTS, or the builder's UNIT lines for a unit T-id), and no
    other test-case line. This edit is allowed only for the entry named by `--fixes`; every other
-   test-case edit still goes through `/prd-change`. A regression T-id that is not `pass` keeps its
-   line, and its block stays `built`: its test is already un-marked and its case still carries
+   test-case edit still goes through `/prd-change`. A regression T-id whose test case is at a
+   deploy-gate level has its `known-failing: E-nnn` line removed at a clean `--fixes` close too
+   (the build-side conditions hold), though it is not run in the build, like any deploy-gate
+   T-id: the tester's `write` round has already un-marked its test, its block closes `verified`,
+   and `prd_trace.py` holds (test un-marked, case no longer known-failing); its test proves the
+   fix at `/prd-deploy`. A build-gate regression T-id still needs `pass`. A regression T-id that is
+   not `pass` keeps its line, and its block stays `built`: its test is already un-marked and its
+   case still carries
    `known-failing:`, so `prd_trace.py`'s `known-failing-tags` stops the build at step 7. This is
    expected: the stop report names each such T-id, and the next step is another
    `/prd-build <area> <IDs> --fixes E-nnn` (the un-mark is idempotent). The caller never resolves

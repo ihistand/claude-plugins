@@ -686,3 +686,23 @@ def test_unmark_line_and_not_passing_regression():
     for s in ("Un-mark: T-002.5, T-002.6 (known-failing E-003)", "the builder un-marks a unit regression T-id itself",
               "stops the build at step 7", "names each such T-id", "the un-mark is idempotent"):
         assert s in r, s
+
+
+# --- F-4 (proof, R21): a deploy-gate regression T-id closes verified ---
+
+def test_r21_deploy_gate_regression_tid_line_comes_off_at_a_clean_close():
+    r = flat(RUN)
+    for s in ("A regression T-id whose test case is at a deploy-gate level has its `known-failing: E-nnn` line removed at a clean `--fixes` close",
+              "it is not run in the build",
+              "its block closes `verified`",
+              "its test proves the fix at `/prd-deploy`",
+              "A build-gate regression T-id still needs `pass`"):
+        assert s in r, s
+    close = r.split("**`--fixes E-nnn` only:**", 1)[1]
+    assert close.index("deploy-gate level") < close.index("A regression T-id that is not `pass` keeps its line")
+
+
+def test_r21_build_gate_not_passing_keeps_r4_text():
+    r = flat(RUN)
+    assert "A regression T-id that is not `pass` keeps its line, and its block stays `built`" in r
+    assert "stops the build at step 7" in r

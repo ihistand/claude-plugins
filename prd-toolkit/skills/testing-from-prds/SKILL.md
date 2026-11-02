@@ -114,8 +114,9 @@ still reports `<T-id>: known-failing E-nnn`, never `pass`; a strict marker that 
 unexpected pass is `fail: unexpected pass`.
 
 In a `--fixes` build's `write` round you are given the regression tests of the entry being
-fixed: the tester removes the marker and the tag from each regression test it is given, and
-changes nothing else in it.
+fixed: the tester removes the marker and the tag from each regression test it is given, a
+deploy-gate regression test too (it is run at `/prd-deploy`, never by the build), and changes
+nothing else in it.
 
 ## Harness commands the guard accepts
 

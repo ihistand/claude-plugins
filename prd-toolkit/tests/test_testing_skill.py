@@ -63,3 +63,8 @@ def test_04_spec_limit_revised():
     s = flat(SPEC04)
     assert "Revised in prd-toolkit 0.6: known-failing tests mark themselves; see the 0.6 design §8" in s
     assert "until 0.6" not in s
+
+
+def test_r21_tester_unmarks_a_deploy_gate_regression_test_too():
+    t = " ".join((ROOT / "skills/testing-from-prds/SKILL.md").read_text(encoding="utf-8").split())
+    assert "a deploy-gate regression test too (it is run at `/prd-deploy`" in t
