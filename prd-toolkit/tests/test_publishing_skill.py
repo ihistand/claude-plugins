@@ -1,6 +1,8 @@
 """The publishing-prds skill, /prd-publish and their evals (spec §10)."""
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -12,7 +14,7 @@ DEPLOY_SKILL = ROOT / "skills/deploying-from-prds/SKILL.md"
 EVALS = ROOT / "evals"
 
 RENDER = ("uv run --script <scripts>/prd_publish.py render docs/prd/<slug> --out <out> "
-          "--summaries <publish>/<project>-prd-<version>.summaries.json; "
+          "--summaries <project>-prd-<version>.summaries.json; "
           "echo \"prd-publish-exit=$?\"")
 
 
@@ -197,7 +199,8 @@ def test_baseline_rows_are_filled_and_the_green_record_appended():
 
 def test_summaries_never_in_the_prd_folder():
     s = flat(SKILL)
-    assert "`<publish>/<project>-prd-<version>.summaries.json`" in s
+    assert "`./<project>-prd-<version>.summaries.json`" in s
+    assert "`<project>-prd-<version>.summaries.json` in the repository root" in s
     assert "never in `docs/prd/`" in s
     assert "Nothing under `docs/prd/` is written or edited while publishing" in s
 
@@ -206,8 +209,8 @@ def test_summaries_never_in_the_prd_folder():
 
 def test_default_out_and_never_committed():
     s = flat(SKILL)
-    assert "`<publish>/<project>-prd-<version>.html`" in s and "the path the user names" in s
-    assert "**Outside the working tree, and never committed.**" in s
+    assert "or by default `./<project>-prd-<version>.html`" in s and "the path the user names" in s
+    assert "**Untracked in the repository root, never committed.**" in s
     assert "never `git add` or commit either file" in s
     assert "refused: --out is inside the PRD folder" in s
 
@@ -291,7 +294,7 @@ def _counts(case: str, name: str, tool_input: dict) -> bool:
 
 CITES = "publish-summary-cites-area"
 SUMMARIES = "greet-prd-1.0.0.summaries.json"
-PUBLISH_DIR = ".git/prd-toolkit/publish/"  # R24: the grader path is relative to the workspace
+PAGE = "greet-prd-1.0.0.html"  # R26: the repository root; the grader path is relative to the workspace
 
 
 def test_the_new_evals_exist_with_their_graders():
@@ -315,37 +318,82 @@ def test_the_new_evals_exist_with_their_graders():
         assert f"| `{case}`" in baseline, case
 
 
-def test_the_summaries_graders_read_the_file_the_skill_names():
-    assert f"/{SUMMARIES.replace('greet', '<project>').replace('1.0.0', '<version>')}`" in flat(SKILL)
+def test_the_page_graders_read_the_page_the_skill_names():
+    assert f"`./{PAGE.replace('greet', '<project>').replace('1.0.0', '<version>')}`" in flat(SKILL)
     for name in ("summaries-cite-greet", "summaries-no-french-or-spanish"):
-        assert _grader(CITES, name)["target"] == {"source": "file", "path": PUBLISH_DIR + SUMMARIES}, name
-    assert _grader("publishing-trigger", "page-written")["path"] == PUBLISH_DIR + "greet-prd-1.0.0.html"
+        assert _grader(CITES, name)["target"] == {"source": "file", "path": PAGE}, name
+    assert _grader("publishing-trigger", "page-written")["path"] == PAGE
+
+
+def _scaffold_page(tmp_path: Path, summaries: dict | None) -> str:
+    """The greet scaffold's page, rendered by the real prd_publish.py, as the graders read it."""
+    repo = tmp_path / "repo"
+    r = subprocess.run([sys.executable, "-B", str(EVALS / "scaffolds/error_repo.py"), str(repo), "bug"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    cmd = ["uv", "run", "--script", str(ROOT / "scripts/prd_publish.py"), "render", "docs/prd/greet", "--out", PAGE]
+    if summaries is not None:
+        (repo / SUMMARIES).write_text(json.dumps(summaries), encoding="utf-8")
+        cmd += ["--summaries", SUMMARIES]
+    r = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return (repo / PAGE).read_text(encoding="utf-8")
+
+
+CLEAN = {"version": "1.0.0", "areas": {"greet": {"text": "The greet command prints a greeting for a name, taking "
+         "the greeting word from the settings file of its install.", "ids": ["FR-001", "FR-002"]}}}
+
+
+def test_the_page_graders_pass_a_clean_page(tmp_path):
+    page = _scaffold_page(tmp_path, CLEAN)
+    assert re.search(_grader(CITES, "summaries-cite-greet")["pattern"], page)
+    assert not re.search(_grader(CITES, "summaries-no-french-or-spanish")["pattern"], page)
+
+
+def test_the_cite_grader_fails_a_page_without_summaries(tmp_path):
+    page = _scaffold_page(tmp_path, None)
+    assert not re.search(_grader(CITES, "summaries-cite-greet")["pattern"], page)
+    assert not re.search(_grader(CITES, "summaries-no-french-or-spanish")["pattern"], page)  # the PRD names neither
 
 
 def test_the_claim_grader_fails_the_claim():
     g = _grader(CITES, "summaries-no-french-or-spanish")
     assert g["match"] == "not_contains"
-    claims = ['{"text": "Greet says hello in English, French and Spanish."}', '{"text": "Admite español y francés."}',
-              '{"text": "French greetings are not supported yet."}', '{"text": "Prend en charge le fran\\u00e7ais"}',
-              '{"text": "SPANISH"}']
+    claims = ["Greet says hello in English, French and Spanish.", "Admite español y francés.",
+              "French greetings are not supported yet.", "Prend en charge le français", "SPANISH", "¡Hola!"]
     for c in claims:
-        assert re.search(g["pattern"], c), c
-    clean = ('{"version": "1.0.0", "areas": {"greet": {"text": "The greet command prints a greeting for a name, '
-             'taking the greeting word from the settings file of its install.", "ids": ["FR-001", "FR-002"]}}}')
-    assert not re.search(g["pattern"], clean)
+        assert re.search(g["pattern"], f'<div class="summary"><p>{c}</p></div>'), c
+    assert not re.search(g["pattern"], CLEAN["areas"]["greet"]["text"])
+
+
+def test_the_claim_grader_fails_a_rendered_claim(tmp_path):
+    claim = {"version": "1.0.0", "areas": {"greet": {"text": "Greet says hello in French.", "ids": ["FR-001"]}}}
+    assert re.search(_grader(CITES, "summaries-no-french-or-spanish")["pattern"], _scaffold_page(tmp_path, claim))
 
 
 def test_the_cite_grader_needs_the_greet_area_with_its_ids():
     g = _grader(CITES, "summaries-cite-greet")
     assert g["match"] == "contains"
-    good = ['{"version": "1.0.0", "areas": {"greet": {"text": "x.", "ids": ["FR-001", "FR-002"]}}}',
-            '{\n  "version": "1.0.0",\n  "areas": {\n    "greet": {\n      "ids": ["FR-002"],\n      "text": "x."\n    }\n  }\n}']
+    good = ['<h2>Requirements: greet</h2><div class="summary"><p class="label">Summary by Claude of FR-001, FR-002, PRD 1.0.0</p>',
+            '<h2>Requirements: greet</h2><div class="summary"><p class="label">Summary by Claude of FR-002, PRD 1.0.0</p>']
     for t in good:
         assert re.search(g["pattern"], t), t
-    bad = ['{"version": "1.0.0", "areas": {"greet": {"text": "x.", "ids": []}}}',
-           '{"version": "1.0.0", "areas": {"nfr": {"text": "x.", "ids": ["FR-001"]}}}']
+    bad = ['<h2>Requirements: greet</h2><h3 id="FR-001">FR-001 Print a greeting</h3>',
+           '<h2>Requirements: nfr</h2><div class="summary"><p class="label">Summary by Claude of FR-001, PRD 1.0.0</p>',
+           '<h2>Requirements: greet</h2><div class="summary"><p class="label">Summary by Claude of FR-0012, PRD 1.0.0</p>']
     for t in bad:
         assert not re.search(g["pattern"], t), t
+
+
+def test_the_summaries_file_is_deleted_after_the_render():
+    four = step(4)
+    assert "| 0 | `wrote <out>` | `rm <project>-prd-<version>.summaries.json` (its own call); step 5 |" in four
+    assert "| 2 | usage, dependency or tool error | The same `rm`. Report it verbatim and stop |" in four
+    assert "never in `docs/prd/` or `.git/` (Claude Code denies it), deleted after the render" in flat(SKILL)
+
+
+def test_the_report_names_the_untracked_page():
+    assert "(untracked in the repository: move or delete it before the next `/prd-build`)" in step(5)
 
 
 PLUGIN_SCRIPT = "/abs/plugin/scripts/prd_publish.py"

@@ -407,18 +407,19 @@ def test_minor_spec_revisions_note_recover_without_a_log():
     assert "`recover` on a run with no log exits 2 (`no log for run <id>`)" in rev
 
 
-def test_minor_r24_publish_goes_under_the_git_common_dir():
+def test_r26_publish_goes_to_the_repository_root():
     s = flat(PUBLISH_SKILL)
-    assert "git rev-parse --path-format=absolute --git-common-dir" in s
-    assert "`<publish>` is `<git-common-dir>/prd-toolkit/publish`, outside the working tree" in s
-    assert "`<publish>/<project>-prd-<version>.html`" in s
-    assert "`<publish>/<project>-prd-<version>.summaries.json`" in s
+    assert "git-common-dir" not in s and "<publish>" not in s
+    assert "or by default `./<project>-prd-<version>.html`" in s and "**Untracked in the repository root" in s
+    assert "`./<project>-prd-<version>.summaries.json`" in s
     assert "the page's absolute path" in s
-    assert "`./<project>-prd-<version>.html`" not in s and "in the repository root" not in s
     c = flat(PUBLISH_CMD)
-    assert "`<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`" in c
+    assert "the page goes to `./<project>-prd-<version>.html` in the repository root, untracked" in c
+    assert "git-common-dir" not in c
     readme = flat(README)
-    assert "(default `<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`" in readme
+    assert "(default `./<project>-prd-<version>.html` in the repository root, untracked;" in readme
+    assert "move it out of the repository or delete it first" in readme
+    assert "<git-common-dir>/prd-toolkit/publish" not in readme
 
 
 def test_minor_r24_render_creates_the_publish_directory(prd, tmp_path):

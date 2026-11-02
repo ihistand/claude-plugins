@@ -5,7 +5,7 @@ repo with contracts and black-box test cases, a 32-rule linter and trace checks,
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
-publisher that renders the PRD as one page to share. Version 0.6.0.
+publisher that renders the PRD as one page to share. Version 0.6.1.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -370,9 +370,10 @@ FR-001–FR-004, PRD <version>` that cites its IDs. Summaries are written fresh 
 never stored in the PRD folder.
 
 **Where it goes.** The page is written outside the PRD folder, to the path you name (default
-`<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`, beside the summaries file and
-outside the working tree, so the next build's clean-tree check is not tripped), and is never
-committed; the skill reports its absolute path. When the session has the Artifact tool,
+`./<project>-prd-<version>.html` in the repository root, untracked; the summaries file is written
+beside it and deleted after the render), and is never committed; the skill reports its absolute
+path. An untracked page stops the next `/prd-build` at its clean-tree check, so move it out of the
+repository or delete it first. When the session has the Artifact tool,
 the skill offers the same file as a private Artifact, or updates one you name; otherwise, or when you
 decline, it gives you the file path.
 
@@ -408,6 +409,7 @@ the user cannot state.
 
 ## Changelog
 
+- **0.6.1:** `/prd-publish` writes again. 0.6.0 put the page and the summaries file under `.git/`, where Claude Code refuses writes, so nothing rendered. The page's default is `./<project>-prd-<version>.html` in the repository root again, untracked and never committed. The summaries file is written beside it and deleted after the render. Move the page out of the repository or delete it before the next `/prd-build`, whose clean-tree check stops on an untracked file.
 - **0.6.0:**
   - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (32 rules) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
   - Known-failing tests mark themselves as strict expected failures and tag their citation. A stopped build records an entry, and `/prd-build --fixes E-nnn` builds a fix from it. `prd_deploy.py recover` ends a killed step. The generated `prd-lint` job also runs `prd_hooks.py check --ci`, which reports stale CI.

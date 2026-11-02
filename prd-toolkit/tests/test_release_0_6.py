@@ -22,19 +22,19 @@ def section(title: str) -> str:
 
 
 def test_versions():
-    assert json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["version"] == "0.6.0"
+    assert json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["version"] == "0.6.1"
     market = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
-    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == ["0.6.0"]
+    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == ["0.6.1"]
     js = (REPO / "web/src/data/plugins.js").read_text()
     a = js.index("id: 'prd-toolkit'")
     block = js[a:]
-    assert "version: '0.6.0'" in block
+    assert "version: '0.6.1'" in block
     assert "/prd-error" in block and "/prd-publish" in block and "handling-errors" in block and "publishing-prds" in block
     assert SPEC_06.split("docs/superpowers/specs/")[1] in block
 
 
 def test_readme_version_and_spec_link():
-    assert "Version 0.6.0." in README
+    assert "Version 0.6.1." in README
     assert f"(../{SPEC_06})" in README
     assert (REPO / SPEC_06).is_file()
     assert "- **0.6.0:**" in README
