@@ -576,23 +576,29 @@ _SNAP_HEADER = re.compile(
     r"(?: Type: (?P<type>[^\s.]+)\.)?(?: Dialect: (?P<dialect>[^\s.]+)\.)?(?: -->)?$")
 
 
-def _snapshots(prd_dir: Path) -> dict[str, list[SnapshotFile]]:
+def _snapshots(prd_dir: Path, findings: list[Finding]) -> dict[str, list[SnapshotFile]]:
     out: dict[str, list[SnapshotFile]] = {}
     base = prd_dir / UPSTREAM_DIR
     if not base.is_dir():
         return out
     for d in sorted(p for p in base.iterdir() if p.is_dir()):
         files = []
-        for p in sorted(x for x in d.rglob("*") if x.is_file()):
-            raw = p.read_text(encoding="utf-8")
+        for p in sorted(x for x in d.rglob("*") if x.is_file() and not any(part.startswith(".") for part in x.relative_to(d).parts)):
+            rel = p.relative_to(prd_dir).as_posix()
+            try:
+                raw = p.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                findings.append(Finding(rel, 0, "snapshot-cited", f"{rel}: not a readable UTF-8 snapshot file"))
+                files.append(SnapshotFile(rel, None, "", None))
+                continue
             first, nl, rest = raw.partition("\n")
             m = _SNAP_HEADER.match(first.rstrip())
             header = {k: v for k, v in m.groupdict().items() if v} if m else None
             text = rest if m else raw
-            rel = p.relative_to(prd_dir).as_posix()
             data = None
             if p.suffix == ".yaml":
-                data, _ = load_yaml(p, rel)
+                data, fs = load_yaml(p, rel)
+                findings += fs
             files.append(SnapshotFile(rel, header, text, data))
         out[d.name] = files
     return out
@@ -785,9 +791,10 @@ def load(prd_dir: Path) -> Prd:
         testing.harness = _harness(hs.body) if hs else Harness()
 
     s8 = sec(8)
+    snapshots = _snapshots(prd_dir, findings)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
                adoption=_adoption(docs), operations=_operations(docs.get("operations.md", "")), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
-               links=_links(docs[LINKS_FILE]) if LINKS_FILE in docs else None, snapshots=_snapshots(prd_dir), change_sets=_change_sets(prd_dir),
+               links=_links(docs[LINKS_FILE]) if LINKS_FILE in docs else None, snapshots=snapshots, change_sets=_change_sets(prd_dir),
                adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
 
 

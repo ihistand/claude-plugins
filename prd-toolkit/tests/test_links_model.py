@@ -90,12 +90,29 @@ def test_change_set_parsed(prd):
 
 
 def test_change_set_problems(prd):
-    bad = RECORD.replace("| Order | PRD |", "| Number | PRD |").replace("| 2 | greet-client |", "| 2 | x | greet-client |")
+    bad = RECORD.replace("| Order | PRD |", "| Number | PRD |").replace("| 2 | greet-client | `../greet-client` | cs-001-json-greeting | 1.0.0 → 1.1.0 | FR-002 | greet live in staging | verified |", "| 2 | greet-client | `../greet-client` | cs-001-json-greeting | 1.0.0 → 1.1.0 | FR-002 | greet live in staging |")
     put(prd, "changes/CS-001.md", bad)
     cs = model.load(prd).change_sets["CS-001"]
     lines = [n for n, _ in cs.problems]
     assert lines == [7, 10] and len(cs.rows) == 1
     assert "changes/CS-001.md" not in model.load(prd).docs
+
+
+def test_snapshot_dotfile_ignored_and_unreadable_reported(prd):
+    put(prd, "contracts/upstream/transform/.DS_Store", "x")
+    (prd / "contracts/upstream/transform/x.sql").write_bytes(b"\xff\xfe\x00bad")
+    p = model.load(prd)
+    assert [s.rel for s in p.snapshots["transform"]] == ["contracts/upstream/transform/x.sql"]
+    assert p.snapshots["transform"][0].header is None
+    assert [(f.file, f.rule, f.message) for f in p.load_findings] == [
+        ("contracts/upstream/transform/x.sql", "snapshot-cited", "contracts/upstream/transform/x.sql: not a readable UTF-8 snapshot file")]
+
+
+def test_snapshot_yaml_error_is_a_load_finding(prd):
+    put(prd, "contracts/upstream/transform/cli.yaml", YAML_HEADER + "greet: [unclosed\n")
+    p = model.load(prd)
+    assert p.snapshots["transform"][0].data is None
+    assert any(f.file == "contracts/upstream/transform/cli.yaml" for f in p.load_findings)
 
 
 def test_parse_ref():
