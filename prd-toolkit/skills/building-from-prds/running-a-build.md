@@ -25,6 +25,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 The builder prompt carries `<scripts>` as its `Scripts:` line, as an absolute path (the repository
 root joined to `.prd-toolkit` when vendored).
@@ -171,8 +174,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `Un-mark: T-002.5, T-002.6 (known-failing E-003)`, the entry's non-unit regression T-ids (the
    T-ids whose test cases carry `known-failing: E-nnn`). The tester removes the expected-failure
    marker and the `known-failing` tag from each test it is given for them, so they run as ordinary
-   tests. The builder's unit regression T-ids are not on that line: the builder un-marks a unit
-   regression T-id itself, in its own unit test.
+   tests. A unit regression T-id carries no marker: the builder writes its unit test failing
+   first, as every unit test, so it is not on that line. On a `--fixes` build the builder prompt
+   adds `Fixes: E-nnn (regression T-ids: <T-ids>)`: step 1's regression T-ids, and any unit T-id
+   the §14 row `regression test for E-nnn` names. Its rules make that entry the builder's target.
 
    With no non-unit T-ids, dispatch the builder alone: the tester has no `write`. When every
    non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their tests, and
@@ -408,6 +413,12 @@ Area: <area>
 IDs: <UJ, FR and NFR IDs>
 Unit T-ids: <one per line, with its test-case file>
 Scripts: <scripts directory, as an absolute path>
+```
+
+A `--fixes` build adds one line after those, on every builder round:
+
+```
+Fixes: E-nnn (regression T-ids: <T-ids>)
 ```
 
 A code-bug round adds three lines after those:

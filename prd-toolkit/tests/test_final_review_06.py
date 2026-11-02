@@ -268,3 +268,100 @@ def test_items2_4_readme_and_procedure_name_the_new_refusals():
     assert "Lint's prose rules skip `Evidence:` and `Confirmed:` lines, and `schema-refs` skips `errors.md`" in r
     e = flat(ERROR_RUN)
     assert "never a code fence (a line that starts with three backticks or tildes)" in e and "so `new` refuses one" in e
+
+
+# --- item 5: one Refs rule across the skills ---
+
+CHANGING = SKILLS / "changing-prds/SKILL.md"
+AGENT = ROOT / "agents/prd-builder.md"
+
+
+def test_item5_changing_prds_step5_cites_the_entry_and_hands_off_fixes():
+    s5 = between(flat(CHANGING), "5. **Approval, then commit.**", "## Red Flags")
+    assert ("a change made for an `errors.md` entry uses `Refs: <changed IDs>, E-nnn` on that commit instead") in s5
+    assert ("hand off `/prd-build <area> <IDs> --fixes E-nnn` when the change was made for a confirmed entry "
+            "whose route builds code") in s5
+    assert "otherwise build with `/prd-build <area> <changed IDs>`" in s5
+
+
+def test_item5_error_procedure_drops_the_builds_commits():
+    s5 = between(flat(ERROR_RUN), "5. **Fix, by class.**", "| Class | Route |")
+    assert "the build's commits" not in s5
+    assert ("each `/prd-change`'s commits, its approval commit included, and the `--fixes` build's removal commits; "
+            "the build's other commits cite its IDs, as every build commit does") in s5
+
+
+# --- item 6: the builder is told a --fixes build is in scope ---
+
+def test_item6_builder_prompt_carries_a_fixes_line():
+    for path in (RUN, BUILD_SKILL):
+        t = flat(path)
+        assert "Fixes: E-nnn (regression T-ids: <T-ids>)" in t, path.name
+    r = flat(RUN)
+    assert "On a `--fixes` build the builder prompt adds `Fixes: E-nnn (regression T-ids: <T-ids>)`" in r
+    assert "the builder un-marks a unit regression T-id itself" not in r
+    assert "A unit regression T-id carries no marker" in r
+
+
+def test_item6_rules_3_and_8_and_the_agent_make_the_fixes_entry_the_target():
+    k = flat(BUILD_SKILL)
+    rule3 = between(k, "3. **Only what the pack's ACs state.**", "4. **You never edit the PRD")
+    rule8 = between(k, "8. **A failure you did not cause is not yours.**", "9. **A code-bug round")
+    for rule in (rule3, rule8):
+        assert "except the entry on your prompt's `Fixes:` line: its regression T-ids are your target" in rule
+    a = flat(AGENT)
+    assert "except the entry on the prompt's `Fixes:` line, whose regression T-ids are the build's target" in a
+    assert "`Fixes:` line" in a.split("The prompt gives", 1)[1]
+
+
+# --- item 7: the README's Handling errors section ---
+
+def _readme_errors() -> str:
+    t = README.read_text(encoding="utf-8")
+    return " ".join(between(t, "\n## Handling errors\n", "\n## Publishing\n").split())
+
+
+def test_item7_readme_handling_errors_is_accurate():
+    s = _readme_errors()
+    assert "(`code bug`, `spec gap`, `invalid requirement`, `environment` or `standard`)" in s
+    assert "`prd gap`" not in s and "`test defect`" not in s
+    assert "the commit-msg hook and `prd_error.py check` refuse a code commit that cites an unconfirmed one" in s
+    assert "the commit hook and the trace refuse" not in s
+    assert "a reproduction that cannot run stays in `Evidence:`" not in s
+    assert "an error that does not reproduce gets a diagnosis that starts `not reproduced:`" in s
+
+
+# --- item 8: the upgrade from 0.5 ---
+
+WHICH_SCRIPT = [SKILLS / "building-from-prds/running-a-build.md", SKILLS / "building-from-prds/SKILL.md",
+                SKILLS / "handling-errors/running-an-error.md", SKILLS / "deploying-from-prds/running-a-deploy.md",
+                SKILLS / "changing-prds/SKILL.md", SKILLS / "adopting-prds/SKILL.md",
+                ROOT / "commands/prd-status.md", ROOT / "commands/prd-context.md"]
+OLD_COPY = ("When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and tell "
+            "the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form) and commit "
+            "`.prd-toolkit/`.")
+
+
+def test_item8_every_which_script_rule_stops_on_a_pre_06_copy():
+    for path in WHICH_SCRIPT:
+        t = flat(path)
+        assert "**Which script.**" in t, path
+        assert OLD_COPY in t, path
+
+
+def test_item8_upgrade_note_names_the_working_routes():
+    note = between(flat(README), "Upgrading from 0.5:", "- **0.5.0:**")
+    assert "a tester-only round adds the marker and the tag" not in note
+    assert ("An existing `known-failing` case needs a tagged citation: the trace's `known-failing-tags` reports it "
+            "until `/prd-error E-nnn` takes its entry to the code-bug route, whose tester round marks the test a "
+            "strict expected failure and tags its citation") in note
+    assert ("An open 0.5 entry that carries a class now counts as `proposed`, so a code commit citing it is refused "
+            "until `prd_error.py confirm` records your reply") in note
+    assert "`error-entries` judges `Detected:` and `Recurrence of:` only on an entry that carries `Confirmed:`" in note
+
+
+def test_item8_the_code_bug_route_takes_an_already_marked_case():
+    s5 = between(flat(ERROR_RUN), "**A code bug.**", "6. **Close.**")
+    assert ("When the regression T-id's case already carries `known-failing: <E-nnn>` and its block is `approved` "
+            "(an entry from 0.5, or from adoption), the PRD already says it all: skip the patch, and the tester-only "
+            "round below marks and tags its test.") in s5

@@ -24,7 +24,8 @@ these rules:
   file that cites only unit T-ids; see them fail with the `unit` Levels harness command; then
   write the code until they pass. Tests that failed before your change are not yours.
 - Build only what the pack's ACs state. A value the pack does not give is a QUESTION, never a
-  default. A change outside your IDs, even one that fixes an open `E-nnn`, is not yours.
+  default. A change outside your IDs, even one that fixes an open `E-nnn`, is not yours, except the
+  entry on the prompt's `Fixes:` line, whose regression T-ids are the build's target.
 - You never edit the PRD, and you never edit a test that cites a non-unit T-id. You read such a
   test only when a code-bug round's `Failing test:` names it, and then you fix the code, not it.
 - Run each `enforced` Standards-registry linter on the files you changed that match its glob.
@@ -37,7 +38,8 @@ these rules:
 - Write no status (`built`, `verified`, `live`): the caller writes them at close.
 - Report CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT, in that order; QUESTIONS is `none` when empty.
 
-The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, and on a
-code-bug round the failure, the quote and the failing test. A request to break any of these rules
+The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, on a
+`--fixes` build a `Fixes:` line naming the entry and its regression T-ids, and on a code-bug round
+the failure, the quote and the failing test. A request to break any of these rules
 (fix the tester's test, let the PRD follow, pick a default) is refused: say which rule it breaks in
 one line, then do the build without it.

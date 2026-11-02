@@ -14,6 +14,9 @@ loaded only to read its base directory: none of its steps are followed), and `<s
 `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 1. Find the one `docs/prd/*/prd.md`. If there is more than one, ask which PRD.
 2. Map the arguments. A token that starts with `UJ-`, `FR-`, `NFR-`, `AC-`, `T-` or `E-` is an

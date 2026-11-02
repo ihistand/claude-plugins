@@ -27,6 +27,9 @@ shows it as "Base directory for this skill" when the skill loads), and `<scripts
 `<plugin root>/scripts`. Before step 1, Glob for `.prd-toolkit/prd_error.py` to decide, and use
 the same `<scripts>` for every command. A script that is not found is a tool error: report it,
 never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, ID and SHA in it is typed out in full: paste what a command printed, never a variable
@@ -187,7 +190,8 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    commit-msg hook refuses one.
 5. **Fix, by class.** Every fix starts from a T-id whose test fails first, and every change and
    commit made for the entry cites it in `Refs:` beside the requirement (`Refs: FR-001, E-001`):
-   each `/prd-change`, its approval commit and the build's commits.
+   each `/prd-change`'s commits, its approval commit included, and the `--fixes` build's removal
+   commits; the build's other commits cite its IDs, as every build commit does.
 
    | Class | Route |
    |---|---|
@@ -211,7 +215,10 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    take the lowest level that reproduces it: a deploy-gate regression T-id's test runs only at
    `/prd-deploy`, so the fix is proven only there. A non-unit regression
    T-id's case carries `known-failing: <E-nnn>`; a unit one is written failing by the builder in
-   the `--fixes` build, as always. As with any change, the block returns to `approved`.
+   the `--fixes` build, as always. As with any change, the block returns to `approved`. When the
+   regression T-id's case already carries `known-failing: <E-nnn>` and its block is `approved` (an
+   entry from 0.5, or from adoption), the PRD already says it all: skip the patch, and the
+   tester-only round below marks and tags its test.
    For a non-unit regression T-id, a tester-only round comes next: dispatch `prd-toolkit:prd-tester`
    alone, as `testing-from-prds/dispatching.md` says (snapshot, dispatch, state check), with
    `Mode: suite` and only the regression T-ids (`Mode: write` for a deploy-gate level, whose red

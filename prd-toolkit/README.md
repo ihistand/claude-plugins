@@ -303,12 +303,13 @@ entry for each; `prd_error.py` is the only writer.
 1. **Record.** `new` appends the entry as `unclassified` with its `Detected:` line and a bounded
    `Evidence:` (20 lines at most, no secret or classified value). A build or deploy that stops on a
    failure records its entry itself.
-2. **Reproduce.** The failing test comes first; a reproduction that cannot run stays in `Evidence:`.
-3. **Propose.** `propose` writes the class (`code bug`, `prd gap`, `test defect` and the other
-   classes the entry model lists) and a diagnosis. Nothing is final yet.
+2. **Reproduce.** The failing test comes first; an error that does not reproduce gets a diagnosis
+   that starts `not reproduced:` and says what was tried.
+3. **Propose.** `propose` writes the class (`code bug`, `spec gap`, `invalid requirement`,
+   `environment` or `standard`) and a diagnosis. Nothing is final yet.
 4. **Your confirmation.** `confirm` records your reply verbatim, in your words, and the class you
-   settle on. Only a confirmed entry can be cited by code (`Refs: E-nnn`); the commit hook and the
-   trace refuse a code commit that cites an unconfirmed one.
+   settle on. Only a confirmed entry can be cited by code (`Refs: E-nnn`); the commit-msg hook and
+   `prd_error.py check` refuse a code commit that cites an unconfirmed one.
 5. **Fix.** A change goes through `/prd-change` (citing the entry), and `/prd-build --fixes E-nnn`
    builds it from the entry's failing test.
 6. **Resolve and check.** `resolve` writes the resolution (`<T-id> [<level>], PRD <X.Y.Z>, fixed in
@@ -409,7 +410,7 @@ the user cannot state.
   - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (32 rules) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
   - Known-failing tests mark themselves as strict expected failures and tag their citation. A stopped build records an entry, and `/prd-build --fixes E-nnn` builds a fix from it. `prd_deploy.py recover` ends a killed step. The generated `prd-lint` job also runs `prd_hooks.py check --ci`, which reports stale CI.
   - `/prd-publish` and the `publishing-prds` skill: `prd_publish.py` renders the PRD as one self-contained HTML page (see Publishing).
-  - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace reports it until a tester-only round adds the marker and the tag. Existing entries need no edit: the new lines are optional, and `check` judges only ranges.
+  - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace's `known-failing-tags` reports it until `/prd-error E-nnn` takes its entry to the code-bug route, whose tester round marks the test a strict expected failure and tags its citation (the case and its `approved` block need no patch). An open 0.5 entry that carries a class now counts as `proposed`, so a code commit citing it is refused until `prd_error.py confirm` records your reply (`/prd-error E-nnn` asks for it). Existing entries need no edit: the new lines are optional, `error-entries` judges `Detected:` and `Recurrence of:` only on an entry that carries `Confirmed:`, and `check` judges only ranges. A `.prd-toolkit/` without `prd_error.py` predates 0.6, and the skills stop on it until `prd_hooks.py install` runs.
 - **0.5.0:**
   - `/prd-deploy` and the `deploying-from-prds` skill: `prd_deploy.py` runs the `operations.md` runbook, every step from 1 in order, and stops at each human step and on each failure. The model never types a runbook command; it relays each reply verbatim, records a failure in `errors.md`, and closes with Deployed rows and `verified` → `live (since X.Y.Z)` (see Deploying).
   - The runbook is a step grammar: `(actor: …) (env: …)` and the labels `Run:`, `Check:`, `Rollback:`, `Do:`. Environments gains a `Production` column. `operations.md` gains `## Deployed` and `## Drift`.

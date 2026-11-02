@@ -683,7 +683,7 @@ def test_fixes_refusal_runs_first_in_step_1():
 
 def test_unmark_line_and_not_passing_regression():
     r = flat(RUN)
-    for s in ("Un-mark: T-002.5, T-002.6 (known-failing E-003)", "the builder un-marks a unit regression T-id itself",
+    for s in ("Un-mark: T-002.5, T-002.6 (known-failing E-003)", "A unit regression T-id carries no marker",
               "stops the build at step 7", "names each such T-id", "the un-mark is idempotent"):
         assert s in r, s
 

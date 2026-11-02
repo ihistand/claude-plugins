@@ -43,6 +43,9 @@ Code shows it as "Base directory for this skill" when the skill loads), and `<sc
 `<plugin root>/scripts`. Before step 1, Glob for `.prd-toolkit/prd_deploy.py` to decide, and
 use the same `<scripts>` for every command of the deploy. A script that is not found is a tool
 error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, run id and SHA in it is typed out in full: paste what a command printed, never a

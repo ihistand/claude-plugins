@@ -23,6 +23,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 Lint, the mechanical gate:
 
@@ -166,9 +169,14 @@ cite the entry: `Refs: FR-001, E-004`.
    `uv run --script <scripts>/prd_block.py docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md with the trailer
-   `Refs: none (no behaviour change)`. Only now may code change, and each
-   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
-   to its requirement): build with `/prd-build <area> <changed IDs>`. Its close writes the status
+   `Refs: none (no behaviour change)` (a change made for an `errors.md` entry uses
+   `Refs: <changed IDs>, E-nnn` on that commit instead). Only now may code change, and each
+   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs
+   (map an AC, test case or error code to its requirement): hand off
+   `/prd-build <area> <IDs> --fixes E-nnn` when the change was made for a confirmed entry whose
+   route builds code (`code bug`, `spec gap`, `invalid requirement`, or `standard` when code must
+   follow, as `prd-toolkit:handling-errors` routes them); otherwise build with
+   `/prd-build <area> <changed IDs>`. Its close writes the status
    moves and each `Source:` line, so there is no refresh to do. Code written outside `/prd-build`
    is written from `/prd-context <area> <changed IDs> implement`. After the code commit, run the
    implement pack again (its own Bash call, the same gate), then
