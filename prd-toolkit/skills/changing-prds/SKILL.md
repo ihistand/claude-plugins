@@ -137,6 +137,17 @@ cite the entry: `Refs: FR-001, E-004`.
    rewrite that ref as `<path>:<current line> @<HEAD short sha>`. A revised block keeps its
    `Source:` line: refresh a STALE one to the current line and sha, and never drop it, because the
    next implement pack reads FR code from it. Set the PRD status to `In review`.
+   **Linked PRDs.** When `links.md` has Consumers, run, after the edits and as its own call,
+   `uv run --script <scripts>/prd_links.py impact docs/prd/<slug>; echo "prd-links-exit=$?"`.
+   `0`: no consumer cites a changed item; go on. `1` (a consumer cites a changed item) or `3` (a
+   consumer was unreachable) stops this change: it crosses repositories, so hand it, the edits
+   in the tree and nothing committed, to `/prd-change-set` (skill `prd-toolkit:coordinating-prds`);
+   that is the only route for an edit to a cited item. Never skip a consumer the output names,
+   cloned or not. `2` is a usage error: fix the command. Inside a change set (its `cs-<nnn>-<slug>`
+   branch, with a record whose rows name this PRD), exit `1` is expected when every consumer it
+   names is a member, and `3` when each unreachable one is a consumer the record's Log leaves
+   out: go on, and step 5's approval is the change set's
+   (`running-a-change-set.md` step 3), its commit adding `-m "Change-set: <start-prd>/CS-<nnn>"`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
@@ -210,6 +221,8 @@ cite the entry: `Refs: FR-001, E-004`.
 - A dry-run slot holding a unit T-id, or no T-id at all.
 - A dry-run question dismissed without an exact quote of the PRD line that answers it.
 - "/prd-build rewrites it", so a revised block's `Source:` line is dropped instead of refreshed.
+- An edit to a contract item of a PRD whose `links.md` has Consumers with no `impact` run, or a
+  consumer "skipped" because it is not cloned here.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 

@@ -129,6 +129,14 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   the repo has deployed environments, offer the `## Drift` table (a `version` row, and a `config`
   row when `contracts/config.yaml` exists) with the introspection command the code already has,
   and write it only on the user's yes.
+- **Links:** when the code consumes or provides another PRD's contract items, discover the link
+  from the code, as registry rows are discovered: a table read from another repository's output,
+  an API called, an event consumed. Propose each; on the user's yes run `prd_links.py add` as its
+  own call, `<location>` the other repository's root as a path from this one, or
+  `<git URL>#<PRD folder>`:
+  `uv run --script <scripts>/prd_links.py add docs/prd/<slug> <location>; echo "prd-links-exit=$?"`.
+  Lint reports the row cited nowhere until a test case cites an item with the `<prd>/` prefix
+  and `prd_links.py sync docs/prd/<slug> <upstream>` copies it.
 - **Test roots:** list every directory that already holds the project's tests (find them with
   Glob: test files, test configs, a test framework's own folder), each backticked, then any new
   directory the characterization suite needs. Never leave an existing test directory out: the

@@ -84,6 +84,14 @@ and runbook steps `N. <title> (actor: agent|human) (env: <environment>)` with la
 The runbook you write passes the `runbook-steps`, `runbook-env`, `production-gate`,
 `runbook-tests` and `drift-rows` rules; an unknown command stays a `[NEEDS CLARIFICATION]`.
 
+**Links.** When the project consumes or provides another PRD's contract items (it reads another
+repository's table, calls its API, consumes its events), phase 1 notes it and phase 4 proposes
+the link. On the user's yes, once the draft exists, run `prd_links.py add` as its own call, with
+`<location>` the other repository's root as a path from this one, or `<git URL>#<PRD folder>`:
+`uv run --script <scripts>/prd_links.py add docs/prd/<slug> <location>; echo "prd-links-exit=$?"`.
+An upstream's items are cited with its prefix (`table:transform/orders_daily`) and copied by
+`prd_links.py sync docs/prd/<slug> <upstream>`; lint reports the row cited nowhere until then.
+
 A failed dry run is a gap: write each question into the file it names as a
 `[NEEDS CLARIFICATION: …]` marker, set the status back to `Draft`, and go back to phase 3; then
 run phases 5 and 6 again, phase 6 on a fresh sample. Do not answer the subagent, and do not let

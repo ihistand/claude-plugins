@@ -57,9 +57,16 @@ def _adopted_areas(prd: model.Prd) -> str:
     return ", ".join(r.area for r in prd.adoption if r.state == "adopted") or "none yet"
 
 
+# The change rule; with links.md it also names the coordination role, and the skill name gives way to keep the block small.
+CHANGE_RULE = "`/prd-change` (`prd-toolkit:changing-prds`), before code"
+CHANGE_RULE_LINKED = ("`/prd-change`, before code; one to an item another PRD cites,\n"
+                      "  with `/prd-change-set`")
+
+
 def render_block(prd: model.Prd, prd_rel: str) -> str:
     text = TEMPLATE.read_text(encoding="utf-8")
     slots = {
+        "change_rule": CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE,
         "prd_path": prd_rel,
         "version": prd.frontmatter.get("version", "unknown").strip(),
         "required_skills": _required_skills(prd),
