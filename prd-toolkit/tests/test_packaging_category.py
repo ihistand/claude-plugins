@@ -39,3 +39,13 @@ def test_packaging_is_asked_whenever_the_project_ships_code():
     assert "whenever the project ships code" in SKILL and "category 13" in SKILL
     check = next(l for l in CHECKLIST.splitlines() if "build backend" in l)
     assert "ships code" in check and "Not applicable" in check
+
+
+SENTENCE = ("for a project that ships code, each of the four packaging elements is either stated or written "
+            "as its own `[NEEDS CLARIFICATION: <element> …]` marker in section 1, never left out")
+
+
+def test_each_packaging_element_is_stated_or_marked_never_left_out():
+    flat = lambda s: " ".join(s.split()).lower()
+    assert flat(SENTENCE) in flat(CATEGORIES)
+    assert flat(SENTENCE) in flat(SKILL)

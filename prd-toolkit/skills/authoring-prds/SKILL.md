@@ -49,6 +49,7 @@ The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `
    value only the user can know (a hostname, URL, person, group name, secret name, budget) has
    none: it is a `NEEDS CLARIFICATION` marker, never a placeholder assumption such as
    `go.example.internal`.
+   Packaging: for a project that ships code, each of the four packaging elements is either stated or written as its own `[NEEDS CLARIFICATION: <element> …]` marker in section 1, never left out; this holds when the user says not to ask questions.
 2. **Every AC gets at least one test case** in `test-cases/<area>.yaml` with all seven
    sufficiency elements, and the requirement's `Tests:` line cites it.
 3. **Never set `Approved` while lint fails**, and never without the user's explicit approval

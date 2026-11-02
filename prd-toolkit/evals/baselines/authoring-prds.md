@@ -729,3 +729,20 @@ the layout or the entry points. The category lifts the install command only; a n
 still leaves three of four elements silent. An earlier loose grader (any backend word and any install
 word in section 1) passed both arms' kind of PRD and is replaced. The case is a weak guard, and the
 text may need to say that a marker is the answer when the user cannot be asked.
+
+### A5, after the explicit "stated or marked, never left out" sentence (fix round 2)
+
+Same case and command with `--runs 2`, on the branch with the sentence added to category 13 and to
+the authoring skill's rule 1. Graders unchanged.
+
+| Grader | Reverted copy (1 run) | Branch, first text (1 run) | Branch, with the sentence (run 1) | Branch, with the sentence (run 2) |
+|---|---|---|---|---|
+| names-build-backend | fail | fail | pass | pass |
+| names-package-layout | fail | fail | pass | pass |
+| names-entry-points | fail | fail | pass | pass |
+| names-install-command | fail | pass | pass | pass |
+| skill-fired | pass | pass | pass | pass |
+| Score | 0.20 | 0.40 | 1.00 | 1.00 |
+
+The sentence is the change that lifted the three silent elements. Whether each pass is a stated value
+or a marker is not split out by the graders; both satisfy them.
