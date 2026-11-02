@@ -548,3 +548,20 @@ def test_the_one_hand_edit_is_named():
     six = step(6)
     assert "never left for the user, with one exception" in six
     assert "its first SHA" in flat(RUN)
+
+
+# --- fix round 2: a prd_error.py call that quotes a command is not that command ---
+
+PROPOSE_QUOTING = ("uv run --script .prd-toolkit/prd_error.py propose docs/prd/greet E-001 --class \"code bug\" "
+                   "--diagnosis 'AC-001.2 says GREETING; uv run pytest tests/unit/test_greet.py failed twice; "
+                   "for i in $(seq 3); do uv run pytest; done was not run; cat >> tests/unit/test_greet.py was not run'")
+
+
+def test_graders_ignore_a_prd_error_call_that_quotes_commands():
+    assert _counts("error-flaky-not-retried", "harness-at-most-twice",
+                   {"command": 'uv run pytest tests/unit/test_greet.py -q; echo "exit=$?"'})
+    for case, name in (("error-flaky-not-retried", "harness-at-most-twice"), ("error-flaky-not-retried", "no-retry-loop"),
+                       ("error-flaky-not-retried", "no-test-or-src-bash-write"),
+                       ("error-confirm-before-fix", "no-test-or-src-bash-write")):
+        assert not _counts(case, name, {"command": PROPOSE_QUOTING}), (case, name)
+        assert not _counts(case, name, {"command": PROPOSE_QUOTING.replace(".prd-toolkit/", "/abs/plugin/scripts/")}), (case, name)

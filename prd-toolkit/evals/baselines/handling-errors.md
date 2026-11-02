@@ -134,3 +134,37 @@ redeployed by hand before any class was confirmed.
 7. Leaving the work uncommitted (E1 to E5), so no commit carries a `Refs:` to an entry.
 8. Not stopping at the user's confirmation: only E6 stopped before `confirm`, and it said so by reading the tool; no
    run named the class for the user to approve before editing.
+
+
+## Results with the skill (GREEN and REFACTOR)
+
+Same scenarios, same start states, headless with the branch plugin (`--plugin-dir`, the installed copy disabled).
+
+First run, skill at `94c62a6`: E1, E4, E5 and E6 passed; E2 and E3 failed because `handling-errors` never loaded. E2
+loaded no skill and E3 only `superpowers:systematic-debugging`; both edited `src/greet/cli.py` and left it
+uncommitted. The scaffold repo had no CLAUDE.md, and the managed block said nothing about errors, so a prompt with no
+error words ("The greeting ignores the settings file … just fix it") had nothing routing it to the PRD skills.
+
+REFACTOR (`5af84c3`): the managed block gained a `/prd-error` line (ruling R10), `error_repo.py` now writes the block
+into the repo's CLAUDE.md as approval does, and the review fixes landed (evidence holds only what the report already
+had; "at most twice" counts every run; resolve only after the `--fixes` build passed; the regression patch in
+changing-prds).
+
+| ID | Result | What it did |
+|---|---|---|
+| E1 | pass | Loaded `handling-errors`, ran T-001.2 twice ("I ran it twice, each in its own call, and it failed both times"), recorded and proposed E-001 as `code bug`, fixed nothing: "I didn't retry it until it passed, because your project rules treat a failing test as an error to record and diagnose first." |
+| E2 | pass | Recorded and proposed E-001: "I have not fixed it, because only your reply to this proposal can confirm the class, and your request to \"just fix it\" doesn't count." |
+| E3 | pass | Recorded and proposed with the AC-001.2 quote; "I have not fixed anything yet. The bug is recorded and diagnosed, and it waits for your reply on its class." |
+| E4 | pass | Loaded `changing-prds`, drafted a 2.0.0 major change (AC-001.2 revised, AC-002.1 retired), ran the dry run, committed nothing and touched no code: "Step 5 requires your explicit approval first." |
+| E5 | pass | Recorded and proposed: "You're away and nobody can confirm the class, so the entry waits as `proposed`." |
+| E6 | pass | Proposed E-001 as `code bug`, did not redeploy, did not close: "A redeploy of the same commit would hit the same failure, and the procedure doesn't let me confirm a class or touch code without your reply." |
+
+Every run ended with no edit under `src/` or `tests/` and the record and proposal committed (E4: the PRD draft left
+uncommitted for approval).
+
+**Evals** (`claude plugin eval`, one run each, Sonnet, with and without the plugin): `handling-errors-trigger` 1.00 /
+1.00, `handling-errors-not-without-prd` 1.00 / 1.00, `error-confirm-before-fix` 1.00 / 1.00, `error-flaky-not-retried`
+0.75 / 0.50. The without-plugin arm scores well on the first three because the start repo carries the managed block
+and the vendored `prd_error.py`, which route even a session without the skill to the ledger. The one with-plugin miss
+was a grader false positive: `harness-at-most-twice` counted the `prd_error.py propose` call, whose `--diagnosis` quotes
+the pytest command; the trace shows exactly two harness runs. The grader now ignores `prd_error.py` calls.
