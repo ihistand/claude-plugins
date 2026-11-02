@@ -6,7 +6,9 @@
 > after F-4 was fixed. Four toolkit defects found on the way (F-1 to F-4) were fixed on the branch.
 > A fifth, F-5, was found afterwards by the final review: V1d's step-7 trace exited 1 on
 > `known-failing-tags`, a stop the session read as expected and went past; it is fixed in the final
-> fix wave, and the Q1 `--fixes` close is not claimed to have passed its step-7 trace.
+> fix wave, and the Q1 `--fixes` close is not claimed to have passed its step-7 trace. A rerun after
+> the fix (Q1b, R25) took a build-gate regression T-id through a `--fixes` build with step 7's
+> trace at 0 and no deviation from the text.
 > - **Q1.** A bug that no test caught was reported, reproduced, proposed as `code bug` with the ACs
 >   quoted, and confirmed. A patch added a new system T-id `known-failing: E-001`. Its strict
 >   expected failure was the red proof, and CI stayed green. The `--fixes` build removed the marker
@@ -109,6 +111,92 @@
 | Q5 | `/prd-publish`: both tabs; no network; a summary citing another area's ID refused; an Artifact | **Pass.** The page is 17,081 bytes. It has zero `<script`, `<link`, `<img`, `<iframe`, `src=`, `@import`, `url(` and `http(s)://`; CSS-only `Business`/`Technical` tabs; light and dark; no `Evidence:`. Refusals, exit 1 with no page written: `greet: FR-003 belongs to area 'farewell'` (on a throwaway two-area copy), `area 'billing' does not exist`, `greet: FR-009 is not defined`. Opened in a browser over a local server: the `Business` and `Technical` tabs render and switch, and the only network request is the page itself. The same file was published, unchanged, as a private Artifact. |
 | Q6 | A change adding a level: the `prd-lint` job fails `stale` until `ci` is re-run | **Pass.** The 1.2.0 change (build-gate `integration` level, T-001.5 under AC-001.3) was approved and committed at 6e68683. The `prd-lint` job's commands run on that tree, before any `ci` re-run: `prd_lint.py --ci` 0, then `prd_hooks.py check --ci` printed `stale: .github/workflows/prd-toolkit.yml: re-run prd_hooks.py ci --github --force` and exited **1**. The close then ran `prd_hooks.py ci --github --force` itself and committed it (6c9d60c, adding a `test-integration` job). At 6c9d60c, lint `--ci` 0 and `check --ci` **0**. A driver re-run of `ci --github --force` changed nothing. |
 
+## Q1b (R25): a `--fixes` build through a build-gate regression T-id
+
+Sessions are W0 and W1a–W1e, in `<repo>`
+(the third attempt's repository). The running log is in `proof/notes.md` under "Q1b (R25)".
+
+**Result: pass.**
+- The `--fixes` build removed the entry's `known-failing:` line in its own commit, after step 5's
+  RESULTS showed the regression T-id `pass` and before step 7.
+- Step 7's trace printed `prd-trace-exit=0` and the session followed the text with no deviation.
+- The block closed `verified`, the entry is resolved, and `prd_error.py check` exits 0.
+
+### Setup
+
+- **Re-vendored** as the README's upgrade note says.
+  - The plugin's `prd_hooks.py check docs/prd/greet` named 11 vendored files that differ (exit 1).
+  - The plugin's `prd_hooks.py install docs/prd/greet` refreshed `.prd-toolkit/` (0.6.0) and both
+    hooks, committed with `Refs: none`.
+  - Afterwards the plugin's `check` exits 0, and the vendored `check --ci`, lint and trace exit 0.
+- **W0, `/prd-build greet FR-001`** (FR-001 was `approved` from Q6).
+  - The tester wrote T-001.5's integration test, and its suite round passed.
+  - The full run gave unit 4 passed and integration 1 passed; trace exited 0.
+  - FR-001 closed `verified`.
+- **The bug.** Planted as an ordinary code commit (ef7335d, `Refs: FR-001`): `__main__.py` passes
+  `a.encode("ascii", "replace").decode("ascii")` of each argument to `main`. A name of one no-break
+  space (U+00A0, whitespace) then reaches `main` as `?`, and `python -m greet` prints `Hello, ?!`
+  with exit 0.
+  - **AC broken:** AC-001.3, "If the name given to `greet <name>` is empty or holds only
+    whitespace, then the command shall print `usage: greet <name>`, exit with status 2 and print no
+    greeting."
+  - **Why no existing T-id catches it:**
+    - T-001.3 and T-001.4 call `main` directly, never `__main__`.
+    - T-001.5 runs `python -m greet ""`, which the encoding leaves unchanged.
+    - The system tests and runbook Checks use ASCII names.
+  - **Why the integration level reproduces it:** it runs `python -m greet <name>` as a subprocess
+    from the source tree.
+- **First bug choice, abandoned.** It dropped accents and broke AC-001.2. Its regression patch
+  stopped at the dry run on a real PRD gap (W1b): the PRD does not say how a source-tree run finds
+  its settings file, and any integration test of AC-001.2 needs one.
+  - The session reverted its draft and asked.
+  - That attempt is kept on tag `q1b-first-bug`. The build branch was reset to W0's close, and the
+    bug above was planted instead.
+
+### Sessions
+
+| Session | Command | Outcome | Commits |
+|---|---|---|---|
+| W0 | `/prd-build greet FR-001` | T-001.5 written and passing; FR-001 `verified`; trace 0 | test, close |
+| W1a, W1b | (first bug) `/prd-error`, the reply | E-005 confirmed; the patch's dry run stopped on the settings-file gap; kept on tag `q1b-first-bug` | record, propose, confirm |
+| W1c | `/prd-error <no-break-space report>` | E-005 reproduced; `code bug` proposed, AC-001.3 quoted, `Touches: FR-001` | record, propose |
+| W1d | the owner's reply | confirmed `yes, it's a code bug`; patch 1.2.1 drafted (T-001.6 [integration], `known-failing: E-005`), dry run clean | confirm |
+| W1e | the owner's `approved` | approval; red round; `--fixes` build; line removed before step 7; `verified`; resolved; check 0 | approval, red test, fix, un-mark, removal, close, resolve |
+
+### Pass line
+
+| Item | Evidence |
+|---|---|
+| Patch adds a new integration T-id `known-failing: E-005` | 5c91b9e `docs(prd): 1.2.1 regression test for E-005`, `Refs: FR-001, E-005`. T-001.6 under AC-001.3 with argv `["python", "-m", "greet", " "]`, expecting usage and exit 2. |
+| Strict expected failure, tagged; red proof | 5b35d08 `test(greet): T-001.6 known-failing E-005`. The test has `@pytest.mark.xfail(strict=True)` and the docstring `@prd T-001.6 known-failing E-005`. RESULTS: `T-001.6: known-failing E-005`. |
+| CI green while known-failing | At 5b35d08: prd-lint (lint `--ci` 0, `check --ci` 0), prd-trace 0, test-unit 0 (4 passed), test-integration 0 (`1 passed, 1 xfailed`). |
+| `--fixes` build carries the entry | Builder prompt line `Fixes: E-005 (regression T-ids: T-001.6)`; tester `write` line `Un-mark: T-001.6 (known-failing E-005)`. |
+| Fix and un-mark | 3e20c0c (`__main__` passes argv unchanged); b1e9266 un-marks the test. Suite: `T-001.5: pass`, `T-001.6: pass`; `prd_build_check.py --results` 0. |
+| Line removed before step 7, in its own commit citing the entry | 893fed2 `docs(prd): T-001.6 no longer known-failing`, `Refs: FR-001, E-005`. Its diff is the one line `-  known-failing: E-005`. It comes after the suite round and before the step-7 commands. |
+| Step 7's trace | `uv run --script .prd-toolkit/prd_trace.py docs/prd/greet; echo "prd-trace-exit=$?"` printed `prd-trace-exit=0`, after unit and integration passed. No finding, no deviation. |
+| Block `verified`; entry resolved; check | 8eff581 FR-001 `verified`. 01370ed `Resolution: T-001.6 [integration], PRD 1.2.1, fixed in 3e20c0c`. `prd_error.py check ef7335d..HEAD` 0 (session and driver). At HEAD: lint 0, trace 0, 6 tests passed, no `known-failing` in test cases or tests. `python -m greet $' '` now prints usage and exits 2. |
+
+No deploy was needed for a build-gate fix.
+
+### F-5 disposition
+
+**F-5 (V1d's step-7 trace exited 1 on `known-failing-tags` and the session went on against the
+text): fixed and proven.** The fix wave (2949dbb and the commits after it) removes a build-gate
+regression T-id's `known-failing:` line right after step 5's RESULTS show it `pass`. W1e did exactly
+that: 893fed2, then step 7's `prd-trace-exit=0`.
+
+### New observations (minor)
+
+- **O-9: an approved draft was edited before its commit.** The session rewrote T-001.6's argv from
+  the literal U+00A0 to the escape `" "`, saying the draft held "a plain ASCII space". It held
+  `\xa0`; the edit is value-equivalent, and the session told the owner. Its claim misread the draft.
+- **O-10: a `Refs:` trailer naming a T-id was refused.** The first approval commit was refused by
+  the commit-msg hook (`T-001.6 is not a PRD ID`), and the session recommitted with
+  `Refs: FR-001, E-005`. The hook worked as designed.
+- **O-11: the driver reset the scratch branch once.** This happened after the first bug's patch hit
+  a real PRD gap (the source-tree settings file). That attempt is kept on the tag `q1b-first-bug`
+  (E-005 recorded, proposed and confirmed there).
+
 ## Findings
 
 | ID | Finding | Disposition |
@@ -117,7 +205,7 @@
 | F-2 | No error class covered a test case or contract that contradicts its own AC (attempt 1). | Fixed, R16 (8c29514, 71dc403). |
 | F-3 | The ledger text the error loop wrote (a quoted `<name>`) turned `prd_lint` red, with no way out (attempt 2). | Fixed, R19 (bfb6fd0). |
 | F-4 | A deploy-gate regression T-id deadlocked the `--fixes` close (attempt 3). | Fixed, R21 (2f43350, e014fb3). |
-| F-5 | Every `--fixes` build with a non-unit regression T-id stopped at its own step 7: the tester un-marked the test, but the case's `known-failing:` line came off only at the close, so the trace's `known-failing-tags` exited 1. V1d hit it and went on; found by the final review, not by the run. | Fixed in the final fix wave: the line comes off before step 7's trace (2949dbb); a short proof rerun (R25) is to take a build-gate regression T-id through it. |
+| F-5 | Every `--fixes` build with a non-unit regression T-id stopped at its own step 7: the tester un-marked the test, but the case's `known-failing:` line came off only at the close, so the trace's `known-failing-tags` exited 1. V1d hit it and went on; found by the final review, not by the run. | Fixed in the final fix wave: the line comes off before step 7's trace (2949dbb). Proven by Q1b (R25): 893fed2 removed the line, then step 7's `prd-trace-exit=0`. |
 | O-1 | An entry recorded before diagnosis could never gain `Touches:`. | Fixed, R17; held in V1a. |
 | O-2 | The first scaffold bug was caught by an existing unit T-id, so the known-failing path never ran. | Resolved by R18; exercised in Q1. |
 | O-3 | Minor procedure drift in sessions: chained commits, pipes to `tail`, a tester round as `Mode: suite` where `Mode: write` was written. | None; no effect on any outcome. |
