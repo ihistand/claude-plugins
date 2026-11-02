@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --accent: #0969da; --warn-bg: #fff8c5; --warn-fg: #7d4e00; --ok: #1a7f37; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --soft: #151b23; --accent: #4493f8; --warn-bg: #3b2e00; --warn-fg: #f2cc60; --ok: #3fb950; --bad: #ff7b72; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+main, header { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
+header { padding-top: 1.5rem; }
+h1 { margin: 0 0 .5rem; font-size: 1.75rem; }
+h2 { margin: 2rem 0 .5rem; font-size: 1.3rem; border-bottom: 1px solid var(--line); padding-bottom: .25rem; }
+h3 { margin: 1.25rem 0 .25rem; font-size: 1.05rem; }
+a { color: var(--accent); }
+code, pre { font: .9em ui-monospace, monospace; background: var(--soft); border-radius: 4px; }
+code { padding: .1em .3em; }
+pre { padding: .75rem; overflow-x: auto; }
+pre code { padding: 0; }
+table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: .3rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+.status-flag { background: var(--warn-bg); color: var(--warn-fg); padding: .1rem .5rem; border-radius: 4px; font-weight: 700; }
+.chip { display: inline-block; font-size: .8rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--soft); vertical-align: middle; }
+.chip-live, .chip-verified { color: var(--ok); }
+.chip-removed { color: var(--bad); }
+.summary { border-left: 4px solid var(--accent); background: var(--soft); padding: .5rem .9rem; margin: .75rem 0; }
+.summary .label { margin: 0 0 .25rem; color: var(--muted); font-size: .85rem; }
+.summary p { margin: .25rem 0; }
+.removed { text-decoration: line-through; color: var(--muted); }
+.entry { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; margin: .75rem 0; }
+.none { color: var(--muted); }
+.tab-input { position: absolute; opacity: 0; pointer-events: none; }
+.tabs { display: flex; gap: .25rem; margin: 1rem 0 0; border-bottom: 1px solid var(--line); }
+.tabs label { padding: .4rem 1rem; cursor: pointer; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); }
+.panel { display: none; }
+#tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
+#tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
+#tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
+@media print { .panel { display: block; } .tabs { display: none; } }
+</style>
+</head>
+<body>
+<header>
+$header
+</header>
+<input class="tab-input" type="radio" name="tab" id="tab-business" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-technical">
+<nav class="tabs" style="max-width: 60rem; margin-left: auto; margin-right: auto; padding: 0 1rem;">
+<label for="tab-business">Business</label>
+<label for="tab-technical">Technical</label>
+</nav>
+<main>
+<section class="panel" id="business">
+$business
+</section>
+<section class="panel" id="technical">
+$technical
+</section>
+</main>
+</body>
+</html>

@@ -27,7 +27,10 @@ these rules:
 - A value the PRD does not give is a QUESTION, never a value from the code or its output.
 - Never edit the code or the PRD.
 - Every test you write carries an `@prd <T-id>` citation for the T-id it covers, in the form
-  testing.md's Layout gives; `prd_trace.py` counts these citations.
+  testing.md's Layout gives; `prd_trace.py` counts these citations. A case carrying `known-failing: E-nnn`
+  is written as a strict expected failure (pytest `xfail(strict=True)`, jest `test.failing`), cited
+  `@prd <T-id> known-failing <E-nnn>`, and its marker is recorded under HARNESS CHOICES. In a
+  `--fixes` build's `write` round, the tester removes the marker and the tag from each regression test it is given.
 - Run only the testing.md Levels harness commands, and only in a suite. Report RESULTS as one
   line per dispatched T-id: `<T-id>: pass`, `<T-id>: fail: <one line>` or
   `<T-id>: known-failing E-nnn`; anything else goes in a note after the lines.

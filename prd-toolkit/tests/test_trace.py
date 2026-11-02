@@ -1,4 +1,4 @@
-"""prd_trace.py: the four trace rules against the synthetic legacy repo."""
+"""prd_trace.py: the trace rules against the synthetic legacy repo."""
 from pathlib import Path
 
 from legacy import commit, make_legacy_repo

@@ -23,6 +23,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 Lint, the mechanical gate:
 
@@ -63,10 +66,26 @@ the gap as the change.
 |---|---|---|
 | **Major** | existing behaviour changes or is removed | getOrder answers 410 instead of 404 for a deleted order: 1.0.0 → **2.0.0**. Dropping the empty-file rule AC-001.3: major. |
 | **Minor** | behaviour is added, nothing existing changes | admins can archive an order, a new FR-005: 2.0.0 → **2.1.0**. Accepting CSV files with a BOM: minor. |
-| **Patch** | wording only; no AC, test expectation, contract or result changes | a typo, a clearer Flow line |
+| **Patch** | wording only; no AC, test expectation, contract or result changes. Two exceptions, below: a regression patch for an `errors.md` entry, and a test case or contract corrected to match its own unchanged AC | a typo, a clearer Flow line |
 
 If any existing AC, test-case `expect`, error code, status code or response changes meaning or
-disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major.
+disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major,
+except the two patches in the Patch row; any other changed `expect` is major.
+
+**A regression patch.** A change made for an `errors.md` entry (`prd-toolkit:handling-errors`)
+that only adds its regression test is a patch: a new test case under an unchanged AC, or a
+`known-failing: E-nnn` line added to an existing case, and the block, which returns to `approved`
+(its `Status:` and §11 row) so `/prd-build <area> <IDs> --fixes E-nnn` can build the fix. Its §14
+row names the entry, as `regression test for E-003`:
+`| 1.0.1 | <date> | regression test for E-003; <dry-run record> | FR-001, T-001.3 |`. A unit-only change records `no dry run (unit only)`; a non-unit regression T-id, new or marked, is
+dry-run as step 4 says. Its commits cite the entry: `Refs: FR-001, E-003`.
+
+**A test case or contract corrected to match its AC.** A test case or a contract that contradicts
+its own AC, while the AC and the code stand, is the fix of an `invalid requirement` entry
+(`prd-toolkit:handling-errors`): revising the test case's `expect` or the contract to say what the
+AC says is a patch when no AC or behaviour changes. The block returns to `approved`, the §14 row
+names the entry (`test case corrected for E-004`) with its dry-run record as above, and its commits
+cite the entry: `Refs: FR-001, E-004`.
 
 ## ID rules
 
@@ -150,15 +169,27 @@ disappears, it is major. Ask "can a test that passes today fail after this?" Yes
    `uv run --script <scripts>/prd_block.py docs/prd/<slug>`; grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update; commit the PRD folder and CLAUDE.md with the trailer
-   `Refs: none (no behaviour change)`. Only now may code change, and each
-   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs (map an AC, test case or error code
-   to its requirement): build with `/prd-build <area> <changed IDs>`. Its close writes the status
+   `Refs: none (no behaviour change)` (a change made for an `errors.md` entry uses
+   `Refs: <changed IDs>, E-nnn` on that commit instead). Only now may code change, and each
+   behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs
+   (map an AC, test case or error code to its requirement): hand off
+   `/prd-build <area> <IDs> --fixes E-nnn` when the change was made for a confirmed entry whose
+   route builds code (`code bug`, `spec gap`, `invalid requirement`, or `standard` when code must
+   follow, as `prd-toolkit:handling-errors` routes them); otherwise build with
+   `/prd-build <area> <changed IDs>`. Its close writes the status
    moves and each `Source:` line, so there is no refresh to do. Code written outside `/prd-build`
    is written from `/prd-context <area> <changed IDs> implement`. After the code commit, run the
    implement pack again (its own Bash call, the same gate), then
    rewrite each STALE `Source:` of a changed block as `<path>:<line> @<new short sha>` and commit
    the PRD. A `Source:` refresh is provenance, not behaviour: it takes no version bump and no
    §14 row, and the status stays Approved with no re-approval.
+   Close: when the change touched `testing.md` or `operations.md`, a generated CI include is stale (a new level, an
+   environment, a `tests` step or a Drift row changes it). If `.gitlab/prd-toolkit.yml` or
+   `.github/workflows/prd-toolkit.yml` exists, regenerate each one present, one command per Bash call, and commit the file:
+   `uv run --script .prd-toolkit/prd_hooks.py ci --<forge> --force docs/prd/<slug>`. Then confirm with
+   `uv run --script .prd-toolkit/prd_hooks.py check --ci docs/prd/<slug>` (it prints nothing when the files are
+   current). The merge gate's generated job runs that same `check --ci`, so a change merged with the old CI fails there. A change made for an `errors.md`
+   entry cites it in `Refs:` beside the requirement it touches (`Refs: FR-002, E-003`).
 
 ## Red Flags - STOP
 

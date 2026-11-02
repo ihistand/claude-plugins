@@ -156,12 +156,10 @@ def test_failed_step_order_rollback_then_errors_then_close():
     two = step(2)
     assert "run `prd_deploy.py rollback` only on the user's yes in their own words" in two
     at = 0
-    for s in ("**4, failed.**", "Rollback:", "prd_deploy.py rollback", "Classification: unclassified", "Go to step 3"):
+    for s in ("**4, failed.**", "Rollback:", "prd_deploy.py rollback", "prd_error.py new", "Go to step 3"):
         at = two.index(s, at)  # each after the one before
     assert "Rollback:" not in two.split("**4, failed.**", 1)[0]
-    for s in ("Detected: <YYYY-MM-DD>, deploy <run id> step <N>", "Touches: -", "Diagnosis: see the deploy log <run id>",
-              "no `Resolution:` line"):
-        assert s in two, s
+    assert '--source "deploy run <run id>, failed step <N>"' in two
 
 
 def test_nothing_is_edited_to_get_past_a_failure():
@@ -312,11 +310,12 @@ def test_r20_which_script_to_call():
                 assert line.strip().startswith("uv run --script <scripts>/"), line
 
 
-def test_r19_errors_entry_is_appended_with_edit():
+def test_failure_entry_is_written_with_prd_error_new():
     two = step(2)
-    assert "Add the entry with Edit, appended at the end of the file; never rewrite `errors.md` with Write." in two
-    assert ("The template line ``No entries yet. Add `### E-001 <title>` when the first error is diagnosed.`` may "
-            "go in the close that adds the first entry, and in no other.") in two
+    assert "prd_error.py new" in two and '--source "deploy run <run id>, failed step <N>"' in two
+    assert "Add the entry with Edit" not in two and "never rewrite `errors.md` with Write" not in two
+    assert "the entry stays open and unclassified" in two
+    assert "/prd-error E-<nnn>" in two and "next step" in two
 
 
 def test_a_reply_may_name_the_run_as_the_only_one_stopped_at_the_step():
@@ -354,3 +353,23 @@ def test_final_review_refusals_in_the_procedure():
     for needle in ("a reached environment with no row", "a row dated other than the run's date",
                    "a run of another PRD"):
         assert needle in check, needle
+
+
+# --- 0.6: recover ---
+
+def test_recover_procedure():
+    two = step(2)
+    assert "prd_deploy.py recover" in two and "--reply '<the user's words, verbatim>'" in two
+    assert "only after the user says they checked the environment" in two
+    assert "never on the request to deploy" in two
+    assert "prd-deploy: failed step=<N> run=<id>" in two
+    assert "recovered: no result after start" in two
+    assert "a new run" in two
+    assert "uv run --script <scripts>/prd_deploy.py recover docs/prd/<slug> --run <id> --step <N> --reply" in RUN.read_text(encoding="utf-8")
+    assert "${CLAUDE_PLUGIN_ROOT}" not in "\n".join(re.findall(r"```bash\n(.*?)```", RUN.read_text(encoding="utf-8"), re.S))
+
+
+def test_recover_replaces_never_work_around_for_a_killed_step():
+    t = flat(RUN)
+    assert "started and did not finish" in t
+    assert "the one way out is `recover`" in t

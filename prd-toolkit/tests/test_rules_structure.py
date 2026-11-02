@@ -246,3 +246,29 @@ def test_angle_text_in_a_code_span_lints_clean(prd):
 def test_bare_angle_text_in_prose_still_fires(prd):
     _append("operations.md", "Pick the <the data_state> now.")(prd)
     assert "placeholder" in fired(lint(prd))
+
+
+def _errors_with(evidence: str, diagnosis: str):
+    def mutate(root):
+        path = root / "errors.md"
+        path.write_text(path.read_text().rstrip("\n") + f"\n\n### E-002 quoted\nDetected: 2026-11-03, user report\nClassification: code bug\nEvidence: {evidence}\nDiagnosis: {diagnosis}\nResolution: -\nRecurrence of: -\n")
+
+    return mutate
+
+
+@pytest.mark.parametrize("quoted", ["usage: greet <name>", "TBD", "this is fast", "a purchase arrives"])
+def test_evidence_lines_are_not_prose(prd, quoted):
+    _errors_with(quoted, "d")(prd)
+    assert [f for f in lint(prd) if f.file == "errors.md"] == []
+
+
+def test_evidence_continuations_are_not_prose(prd):
+    _errors_with("first", "d")(prd)
+    edit(prd, "errors.md", "Evidence: first\n", "Evidence: first\n  usage: greet <name>\n  TBD\n")
+    assert [f for f in lint(prd) if f.file == "errors.md"] == []
+
+
+@pytest.mark.parametrize("quoted,rule", [("usage: greet <name>", "placeholder"), ("a purchase arrives", "glossary-synonym")])
+def test_diagnosis_still_counts_as_prose(prd, quoted, rule):
+    _errors_with("e", quoted)(prd)
+    assert rule in {f.rule for f in lint(prd) if f.file == "errors.md"}

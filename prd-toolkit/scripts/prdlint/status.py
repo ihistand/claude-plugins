@@ -4,10 +4,10 @@ from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
-from . import deploy, trace
-from .model import Prd, gate_of
+from . import deploy, errors, hooks, trace
+from .model import Prd, gate_of, git_toplevel
 
-PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Deployed", "Matrix")
+PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "CI", "Deployed", "Matrix")
 
 
 @dataclass(frozen=True)
@@ -15,16 +15,6 @@ class StatusItem:
     part: str
     id: str | None
     text: str
-
-
-def _titles(prd: Prd) -> dict[str, str]:
-    """errors.md entry id -> the title on its heading line."""
-    lines = prd.docs.get("errors.md", "").split("\n")
-    out = {}
-    for e in prd.errors_ledger.values():
-        words = lines[e.line - 1].split(None, 2)
-        out[e.id] = words[2].strip() if len(words) > 2 else ""
-    return out
 
 
 def _requirements(prd: Prd) -> list[StatusItem]:
@@ -51,10 +41,15 @@ def _by_status(prd: Prd, part: str, status: str) -> list[StatusItem]:
 
 
 def _open_errors(prd: Prd) -> list[StatusItem]:
-    titles = _titles(prd)
-    rows = [StatusItem("Open errors", e.id, f"{e.id} {titles[e.id]}; Touches: " + (", ".join(t for t, _ in e.touches) or "-"))
-            for e in prd.errors_ledger.values() if e.open]
+    rows = [StatusItem("Open errors", e.id, f"{e.id} {errors.summary(e)} — {e.title}") for e in prd.errors_ledger.values() if e.open]
     return rows or [StatusItem("Open errors", None, "None.")]
+
+
+def _ci(prd: Prd, repo_root: Path) -> list[StatusItem]:
+    if git_toplevel(prd.root) is None:
+        return [StatusItem("CI", None, hooks.not_a_checkout(prd))]
+    lines = hooks.stale_ci(repo_root, prd, deploy.prd_rel(prd, repo_root))
+    return [StatusItem("CI", None, line) for line in lines] or [StatusItem("CI", None, "None.")]
 
 
 def _stopped(prd: Prd, repo_root: Path, env: str, after: str | None) -> str | None:
@@ -112,7 +107,7 @@ def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusIte
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
     return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
-            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
+            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 
 
 def render_text(items: list[StatusItem]) -> str:

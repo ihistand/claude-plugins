@@ -101,6 +101,23 @@ redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. Any
 PRD does not tell you is a question: behaviour, payloads, status codes, error codes, fixture
 contents, environments, identities, or a convention testing.md should state.
 
+## A known-failing case
+
+A test case that carries `known-failing: E-nnn` fails on purpose until the code is fixed, so its
+test marks itself. Write it as a **strict** expected failure in the harness's own way: pytest
+`@pytest.mark.xfail(strict=True)`, jest `test.failing`. Strict means an unexpected pass fails the
+run, so a fixed bug cannot go unnoticed and the job stays green while the bug is open. Tag the
+citation too: `@prd <T-id> known-failing <E-nnn>`, for example `"""@prd T-002.1 known-failing E-001"""`.
+`prd_trace.py` checks the tag against the case and `errors.md`. Under HARNESS CHOICES, record how you marked
+it (the harness's marker and where it sits), one line per test. In a suite, an expected failure
+still reports `<T-id>: known-failing E-nnn`, never `pass`; a strict marker that reports an
+unexpected pass is `fail: unexpected pass`.
+
+In a `--fixes` build's `write` round you are given the regression tests of the entry being
+fixed: the tester removes the marker and the tag from each regression test it is given, a
+deploy-gate regression test too (it is run at `/prd-deploy`, never by the build), and changes
+nothing else in it.
+
 ## Harness commands the guard accepts
 
 A Levels harness command must be **one simple command**, such as `` `uv run pytest tests` ``.

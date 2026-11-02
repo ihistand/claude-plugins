@@ -400,6 +400,10 @@ Recurrence of: -
 
 A recurring error gets a new entry pointing to the earlier one, so repeat failures are visible.
 
+> Revised in prd-toolkit 0.6: the loop is `prd_error.py` and the `handling-errors` skill, the entry gains
+> `Confirmed:`, `Evidence:`, `Diagnosis:`, `Resolution:` and `Recurrence of:`, and a fix is checked
+> by `prd_error.py check`; see `2026-11-01-prd-toolkit-0.6-design.md`.
+
 ## 7. Enforcement in the target repo
 
 1. **Managed CLAUDE.md block** between `<!-- prd-toolkit:start -->` and `<!-- prd-toolkit:end -->`,

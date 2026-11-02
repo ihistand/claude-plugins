@@ -11,8 +11,11 @@ asked to implement an approved change or to make a failing PRD test go green. Th
 You are the caller, not the builder and not the tester. You dispatch, check, merge, reconcile and
 close. You never write or fix code or a test, you never read or run the code to judge a result,
 and you write no status the close does not earn. The caller edits the PRD only at the close: a
-block's `Status:`, its §11 status and its `Source:`. A test case, a `known-failing:` marker, an AC
-or a contract change goes through `/prd-change`. The caller's Red Flags in `SKILL.md` are yours.
+block's `Status:`, its §11 status and its `Source:`, and the entry `prd_error.py new` writes for a
+stop (never by hand). One edit comes before the close: on a `--fixes` build, steps 4 and 5 remove
+that entry's `known-failing:` lines, each removal its own commit, before step 7's trace. A test
+case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`. The
+caller's Red Flags in `SKILL.md` are yours.
 
 **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
@@ -22,6 +25,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 The builder prompt carries `<scripts>` as its `Scripts:` line, as an absolute path (the repository
 root joined to `.prd-toolkit` when vendored).
@@ -32,7 +38,8 @@ never a variable that holds it or a `$(…)`. The gate form `; echo "<script>-ex
 allowed tail. Never pipe, filter or truncate a gated command's output (no `| head`, no `| grep`).
 
 **Input:** a PRD with status `Approved` and `prd-lint-exit=0`; an area; the changed UJ, FR and NFR
-IDs (or a bug fix's `E-nnn`, mapped to its requirements as the `implement` pack maps it), each
+IDs (or a bug fix's `E-nnn`, mapped to its requirements as the `implement` pack maps it, or
+`--fixes E-nnn` below), each
 block at `approved`, or at `built` when a stopped build resumes, or at `verified` for a tester-only
 round (below). A draft goes to
 `prd-toolkit:authoring-prds`; a block at any other status, or a change not yet approved, goes to
@@ -67,6 +74,30 @@ T-id. Any stop after the builder's merge writes `built` for each block whose uni
 never `verified`. A stop before the merge writes no status. Either way, report the stop to the
 user with its records; a PRD gap also goes to `/prd-change`.
 
+**Stops that record an entry.** Three stops are failures the build could not settle, and each
+appends an `unclassified` entry to `errors.md`: the third failed round on a T-id, a failing test
+that cites no T-id, and a harness overlap. A PRD gap, a dirty tree and a failed state check record
+none: a gap is a change request, and the other two are not an error of the system. A stop that
+records an entry writes the stop's status, then runs `prd_error.py new`, then runs the close's lint
+and trace, then commits `errors.md` with the status edits in one commit, before it
+reports. A stop before the builder's merge still records its entry (the status part follows
+**Stops**: none), and the commit then holds `errors.md` alone. A dirty-tree stop records none and
+commits nothing. Save the stop's failure lines verbatim (the RESULTS lines, or the harness lines of
+the failing test) with the Write tool to `<SNAP>/stop-evidence.md`, then run:
+
+```bash
+uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title '<the stop in one line>' --source 'build <area> <IDs>' --touches <IDs> --evidence-file <SNAP>/stop-evidence.md; echo "prd-error-exit=$?"
+```
+
+Free text goes in single quotes, each `'` in it written as `'\''`, as `running-an-error.md` says:
+inside double quotes a backtick or a `$` runs as shell. `--touches` takes the blocks the stop
+concerns, as `FR-001,FR-002`. On a `--fixes` build the
+`--source` is `build <area> <IDs> --fixes E-nnn`, naming the entry being fixed. `prd-error-exit=`
+must be `0`; it prints the new `E-nnn`, which goes in the stop report. The commit's message is
+`docs(prd): <IDs> <built, or stopped>` with `Refs: E-nnn` and the blocks' IDs, as
+`-m "Refs: <E-nnn>, <IDs>"`.
+`/prd-error` classifies the entry.
+
 **A tester-only round.** A block already `verified` whose deploy-gate T-ids no test cites comes
 here as `/prd-build <area> <IDs>`, sent by the deploy pre-flight's refusal
 `<ID>: <T-id> (deploy gate) has no citing test; it cannot go live`. It takes a tester-only write
@@ -91,7 +122,20 @@ the turn with a next round announced: dispatch it. You end the turn only after t
 or after a stop's. The one carve-out: before step 2, the caller may stop to ask the user (a dirty
 tree, or a branch off the default branch, in step 1) and resumes the build at step 1 once answered.
 
-1. **Preflight.** Run each line as its own call:
+1. **Preflight.** On a `--fixes E-nnn` build the entry check comes first: run it before anything
+   else in step 1; after a refusal, nothing else runs. The E-nnn is also passed to `--req`, so the
+   pack's Known defects part carries the whole entry. Run, as its own call:
+
+   ```bash
+   uv run --script <scripts>/prd_error.py list docs/prd/<slug> --open; echo "prd-error-exit=$?"
+   ```
+
+   Find the entry's line: its second word is the state. Unless it is `confirmed`, refuse and build
+   nothing: `refused: E-nnn is <state>; a fix starts from a confirmed entry`. An entry absent from
+   the `--open` output (resolved or unknown) is refused too, with the state `resolved` or
+   `unknown`. From the entry, take its regression T-ids: the T-ids whose test cases carry
+   `known-failing: E-nnn` (Grep `known-failing: E-nnn` with the path
+   `docs/prd/<slug>/test-cases/`). Then, on every build, run each line as its own call:
 
    ```bash
    uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
@@ -127,6 +171,15 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      its slots filled and nothing else: no summary of the PRD, no hints, no pointers into the code.
    - `prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and every
      non-unit T-id, build gate and deploy gate, each with its test-case file.
+
+   On a `--fixes` build, the tester's `write` prompt carries one more line, after the T-ids:
+   `Un-mark: T-002.5, T-002.6 (known-failing E-003)`, the entry's non-unit regression T-ids (the
+   T-ids whose test cases carry `known-failing: E-nnn`). The tester removes the expected-failure
+   marker and the `known-failing` tag from each test it is given for them, so they run as ordinary
+   tests. A unit regression T-id carries no marker: the builder writes its unit test failing
+   first, as every unit test, so it is not on that line. On a `--fixes` build the builder prompt
+   adds `Fixes: E-nnn (regression T-ids: <T-ids>)`: step 1's regression T-ids, and any unit T-id
+   the §14 row `regression test for E-nnn` names. Its rules make that entry the builder's target.
 
    With no non-unit T-ids, dispatch the builder alone: the tester has no `write`. When every
    non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their tests, and
@@ -189,6 +242,19 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    If the merge refuses because a tester's file is in the way, stop and report both paths to the
    user.
+
+   **`--fixes E-nnn` only: the deploy-gate lines.** Right after that commit, remove the
+   `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level,
+   and no other test-case line: the tester's `write` has un-marked its test, the build never runs
+   it, and its test proves the fix at `/prd-deploy`. Its block closes `verified` like any block
+   whose build-gate T-ids pass. Then, each its own call, with the test-case files typed out:
+
+   ```bash
+   git add docs/prd/<slug>/test-cases/<file>
+   git commit -m "docs(prd): <T-ids> no longer known-failing" -m "Refs: <IDs>, <E-nnn>"
+   ```
+
+   With no deploy-gate regression T-id, there is nothing to remove or commit here.
 5. **Run.** On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md`
    step 2) and then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids. Its
    RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. The
@@ -212,6 +278,20 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `git commit -m "test(<area>): <T-id> matches the PRD" -m "Refs: <IDs>"` after its `git add`.
    A `known-failing E-nnn` line for a case that carries `known-failing: E-nnn` is expected: it is
    not reconciled, and it is not a pass.
+
+   **`--fixes E-nnn` only: the build-gate and unit lines.** Right after each step 5 check, remove
+   the `known-failing: E-nnn` line of each build-gate or unit regression T-id that is `pass` (a
+   build-gate T-id on the suite RESULTS, a unit T-id on the builder's UNIT lines), and no other
+   test-case line, then commit it as step 4's deploy-gate removal does: the same `git add` and
+   `git commit -m "docs(prd): <T-ids> no longer known-failing" -m "Refs: <IDs>, <E-nnn>"`, each its
+   own call. When step 5 is skipped, do this right after step 4's commits. This edit, and step 4's,
+   is allowed only for the entry named by `--fixes`; every other test-case edit still goes through
+   `/prd-change`. A build-gate or unit regression T-id that is not `pass` keeps its line, and its
+   block stays `built`: its test is already un-marked and its case still carries `known-failing:`,
+   so `prd_trace.py`'s `known-failing-tags` stops the build at step 7. This is expected: the
+   stop report names each such T-id, and the next step is another
+   `/prd-build <area> <IDs> --fixes E-nnn` (the un-mark is idempotent). A later round that makes it
+   `pass` removes its line after that round's step 5 check, still before step 7.
 6. **Reconcile** each `fail` line and each test dispute, one at a time. Read the T-id's entry in
    its test-case file (the block's `Tests:` line names the file) and the test that cites it (TESTS
    names it). Quote verbatim the test case's `ac:` line, the `expect` entry the failure concerns
@@ -262,7 +342,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    `prd-trace-exit=` must be `0`; anything else stops the build, as **Stops** says. Trace asks a
    citation for each unit and build-gate T-id of a `built` or `verified` block; deploy-gate T-ids
-   wait for `live`.
+   wait for `live`. On a `--fixes` build the regression T-ids' `known-failing:` lines are already
+   off (steps 4 and 5) for every one that may lose it, so a `known-failing-tags` finding here names
+   a build-gate or unit regression T-id that is not `pass`, and the build stops as step 5 says.
 8. **Close.** Write each block's status in the block and its §11 index row together:
 
    | Move | When |
@@ -280,11 +362,19 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `known-failing` result is not a pass, so its block stays `built`. Never write `live`: it
    means deployed, and a build deploys nothing; deploy-gate tests run at `/prd-deploy`. Change
    only the status word; keep any `(since X.Y.Z)` and the index row's Since cell as they are.
-   Edit nothing else in the PRD.
+   Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of
+   steps 4 and 5, already committed.
 
    Run `git rev-parse --short HEAD` as its own call, after the last merge. From each SOURCES line
    of the builder's latest report for a block, write the block's
    `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
+
+   **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
+   them, each in its own commit, before step 7's trace, so the close's trace holds (test
+   un-marked, case no longer known-failing). The close's moves are the table's; a block whose
+   deploy-gate regression T-id lost its line in step 4 closes `verified` when its unit and
+   build-gate T-ids pass. The caller never resolves the entry: the build reports, and
+   `handling-errors` resolves.
 
    A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the
    PRD status stays `Approved`. Leave `version` and `updated` as they are. Run the trace before
@@ -327,6 +417,12 @@ Unit T-ids: <one per line, with its test-case file>
 Scripts: <scripts directory, as an absolute path>
 ```
 
+A `--fixes` build adds one line after those, on every builder round:
+
+```
+Fixes: E-nnn (regression T-ids: <T-ids>)
+```
+
 A code-bug round adds three lines after those:
 
 ```
@@ -347,6 +443,8 @@ PRD: docs/prd/<slug>/
 T-ids (one per line, each with its test-case file):
 <T_IDS>
 ```
+
+A `--fixes` build's `write` adds, after the T-ids, `Un-mark: <T-ids> (known-failing <E-nnn>)`.
 
 A test-misread round is `Mode: suite` with one
 `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"` line per

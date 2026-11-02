@@ -317,7 +317,7 @@ def test_r25_test_disputes_are_reconciled_not_stopped():
 def test_r28_caller_edits_the_prd_only_at_the_close():
     t = flat(RUN)
     assert ("The caller edits the PRD only at the close: a block's `Status:`, its §11 status and its "
-            "`Source:`.") in t
+            "`Source:`, and ") in t
     assert "A test case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`." in t
     assert "I didn't add a known-failing marker since this looks like a harness issue" in flat(SKILL)
 
@@ -614,3 +614,100 @@ def test_tester_only_round_finds_missing_tids_exactly():
             "`refused:` lines") in para
     assert r"Grep the anchored pattern `@prd\s+<T-id>\b` (dots escaped: `@prd\s+T-004\.1\b`)" in para
     assert "When none is missing, report that and commit nothing." in para
+
+
+# --- 0.6: a stopped build records an entry; /prd-build --fixes E-nnn ---
+
+def test_stops_name_the_three_that_record_an_entry():
+    t = flat(RUN)
+    stops = t.split("**Stops.**", 1)[1].split("**A tester-only round.**", 1)[0]
+    for s in ("Stops that record an entry", "the third failed round on a T-id", "a failing test that cites no T-id",
+              "a harness overlap", "prd_error.py new", "--touches", "--evidence-file",
+              "A PRD gap, a dirty tree and a failed state check record none"):
+        assert s in stops, s
+    assert 'echo "prd-error-exit=$?"' in RUN.read_text(encoding="utf-8")
+
+
+def test_fixes_flag_in_command_and_preflight():
+    c = flat(COMMAND)
+    assert "--fixes E-nnn" in c and "also goes to `--req`" in c
+    r = flat(RUN)
+    for s in ("prd_error.py list docs/prd/<slug> --open",
+              "refused: E-nnn is <state>; a fix starts from a confirmed entry"):
+        assert s in r, s
+
+
+def test_fixes_close_edit_is_one_line_only():
+    r = flat(RUN)
+    for s in ("line of each build-gate or unit regression T-id that is `pass`", "and no other test-case line",
+              "every other test-case edit still goes through `/prd-change`",
+              "the T-ids whose test cases carry `known-failing: E-nnn`"):
+        assert s in r, s
+    assert "--fixes" in flat(ROOT / "references/prd-format.md")
+
+
+def test_caller_never_resolves_the_entry():
+    assert "The caller never resolves the entry: the build reports, and `handling-errors` resolves" in flat(RUN)
+    assert "never resolves an entry" in flat(SKILL)
+
+
+# --- fix round 1 ---
+
+def test_caller_rules_allow_the_entry_and_the_fixes_edit():
+    r = flat(RUN)
+    assert ("`Source:`, and the entry `prd_error.py new` writes for a stop (never by hand). One edit comes before the "
+            "close: on a `--fixes` build, steps 4 and 5 remove that entry's `known-failing:` lines") in r
+    assert "Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of steps 4 and 5" in r
+    assert "the entry `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`" in flat(SKILL)
+
+
+def test_stop_entry_order_and_commit():
+    r = flat(RUN)
+    for s in ("A stop that records an entry writes the stop's status, then runs `prd_error.py new`, then runs the "
+              "close's lint and trace, then commits `errors.md` with the status edits in one commit",
+              "`Refs: E-nnn` and the blocks' IDs",
+              "A stop before the builder's merge still records its entry",
+              "A dirty-tree stop records none and commits nothing",
+              "--source 'build <area> <IDs>'", "`--source` is `build <area> <IDs> --fixes E-nnn`"):
+        assert s in r, s
+
+
+def test_fixes_refusal_runs_first_in_step_1():
+    r = flat(RUN)
+    for s in ("run it before anything else in step 1; after a refusal, nothing else runs",
+              "An entry absent from the `--open` output (resolved or unknown) is refused too"):
+        assert s in r, s
+    step1 = RUN.read_text(encoding="utf-8").split("1. **Preflight.**", 1)[1]
+    assert step1.index("prd_error.py list") < step1.index("prd_lint.py")
+
+
+def test_unmark_line_and_not_passing_regression():
+    r = flat(RUN)
+    for s in ("Un-mark: T-002.5, T-002.6 (known-failing E-003)", "A unit regression T-id carries no marker",
+              "stops the build at step 7", "names each such T-id", "the un-mark is idempotent"):
+        assert s in r, s
+
+
+# --- F-4 (proof, R21): a deploy-gate regression T-id closes verified ---
+# final review item 1: its line comes off right after the tester's un-mark commit, not at the close
+
+def test_r21_deploy_gate_regression_tid_line_comes_off_before_step_7():
+    r = flat(RUN)
+    for s in ("Right after that commit, remove the `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level",
+              "the build never runs it",
+              "Its block closes `verified`",
+              "its test proves the fix at `/prd-deploy`"):
+        assert s in r, s
+    assert r.index("the deploy-gate lines.**") < r.index("the build-gate and unit lines.**") < r.index("7. **Full run.**")
+
+
+def test_r21_build_gate_not_passing_keeps_r4_text():
+    r = flat(RUN)
+    assert "A build-gate or unit regression T-id that is not `pass` keeps its line, and its block stays `built`" in r
+    assert "stops the build at step 7" in r
+
+
+def test_r21_exceptions_in_the_callers_rules():
+    k = flat(SKILL)
+    assert "a deploy-gate one's right after the tester's un-mark commit" in k
+    assert "for a build-gate or unit T-id that is not `pass`" in k

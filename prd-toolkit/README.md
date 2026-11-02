@@ -1,16 +1,18 @@
 # prd-toolkit
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
-repo with contracts and black-box test cases, a 31-rule linter and trace checks, a test agent
+repo with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
-approved change to verified code, and a deploy script that takes verified code to a running
-environment. Version 0.5.0.
+approved change to verified code, a deploy script that takes verified code to a running
+environment, an error ledger that carries every failure from record to a checked fix, and a
+publisher that renders the PRD as one page to share. Version 0.6.0.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
 for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md),
 for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md),
-and for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md).
+for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md),
+and for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md).
 
 ## Install
 
@@ -35,6 +37,8 @@ install hint and exits 2.
 | `/prd-build <area> <IDs>` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works in its own worktree while `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
 | `/prd-status` | `prd_status.py` | Show where each requirement stands, and the version each environment runs |
 | `/prd-deploy [--until <env>] [<run id>]` | `prd-toolkit:deploying-from-prds` | Deploy a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, then record the run (see Deploying) |
+| `/prd-error [<E-nnn> \| <run id> \| <text>]` | `prd-toolkit:handling-errors` | Record an error in `errors.md` with `prd_error.py`, diagnose it, propose its class and wait for the user's confirmation; the fix starts from a failing test and goes through `/prd-change` and `/prd-build --fixes E-nnn`, and the close is checked with `prd_error.py check` |
+| `/prd-publish [<out file>] [<request>]` | `prd-toolkit:publishing-prds` | Render the PRD with `prd_publish.py` as one self-contained HTML page (a Business and a Technical tab), with per-area summaries by Claude that cite their IDs; the page goes outside the PRD folder, is never committed, and is offered as a private Artifact when the session has the Artifact tool |
 
 ## Lint CLI
 
@@ -53,7 +57,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
   other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
-- `--list-rules` prints the 31 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
+- `--list-rules` prints the 32 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 
@@ -147,6 +151,12 @@ Generate the merge-gate CI file, then commit it. `--github` writes
 `include: '.gitlab/prd-toolkit.yml'` line to add to `.gitlab-ci.yml`. An existing file that
 differs is rewritten only with `--force`.
 
+The generated `prd-lint` job runs `prd_lint.py --ci` and then `prd_hooks.py check --ci`, which reports
+`stale: <path>: re-run prd_hooks.py ci --<forge> --force` when the PRD has since gained a level, an
+environment, a `tests` step or a Drift row. `check` and `/prd-status` print the same line.
+Outside a git checkout `check --ci` exits 2 (`prd_hooks: <path> is not inside a git checkout`), and
+`/prd-status`'s CI part says the same.
+
 ```
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --github docs/prd/<slug>
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py ci --gitlab docs/prd/<slug>
@@ -168,8 +178,9 @@ blocks the commit when `uv` is missing, and skips with a message on a branch tha
 
 Known limits:
 
-- A `test-<level>` job runs the whole harness command, so it stays red while any case is
-  `known-failing` on an open `E-nnn`, until 0.6.
+- A case that is `known-failing` on an open `E-nnn` is a strict expected failure that tags its
+  citation, so known-failing tests mark themselves and a `test-<level>` job stays green while the
+  bug is open.
 - A `commit --amend` that only rewrites the message stages no file, so the `commit-msg` hook lets
   it through; CI's `commit-refs` (trace with `--range`) catches it.
 
@@ -225,7 +236,8 @@ uv run --script .prd-toolkit/prd_drift.py docs/prd/<slug> --env production
 **CI.** `prd_hooks.py ci` adds a `drift-<env>` job only for an environment with rows in
 `## Drift`, and a `test-deploy-<env>` job only for one that a `tests` step runs on: the
 deploy-gate suites the runbook runs there, each line `export PRD_ENV=<env> TEST_ENV=<env>; <harness
-command>`, so a compound command (`cd tools && bash gate.sh`) sees both variables. Both start by
+command>`, so the harness command (one simple command, such as `bash tools/gate.sh system`, as the
+Levels rule requires) sees both variables. Both start by
 hand (`workflow_dispatch` on GitHub, `when: manual` on GitLab), stay out of the merge gate, and
 never deploy; deploying is done from a session.
 
@@ -246,6 +258,10 @@ never deploy; deploying is done from a session.
 - `rollback`: the run is another PRD's run, or its log names no PRD folder; HEAD or the PRD
   version moved since the run started, the tracked tree is dirty, or the runbook changed; or
   another `prd_deploy` command is working on this run or running in this repository;
+- `recover`: the run is another PRD's run, or its log names no PRD folder; the step has no
+  unfinished `start` (`step <N> has no unfinished start in run <id>`) or already has a result
+  (`step <N> already has a result in run <id>`); or another `prd_deploy` command is working on
+  this run or running in this repository;
 - `check`: the run is another PRD's run, or its log names no PRD folder, as its only line; every
   other exit 1 of `check` prints close-check findings.
 
@@ -255,19 +271,132 @@ Exit 2 (usage error, nothing run), with the reason printed:
   `<env>` after a production one), unless `<env>` is production itself;
 - `rollback`: a second rollback of the same step, or a rollback of a step that is not the run's
   failed step or has no `Rollback:`;
-- `confirm`: another PRD's run, or another `prd_deploy` command working on this run; a step that
+- `confirm`: another PRD's run, or its log names no PRD folder, or another `prd_deploy` command working on this run; a step that
   already has a `confirm` record, or that is not the human step the run stopped at; or an empty
-  reply.
+  reply;
+- `recover`: no log for the run, or an empty reply.
+
+`recover --run <id> --step <N> --reply "<the user's words>"` ends a step killed between its `start`
+and its result, once the user has checked the environment: it logs the reply and a failed step
+(`recovered: no result after start`, never a pass) and ends `prd-deploy: failed step=<N> run=<id>`,
+exit 4, so `rollback` and the close work as for any failed run.
 
 `run`, `resume` and `rollback` hold a repository-wide lock while they run commands; a run stopped
-at a human step holds none, and `plan`, `check` and `confirm` take none.
+at a human step holds none, and `plan`, `check` and `confirm` take none. `recover` runs no command
+but takes the same repository lock and the run's lock while it writes.
 
 A failed step exits 4 and prints its `Rollback:` command; the script never runs it unasked.
 
-**Known limit.** The script cannot prove that a person wrote a `confirm` reply. The skill requires
+**Known limits.** The script reads the runbook's steps and hashes `operations.md` and `testing.md` a
+moment apart; an edit to either in the window between reading the runbook steps and hashing them is
+not caught. The script cannot prove that a person wrote a `confirm` reply. The skill requires
 the user's own message, verbatim, the log keeps it, and the close report quotes it, but a `confirm`
 reply is trusted to be the user's. Steps run in a shell on the session's machine with its
 credentials; the toolkit adds no sandbox.
+
+## Handling errors
+
+`/prd-error` (skill `prd-toolkit:handling-errors`) takes any error, a bug, a failing test, an
+incident or a failed deploy, from a record to a checked fix. `errors.md` holds one `### E-nnn`
+entry for each; `prd_error.py` is the only writer.
+
+1. **Record.** `new` appends the entry as `unclassified` with its `Detected:` line and a bounded
+   `Evidence:` (20 lines at most, no secret or classified value). A build or deploy that stops on a
+   failure records its entry itself.
+2. **Reproduce.** The failing test comes first; an error that does not reproduce gets a diagnosis
+   that starts `not reproduced:` and says what was tried.
+3. **Propose.** `propose` writes the class (`code bug`, `spec gap`, `invalid requirement`,
+   `environment` or `standard`) and a diagnosis. Nothing is final yet.
+4. **Your confirmation.** `confirm` records your reply verbatim, in your words, and the class you
+   settle on. Only a confirmed entry can be cited by code (`Refs: E-nnn`); the commit-msg hook and
+   `prd_error.py check` refuse a code commit that cites an unconfirmed one.
+5. **Fix.** A change goes through `/prd-change` (citing the entry), and `/prd-build --fixes E-nnn`
+   builds it from the entry's failing test.
+6. **Resolve and check.** `resolve` writes the resolution (`<T-id> [<level>], PRD <X.Y.Z>, fixed in
+   <commit>`; `<T-id or ->, PRD <X.Y.Z>, run <run id>`; or `not a defect: <why>`), then
+   `prd_error.py check <base>..<head>` validates every change to the ledger in the range.
+
+```
+uv run --script .prd-toolkit/prd_error.py new docs/prd/<slug> --title "<title>" --source "<where seen>"
+uv run --script .prd-toolkit/prd_error.py propose docs/prd/<slug> E-nnn --class "<class>" --diagnosis "<root cause>" [--touches FR-001,FR-002] [--recurrence E-mmm]
+uv run --script .prd-toolkit/prd_error.py list docs/prd/<slug> --open
+uv run --script .prd-toolkit/prd_error.py check docs/prd/<slug> <base>..<head>
+```
+
+**Known-failing tests.** A case marked `known-failing` on an open entry is a strict expected failure
+that tags its citation `@prd T-nnn.n known-failing E-nnn`; it fails the day the bug is fixed, so the
+marker cannot outlive the defect. The trace's `known-failing-tags` rule reports a case with no tagged
+citation and a tag whose entry is resolved or unknown.
+
+**A killed deploy step.** `prd_deploy.py recover` ends a step killed between its `start` and its
+result, once you have checked the environment (see Deploying); the run then fails as any failed run
+does, and the failure close records the entry.
+
+**What `prd_error.py` refuses.** Exit 1 (`refused`), with each reason printed:
+
+- `new`: a `Touches:` ID the PRD does not define, or evidence over 20 lines;
+- `propose`: an entry that is `confirmed` (its class is settled) or `resolved`, a
+  `Recurrence of:` that is not an entry, or a `--touches` ID the PRD does not define;
+- `confirm`: an `unclassified`, already `confirmed` or `resolved` entry;
+- `resolve`: an entry that is not `confirmed`, or is already resolved, or a `--t` with no test case or level;
+- `new`, `propose`, `confirm` and `resolve`: a value that would open a code fence (an `Evidence:` line,
+  or a title, diagnosis, reply or reason, whose first non-space characters are ```` ``` ```` or `~~~`),
+  which would end the ledger's parse (`refused: Evidence: line <n> would open a code fence; drop it or
+  put text before it`, or `refused: --reply would open a code fence; …`);
+- `new`, `propose`, `confirm` and `resolve`: a write that would add a lint finding located in
+  `errors.md` (`refused: the entry would fail lint: <file>:<line>: <rule>: <message>`, one per finding,
+  then the hint `put quoted output in backticks`); `errors.md` is left byte-identical. Lint's prose
+  rules skip `Evidence:` and `Confirmed:` lines, and `schema-refs` skips `errors.md`, so quoted output
+  belongs in `Evidence:` bare and in backticks elsewhere;
+- any command naming an `E-nnn` that is not an entry; and `check`, whose exit 1 prints findings, one
+  per line, as `errors.md: E-nnn: <finding>`.
+
+Exit 2 (usage error, nothing written): an empty reply, class, diagnosis, title or source; `unclassified` as a
+class; a malformed version, T-id, run id or commit (7 to 40 lowercase hex digits); a fix without its
+T-id, level or commit (`a fix needs a T-id, its level and a commit`); `--not-a-defect` combined with
+another resolution; an unreadable range or PRD folder.
+
+## Publishing
+
+`/prd-publish [<out file>] [<request>]` (skill `prd-toolkit:publishing-prds`) renders the PRD with
+`prd_publish.py` as one self-contained HTML page with a Business tab and a Technical tab. The page
+loads nothing (no script, stylesheet, font or image from any URL), so it opens offline, by email or
+on an intranet; PRD text is rendered from markdown with raw HTML escaped, and the error ledger
+appears without its `Evidence:` lines.
+
+**Summaries.** The skill writes a short plain-language summary of each area (600 characters at most,
+in the language you ask for), and the page shows it in a box labelled `Summary by Claude of
+FR-001–FR-004, PRD <version>` that cites its IDs. Summaries are written fresh for each publish and
+never stored in the PRD folder.
+
+**Where it goes.** The page is written outside the PRD folder, to the path you name (default
+`<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`, beside the summaries file and
+outside the working tree, so the next build's clean-tree check is not tripped), and is never
+committed; the skill reports its absolute path. When the session has the Artifact tool,
+the skill offers the same file as a private Artifact, or updates one you name; otherwise, or when you
+decline, it gives you the file path.
+
+`prd_publish.py` is not vendored into `.prd-toolkit/`; it runs from the plugin (see Lint CLI for the install path).
+
+```
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_publish.py render docs/prd/<slug> --out <file> [--summaries <json>]
+```
+
+**What `prd_publish.py` refuses.** Exit 1 (`refused`): an `--out` inside the PRD folder; a summary
+whose version is not the PRD's, whose area does not exist, whose ID is undefined or belongs to
+another area, or whose text is over 600 characters; a summaries file that is not an object with version and areas (`summaries: must be an object …`), an area that is not an object with text and ids, or `ids` that are not a list of requirement IDs (`… ids must be a list of requirement IDs`). Exit 2 (usage error, nothing written): not a PRD
+folder, an unmigrated `adoption.md`, an unreadable summaries file, or an output path that cannot be
+written.
+
+## Known limits (0.6)
+
+- The strict expected-failure marker is held by instruction; the trace reads the tag, not each
+  runner's syntax.
+- A confirmation is trusted to be the user's, as `prd_deploy.py confirm` is.
+- `recover` never marks a step done.
+- `Evidence:` holding no secret or classified value is held by instruction; nothing scans it.
+- Mermaid diagrams on the published page are shown as source, and the page's own labels are English.
+- The window between reading the runbook steps and hashing them is not covered (see Deploying).
 
 ## Assumption status `awaiting <who>`
 
@@ -279,6 +408,11 @@ the user cannot state.
 
 ## Changelog
 
+- **0.6.0:**
+  - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (32 rules) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
+  - Known-failing tests mark themselves as strict expected failures and tag their citation. A stopped build records an entry, and `/prd-build --fixes E-nnn` builds a fix from it. `prd_deploy.py recover` ends a killed step. The generated `prd-lint` job also runs `prd_hooks.py check --ci`, which reports stale CI.
+  - `/prd-publish` and the `publishing-prds` skill: `prd_publish.py` renders the PRD as one self-contained HTML page (see Publishing).
+  - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace's `known-failing-tags` reports it until `/prd-error E-nnn` takes its entry to the code-bug route, whose tester round marks the test a strict expected failure and tags its citation (the case and its `approved` block need no patch). An open 0.5 entry that carries a class now counts as `proposed`, so a code commit citing it is refused until `prd_error.py confirm` records your reply (`/prd-error E-nnn` asks for it). Existing entries need no edit: the new lines are optional, `error-entries` judges `Detected:` and `Recurrence of:` only on an entry that carries `Confirmed:`, and `check` judges only ranges. A `.prd-toolkit/` without `prd_error.py` predates 0.6, and the skills stop on it until `prd_hooks.py install` runs.
 - **0.5.0:**
   - `/prd-deploy` and the `deploying-from-prds` skill: `prd_deploy.py` runs the `operations.md` runbook, every step from 1 in order, and stops at each human step and on each failure. The model never types a runbook command; it relays each reply verbatim, records a failure in `errors.md`, and closes with Deployed rows and `verified` → `live (since X.Y.Z)` (see Deploying).
   - The runbook is a step grammar: `(actor: …) (env: …)` and the labels `Run:`, `Check:`, `Rollback:`, `Do:`. Environments gains a `Production` column. `operations.md` gains `## Deployed` and `## Drift`.

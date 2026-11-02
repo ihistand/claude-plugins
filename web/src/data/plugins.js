@@ -41,8 +41,8 @@ export const plugins = [
   {
     id: 'prd-toolkit',
     name: 'prd-toolkit',
-    version: '0.5.0',
-    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 31-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code and a deploy script that takes it live. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status and /prd-deploy.',
+    version: '0.6.0',
+    description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 32-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, and a builder that takes an approved change to verified code, a deploy script that takes it live, an error ledger from record to checked fix, and a publisher that renders the PRD as one page. Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status, /prd-deploy, /prd-error and /prd-publish.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
       { name: '/prd-new', description: 'Start a PRD for a new project', workflow: 'Interview → docs/prd/<slug>/ with contracts and test cases → lint → prd-tester dry run → approve → CLAUDE.md block' },
@@ -52,6 +52,8 @@ export const plugins = [
       { name: '/prd-build', description: 'Build approved PRD changes to verified code', workflow: 'Pick the approved IDs → prd-builder in its own worktree while prd-tester writes the tests → merge → quote-based reconcile → statuses approved → built → verified' },
       { name: '/prd-status', description: 'Show where each requirement stands', workflow: 'prd_status.py reads the PRD and the build state → prints each requirement as approved, built or verified' },
       { name: '/prd-deploy', description: 'Deploy a verified PRD through its runbook', workflow: 'prd_deploy.py plan → run the runbook step by step, stopping at every human step and failure → you relay each reply verbatim → Deployed rows and verified → live' },
+      { name: '/prd-error', description: 'Record, diagnose and fix an error through the PRD', workflow: 'prd_error.py new → reproduce with a failing test → propose a class → your confirmation → /prd-change and /prd-build --fixes → resolve → prd_error.py check' },
+      { name: '/prd-publish', description: 'Render the PRD as one self-contained page to share', workflow: 'prd_publish.py → Business and Technical tabs with per-area summaries that cite their IDs → a private Artifact or the file' },
     ],
     skills: [
       { name: 'authoring-prds', description: 'Interviews to a PRD folder (docs/prd/<project>/) with contracts and test cases that agents build, test and deploy from; also approves and signs off a draft PRD' },
@@ -59,6 +61,8 @@ export const plugins = [
       { name: 'adopting-prds', description: 'Brings an existing codebase under a PRD one area at a time: extracts as-built requirements with sources, confirms intent with the user, and closes each area with characterization tests run by prd-tester' },
       { name: 'building-from-prds', description: 'Takes approved PRD changes to verified code: a builder works in its own worktree, the tester writes its tests, the build reconciles by quote and moves statuses approved, built, verified' },
       { name: 'deploying-from-prds', description: 'Deploys a verified PRD through its operations.md runbook with prd_deploy.py: the caller relays each human step\'s reply verbatim, records a failure in errors.md, and closes with Deployed rows and verified → live' },
+      { name: 'handling-errors', description: 'Records any error in errors.md with prd_error.py, proposes its class for you to confirm, and fixes it from a failing test through /prd-change and /prd-build' },
+      { name: 'publishing-prds', description: 'Renders the PRD as one self-contained HTML page with per-area summaries that cite their IDs, outside the PRD folder and never committed, offered as a private Artifact' },
       { name: 'testing-from-prds', description: 'Black-box testing from the PRD alone, run by the prd-tester agent for dry runs, writes and suites; the caller checks integrity after each dispatch' },
     ],
     references: [
@@ -67,6 +71,7 @@ export const plugins = [
       { label: 'Design spec (0.3)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md' },
       { label: 'Design spec (0.4)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md' },
       { label: 'Design spec (0.5)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md' },
+      { label: 'Design spec (0.6)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md' },
     ],
   },
 ]

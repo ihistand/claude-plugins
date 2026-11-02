@@ -37,6 +37,12 @@ Unit T-ids: <one per line, with its test-case file>
 Scripts: <scripts directory, as an absolute path>
 ```
 
+A `--fixes` build adds one line after those:
+
+```
+Fixes: E-nnn (regression T-ids: <T-ids>)
+```
+
 A code-bug round adds three lines after those:
 
 ```
@@ -53,6 +59,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 The caller gives the builder `<scripts>` as the `Scripts:` line of its prompt, as an absolute path
 (the repository root joined to `.prd-toolkit` when the copy is vendored); the builder uses that value.
@@ -80,8 +89,9 @@ allowed. Never pipe, filter or truncate a gated command's output.
    one of your IDs. A value the pack does not give (a message, a limit, an empty-state answer, an
    error code) is a QUESTION, never a default: write it under QUESTIONS and build nothing that
    depends on it. A change outside your IDs is not yours, even one that fixes an open `E-nnn` or
-   makes a `known-failing` case pass. Every test you write cites one of your unit T-ids; a test
-   that cites no T-id tests behaviour that no requirement states.
+   makes a `known-failing` case pass, except the entry on your prompt's `Fixes:` line: its
+   regression T-ids are your target, and making them pass is the build. Every test you write cites
+   one of your unit T-ids; a test that cites no T-id tests behaviour that no requirement states.
 4. **You never edit the PRD, and you never edit a test that cites a non-unit T-id.** Nothing
    under `docs/prd/<slug>/` is yours: statuses, `Source:` lines and test cases are written by the
    caller at close, and a gap goes to `prd-toolkit:changing-prds`. A file that cites (`@prd T-…`)
@@ -107,7 +117,9 @@ allowed. Never pipe, filter or truncate a gated command's output.
    report names no status.
 8. **A failure you did not cause is not yours.** A test that already failed before your change,
    a case carrying `known-failing: E-nnn` above all, stays as it is: no fix, no offer of one, no
-   line about it in your report. A test your change broke is your code's failure: fix the code.
+   line about it in your report, except the entry on your prompt's `Fixes:` line: its regression
+   T-ids are your target, and you fix the code until they pass. A test your change broke is your
+   code's failure: fix the code.
 9. **A code-bug round fixes the code, never the test.** Read the `Failing test:`, compare it with
    the `Quote:`, and change the code until it does what the quote says. Then run the unit
    harness, commit with `Refs: <IDs>` and report as below.
@@ -188,8 +200,19 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   T-id has no result until the tester's `Mode: suite` round reports it.
 - "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
-  add or weigh. The caller edits the PRD only at the close (status and `Source:`); everything
-  else goes through `/prd-change`.
+  add or weigh. The caller edits the PRD only at the close (status and `Source:`, and the entry
+  `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`, that entry's `known-failing:`
+  lines before step 7's trace (a build-gate or unit regression T-id's once it is `pass`, a
+  deploy-gate one's right after the tester's un-mark commit); everything else goes through
+  `/prd-change`.
+- Resolving the entry after a `--fixes` build, or writing a stop's entry by hand. (Pressure, not
+  observed.) The caller never resolves an entry: the build reports, and `handling-errors`
+  resolves; a stop's entry is written with `prd_error.py new`, never typed into `errors.md`.
+- Removing a `known-failing:` line on a build without `--fixes E-nnn`, for another entry, for a
+  build-gate or unit T-id that is not `pass`, or at the close instead of before step 7's trace.
+  (The last observed in the 0.6 proof: the line still on at step 7, the trace exited 1 on
+  `known-failing-tags`, and the session went on to the close.) Remove each line where steps 4 and
+  5 say, then run step 7.
 - Writing the code or a test in the caller's session because "it's tiny" or "no need for agents".
   (Pressure, not observed.) A change built outside the build earns no `built` and no `verified`.
 - "Classification: code bug → route to the builder. (I went ahead and applied the fix myself.)"

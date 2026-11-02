@@ -22,9 +22,9 @@ user**: name the command so they can allow it, exactly as you ran it, and wait f
 yourself. Run `run` and `resume` in the background, and wait for the exit: the script's 600 s
 timeout per command can outlive a foreground Bash call. A Bash call that timed out or was killed
 is reported to the user, never rerun, and never finished by hand: the step it was running is
-logged as started, and the next `resume` refuses with "step <N> started and did not finish".
-Never start a second `prd_deploy.py` command on a run while one is still working; the script
-refuses it.
+logged as started, and the next `resume` refuses with "step <N> started and did not finish"
+(the one way out is `recover`, in step 2). Never start a second `prd_deploy.py` command on a run
+while one is still working; the script refuses it.
 
 **Code, tests and the runbook are never edited during a deploy**, nor the PRD outside the close
 (step 3), even when the user says "fix it and carry on". A failed step is a defect to record
@@ -43,6 +43,9 @@ Code shows it as "Base directory for this skill" when the skill loads), and `<sc
 `<plugin root>/scripts`. Before step 1, Glob for `.prd-toolkit/prd_deploy.py` to decide, and
 use the same `<scripts>` for every command of the deploy. A script that is not found is a tool
 error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, run id and SHA in it is typed out in full: paste what a command printed, never a
@@ -60,17 +63,17 @@ pipe, filter or truncate a gated command's output (no `| head`, no `| grep`).
 | 1 | `refused` | each reason is a `refused:` line: report them all and stop (step 2) |
 | 2 | usage or tool error | a command you mistyped: fix it and run it again. Any other `prd_deploy: …` line on stderr (a confirm already recorded, a step already rolled back): report it and stop |
 | 3 | `human` | stopped at a human step: step 2, **3, human step** |
-| 4 | `failed` | a step's `Run:` or `Check:` failed or timed out: step 2, **4, failed** |
+| 4 | `failed` | a step's `Run:` or `Check:` failed or timed out, or `recover` ended a killed step: step 2, **4, failed** |
 
-A refusal is final. A step that started and did not finish, a confirm already used, a second
-rollback and a resume of a failed run are refused by the script: report the refusal and stop;
-never work around it with another command. A run id of another PRD (`run <id> is for <folder>,
-not <folder>`) and a runbook changed since the run started are refused the same way.
-`another prd_deploy command is running in this repository` means a `run`, `resume` or `rollback`
-is still working in this repository: report it and wait for the user, never retry it in a loop.
-An `--until` whose cut would take a production step along exits 2: the runbook runs a step on
-that environment after production. Report it and stop; the order is a gap for
-`prd-toolkit:changing-prds`.
+A refusal is final. A step that started and did not finish (only `recover` ends it, on the user's
+word), a confirm already used, a second rollback and a resume of a failed run are refused by the
+script: report the refusal and stop; never work around it with another command. A run id of
+another PRD (`run <id> is for <folder>, not <folder>`) and a runbook changed since the run started
+are refused the same way. `another prd_deploy command is running in this repository` means a
+`run`, `resume` or `rollback` is still working in this repository: report it and wait for the
+user, never retry it in a loop. An `--until` whose cut would take a production step along exits 2:
+the runbook runs a step on that environment after production. Report it and stop; the order is a
+gap for `prd-toolkit:changing-prds`.
 
 **Input:** a PRD at `docs/prd/<slug>/` with a `## Runbook` in `operations.md`, and the user's
 request. "Deploy to production" or "deploy everything" is a run with no `--until`; "deploy to
@@ -173,27 +176,50 @@ step 3 for a finished run they ask you to record.
      anything, since `rollback` refuses once HEAD or the tracked tree has moved. With no yes, or
      no one to ask, nothing is rolled back and the report names the command.
 
-     Then add an open entry at the end of `docs/prd/<slug>/errors.md`, numbered after its last
-     `E-nnn` (`E-001` for the first), with no `Resolution:` line, whether or not the step was
-     rolled back. Add the entry with Edit, appended at the end of the file; never rewrite
-     `errors.md` with Write. The template line
-     ``No entries yet. Add `### E-001 <title>` when the first error is diagnosed.`` may go in the
-     close that adds the first entry, and in no other. Every other line stays as it is:
+     Then add the open failure entry with `prd_error.py new`, whether or not the step was rolled
+     back, its `--source` naming the run and the failed step as written here (the close check
+     reads it). Never write the entry by hand:
 
+     ```bash
+     uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "Deploy <run id> failed at step <N>" --source "deploy run <run id>, failed step <N>"; echo "prd-error-exit=$?"
      ```
-     ### E-<nnn> Deploy <run id> failed at step <N>
-     Detected: <YYYY-MM-DD>, deploy <run id> step <N>
-     Classification: unclassified
-     Touches: -
-     Diagnosis: see the deploy log <run id>
-     ```
+
+     `prd-error-exit=` must be `0`; a `refused:` line is reported, never worked around. It prints
+     the new entry's `E-<nnn>` and numbers it after the ledger's last one. It never
+     classifies: the entry stays open (`Classification: unclassified`), and
+     `--touches` and `--evidence-file` are optional.
 
      Diagnosing it is not part of the deploy: the entry stays open and unclassified. Go to
-     step 3; the close commit carries the entry. A failed run ends, and `resume` refuses it.
+     step 3; the close commit carries the entry, and after the close offer the user
+     `/prd-error E-<nnn>` as the next step: it diagnoses and resolves the entry.
+     A failed run ends, and `resume` refuses it.
      Start a new run only when the user asks for one after seeing the failure, and tell them
      first whether anything changed: a new run on the same commit runs the same commands. A new
      run after a failed one starts again at step 1, after the failed run's close (step 3) and
      close check (step 4), and both runs go in one report.
+   - **Killed step.** A step with a `start` record and no step record (a killed or timed-out
+     call, a dead session; `resume` refuses it with "started and did not finish") is ended by
+     `prd_deploy.py recover`, the one way out of it. Run it only after the user says they
+     checked the environment (what the step left behind), in words they gave after seeing the
+     refusal and that name the run (by id, or as the only run with an unfinished step): their
+     words, verbatim, are the `--reply`, writing each `'` as `'\''`. never on the request to
+     deploy, never with your own text as the reply, and never after you checked the environment
+     for them. With no such reply, nothing is recovered: report the run and the step.
+
+     ```bash
+     uv run --script <scripts>/prd_deploy.py recover docs/prd/<slug> --run <id> --step <N> --reply '<the user's words, verbatim>'; echo "prd-deploy-exit=$?"
+     ```
+
+     It records the reply and a failed step `recovered: no result after start` (never a pass),
+     prints `recovered: step <N> run=<id>` and ends `prd-deploy: failed step=<N> run=<id>`,
+     exit 4. The run is now an ordinary failed run: go on as **4, failed** above, from the
+     failure's output through the rollback question, the failure entry and the close. A rollback
+     after `recover` runs the step's `Rollback:` as written: it restores the previous install even
+     when the killed step installed nothing, so say so when you ask. It refuses
+     a step with no unfinished start (`step <N> has no unfinished start in run <id>`) or that
+     already has a result, and another PRD's run; an empty reply exits 2. A step that finished
+     without saying so is never marked done: the environment is fixed by its cause and a new run
+     (step 2 starts again at step 1), and the entry's resolution names that run.
 3. **Close.** The close is always committed, after every run that ran a step: one that finished,
    one that failed, and one stopped at a human step that the user ends. For a run from an earlier
    session, run `git rev-parse --git-common-dir` from the repository root and Read
@@ -270,4 +296,13 @@ step 3 for a finished run they ask you to record.
    added; a trace finding at the close, with where it went; the close commit and the close
    check's result. A rollback not run before the close stays unrun: the close commit moved
    HEAD, so the rollback can no longer run through the script and is never run by hand. Name
-   its command for the user only as information.
+   its command for the user only as information. After a run whose `tests` step passed, run, as
+   its own call:
+
+   ```bash
+   uv run --script <scripts>/prd_error.py list docs/prd/<slug> --open; echo "prd-error-exit=$?"
+   ```
+
+   and for each `confirmed` entry whose `Touches:` names a block the run's `tests` step passed, name
+   `/prd-error E-nnn` as the next step: it resolves the entry from this run's log (a deploy-gate
+   regression T-id's entry resolves only from a run that passed it).

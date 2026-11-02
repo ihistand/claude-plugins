@@ -31,6 +31,9 @@ root is two directories above the skill's base directory (Claude Code shows it a
 directory for this skill" when the skill loads), and `<scripts>` is `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 A first adoption has no `.prd-toolkit/` until the hooks install, so it uses the plugin path; a later
 area in an adopted repo uses the vendored copy, so lint and trace match what CI runs.
 
@@ -252,7 +255,7 @@ Triage every `fail` with the user, one T-id at a time:
 - **The PRD is wrong:** the user's corrected text goes in, with everything that describes it
   (`prd-toolkit:changing-prds` rule 5 and its ID rules). It is part of this area's change and
   takes no version of its own.
-- **A real bug:** an `E-nnn` entry (new, or the open one that already describes it), the requirement drops to `approved`, and its test case gains `known-failing: E-nnn`. The test stays as written.
+- **A real bug:** an `E-nnn` entry (new, or the open one that already describes it), the requirement drops to `approved`, and its test case gains `known-failing: E-nnn`. The test stays as written. `prd-tester` marks it a strict expected failure (pytest `xfail(strict=True)`, jest `test.failing`) and tags its citation `@prd <T-id> known-failing <E-nnn>`, so the suite and CI stay green while the bug is open.
 
 Then run the suite again. The gate is one RESULTS line per T-id of the area, each `pass` or `known-failing E-nnn` whose entry is open and cited on that case, and an integrity check that found no change outside the test roots. Anything else, and the area stays `confirmed`.
 

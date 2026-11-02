@@ -82,6 +82,28 @@ class ErrorEntry:
     touches: list[tuple[str, int]] = field(default_factory=list)  # (requirement ID, line) from `Touches:`
     classification: str = ""  # the trimmed value after `Classification:`; empty when absent
     end: int = 0  # last line of the entry
+    title: str = ""
+    detected: str = ""  # the trimmed value after `Detected:`; empty when absent
+    detected_line: int = 0
+    confirmed: tuple[str, str] | None = None  # (date, reply) of a well-formed `Confirmed:`
+    confirmed_raw: str | None = None  # the value after `Confirmed:`, well-formed or not; None when the line is absent
+    confirmed_line: int = 0
+    evidence: list[str] = field(default_factory=list)  # the Evidence lines, continuation prefix stripped
+    evidence_line: int = 0
+    diagnosis: str = ""
+    resolution: str = ""
+    resolution_line: int = 0
+    recurrence: str = ""
+    recurrence_line: int = 0
+    classification_line: int = 0
+
+    @property
+    def state(self) -> str:
+        if not self.open:
+            return "resolved"
+        if self.classification in ("", "unclassified"):
+            return "unclassified"
+        return "confirmed" if self.confirmed else "proposed"
 
 
 @dataclass
@@ -183,6 +205,13 @@ _ERROR_HEAD = re.compile(r"^### (E-\d+)\b")
 _RESOLUTION = re.compile(r"^Resolution:\s*(.*?)\s*$")
 _TOUCHES = re.compile(r"^Touches:\s*(.*?)\s*$")
 _CLASSIFICATION = re.compile(r"^Classification:\s*(.*?)\s*$")
+_DETECTED = re.compile(r"^Detected:\s*(.*?)\s*$")
+_CONFIRMED = re.compile(r"^Confirmed:\s*(.*?)\s*$")
+_CONFIRMED_VALUE = re.compile(r'^(\d{4}-\d{2}-\d{2}),\s*"(.*)"$')
+_EVIDENCE = re.compile(r"^Evidence:\s*(.*?)\s*$")
+_DIAGNOSIS = re.compile(r"^Diagnosis:\s*(.*?)\s*$")
+_RECURRENCE = re.compile(r"^Recurrence of:\s*(.*?)\s*$")
+CLASSES = ("code bug", "spec gap", "invalid requirement", "environment", "standard", "unclassified")
 DRIFT_CHECKS = ("version", "config")
 _TOUCH_ID = re.compile(r"\b(?:UJ|FR|NFR)-\d+\b")
 _SLOT = re.compile(r"^- \*\*([^*]+?)\.\*\*")
@@ -293,22 +322,43 @@ def _errors_ledger(text: str) -> dict[str, ErrorEntry]:
     ledger: dict[str, ErrorEntry] = {}
     cur: ErrorEntry | None = None
     last = len(text.rstrip("\n").split("\n")) if text.strip() else 0
+    in_evidence = False
     for n, (orig, st) in enumerate(zip(text.split("\n"), strip_code(text).split("\n")), 1):
         if _HEADING.match(st):
             if cur:
                 cur.end = n - 1
+            in_evidence = False
             m = _ERROR_HEAD.match(orig) if _ERROR_HEAD.match(st) else None
-            cur = ErrorEntry(m.group(1), n, True) if m else None
+            cur = ErrorEntry(m.group(1), n, True, title=orig[m.end():].strip()) if m else None
             if cur:
                 ledger.setdefault(cur.id, cur)
             continue
+        if cur and in_evidence and orig.startswith("  "):
+            cur.evidence.append(orig[2:].rstrip())
+            continue
+        in_evidence = False
         rm = _RESOLUTION.match(orig) if cur else None
         if rm:
             v = rm.group(1).lower()
             cur.open = v in ("", "-") or v.startswith("open")
+            cur.resolution, cur.resolution_line = rm.group(1), n
         cm = _CLASSIFICATION.match(orig) if cur else None
         if cm:
-            cur.classification = cm.group(1)
+            cur.classification, cur.classification_line = cm.group(1), n
+        for rx, attr in ((_DETECTED, "detected"), (_DIAGNOSIS, "diagnosis"), (_RECURRENCE, "recurrence")):
+            fm = rx.match(orig) if cur else None
+            if fm:
+                setattr(cur, attr, fm.group(1))
+                if attr in ("detected", "recurrence"):
+                    setattr(cur, attr + "_line", n)
+        fm = _CONFIRMED.match(orig) if cur else None
+        if fm:
+            cur.confirmed_raw, cur.confirmed_line = fm.group(1), n
+            vm = _CONFIRMED_VALUE.match(fm.group(1))
+            cur.confirmed = (vm.group(1), vm.group(2)) if vm else None
+        em = _EVIDENCE.match(orig) if cur else None
+        if em:
+            cur.evidence_line, cur.evidence, in_evidence = n, ([em.group(1)] if em.group(1) else []), True
         tm = _TOUCHES.match(orig) if cur else None
         if tm:
             cur.touches.extend((i, n) for i in _TOUCH_ID.findall(tm.group(1)))
@@ -519,13 +569,18 @@ def gate_of(prd: Prd, level: str) -> str | None:
     return prd.testing.gates.get(level) or None
 
 
-def repo_root(path: Path) -> Path:
-    """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
+def git_toplevel(path: Path) -> Path | None:
+    """`git rev-parse --show-toplevel` from `path`; None when git cannot find a checkout there (or git is missing)."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=10, check=True
         ).stdout.strip()
-        return Path(out) if out else path
+        return Path(out) if out else None
     except (OSError, subprocess.SubprocessError):
-        return path
+        return None
+
+
+def repo_root(path: Path) -> Path:
+    """`git rev-parse --show-toplevel` from `path`; `path` itself on any failure (including no git)."""
+    return git_toplevel(path) or path

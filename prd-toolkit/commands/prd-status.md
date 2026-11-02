@@ -14,12 +14,15 @@ loaded only to read its base directory: none of its steps are followed), and `<s
 `<plugin root>/scripts`.
 Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for every command.
 A script that is not found is a tool error: report it, never guess another path.
+When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
+tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
+and commit `.prd-toolkit/`.
 
 1. Find the one `docs/prd/*/prd.md`. If there is more than one, ask which PRD.
 2. Run the script in one Bash call, with the literal PRD folder:
    `uv run --script <scripts>/prd_status.py docs/prd/<slug>; echo "prd-status-exit=$?"`
    Add `--json` only when asked for JSON. Never pipe, filter or truncate the output (no `| head`,
    no `| grep`): `prd-status-exit=` then reports the filter's status, not the script's.
-3. Print the output as it is. The report has eight parts: Header, Requirements, Adoption map,
-   Not built, Not verified, Open errors, Deployed and Matrix. It is read-only.
+3. Print the output as it is. The report has nine parts: Header, Requirements, Adoption map,
+   Not built, Not verified, Open errors, CI, Deployed and Matrix. It is read-only.
 4. On `prd-status-exit=2`, the call was wrong and nothing printed: fix the path.

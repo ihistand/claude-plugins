@@ -33,14 +33,15 @@ def _parser() -> argparse.ArgumentParser:
         if name == "run":
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
     for name, text in (("resume", "continue a run after its confirmed human step"), ("confirm", "record the reply to the human step a run stopped at"),
-                       ("rollback", "run a failed step's Rollback")):
+                       ("rollback", "run a failed step's Rollback"),
+                       ("recover", "turn a step killed before its result into a failed step")):
         p = sub.add_parser(name, help=text)
         p.add_argument("prd_dir")
         p.add_argument("--run", required=True, metavar="ID")
         if name != "resume":
             p.add_argument("--step", required=True, type=int, metavar="N")
-        if name == "confirm":
-            p.add_argument("--reply", required=True, metavar="TEXT")
+        if name in ("confirm", "recover"):
+            p.add_argument("--reply", required=True, metavar="TEXT", help="the user's words" if name == "recover" else None)
         else:
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
     p = sub.add_parser("check", help="the close check: a deploy run's close commit says only what its log proves")
@@ -82,7 +83,7 @@ def _refuse(reasons: list[str], step: int, run_id: str) -> int:
 
 
 def _existing_run(args, prd: model.Prd) -> int:
-    """confirm, resume and rollback: work on a run that has a log."""
+    """confirm, resume, rollback and recover: work on a run that has a log."""
     try:
         repo_root = model.repo_root(prd.root)
         if args.command == "confirm":
@@ -90,6 +91,14 @@ def _existing_run(args, prd: model.Prd) -> int:
             print(f"confirmed: step {args.step} run={args.run}")
             return 0
         deploy.check_run_id(args.run)
+        if args.command == "recover":
+            try:
+                deploy.recover(prd, repo_root, args.run, args.step, args.reply)
+            except deploy.Refused as e:
+                return _refuse(e.reasons, args.step, args.run)
+            print(f"recovered: step {args.step} run={args.run}")
+            print(f"prd-deploy: failed step={args.step} run={args.run}")
+            return deploy.EXIT["failed"]
         try:
             with deploy.repo_lock(repo_root):  # held through the final record; a second run, resume or rollback is refused
                 return _rollback(args, prd, repo_root) if args.command == "rollback" else _resume(args, prd, repo_root)
@@ -168,7 +177,7 @@ def main(argv: list[str]) -> int:
         return _fail(f"internal error: {type(e).__name__}: {e}")
     if prd.adoption_unmigrated:
         return _fail(f"{prd.root.as_posix()}/prd.md: {model.UNMIGRATED}")
-    if args.command in ("confirm", "resume", "rollback"):
+    if args.command in ("confirm", "resume", "rollback", "recover"):
         return _existing_run(args, prd)
     if args.command == "check":
         try:

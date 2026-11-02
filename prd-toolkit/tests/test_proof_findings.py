@@ -44,3 +44,18 @@ def test_f3_approval_commit_carries_refs_none():
 def test_f3_changing_commit_of_prd_and_claude_md_carries_refs_none():
     step5 = between(flat(CHANGING), "5. **Approval, then commit.**", "## Red Flags")
     assert "commit the PRD folder and CLAUDE.md with the trailer " + NO_REFS in step5
+
+
+def test_r16_patch_row_and_bump_rule_name_the_two_exceptions():
+    """Review: the Patch row and the bump rule carry the regression patch and the corrected-to-match test case."""
+    text = flat(CHANGING)
+    rule = between(text, "## Version rule", "**A regression patch.**")
+    patch_row = between(rule, "| **Patch** |", "If any existing AC")
+    assert "a regression patch for an `errors.md` entry" in patch_row
+    assert "a test case or contract corrected to match its own unchanged AC" in patch_row
+    bump = rule.split("If any existing AC", 1)[1]
+    assert "Yes means major" in bump and "except the two patches in the Patch row" in bump
+    assert "any other changed `expect`" in bump and "major" in bump
+    corrected = between(text, "**A test case or contract corrected to match its AC.**", "## ID rules")
+    assert "`invalid requirement`" in corrected and "no AC or behaviour changes" in corrected
+    assert "`Refs: FR-001, E-003`" in corrected or "cite the entry" in corrected

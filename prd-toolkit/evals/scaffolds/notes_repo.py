@@ -333,7 +333,7 @@ def test_add_note_returns_an_id():
 
 
 def test_search_ignores_case_in_insertion_order():
-    """@prd T-002.1"""
+    """@prd T-002.1 known-failing E-001"""
     for text in ["Buy Milk", "call bob"]:
         add_note(text)
     assert search_notes("milk") == ["Buy Milk"]

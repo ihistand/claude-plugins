@@ -430,6 +430,35 @@ def repo_lock(repo_root: Path):
         f.close()  # closing releases the lock
 
 
+def recover(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> None:
+    """Turn a step killed between its `start` and its result into an ordinary failed step, on the user's word that they checked.
+
+    Never records a pass. ValueError (a usage error) for no usable log or an empty reply; Refused for another PRD's run, a held lock,
+    or a step with no unfinished start. Takes the repository lock, then the run lock, as `run` does.
+    """
+    check_run_id(run_id)
+    with repo_lock(repo_root), run_lock(repo_root, run_id):
+        header, recs = _load_log(repo_root, run_id)
+        wrong = other_prd(prd, repo_root, run_id, header)
+        if wrong:
+            raise Refused([wrong])
+        if not reply.strip():
+            raise ValueError("the reply is empty")
+        starts = [r for r in unfinished_starts(recs) if r.get("step") == step]
+        if not starts:
+            if any(r.get("kind") == "step" and r.get("step") == step for r in recs):
+                raise Refused([f"step {step} already has a result in run {run_id}"])
+            raise Refused([f"step {step} has no unfinished start in run {run_id}"])
+        start = starts[-1]
+        now = _iso()
+        append(repo_root, run_id, {"kind": "recover", "step": step, "reply": reply, "at": now})
+        rec = {"kind": "step", "step": step, "env": start.get("env"), "result": "fail", "reason": "recovered: no result after start",
+               "started": start.get("at"), "ended": now}
+        if start.get("level") is not None:
+            rec["level"] = start["level"]
+        append(repo_root, run_id, rec)
+
+
 def start_resume(prd: Prd, repo_root: Path, run_id: str, extra=None) -> tuple[int, str | None, list[str]]:
     """Check that the run may continue and, under the run lock, use up the confirm in the same breath.
 
@@ -628,6 +657,11 @@ def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> lis
     return out
 
 
+def detected_names_failure(detected: str | None, run_id: str, step) -> bool:
+    """A failure entry's `Detected:` line names the run id and `step N`."""
+    return bool(detected and re.search(rf"\bstep\s+{step}\b", detected) and run_id in detected)
+
+
 def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
     """Findings for a run's close commit(s); BadRange for a bad range, ValueError for an unusable log."""
     m = re.match(r"^([^.\s][^\s]*?)\.\.([^.\s][^\s]*)$", rng)
@@ -721,7 +755,7 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         e = new[0]
         etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
         detected = re.search(r"^Detected:.*$", etext, re.M)
-        step_ok = detected and re.search(rf"\bstep\s+{failed.get('step')}\b", detected.group(0)) and run_id in detected.group(0)
+        step_ok = detected_names_failure(detected.group(0) if detected else None, run_id, failed.get("step"))
         if not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))

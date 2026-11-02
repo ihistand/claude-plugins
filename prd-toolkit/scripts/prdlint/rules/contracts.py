@@ -500,7 +500,8 @@ def schema_refs(prd: Prd):
         fenced[rel] = lines
     originals = {rel: text.split("\n") for rel, text in prd.docs.items()}
     for rel, n, _ in prose(prd):
-        if n in fenced[rel]:
+        # errors.md quotes what went wrong: a diagnosis naturally names the column the code got wrong
+        if rel == "errors.md" or n in fenced[rel]:
             continue
         for m in _SPAN.finditer(originals[rel][n - 1]):
             q = _QUALIFIED.fullmatch(m.group(2).strip())

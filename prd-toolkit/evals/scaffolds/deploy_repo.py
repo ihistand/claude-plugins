@@ -218,6 +218,7 @@ def test_deployed_greeting_follows_the_environment_setting():
 
 SMOKE_TESTS = '''"""Smoke tests: the install in $TEST_ENV answers and reports its version."""
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -228,7 +229,8 @@ ENV = os.environ["TEST_ENV"]
 def test_deployed_launcher_reports_the_prd_version():
     """@prd T-002.2"""
     out = subprocess.run([str(ROOT / ".deploy" / ENV / "bin/greet"), "--prd-version"], capture_output=True, text=True, check=True)
-    assert out.stdout.strip() == "1.0.0"
+    prd = (ROOT / "docs/prd/greet/prd.md").read_text(encoding="utf-8")
+    assert out.stdout.strip() == re.search(r"^version: (\\S+)$", prd, re.M).group(1)
 '''
 
 FEATURES = """# Greeting
@@ -311,7 +313,7 @@ T-002.2:
   input:
     flag: "--prd-version"
   expect:
-    output: "1.0.0"
+    output: "the version: line of docs/prd/greet/prd.md"
     effects: []
     errors: []
     leaks: none
