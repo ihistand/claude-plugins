@@ -247,6 +247,10 @@ never deploy; deploying is done from a session.
 - `rollback`: the run is another PRD's run, or its log names no PRD folder; HEAD or the PRD
   version moved since the run started, the tracked tree is dirty, or the runbook changed; or
   another `prd_deploy` command is working on this run or running in this repository;
+- `recover`: the run is another PRD's run, or its log names no PRD folder; the step has no
+  unfinished `start` (`step <N> has no unfinished start in run <id>`) or already has a result
+  (`step <N> already has a result in run <id>`); or another `prd_deploy` command is working on
+  this run or running in this repository;
 - `check`: the run is another PRD's run, or its log names no PRD folder, as its only line; every
   other exit 1 of `check` prints close-check findings.
 
@@ -258,10 +262,17 @@ Exit 2 (usage error, nothing run), with the reason printed:
   failed step or has no `Rollback:`;
 - `confirm`: another PRD's run, or another `prd_deploy` command working on this run; a step that
   already has a `confirm` record, or that is not the human step the run stopped at; or an empty
-  reply.
+  reply;
+- `recover`: no log for the run, or an empty reply.
+
+`recover --run <id> --step <N> --reply "<the user's words>"` ends a step killed between its `start`
+and its result, once the user has checked the environment: it logs the reply and a failed step
+(`recovered: no result after start`, never a pass) and ends `prd-deploy: failed step=<N> run=<id>`,
+exit 4, so `rollback` and the close work as for any failed run.
 
 `run`, `resume` and `rollback` hold a repository-wide lock while they run commands; a run stopped
-at a human step holds none, and `plan`, `check` and `confirm` take none.
+at a human step holds none, and `plan`, `check` and `confirm` take none. `recover` runs no command
+but takes the same repository lock and the run's lock while it writes.
 
 A failed step exits 4 and prints its `Rollback:` command; the script never runs it unasked.
 
