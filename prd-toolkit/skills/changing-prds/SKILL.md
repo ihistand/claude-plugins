@@ -63,10 +63,11 @@ the gap as the change.
 |---|---|---|
 | **Major** | existing behaviour changes or is removed | getOrder answers 410 instead of 404 for a deleted order: 1.0.0 → **2.0.0**. Dropping the empty-file rule AC-001.3: major. |
 | **Minor** | behaviour is added, nothing existing changes | admins can archive an order, a new FR-005: 2.0.0 → **2.1.0**. Accepting CSV files with a BOM: minor. |
-| **Patch** | wording only; no AC, test expectation, contract or result changes | a typo, a clearer Flow line |
+| **Patch** | wording only; no AC, test expectation, contract or result changes. Two exceptions, below: a regression patch for an `errors.md` entry, and a test case or contract corrected to match its own unchanged AC | a typo, a clearer Flow line |
 
 If any existing AC, test-case `expect`, error code, status code or response changes meaning or
-disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major.
+disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major,
+except the two patches in the Patch row; any other changed `expect` is major.
 
 **A regression patch.** A change made for an `errors.md` entry (`prd-toolkit:handling-errors`)
 that only adds its regression test is a patch: a new test case under an unchanged AC, or a
@@ -75,6 +76,13 @@ that only adds its regression test is a patch: a new test case under an unchange
 row names the entry, as `regression test for E-003`:
 `| 1.0.1 | <date> | regression test for E-003; <dry-run record> | FR-001, T-001.3 |`. A unit-only change records `no dry run (unit only)`; a non-unit regression T-id, new or marked, is
 dry-run as step 4 says. Its commits cite the entry: `Refs: FR-001, E-003`.
+
+**A test case or contract corrected to match its AC.** A test case or a contract that contradicts
+its own AC, while the AC and the code stand, is the fix of an `invalid requirement` entry
+(`prd-toolkit:handling-errors`): revising the test case's `expect` or the contract to say what the
+AC says is a patch when no AC or behaviour changes. The block returns to `approved`, the §14 row
+names the entry (`test case corrected for E-004`) with its dry-run record as above, and its commits
+cite the entry: `Refs: FR-001, E-004`.
 
 ## ID rules
 
