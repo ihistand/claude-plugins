@@ -188,16 +188,19 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   T-id has no result until the tester's `Mode: suite` round reports it.
 - "I didn't add a known-failing marker since this looks like a harness issue" is the thought to
   stop at: a `known-failing:` marker, a test case, an AC or a contract is never the caller's to
-  add or weigh. The caller edits the PRD only at the close (status and `Source:`, the entry
-  `prd_error.py new` writes (never by hand) and, on `--fixes E-nnn`, that entry's `known-failing:`
-  lines once their T-ids pass, or, for a deploy-gate regression T-id, at a clean close);
-  everything else goes through `/prd-change`.
+  add or weigh. The caller edits the PRD only at the close (status and `Source:`, and the entry
+  `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`, that entry's `known-failing:`
+  lines before step 7's trace (a build-gate or unit regression T-id's once it is `pass`, a
+  deploy-gate one's right after the tester's un-mark commit); everything else goes through
+  `/prd-change`.
 - Resolving the entry after a `--fixes` build, or writing a stop's entry by hand. (Pressure, not
   observed.) The caller never resolves an entry: the build reports, and `handling-errors`
   resolves; a stop's entry is written with `prd_error.py new`, never typed into `errors.md`.
-- Removing a `known-failing:` line for a T-id that is not `pass`, or on a build without
-  `--fixes E-nnn`, other than a deploy-gate regression T-id of the `--fixes` entry, removed at a
-  clean close. (Pressure, not observed.)
+- Removing a `known-failing:` line on a build without `--fixes E-nnn`, for another entry, for a
+  build-gate or unit T-id that is not `pass`, or at the close instead of before step 7's trace.
+  (The last observed in the 0.6 proof: the line still on at step 7, the trace exited 1 on
+  `known-failing-tags`, and the session went on to the close.) Remove each line where steps 4 and
+  5 say, then run step 7.
 - Writing the code or a test in the caller's session because "it's tiny" or "no need for agents".
   (Pressure, not observed.) A change built outside the build earns no `built` and no `verified`.
 - "Classification: code bug → route to the builder. (I went ahead and applied the fix myself.)"

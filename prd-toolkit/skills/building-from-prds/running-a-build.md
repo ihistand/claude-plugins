@@ -11,10 +11,11 @@ asked to implement an approved change or to make a failing PRD test go green. Th
 You are the caller, not the builder and not the tester. You dispatch, check, merge, reconcile and
 close. You never write or fix code or a test, you never read or run the code to judge a result,
 and you write no status the close does not earn. The caller edits the PRD only at the close: a
-block's `Status:`, its §11 status and its `Source:`, the entry `prd_error.py new` writes for a stop
-(never by hand) and, on a `--fixes` build, the removal of that entry's `known-failing:` lines. A
-test case, a `known-failing:` marker, an AC
-or a contract change goes through `/prd-change`. The caller's Red Flags in `SKILL.md` are yours.
+block's `Status:`, its §11 status and its `Source:`, and the entry `prd_error.py new` writes for a
+stop (never by hand). One edit comes before the close: on a `--fixes` build, steps 4 and 5 remove
+that entry's `known-failing:` lines, each removal its own commit, before step 7's trace. A test
+case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`. The
+caller's Red Flags in `SKILL.md` are yours.
 
 **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
@@ -234,6 +235,19 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    If the merge refuses because a tester's file is in the way, stop and report both paths to the
    user.
+
+   **`--fixes E-nnn` only: the deploy-gate lines.** Right after that commit, remove the
+   `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level,
+   and no other test-case line: the tester's `write` has un-marked its test, the build never runs
+   it, and its test proves the fix at `/prd-deploy`. Its block closes `verified` like any block
+   whose build-gate T-ids pass. Then, each its own call, with the test-case files typed out:
+
+   ```bash
+   git add docs/prd/<slug>/test-cases/<file>
+   git commit -m "docs(prd): <T-ids> no longer known-failing" -m "Refs: <IDs>, <E-nnn>"
+   ```
+
+   With no deploy-gate regression T-id, there is nothing to remove or commit here.
 5. **Run.** On every route, after each builder round, step 5 runs: the snapshot (`dispatching.md`
    step 2) and then `prd-tester` `Mode: suite` on the build's non-unit build-gate T-ids. Its
    RESULTS, checked with `prd_build_check.py --results`, are the only evidence for those T-ids. The
@@ -257,6 +271,20 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `git commit -m "test(<area>): <T-id> matches the PRD" -m "Refs: <IDs>"` after its `git add`.
    A `known-failing E-nnn` line for a case that carries `known-failing: E-nnn` is expected: it is
    not reconciled, and it is not a pass.
+
+   **`--fixes E-nnn` only: the build-gate and unit lines.** Right after each step 5 check, remove
+   the `known-failing: E-nnn` line of each build-gate or unit regression T-id that is `pass` (a
+   build-gate T-id on the suite RESULTS, a unit T-id on the builder's UNIT lines), and no other
+   test-case line, then commit it as step 4's deploy-gate removal does: the same `git add` and
+   `git commit -m "docs(prd): <T-ids> no longer known-failing" -m "Refs: <IDs>, <E-nnn>"`, each its
+   own call. When step 5 is skipped, do this right after step 4's commits. This edit, and step 4's,
+   is allowed only for the entry named by `--fixes`; every other test-case edit still goes through
+   `/prd-change`. A build-gate or unit regression T-id that is not `pass` keeps its line, and its
+   block stays `built`: its test is already un-marked and its case still carries `known-failing:`,
+   so `prd_trace.py`'s `known-failing-tags` stops the build at step 7. This is expected: the
+   stop report names each such T-id, and the next step is another
+   `/prd-build <area> <IDs> --fixes E-nnn` (the un-mark is idempotent). A later round that makes it
+   `pass` removes its line after that round's step 5 check, still before step 7.
 6. **Reconcile** each `fail` line and each test dispute, one at a time. Read the T-id's entry in
    its test-case file (the block's `Tests:` line names the file) and the test that cites it (TESTS
    names it). Quote verbatim the test case's `ac:` line, the `expect` entry the failure concerns
@@ -307,7 +335,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    `prd-trace-exit=` must be `0`; anything else stops the build, as **Stops** says. Trace asks a
    citation for each unit and build-gate T-id of a `built` or `verified` block; deploy-gate T-ids
-   wait for `live`.
+   wait for `live`. On a `--fixes` build the regression T-ids' `known-failing:` lines are already
+   off (steps 4 and 5) for every one that may lose it, so a `known-failing-tags` finding here names
+   a build-gate or unit regression T-id that is not `pass`, and the build stops as step 5 says.
 8. **Close.** Write each block's status in the block and its §11 index row together:
 
    | Move | When |
@@ -325,29 +355,19 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `known-failing` result is not a pass, so its block stays `built`. Never write `live`: it
    means deployed, and a build deploys nothing; deploy-gate tests run at `/prd-deploy`. Change
    only the status word; keep any `(since X.Y.Z)` and the index row's Since cell as they are.
-   Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removal
-   below.
+   Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of
+   steps 4 and 5, already committed.
 
    Run `git rev-parse --short HEAD` as its own call, after the last merge. From each SOURCES line
    of the builder's latest report for a block, write the block's
    `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
 
-   **`--fixes E-nnn` only:** the close also removes each test case's `known-failing: E-nnn` line
-   whose T-id is `pass` (in the suite RESULTS, or the builder's UNIT lines for a unit T-id), and
-   no other test-case line, except a deploy-gate regression T-id's line, removed at a clean close
-   as below. This edit is allowed only for the entry named by `--fixes`; every other test-case
-   edit still goes through `/prd-change`. A regression T-id whose test case is at a deploy-gate
-   level has its `known-failing: E-nnn` line removed at a clean `--fixes` close too (the tester's
-   un-mark committed and the fix merged), though it is not run in the build, like any deploy-gate
-   T-id: the tester's `write` round has already un-marked its test, its block closes `verified`,
-   and `prd_trace.py` holds (test un-marked, case no longer known-failing); its test proves the
-   fix at `/prd-deploy`. A build-gate regression T-id still needs `pass`. A build-gate or unit
-   regression T-id that is not `pass` keeps its line, and its block stays `built`: its test is
-   already un-marked and its case still carries `known-failing:`, so `prd_trace.py`'s
-   `known-failing-tags` stops the build at step 7. This is expected: the stop report names each
-   such T-id, and the next step is another `/prd-build <area> <IDs> --fixes E-nnn` (the un-mark is
-   idempotent). The caller never resolves the entry: the build reports, and `handling-errors`
-   resolves.
+   **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
+   them, each in its own commit, before step 7's trace, so the close's trace holds (test
+   un-marked, case no longer known-failing). The close's moves are the table's; a block whose
+   deploy-gate regression T-id lost its line in step 4 closes `verified` when its unit and
+   build-gate T-ids pass. The caller never resolves the entry: the build reports, and
+   `handling-errors` resolves.
 
    A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the
    PRD status stays `Approved`. Leave `version` and `updated` as they are. Run the trace before

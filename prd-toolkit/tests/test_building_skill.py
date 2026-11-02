@@ -317,7 +317,7 @@ def test_r25_test_disputes_are_reconciled_not_stopped():
 def test_r28_caller_edits_the_prd_only_at_the_close():
     t = flat(RUN)
     assert ("The caller edits the PRD only at the close: a block's `Status:`, its §11 status and its "
-            "`Source:`, ") in t
+            "`Source:`, and ") in t
     assert "A test case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`." in t
     assert "I didn't add a known-failing marker since this looks like a harness issue" in flat(SKILL)
 
@@ -639,7 +639,7 @@ def test_fixes_flag_in_command_and_preflight():
 
 def test_fixes_close_edit_is_one_line_only():
     r = flat(RUN)
-    for s in ("known-failing: E-nnn` line whose T-id is `pass`", "and no other test-case line",
+    for s in ("line of each build-gate or unit regression T-id that is `pass`", "and no other test-case line",
               "every other test-case edit still goes through `/prd-change`",
               "the T-ids whose test cases carry `known-failing: E-nnn`"):
         assert s in r, s
@@ -655,10 +655,10 @@ def test_caller_never_resolves_the_entry():
 
 def test_caller_rules_allow_the_entry_and_the_fixes_edit():
     r = flat(RUN)
-    assert ("`Source:`, the entry `prd_error.py new` writes for a stop (never by hand) and, on a `--fixes` build, "
-            "the removal of that entry's `known-failing:` lines") in r
-    assert "Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, " in r
-    assert "the entry `prd_error.py new` writes (never by hand) and, on `--fixes E-nnn`" in flat(SKILL)
+    assert ("`Source:`, and the entry `prd_error.py new` writes for a stop (never by hand). One edit comes before the "
+            "close: on a `--fixes` build, steps 4 and 5 remove that entry's `known-failing:` lines") in r
+    assert "Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of steps 4 and 5" in r
+    assert "the entry `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`" in flat(SKILL)
 
 
 def test_stop_entry_order_and_commit():
@@ -689,17 +689,16 @@ def test_unmark_line_and_not_passing_regression():
 
 
 # --- F-4 (proof, R21): a deploy-gate regression T-id closes verified ---
+# final review item 1: its line comes off right after the tester's un-mark commit, not at the close
 
-def test_r21_deploy_gate_regression_tid_line_comes_off_at_a_clean_close():
+def test_r21_deploy_gate_regression_tid_line_comes_off_before_step_7():
     r = flat(RUN)
-    for s in ("A regression T-id whose test case is at a deploy-gate level has its `known-failing: E-nnn` line removed at a clean `--fixes` close",
-              "it is not run in the build",
-              "its block closes `verified`",
-              "its test proves the fix at `/prd-deploy`",
-              "A build-gate regression T-id still needs `pass`"):
+    for s in ("Right after that commit, remove the `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level",
+              "the build never runs it",
+              "Its block closes `verified`",
+              "its test proves the fix at `/prd-deploy`"):
         assert s in r, s
-    close = r.split("**`--fixes E-nnn` only:**", 1)[1]
-    assert close.index("deploy-gate level") < close.index("A build-gate or unit regression T-id that is not `pass` keeps its line")
+    assert r.index("the deploy-gate lines.**") < r.index("the build-gate and unit lines.**") < r.index("7. **Full run.**")
 
 
 def test_r21_build_gate_not_passing_keeps_r4_text():
@@ -710,8 +709,5 @@ def test_r21_build_gate_not_passing_keeps_r4_text():
 
 def test_r21_exceptions_in_the_callers_rules():
     k = flat(SKILL)
-    assert "once their T-ids pass, or, for a deploy-gate regression T-id, at a clean close" in k
-    assert "other than a deploy-gate regression T-id of the `--fixes` entry, removed at a clean close" in k
-    r = flat(RUN)
-    assert "and no other test-case line, except a deploy-gate regression T-id's line, removed at a clean close as below" in r
-    assert "(the tester's un-mark committed and the fix merged)" in r
+    assert "a deploy-gate one's right after the tester's un-mark commit" in k
+    assert "for a build-gate or unit T-id that is not `pass`" in k

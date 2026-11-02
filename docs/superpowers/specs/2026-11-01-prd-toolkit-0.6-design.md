@@ -8,7 +8,7 @@
 > addendum wins for 0.6.
 
 > **Revisions.**
-> - §5–§6 (proof, R21): a deploy-gate regression T-id's `known-failing:` line comes off at a clean `--fixes` close and its block closes `verified`; its entry resolves only after a deploy run passed it.
+> - §5–§6 (proof, R21; final review): a deploy-gate regression T-id's `known-failing:` line comes off in the `--fixes` build right after the tester's un-mark commit, and a build-gate or unit one's once its result is `pass`, each removal its own commit (`Refs: <IDs>, E-nnn`) before step 7's trace; the close removes none (§6's "the close removes" stopped every such build at step 7's `known-failing-tags`). Its block closes `verified`; its entry resolves only after a deploy run passed it.
 > - §3–§4 (proof, R19): lint's prose rules skip `Evidence:` lines (quoted material), and every `prd_error.py` write refuses one that adds a lint finding.
 > - §3 (plan): lint's `error-entries` does not check a resolution's form. Entries resolved under 0.2
 >   to 0.5 hold free text, so a lint check would fail every existing ledger, against §14.

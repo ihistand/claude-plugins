@@ -226,15 +226,16 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    ```
 
    Then `/prd-build <area> <IDs> --fixes <E-nnn>`: it un-marks the regression tests, the builder
-   fixes the code, and the close takes the block to `verified`; a later `/prd-deploy` takes it to
-   `live`.
+   fixes the code, the build removes their `known-failing:` lines before its full run (a
+   deploy-gate one's once the un-mark is committed, a build-gate one's once it passes), and the
+   close takes the block to `verified`; a later `/prd-deploy` takes it to `live`.
 6. **Close.** For a fix (code bug, spec gap, invalid requirement, standard), the rule is this.
    Resolve only when the `--fixes` build closed with every regression T-id `pass` (its suite
    RESULTS, or the builder's unit result) and the block `verified`; otherwise run `/prd-build <area>
    <IDs> --fixes <E-nnn>` again. A build-gate and a unit regression T-id are proven by that
-   build. A deploy-gate regression T-id is not run in it (its `known-failing:` line came off at
-   the clean close), so a deploy-gate regression T-id's entry is resolved only after a
-   `/prd-deploy` run whose `tests` step record passed that T-id's level: Read the run's log
+   build. A deploy-gate regression T-id is not run in it (its `known-failing:` line came off once
+   the tester's un-mark was committed), so a deploy-gate regression T-id's entry is resolved only
+   after a `/prd-deploy` run whose `tests` step record passed that T-id's level: Read the run's log
    (`<that dir>/prd-toolkit/deploys/<run id>.jsonl`, as in the deploy skill) and check that the
    `tests` step record for that level is `pass` before resolving; with no such run, deploy first.
    The resolution keeps the code-bug form (T-id, level, version, fix commit). A unit regression
