@@ -15,6 +15,7 @@
 >   `prd_error.py check` checks the form of each resolution added inside its range (§4).
 > - §4 (proof, R17): `propose` also takes `--touches`, because an entry recorded before diagnosis has no `Touches:` and the recurrence check needs it.
 > - §7 (final review): `recover` on a run with no log exits 2 (`no log for run <id>`), a usage error, as 0.5's run commands do.
+> - §10 (0.6.1, R26): the page's default stays `./<project>-prd-<version>.html`, untracked in the repository root. The summaries file is written beside it as `./<project>-prd-<version>.summaries.json` and deleted once the render exits 0 or 2. The report says to move the page out of the repository or delete it before the next `/prd-build`, whose clean-tree check stops on it. 0.6.0's `<git-common-dir>/prd-toolkit/publish/` default (R24) is withdrawn, because Claude Code refuses writes under `.git/`. The two summary eval graders read the rendered page.
 
 ## 1. Scope
 

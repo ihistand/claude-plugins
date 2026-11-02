@@ -39,7 +39,7 @@ describe('plugins data', () => {
   it('prd-toolkit has 9 commands', () => {
     const prd = plugins.find(p => p.id === 'prd-toolkit')
     expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy', '/prd-error', '/prd-publish'])
-    expect(prd.version).toBe('0.6.0')
+    expect(prd.version).toBe('0.6.1')
     expect(prd.description).toContain('/prd-context')
     expect(prd.description).toContain('/prd-build')
     expect(prd.description).toContain('/prd-status')

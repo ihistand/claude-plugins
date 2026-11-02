@@ -90,3 +90,19 @@ In both, the page and the summaries file sat in the repository root, untracked a
 **Evals** (`claude plugin eval`, one run each, Sonnet, with and without the plugin): `publishing-trigger` 1.00 / 0.00,
 `publish-summary-cites-area` 1.00 / 0.50. Without the plugin no page was rendered with summaries; a grader on the
 missing summaries file fails, so the case does not pass a run that writes none.
+
+## 0.6.1 re-run (R26)
+
+0.6.0's final fix wave (R24) moved the page and the summaries file under `<git-common-dir>/prd-toolkit/publish/`.
+Claude Code refuses writes under `.git/` ("File is in a directory that is denied by your permission settings"),
+so with the plugin both evals fell to 0.00 and 0.50, the same as without it. R26 puts both files back in the
+repository root, deletes the summaries file after the render, and has the two summary graders read the rendered
+page (the renderer labels each summary `Summary by Claude of <IDs>`).
+
+**Evals** (2026-11-02, one run each, Sonnet, with and without the plugin): `publishing-trigger` 1.00 / 0.00,
+`publish-summary-cites-area` 1.00 / 0.50. Without the plugin no page exists, so both page graders fail.
+
+**Headless check** (the greet scaffold, state `bug`, "Publish the PRD as a page for the business team."): the
+session wrote `greet-prd-1.0.0.summaries.json` in the root, rendered with `--summaries`, then ran
+`rm greet-prd-1.0.0.summaries.json`; `git status` showed only `?? greet-prd-1.0.0.html`. Its report: "the file is
+untracked and I committed nothing. Move it out of the repository or delete it before the next `/prd-build`".

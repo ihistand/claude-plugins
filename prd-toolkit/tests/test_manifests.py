@@ -20,7 +20,7 @@ def test_versions_are_0_6_0():
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
     market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
     entry = next(p for p in market["plugins"] if p["name"] == "prd-toolkit")
-    assert plugin["version"] == entry["version"] == "0.6.0"
+    assert plugin["version"] == entry["version"] == "0.6.1"
 
 
 def test_web_description_matches():
