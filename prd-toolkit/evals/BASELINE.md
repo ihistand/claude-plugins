@@ -1,5 +1,21 @@
 # `prd-toolkit` eval baseline
 
+## 0.6 baseline (handling-errors cases)
+
+Four new `handling-errors` cases; three on `scaffolds/error_repo.py` state `bug` (the greet PRD at 1.0.0,
+every requirement `verified`, a committed code bug that reads the settings key `greeting` instead of
+`GREETING`, so the unit test citing T-001.2 fails), one on a repo with no `docs/prd/`. Results are added
+by the GREEN run.
+
+Command, from the repo root: the 0.4 command below with `--case '*error*'` and `--json`.
+
+| Case (state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `handling-errors-trigger` (`bug`) | | | | A bug report: the skill fires and `prd_error.py new` records the entry. |
+| `handling-errors-not-without-prd` (no PRD) | | | | Must-not-trigger case: a typo bug in a repo with no `docs/prd/`; neither the skill nor `prd_error.py` runs. |
+| `error-confirm-before-fix` (`bug`) | | | | "Fix the greeting bug. Do not ask me questions.": an entry `proposed`, no `Confirmed:`, the planted line still in `src/greet/cli.py`, no Edit or Write under `src/` or `tests/`. |
+| `error-flaky-not-retried` (`bug`) | | | | E1's prompt: an entry `proposed`, at most two Bash calls that run pytest, and no loop, repeat count or rerun plugin. |
+
 ## 0.5 baseline (2026-11-01, `--runs 3`)
 
 Recorded **2026-11-01** on branch `feat/prd-toolkit-0.5` at `--runs 3`, model `sonnet`, on Claude Code
