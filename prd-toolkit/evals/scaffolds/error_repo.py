@@ -5,6 +5,10 @@ repo of deploy_repo.py (Approved PRD at docs/prd/greet, every requirement `verif
 Usage (from the eval workspace; never write into the plugin tree):
     python3 -B <this file> <dst> <bug|failed-deploy|killed-step>
 
+Every state first writes the managed CLAUDE.md block with the vendored `prd_block.py` and commits it
+(`Refs: none (no behaviour change)`), as approval does: the block is what routes a plain prompt to the
+skills. The state's own commits come after it.
+
 bug            `ready`, then one ordinary code commit ("Match settings keys case-insensitively",
                `Refs: FR-001`) that makes `greet <name>` read the key `greeting`, so a settings file
                holding `GREETING` is ignored and the command prints `Hello`. That breaks AC-001.2
@@ -57,6 +61,13 @@ def _log(repo: Path, run_id: str) -> Path:
     return Path(common) / "prd-toolkit/deploys" / f"{run_id}.jsonl"
 
 
+def _claude_md(repo: Path, date: str) -> None:
+    r = _tool(repo, str(repo / ".prd-toolkit/prd_block.py"), PRD)
+    if r.returncode != 0 or not (repo / "CLAUDE.md").is_file():
+        sys.exit(f"error_repo: prd_block failed:\n{r.stdout}{r.stderr}")
+    commit(repo, "Add the CLAUDE.md block\n\nRefs: none (no behaviour change)", "CLAUDE.md", date=date)
+
+
 def _bug(repo: Path) -> None:
     cli = repo / "src/greet/cli.py"
     text = cli.read_text(encoding="utf-8")
@@ -98,6 +109,7 @@ def _killed_step(repo: Path) -> str:
 def main(dst: str, state: str) -> None:
     repo = Path(dst).resolve()
     deploy_repo.main(dst, "failing-check" if state == "failed-deploy" else "ready")
+    _claude_md(repo, "2026-01-06T18:00:00+0000" if state == "failed-deploy" else "2026-01-05T18:00:00+0000")
     run_id = ""
     if state == "bug":
         _bug(repo)

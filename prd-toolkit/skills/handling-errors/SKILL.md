@@ -26,7 +26,8 @@ nothing below.
 ## Non-negotiable rules
 
 1. **Record first.** `prd_error.py new` before any fix, and the entry committed with
-   `Refs: E-nnn`. Never write an entry or its lines by hand. Call the vendored
+   `Refs: E-nnn`. Never write an entry or its lines by hand, except one `Resolution:` line that
+   `check` reports wrong (step 6). Call the vendored
    `.prd-toolkit/prd_error.py` when `.prd-toolkit/` exists, otherwise the plugin's
    `scripts/prd_error.py` as a literal absolute path, the plugin root being two directories above
    the skill's base directory.

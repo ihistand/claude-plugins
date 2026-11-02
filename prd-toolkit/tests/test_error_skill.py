@@ -212,6 +212,9 @@ def test_step_2_reproduces_and_fixes_nothing():
     assert "you are not the black-box tester" in two
     assert "Nothing is fixed here" in two
     assert "at most twice" in two and "never in a loop" in two
+    assert "counts every run of the harness in this loop" in two
+    assert "go in the `--diagnosis`" in two
+    assert "go in the evidence" not in flat(RUN)
     assert "not reproduced:" in two  # an error that does not reproduce gets a diagnosis and waits
     assert "never rerun a deploy" in two and "prd_deploy.py recover" in two
 
@@ -378,8 +381,9 @@ def test_the_new_evals_exist_with_their_graders():
         "handling-errors-trigger": {"skill-fired", "entry-recorded"},
         "handling-errors-not-without-prd": {"skill-not-fired", "no-prd-error-run"},
         "error-confirm-before-fix": {"skill-fired", "entry-proposed", "no-confirmed", "bug-still-planted",
-                                     "no-test-or-src-edit", "no-test-or-src-write"},
-        "error-flaky-not-retried": {"skill-fired", "entry-proposed", "harness-at-most-twice", "no-retry-loop"},
+                                     "no-test-or-src-edit", "no-test-or-src-write", "no-test-or-src-bash-write"},
+        "error-flaky-not-retried": {"skill-fired", "entry-proposed", "harness-at-most-twice", "no-retry-loop",
+                                    "no-test-or-src-bash-write"},
     }
     for case, graders in want.items():
         d = EVALS / case
@@ -440,8 +444,43 @@ def test_the_fix_graders_catch_code_and_test_edits():
         assert not _counts("error-confirm-before-fix", name, {"file_path": "/tmp/x/evidence.txt", "content": "x"})
     planted = _grader("error-confirm-before-fix", "bug-still-planted")
     assert planted["target"] == {"source": "file", "path": "src/greet/cli.py"}
+    assert planted["pattern"] == r'load_settings\(\)\.get\("greeting", "Hello"\)'
     assert re.search(planted["pattern"], 'greeting = load_settings().get("greeting", "Hello")')
     assert not re.search(planted["pattern"], 'greeting = load_settings().get("GREETING", "Hello")')
+    lowercased = ('settings = {k.lower(): v for k, v in load_settings().items()}\n'
+                  '    greeting = settings.get("greeting", "Hello")')  # RED's E1/E3/E5 fix: not the planted line
+    assert not re.search(planted["pattern"], lowercased)
+    assert "however it would have been edited" not in planted["body"]
+
+
+BASH_WRITES = [
+    "sed -i '' 's/greeting/GREETING/' src/greet/cli.py",
+    "sed -i.bak 's/a/b/' /w/src/greet/cli.py",
+    "cat >> tests/unit/test_greet.py <<'EOF'\ndef test_x():\n    pass\nEOF",
+    "echo 'x' > src/greet/cli.py",
+    "printf 'x' >>/w/tests/unit/test_greet.py",
+    "tee -a tests/unit/test_greet.py < /tmp/x",
+    "python3 - <<'EOF'\nfrom pathlib import Path\np = Path(\"src/greet/cli.py\")\np.write_text(p.read_text().replace(\"a\", \"b\"))\nEOF",
+    "python3 -c \"open('src/greet/cli.py', 'w').write('x')\"",
+    "uv run python -c \"import pathlib; pathlib.Path('tests/unit/t.py').write_text('x')\"",
+]
+BASH_READS = [
+    "uv run pytest tests/unit -q", "uv run pytest tests/unit/test_greet.py -q 2>&1", "cat src/greet/cli.py",
+    "grep -n greeting src/greet/cli.py", "git diff src tests", "git show HEAD -- src/greet/cli.py",
+    "uv run pytest tests/unit -q > /tmp/x/out.txt",
+    "uv run --script .prd-toolkit/prd_error.py new docs/prd/greet --title 'x' --source 'y' --evidence-file /tmp/x/evidence.txt",
+    "python3 -c \"print(open('src/greet/cli.py').read())\"",
+]
+
+
+def test_the_bash_write_grader_catches_writes_under_src_and_tests():
+    for case in ("error-confirm-before-fix", "error-flaky-not-retried"):
+        g = _grader(case, "no-test-or-src-bash-write")
+        assert g["tool"] == "Bash" and g["min"] == 0 and g["max"] == 0, case
+        for cmd in BASH_WRITES:
+            assert _counts(case, "no-test-or-src-bash-write", {"command": cmd, "description": "x"}), (case, cmd)
+        for cmd in BASH_READS:
+            assert not _counts(case, "no-test-or-src-bash-write", {"command": cmd, "description": "write src/x"}), (case, cmd)
 
 
 def test_the_non_trigger_graders_hold_in_both_arms():
@@ -450,3 +489,62 @@ def test_the_non_trigger_graders_hold_in_both_arms():
         assert g["min"] == 0 and g["max"] == 0 and g["arm"] == "both", name
     assert _counts("handling-errors-not-without-prd", "skill-not-fired", {"skill": "prd-toolkit:handling-errors"})
     assert _counts("handling-errors-not-without-prd", "skill-not-fired", {"skill": "handling-errors"})
+
+
+# --- fix round 1 (review of 94c62a6, GREEN rulings R10, R11) ---
+
+def test_step_1_runs_nothing_to_make_evidence():
+    one = step(1)
+    assert "Run nothing to produce it" in one
+    assert "leave out `--evidence-file`" in one
+    t = flat(RUN)
+    assert "the failing test's lines" not in t
+    assert "what the report or the failure already holds" in t
+
+
+def test_resolve_only_after_the_fix_passed():
+    six = step(6)
+    assert ("Resolve only when the `--fixes` build closed with every regression T-id `pass` (its suite RESULTS, "
+            "or the builder's unit result) and the block `verified`") in six
+    assert "otherwise run `/prd-build <area> <IDs> --fixes <E-nnn>` again" in six
+    assert six.index("Resolve only when") < six.index("prd_error.py resolve")
+
+
+CHANGING = ROOT / "skills/changing-prds/SKILL.md"
+
+
+def test_r11_a_regression_patch_is_a_patch():
+    t = flat(CHANGING)
+    para = t.split("**A regression patch.**", 1)[1].split("## ", 1)[0]
+    for s in ("a new test case under an unchanged AC", "a `known-failing: E-nnn` line added to an existing case",
+              "returns to `approved`", "is a patch", "`regression test for E-003`", "`no dry run (unit only)`",
+              "is dry-run as step 4 says"):
+        assert s in para, s
+    assert "**A regression patch**" in step(5) and "prd-toolkit:changing-prds" in step(5)
+
+
+def test_r10_the_block_routes_errors_to_prd_error():
+    t = " ".join((ROOT / "templates/claude-block.md").read_text(encoding="utf-8").split())
+    assert ("A bug, a failing test, an error or a failed deploy goes to `/prd-error` (skill "
+            "`prd-toolkit:handling-errors`) before any code changes.") in t
+
+
+def test_environment_redeploy_needs_the_users_word():
+    five = step(5)
+    assert ("A new `/prd-deploy` run without a PRD change follows only the user's word on what they fixed in the "
+            "environment") in five
+    assert "a request to \"redeploy\" is not that word" in five
+    assert "closes only by `resolve --run` and `check`" in five
+
+
+def test_recurrence_lookup_is_a_command():
+    assert ('uv run --script <scripts>/prd_error.py list docs/prd/<slug>; echo "prd-error-exit=$?"'
+            in RUN.read_text(encoding="utf-8"))
+
+
+def test_the_one_hand_edit_is_named():
+    s = flat(SKILL)
+    assert "except one `Resolution:` line that `check` reports wrong (step 6)" in s
+    six = step(6)
+    assert "never left for the user, with one exception" in six
+    assert "its first SHA" in flat(RUN)

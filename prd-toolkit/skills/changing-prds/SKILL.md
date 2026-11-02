@@ -68,6 +68,14 @@ the gap as the change.
 If any existing AC, test-case `expect`, error code, status code or response changes meaning or
 disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major.
 
+**A regression patch.** A change made for an `errors.md` entry (`prd-toolkit:handling-errors`)
+that only adds its regression test is a patch: a new test case under an unchanged AC, or a
+`known-failing: E-nnn` line added to an existing case, and the block, which returns to `approved`
+(its `Status:` and §11 row) so `/prd-build <area> <IDs> --fixes E-nnn` can build the fix. Its §14
+row names the entry, as `regression test for E-003`:
+`| 1.0.1 | <date> | regression test for E-003; <dry-run record> | FR-001, T-001.3 |`. A unit-only change records `no dry run (unit only)`; a non-unit regression T-id, new or marked, is
+dry-run as step 4 says. Its commits cite the entry: `Refs: FR-001, E-003`.
+
 ## ID rules
 
 - **Next free FR or NFR number** = the highest FR or NFR number in the PRD, across both kinds and
