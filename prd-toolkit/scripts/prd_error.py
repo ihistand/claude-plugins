@@ -5,7 +5,9 @@
 # ///
 """The errors.md ledger: new, list, propose, confirm, resolve, check. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
+import os
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -16,7 +18,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import deploy, errors, model, trace  # noqa: E402
+from prdlint import deploy, errors, model, registry, trace  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -88,6 +90,55 @@ def _run(args: argparse.Namespace, prd: model.Prd, today: date) -> list[str]:
     return [f"{args.eid} {errors.summary(model.load(prd.root).errors_ledger[args.eid])}"]
 
 
+class LintRefused(deploy.Refused):
+    """A write that would add a lint finding in errors.md."""
+
+
+def _ledger_findings(root: Path) -> Counter:
+    """Lint findings located in errors.md, keyed so a finding that only moved down a line still matches."""
+    prd = model.load(root)
+    lines = prd.docs.get("errors.md", "").split("\n")
+    keys: Counter = Counter()
+    for f in registry.run(prd):
+        if f.file == "errors.md":
+            text = lines[f.line - 1] if 0 < f.line <= len(lines) else ""
+            keys[(f.line, f.rule, f.message, text)] += 1
+    return keys
+
+
+def _guarded_write(args: argparse.Namespace, prd: model.Prd, today: date) -> list[str]:
+    """Run a ledger write; refuse it, leaving errors.md as it was, when it adds a lint finding there."""
+    path = prd.root / "errors.md"
+    original = path.read_bytes() if path.is_file() else None
+    os.environ.setdefault("PRD_LINT_CI", "1")
+    budget = Counter()
+    for (_, rule, msg, text), n in _ledger_findings(prd.root).items():
+        budget[(rule, msg, text)] += n
+    out = _run(args, prd, today)
+    try:
+        added = []
+        for (ln, rule, msg, text), n in sorted(_ledger_findings(prd.root).items()):
+            for _ in range(n):
+                if budget[(rule, msg, text)] > 0:
+                    budget[(rule, msg, text)] -= 1
+                else:
+                    added.append((ln, rule, msg))
+    except BaseException:
+        _restore(path, original)
+        raise
+    if added:
+        _restore(path, original)
+        raise LintRefused([f"the entry would fail lint: errors.md:{ln}: {rule}: {msg}" for ln, rule, msg in added])
+    return out
+
+
+def _restore(path: Path, original: bytes | None) -> None:
+    if original is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.write_bytes(original)
+
+
 def main(argv: list[str], today: date | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
@@ -95,13 +146,16 @@ def main(argv: list[str], today: date | None = None) -> int:
         return 0 if e.code in (0, None) else 2
     try:
         prd = model.load(Path(args.prd_dir))
-        out = _run(args, prd, today or date.today())
+        today = today or date.today()
+        out = _run(args, prd, today) if args.cmd in ("check", "list") else _guarded_write(args, prd, today)
     except (model.NotAPrd, ValueError, trace.BadRange) as e:
         print(f"prd_error: {e}", file=sys.stderr)
         return 2
     except deploy.Refused as e:
         for reason in e.reasons:
             print(f"refused: {reason}", file=sys.stderr)
+        if isinstance(e, LintRefused):
+            print("hint: put quoted output in backticks", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"prd_error: internal error: {type(e).__name__}: {e}", file=sys.stderr)

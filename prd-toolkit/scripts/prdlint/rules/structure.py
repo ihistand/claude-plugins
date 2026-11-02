@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 from ..deps import require
 from ..findings import Finding
-from ..markdown import strip_code, tables
+from ..markdown import mask_evidence, strip_code, tables
 from ..model import ADOPTION_FILE, ADOPTION_STATES, UNMIGRATED, Prd
 from ..registry import rule
 
@@ -33,9 +33,14 @@ STATUSES = ("Draft", "In review", "Approved")
 
 
 def prose(prd: Prd) -> Iterator[tuple[str, int, str]]:
-    """Every markdown line of the PRD as (file, line, text), with code blocks and spans blanked."""
+    """Every markdown line of the PRD as (file, line, text), with code blocks and spans blanked.
+
+    errors.md's `Evidence:` lines are quoted material, not PRD prose, so they are blanked too."""
     for rel, text in prd.docs.items():
-        for n, line in enumerate(strip_code(text).split("\n"), 1):
+        stripped = strip_code(text)
+        if rel == "errors.md":
+            stripped = mask_evidence(stripped)
+        for n, line in enumerate(stripped.split("\n"), 1):
             yield rel, n, line
 
 

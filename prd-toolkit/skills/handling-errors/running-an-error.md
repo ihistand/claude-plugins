@@ -34,6 +34,10 @@ that holds it or a `$(…)`. The gate form `; echo "prd-error-exit=$?"` is the o
 Never pipe, filter or truncate a gated command's output (no `| head`, no `| grep`). Free text
 (a title, a source, a diagnosis, a reply) goes in single quotes, writing each `'` in it as `'\''`:
 inside double quotes a backtick or a `$` runs as shell.
+Quoted program output in `--diagnosis` and `--title` (a usage line, an HTML-like token, a `<name>`)
+goes in backticks; only the `Evidence:` lines take it bare. A `refused: the entry would fail lint`
+(it names the finding) is fixed by re-running the same command with the quoted
+part in backticks; nothing was written. In a command, those backticks sit inside the single quotes.
 
 **Exits.** `prd_error.py` prints one result line and the gate line follows.
 

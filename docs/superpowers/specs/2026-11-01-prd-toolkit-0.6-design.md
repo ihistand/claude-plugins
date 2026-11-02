@@ -8,6 +8,7 @@
 > addendum wins for 0.6.
 
 > **Revisions.**
+> - §3–§4 (proof, R19): lint's prose rules skip `Evidence:` lines (quoted material), and every `prd_error.py` write refuses one that adds a lint finding.
 > - §3 (plan): lint's `error-entries` does not check a resolution's form. Entries resolved under 0.2
 >   to 0.5 hold free text, so a lint check would fail every existing ledger, against §14.
 >   `prd_error.py check` checks the form of each resolution added inside its range (§4).

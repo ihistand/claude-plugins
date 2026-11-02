@@ -269,3 +269,57 @@ def test_cli_propose_touches(prd):
     r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "d", "--touches", "FR-001")
     assert r.returncode == 0, r.stderr
     assert "Touches: FR-001\n" in (prd / "errors.md").read_text().split("### E-002", 1)[1]
+
+
+def _errors_bytes(prd):
+    return (prd / "errors.md").read_bytes()
+
+
+def _propose(prd, diagnosis):
+    return run(prd, "propose", str(prd), "E-001", "--class", "code bug", "--diagnosis", diagnosis)
+
+
+def _entry_unclassified(prd):
+    assert run(prd, "new", str(prd), "--title", "t", "--source", "s", "--touches", "FR-001").stdout.strip() == "E-002"
+
+
+def test_propose_with_bare_placeholder_in_diagnosis_is_refused_unchanged(prd):
+    _entry_unclassified(prd)
+    before = _errors_bytes(prd)
+    r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "prints usage: greet <name>")
+    assert r.returncode == 1 and r.stdout == ""
+    lines = r.stderr.strip().splitlines()
+    assert lines[0].startswith("refused: the entry would fail lint: errors.md:") and ": placeholder: " in lines[0]
+    assert "put quoted output in backticks" in lines[-1]
+    assert _errors_bytes(prd) == before
+
+
+def test_propose_with_backticked_diagnosis_is_written(prd):
+    _entry_unclassified(prd)
+    r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "prints `usage: greet <name>`")
+    assert r.returncode == 0, r.stderr
+    assert ledger(prd)["E-002"].state == "proposed"
+
+
+def test_new_with_placeholder_in_evidence_is_written(prd, tmp_path):
+    ev = tmp_path / "ev.txt"
+    ev.write_text('Actual: prints "usage: greet <name>", exit 2\n')
+    r = run(prd, "new", str(prd), "--title", "t", "--source", "s", "--evidence-file", str(ev))
+    assert r.returncode == 0, r.stderr
+
+
+def test_new_with_placeholder_in_title_is_refused(prd):
+    before = _errors_bytes(prd)
+    r = run(prd, "new", str(prd), "--title", "prints <name>", "--source", "s")
+    assert r.returncode == 1 and "refused: the entry would fail lint: errors.md:" in r.stderr
+    assert _errors_bytes(prd) == before
+
+
+def test_existing_findings_elsewhere_do_not_block_a_write(prd):
+    _entry_unclassified(prd)
+    text = (prd / "errors.md").read_text()
+    (prd / "errors.md").write_text(text.replace("### E-002 t", "### E-002 bare <name> title"))
+    r = run(prd, "propose", str(prd), "E-002", "--class", "code bug", "--diagnosis", "plain words")
+    assert r.returncode == 0, r.stderr
+    r = run(prd, "confirm", str(prd), "E-002", "--reply", "yes")
+    assert r.returncode == 0, r.stderr

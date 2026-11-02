@@ -21,6 +21,19 @@ def strip_code(text: str) -> str:
     return "\n".join(out)
 
 
+def mask_evidence(text: str) -> str:
+    """Blank errors.md's `Evidence:` lines and their two-space continuations; line numbers survive."""
+    out: list[str] = []
+    on = False
+    for line in text.split("\n"):
+        if line.startswith("Evidence:"):
+            on = True
+        elif not (on and line.startswith("  ")):
+            on = False
+        out.append(" " * len(line) if on else line)
+    return "\n".join(out)
+
+
 def frontmatter(text: str) -> tuple[dict[str, str], int]:
     """Parse the leading `---` block into {key: value}. Returns (fields, line of the opening ---),
     or ({}, 0) when there is none."""

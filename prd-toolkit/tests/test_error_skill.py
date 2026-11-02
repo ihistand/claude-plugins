@@ -582,3 +582,14 @@ def test_r17_step_3_passes_touches_to_propose():
     cmd = step(3).split("prd_error.py propose", 1)[1].split("; echo", 1)[0]
     assert "--touches <IDs>" in cmd
     assert "the blocks the diagnosis names" in step(3)
+
+
+def test_quoted_output_goes_in_backticks_and_lint_refusal_is_fixed_by_rerun():
+    t = flat(RUN)
+    assert "Quoted program output in `--diagnosis` and `--title`" in t and "goes in backticks" in t
+    assert "refused: the entry would fail lint" in t
+    assert "re-running the same command with the quoted part in backticks" in t
+
+
+def test_readme_lists_the_lint_refusal():
+    assert "the entry would fail lint" in flat(ROOT / "README.md")

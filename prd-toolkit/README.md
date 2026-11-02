@@ -336,6 +336,10 @@ does, and the failure close records the entry.
   `Recurrence of:` that is not an entry, or a `--touches` ID the PRD does not define;
 - `confirm`: an `unclassified`, already `confirmed` or `resolved` entry;
 - `resolve`: an entry that is not `confirmed`, or is already resolved, or a `--t` with no test case or level;
+- `new`, `propose`, `confirm` and `resolve`: a write that would add a lint finding located in
+  `errors.md` (`refused: the entry would fail lint: <file>:<line>: <rule>: <message>`, one per finding,
+  then the hint `put quoted output in backticks`); `errors.md` is left byte-identical. Lint's prose
+  rules skip `Evidence:` lines, so quoted output belongs there bare and in backticks elsewhere;
 - any command naming an `E-nnn` that is not an entry; and `check`, whose exit 1 prints findings, one
   per line, as `errors.md: E-nnn: <finding>`.
 
