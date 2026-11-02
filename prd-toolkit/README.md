@@ -334,13 +334,13 @@ does, and the failure close records the entry.
 - `propose`: an entry that is `confirmed` (its class is settled) or `resolved`, or a
   `Recurrence of:` that is not an entry;
 - `confirm`: an `unclassified`, already `confirmed` or `resolved` entry;
-- `resolve`: an entry that is not `confirmed`, or is already resolved;
+- `resolve`: an entry that is not `confirmed`, or is already resolved, or a `--t` with no test case or level;
 - any command naming an `E-nnn` that is not an entry; and `check`, whose exit 1 prints findings, one
   per line, as `errors.md: E-nnn: <finding>`.
 
-Exit 2 (usage error, nothing written): an empty reply, class, title or source; `unclassified` as a
+Exit 2 (usage error, nothing written): an empty reply, class, diagnosis, title or source; `unclassified` as a
 class; a malformed version, T-id, run id or commit (7 to 40 lowercase hex digits); `--not-a-defect`
-combined with another resolution; a `--t` with no test case or level; an unreadable range or PRD
+combined with another resolution; an unreadable range or PRD
 folder.
 
 ## Publishing
@@ -353,7 +353,7 @@ appears without its `Evidence:` lines.
 
 **Summaries.** The skill writes a short plain-language summary of each area (600 characters at most,
 in the language you ask for), and the page shows it in a box labelled `Summary by Claude of
-FR-001-FR-004, PRD <version>` that cites its IDs. Summaries are written fresh for each publish and
+FR-001–FR-004, PRD <version>` that cites its IDs. Summaries are written fresh for each publish and
 never stored in the PRD folder.
 
 **Where it goes.** The page is written outside the PRD folder, to the path you name (default
@@ -361,13 +361,15 @@ never stored in the PRD folder.
 the skill offers the same file as a private Artifact, or updates one you name; otherwise, or when you
 decline, it gives you the file path.
 
+`prd_publish.py` is not vendored into `.prd-toolkit/`; it runs from the plugin (see Lint CLI for the install path).
+
 ```
-uv run --script .prd-toolkit/prd_publish.py render docs/prd/<slug> --out <file> [--summaries <json>]
+uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_publish.py render docs/prd/<slug> --out <file> [--summaries <json>]
 ```
 
 **What `prd_publish.py` refuses.** Exit 1 (`refused`): an `--out` inside the PRD folder; a summary
 whose version is not the PRD's, whose area does not exist, whose ID is undefined or belongs to
-another area, or whose text is over 600 characters. Exit 2 (usage error, nothing written): not a PRD
+another area, or whose text is over 600 characters; a summaries file that is not an object with version and areas (`summaries: must be an object …`), an area that is not an object with text and ids, or `ids` that are not a list of requirement IDs (`… ids must be a list of requirement IDs`). Exit 2 (usage error, nothing written): not a PRD
 folder, an unmigrated `adoption.md`, an unreadable summaries file, or an output path that cannot be
 written.
 
@@ -395,7 +397,7 @@ the user cannot state.
   - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (32 rules) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).
   - Known-failing tests mark themselves as strict expected failures and tag their citation. A stopped build records an entry, and `/prd-build --fixes E-nnn` builds a fix from it. `prd_deploy.py recover` ends a killed step. The generated `prd-lint` job also runs `prd_hooks.py check --ci`, which reports stale CI.
   - `/prd-publish` and the `publishing-prds` skill: `prd_publish.py` renders the PRD as one self-contained HTML page (see Publishing).
-  - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py` and `prd_publish.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace reports it until a tester-only round adds the marker and the tag. Existing entries need no edit: the new lines are optional, and `check` judges only ranges.
+  - Upgrading from 0.5: re-run `prd_hooks.py install` (it vendors `prd_error.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci`). The managed block's text changed in 0.6, so every existing repo's `prd_block.py --check` reports its CLAUDE.md block stale until `prd_block.py` is re-run. An existing `known-failing` case needs a tagged citation: the trace reports it until a tester-only round adds the marker and the tag. Existing entries need no edit: the new lines are optional, and `check` judges only ranges.
 - **0.5.0:**
   - `/prd-deploy` and the `deploying-from-prds` skill: `prd_deploy.py` runs the `operations.md` runbook, every step from 1 in order, and stops at each human step and on each failure. The model never types a runbook command; it relays each reply verbatim, records a failure in `errors.md`, and closes with Deployed rows and `verified` → `live (since X.Y.Z)` (see Deploying).
   - The runbook is a step grammar: `(actor: …) (env: …)` and the labels `Run:`, `Check:`, `Rollback:`, `Do:`. Environments gains a `Production` column. `operations.md` gains `## Deployed` and `## Drift`.

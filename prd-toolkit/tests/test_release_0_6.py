@@ -99,3 +99,24 @@ def test_base_spec_points_to_the_06_design():
 def test_block_names_prd_error_and_stays_small():
     block = (ROOT / "templates/claude-block.md").read_text()
     assert "`/prd-error`" in block
+
+
+def test_readme_vendored_paths_are_vendored():
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from prdlint import hooks
+    named = set(re.findall(r"\.prd-toolkit/(\w+\.py)", README))
+    assert named and named <= set(hooks.VENDORED), sorted(named - set(hooks.VENDORED))
+    pub = flat(section("Publishing"))
+    assert "prd-toolkit/<version>/scripts/prd_publish.py render" in pub and "runs from the plugin" in pub
+    assert "(it vendors `prd_error.py`)" in flat(README) and "`prd_error.py` and `prd_publish.py`" not in README
+
+
+def test_error_refusal_placement_and_publish_wording():
+    s = flat(section("Handling errors"))
+    one, two = s.split("Exit 2 (usage error, nothing written)", 1)
+    assert "`--t` with no test case or level" in one and "`--t` with no test case or level" not in two
+    assert "empty reply, class, diagnosis, title or source" in two
+    p = flat(section("Publishing"))
+    assert "summaries: must be an object" in p and "ids must be a list of requirement IDs" in p
+    assert "FR-001–FR-004" in p and "FR-001-FR-004" not in p
