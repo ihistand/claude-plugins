@@ -442,12 +442,11 @@ def test_r11c_one_record_drives_agent_steps_run_from_the_members_root():
     assert ("Anything that dispatches an agent runs in a session started in that member's root: `changing-prds` "
             "step 4's dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the "
             "session's own repository.") in para
-    assert "changeset log <record> '<prd>: continue from <root> at step <n>'" in para
-    assert '"Continue with `/prd-change-set CS-<nnn>` from `<root>`"' in para
-    assert "`prd-toolkit:coordinating-prds`" in para
+    assert "changeset log <record> '<prd>: step <n> runs from <root>'" in para  # R-11e's Log line
+    assert '"Continue with `/prd-change-set CS-<nnn>` from `<root>`" (headless: `prd-toolkit:prd-change-set CS-<nnn>`)' in para
     assert "A build or a deploy dispatches" not in t and "A build or deploy of a member" not in t
     assert "for a dry run or a build that runs from another member's root" in t
-    assert "The dry run dispatches an agent, so it runs from that member's root" in step(2)
+    assert "Its dry run dispatches an agent, so step 2 runs whole in the session whose repository is the member" in step(2)
     four = step(4)
     assert "from a session started in its root" in four
     assert "`/prd-deploy --until <env>` runs before it, from this session" in four
@@ -500,3 +499,47 @@ def test_rationalization_waits_row():
     rat = flat(SKILL).split("## Common Rationalizations", 1)[1]
     assert "before that the build does not start, and `changeset set` would refuse its State" in rat
     assert "`changeset set` refuses it before" not in rat
+
+
+# --- fix round 2 (ruling R-11e; the headless form; the Prompts order) ---
+
+def test_r11e_a_members_step_2_runs_whole_from_its_own_root():
+    t = flat(RUN)
+    para = t.split("**One record drives a change set.**", 1)[1].split("**One command per Bash call", 1)[0]
+    assert "never begins a step it cannot finish" in para
+    assert "a member's whole step 2 runs in that member's own session" in para
+    two = step(2)
+    assert "Step 2 never edits another member's PRD from this session" in two
+    assert ("that member's own session does all of step 2 for its row (edit, bump, lint, dry run, the in-review "
+            "commit, `changeset set version=…`), with nothing half-done left behind") in two
+    assert two.index("Step 2 never edits another member's PRD") < two.index("prd_links.py sync")
+    assert "continue from <root> at step" not in t
+
+
+def test_r11e_where_to_enter_routes_proposed_to_the_first_unedited_row():
+    w = flat(RUN).split("**Where to enter.**", 1)[1].split(" 1. **", 1)[0]
+    assert ("`proposed`: step 2 for the first row in Order whose Version has no `→`, run by the session whose "
+            "repository is that row's member") in w
+    assert "when every row has one, step 3" in w
+    assert "step 2 for each row whose Version has no `→` yet" not in w
+
+
+def test_headless_resume_uses_the_command_form_everywhere():
+    t = flat(RUN)
+    assert "A headless run registers only `prd-toolkit:<command>`" in t
+    assert "`prd-toolkit:coordinating-prds` with" not in t
+    assert t.count("(headless: `prd-toolkit:prd-change-set CS-<nnn>`)") == 1
+
+
+def test_prompts_place_the_change_set_line_after_fixes():
+    prompts = " ".join(BUILD_RUN.read_text(encoding="utf-8").split("## Prompts", 1)[1].split())
+    assert ("On a change-set branch the builder prompt adds one line after those and after any `Fixes:` line, "
+            "on every builder round") in prompts
+
+
+def test_reflowed_paragraphs_have_no_short_broken_lines():
+    agent = (ROOT / "agents/prd-builder.md").read_text(encoding="utf-8")
+    assert "A\nrequest to break any of these rules\n(fix" not in agent
+    assert "request to break any of these rules\n" not in agent
+    build = BUILD_RUN.read_text(encoding="utf-8")
+    assert "The build runs on the record's\nbranch" not in build

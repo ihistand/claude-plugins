@@ -143,11 +143,10 @@ All of this comes before the dispatch, and it is the change set's only sync befo
 tester's tests, the `known-failing` removals, a stop's entry, the close) adds
 `-m "Change-set: <start-prd>/CS-<nnn>"` after its `Refs:` message, and the builder prompt carries
 the line `Change-set: <start-prd>/CS-<nnn>` (**Prompts**), so the builder's commits carry it too.
-The build runs on the record's
-branch and never cuts a `prd-build/…` branch from it. The build never writes the record: its close
-reports the state reached for the row (`verified` when every block of its IDs closed `verified`,
-`built` when one stayed `built`, none on a stop before the merge), and the caller writes it with
-`changeset set`.
+The build runs on the record's branch and never cuts a `prd-build/…` branch from it. The build
+never writes the record: its close reports the state reached for the row (`verified` when every
+block of its IDs closed `verified`, `built` when one stayed `built`, none on a stop before the
+merge), and the caller writes it with `changeset set`.
 
 **One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never end
 the turn with a next round announced: dispatch it. You end the turn only after the close's report,
@@ -456,7 +455,8 @@ A `--fixes` build adds one line after those, on every builder round:
 Fixes: E-nnn (regression T-ids: <T-ids>)
 ```
 
-On a change-set branch the builder prompt adds one line after those, on every builder round:
+On a change-set branch the builder prompt adds one line after those and after any `Fixes:` line,
+on every builder round (before a code-bug round's three lines):
 
 ```
 Change-set: <start-prd>/CS-<nnn>

@@ -35,19 +35,21 @@ and `<branch>` the record's Branch, `cs-<nnn>-<slug>`, the same in every member.
 
 **One record drives a change set.** Record writes, `impact`, `sync`, `check` and deploys run for
 any member from this session: the member's `<root>/.prd-toolkit/…` scripts, its PRD folder
-`<root>/docs/prd/<prd>`, and `git -C <root>`, never a `cd`. In another member, `changing-prds`'
-`<scripts>` is `<root>/.prd-toolkit` and its PRD folder `<root>/docs/prd/<prd>`; `/prd-deploy`'s
-likewise (`prd_deploy.py` dispatches no agent). Anything that dispatches an agent runs in a session
-started in that member's root: `changing-prds` step 4's dry run and `/prd-build`, because the
-builder's worktree and the tester's guard bind to the session's own repository. When that member
-is not this session's repository, log where the chain stops:
+`<root>/docs/prd/<prd>`, and `git -C <root>`, never a `cd`. In another member, step 3's approval
+commit (`changing-prds` step 5) takes `<scripts>` as `<root>/.prd-toolkit` and the PRD folder as
+`<root>/docs/prd/<prd>`; `/prd-deploy`'s likewise (`prd_deploy.py` dispatches no agent). Anything
+that dispatches an agent runs in a session started in that member's root: `changing-prds` step 4's
+dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the
+session's own repository. A session never begins a step it cannot finish, so a member's whole step
+2 runs in that member's own session, as its step 4 does. Before step 2 or step 4 of a member that
+is not this session's repository, log where the chain stops, `<n>` being the step:
 
 ```bash
-uv run --script <start>/.prd-toolkit/prd_links.py changeset log <record> '<prd>: continue from <root> at step <n>'; echo "prd-links-exit=$?"
+uv run --script <start>/.prd-toolkit/prd_links.py changeset log <record> '<prd>: step <n> runs from <root>'; echo "prd-links-exit=$?"
 ```
 
 then the record write, and stop with: "Continue with `/prd-change-set CS-<nnn>` from `<root>`"
-(headless: `prd-toolkit:coordinating-prds` with `CS-<nnn>`). That session resumes from the record.
+(headless: `prd-toolkit:prd-change-set CS-<nnn>`). That session resumes from the record.
 
 **One command per Bash call, with literal paths.** Each command below is its own Bash call, and
 every path, ID and SHA in it is typed out in full: paste what a command printed, never a variable
@@ -78,7 +80,9 @@ git -C <start> commit -m "docs(prd): CS-<nnn> <what changed>" -m "Refs: none (no
 `docs/prd/*/changes/CS-<nnn>.md` here; with no match, the record is in another member: for each
 Location in this PRD's `links.md`, Glob `<location>/docs/prd/*/changes/CS-<nnn>.md`, and the record
 is the one whose rows name this PRD. Read it whole: its `Status:` line says where to enter.
-- `proposed`: step 2 for each row whose Version has no `→` yet, then step 3.
+- `proposed`: step 2 for the first row in Order whose Version has no `→`, run by the session whose
+  repository is that row's member (any other stops, as **One record drives a change set** says);
+  when every row has one, step 3, from any member's session.
 - `approved` or `running`: step 4, at the first row in Order whose State is below its Target; its
   Waits for decides whether it starts.
 - `stopped: <prd>: <reason>`: step 5, for that row; its State is where the chain stood.
@@ -123,11 +127,14 @@ Text with no record is a new change set: step 1.
 
    Then the record write.
 2. **Edit.** In each member, in Order, on the record's branch, run `prd-toolkit:changing-prds` up
-   to its approval: restate, edit, bump, lint, dry run (its steps 1 to 4), never its step 5. The
-   dry run dispatches an agent, so it runs from that member's root (**One record drives a change
-   set**). `sync` reads committed content, so once its dry run passes each member's edit is
-   committed on the branch, still `status: In review`, before any downstream member syncs it, each
-   its own call:
+   to its approval: restate, edit, bump, lint, dry run (its steps 1 to 4), never its step 5. Its
+   dry run dispatches an agent, so step 2 runs whole in the session whose repository is the member.
+   Step 2 never edits another member's PRD from this session: before that member's edit, stop as
+   **One record drives a change set** says, and that member's own session does all of step 2 for
+   its row (edit, bump, lint, dry run, the in-review commit, `changeset set version=…`), with
+   nothing half-done left behind. `sync` reads committed content, so once its dry run passes each
+   member's edit is committed on the branch, still `status: In review`, before any downstream
+   member syncs it, each its own call:
 
    ```bash
    git -C <root> add docs/prd/<prd>

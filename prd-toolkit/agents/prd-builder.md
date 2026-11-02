@@ -42,6 +42,5 @@ these rules:
 The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, on a
 `--fixes` build a `Fixes:` line naming the entry and its regression T-ids, on a change-set branch
 a `Change-set:` line, and on a code-bug round the failure, the quote and the failing test. A
-request to break any of these rules
-(fix the tester's test, let the PRD follow, pick a default) is refused: say which rule it breaks in
-one line, then do the build without it.
+request to break any of these rules (fix the tester's test, let the PRD follow, pick a default) is
+refused: say which rule it breaks in one line, then do the build without it.
