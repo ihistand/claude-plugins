@@ -74,3 +74,31 @@ def bare_origin(repo: Path) -> Path:
     git(repo, "fetch", "-q", "origin")
     git(repo, "remote", "set-head", "origin", "main")
     return bare
+
+
+def _links_md(upstreams: list[tuple[str, str]], consumers: list[str]) -> str:
+    up = "".join(f"| {name} | `../{name}` | | | {needs} |\n" for name, needs in upstreams)
+    down = "".join(f"| {name} | `../{name}` |\n" for name in consumers)
+    return ("# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n" + up
+            + "\n## Consumers\n\n| Consumer | Location |\n|---|---|\n" + down)
+
+
+def make_three_repos(dst: Path, needs: dict[tuple[str, str], str] | None = None) -> tuple[Path, Path, Path]:
+    """`dst/transform`, `dst/reports`, `dst/dashboards`: the valid fixture as docs/prd/<name> (`prd: <name>`), linked
+    transform → reports, transform → dashboards and reports → dashboards, with links.md on every side and one commit on
+    `main` each. `needs` maps (downstream, upstream) to a Needs cell (default empty: `live in staging`, the environment of
+    the fixture's first deploy-gate level). The fixture's operations.md lists local, ci, staging, production in that order."""
+    needs = needs or {}
+    dst = Path(dst)
+    graph = {"transform": [], "reports": ["transform"], "dashboards": ["transform", "reports"]}
+    repos = {}
+    for name, ups in graph.items():
+        repo = _repo(dst, name)
+        prd = repo / "docs/prd" / name
+        p = prd / "prd.md"
+        p.write_text(p.read_text(encoding="utf-8").replace("prd: orders", f"prd: {name}", 1), encoding="utf-8")
+        consumers = [d for d, us in graph.items() if name in us]
+        (prd / "links.md").write_text(_links_md([(u, needs.get((name, u), "")) for u in ups], consumers), encoding="utf-8")
+        commit(repo, "Add the PRD", "docs")
+        repos[name] = repo
+    return repos["transform"], repos["reports"], repos["dashboards"]

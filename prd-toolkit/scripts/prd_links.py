@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""Links between PRDs in different repositories: add, sync, check, impact.
+"""Links between PRDs in different repositories: add, sync, check, impact, and changeset (the change-set record's only writer).
 
 Exit 0 done or clean, 1 refused (`refused: <why>` on stderr) or drift, 2 usage or tool error, 3 (check and impact)
 nothing drifted but a side was unreachable; `check --ci` exits 0 there, after printing the unreachable line.
@@ -19,7 +19,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import links, model  # noqa: E402
+from prdlint import changeset, links, model  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,7 +40,46 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("impact", help="the contract items this working tree changes, and the consumers that cite them")
     p.add_argument("prd_dir", metavar="PRD")
     p.add_argument("--base", default="HEAD", help="the ref to compare the working tree with (default: HEAD)")
+    cs = sub.add_parser("changeset", help="write a change-set record, changes/CS-nnn.md").add_subparsers(dest="action", metavar="<action>")
+    p = cs.add_parser("new", help="number a record and write every member in Order, Status proposed")
+    p.add_argument("prd_dir", metavar="PRD")
+    p.add_argument("--title", required=True)
+    p.add_argument("--member", action="append", default=[], help="a path to a member repository's root (repeat for each)")
+    p = cs.add_parser("set", help="set a row's branch, version, ids or state")
+    p.add_argument("record")
+    p.add_argument("prd")
+    p.add_argument("fields", nargs="+", metavar="<field>=<value>")
+    p = cs.add_parser("approve", help="record the user's approval reply; proposed rows and Status become approved")
+    p.add_argument("record")
+    p.add_argument("--reply", required=True)
+    p.add_argument("--amendment", action="store_true")
+    p = cs.add_parser("stop", help="record a stop on Status and in Log")
+    p.add_argument("record")
+    p.add_argument("prd")
+    p.add_argument("reason")
+    p = cs.add_parser("log", help="add a line to Log")
+    p.add_argument("record")
+    p.add_argument("text")
+    p = cs.add_parser("close", help="Status done and the Merge order, once every State equals its Target")
+    p.add_argument("record")
+    p = cs.add_parser("abandon", help="Status abandoned; the branches are left for the user")
+    p.add_argument("record")
+    p.add_argument("reason")
     return parser
+
+
+def _changeset(args) -> Path:
+    if args.action == "set":
+        return changeset.set_fields(args.record, args.prd, args.fields)
+    if args.action == "approve":
+        return changeset.approve(args.record, args.reply, args.amendment)
+    if args.action == "stop":
+        return changeset.stop(args.record, args.prd, args.reason)
+    if args.action == "log":
+        return changeset.log(args.record, args.text)
+    if args.action == "close":
+        return changeset.close(args.record)
+    return changeset.abandon(args.record, args.reason)
 
 
 def main(argv: list[str]) -> int:
@@ -53,6 +92,12 @@ def main(argv: list[str]) -> int:
         parser.print_usage(sys.stderr)
         print("prd_links: give a command", file=sys.stderr)
         return 2
+    if args.command == "changeset" and not args.action:
+        parser.print_usage(sys.stderr)
+        print("prd_links: changeset: give new, set, approve, stop, log, close or abandon", file=sys.stderr)
+        return 2
+    if args.command == "changeset" and args.action != "new":
+        return _run(lambda: ([str(_changeset(args))], 0))
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
@@ -64,22 +109,31 @@ def main(argv: list[str]) -> int:
     if prd.adoption_unmigrated:
         print(f"prd_links: {prd.root.as_posix()}/prd.md: {model.UNMIGRATED}", file=sys.stderr)
         return 2
-    code = 0
+    return _run(lambda: _command(args, prd))
+
+
+def _command(args, prd: model.Prd) -> tuple[list[str], int]:
+    """A command on a loaded PRD: its report lines and exit code."""
+    if args.command == "changeset":
+        return [str(changeset.new(prd, args.title, args.member))], 0
+    if args.command == "add":
+        return links.add(prd, args.location, args.needs), 0
+    if args.command == "sync":
+        return links.sync(prd, args.upstream, args.ref), 0
+    if args.command == "check":
+        lines = links.check(prd, args.ref)
+        code = links.check_exit(lines)
+        return [str(x) for x in lines], 0 if args.ci and code == 3 else code
+    changed, cited, unreachable = links.impact(prd, args.base)
+    report = ([f"changed: {x}" for x in changed] + [f"consumer {c}: {x}" for c in sorted(cited) for x in cited[c]]
+              + [f"consumer {c}: unreachable" for c in unreachable])
+    return report, 1 if cited else 3 if unreachable else 0
+
+
+def _run(command) -> int:
+    """Run `command` (returning its report lines and exit code), print the report, and map the errors to exit codes."""
     try:
-        if args.command == "add":
-            report = links.add(prd, args.location, args.needs)
-        elif args.command == "sync":
-            report = links.sync(prd, args.upstream, args.ref)
-        elif args.command == "check":
-            lines = links.check(prd, args.ref)
-            report, code = [str(x) for x in lines], links.check_exit(lines)
-            if args.ci and code == 3:
-                code = 0
-        else:
-            changed, cited, unreachable = links.impact(prd, args.base)
-            report = ([f"changed: {x}" for x in changed] + [f"consumer {c}: {x}" for c in sorted(cited) for x in cited[c]]
-                      + [f"consumer {c}: unreachable" for c in unreachable])
-            code = 1 if cited else 3 if unreachable else 0
+        report, code = command()
     except links.BadArgument as e:
         print(f"prd_links: {e}", file=sys.stderr)
         return 2
