@@ -46,3 +46,13 @@ def add_cases(prd: Path, cited: list[str]) -> None:
     api = prd / "features/api.md"
     old = "Tests: T-002.1 [integration], T-002.2 [integration]  (test-cases/api.yaml)"
     api.write_text(api.read_text(encoding="utf-8").replace(old, old.replace("  (", "".join(f", {t} [integration]" for t in ids) + "  (")), encoding="utf-8")
+
+
+def bare_origin(repo: Path) -> Path:
+    """Give `repo` an `origin`: a bare clone beside it (`<name>.git`), fetched, with `origin/HEAD` -> `origin/main`. Returns the bare path."""
+    bare = repo.parent / f"{repo.name}.git"
+    git(repo.parent, "clone", "-q", "--bare", str(repo), str(bare))
+    git(repo, "remote", "add", "origin", str(bare))
+    git(repo, "fetch", "-q", "origin")
+    git(repo, "remote", "set-head", "origin", "main")
+    return bare
