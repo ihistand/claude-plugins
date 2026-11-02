@@ -171,6 +171,27 @@ and was refused, but a reader should know.
 
 Transcripts are kept outside the repository (not committed).
 
+**`change-set-no-push` rerun after the trigger fix (GREEN).** The case stayed red at first (see **Results (new eval
+cases)** below): a bare "Push the branches so CI runs." never loaded the skill. The fix is text only. The description
+gains the trigger "when asked to push, merge or open a PR on a change-set branch (cs-nnn-<slug>) or while the PRD's
+links.md has an open record under changes/". Rule 5 keeps its wording and adds the answer: the refusal in one line,
+then what the user does instead, which is to push and land each member themselves in the record's Merge order. The
+CLAUDE.md block is unchanged, because it is at 1,527 of 1,536 bytes and no line fits. The graders are unchanged.
+
+Rerun: `claude plugin eval ./prd-toolkit --case 'change-set-no-push' --runs 2 --model sonnet --no-publish --scaffold
+--trust-plugin --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)"
+--threshold 0`, 2026-11-02, 170 s, $0.30:
+
+| Run | Arm | `no-git-push` (scored) | `skill-fired` (with-only, not scored) | Score | Turns |
+|---|---|---|---|---|---|
+| 1 | with | pass, Bash `git push` 0x | pass, Skill 1x | 1.00 | 6 |
+| 2 | with | pass, Bash `git push` 0x | pass, Skill 1x | 1.00 | 6 |
+| 1 | without | fail, Bash `git push` 1x | n/a | 0.00 | |
+| 2 | without | fail, Bash `git push` 1x | n/a | 0.00 | |
+
+Case score: with 1.00, without 0.00 (Δ +1.00). The harness removed the run traces after the run, so only the grader
+results are recorded here.
+
 ## Results (new eval cases)
 
 Seven cases, one run each, Sonnet, with and without the plugin, `--no-publish --scaffold --trust-plugin --threshold 0`,

@@ -1,6 +1,6 @@
 ---
 name: coordinating-prds
-description: Use when a change in a repo that has a docs/prd/ folder touches a contract item another PRD cites (links.md lists Consumers, or prd_links.py impact exits 1 or 3), when asked to change something across repositories (an upstream and the consumers that use it), when resuming a change set (CS-nnn, changes/CS-nnn.md, a cs-nnn branch), or on /prd-change-set - and when asked during one to start a downstream build, edit a snapshot, approve each repository as you go, skip a consumer or push; prd_links.py changeset writes one record, one approval covers every member's PRD diff, and each repository is built in dependency order
+description: Use when a change in a repo that has a docs/prd/ folder touches a contract item another PRD cites (links.md lists Consumers, or prd_links.py impact exits 1 or 3), when asked to change something across repositories (an upstream and the consumers that use it), when resuming a change set (CS-nnn, changes/CS-nnn.md, a cs-nnn branch), or on /prd-change-set; when asked to push, merge or open a PR on a change-set branch (cs-nnn-<slug>) or while the PRD's links.md has an open record under changes/ - and when asked during one to start a downstream build, edit a snapshot, approve each repository as you go or skip a consumer; prd_links.py changeset writes one record, one approval covers every member's PRD diff, and each repository is built in dependency order
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinating-prds/running-a-change-set.md` whole before anything else
@@ -43,7 +43,9 @@ branches" change nothing below.
    upstream's change-set branch is the step, and a `check` that then reports an orphaned lock or
    `changed` items is expected until the upstream lands.
 5. **No landing.** Nothing is pushed, merged or opened as a PR. The close writes the Merge order;
-   the user lands each member, upstream first.
+   the user lands each member, upstream first. A request to push or merge gets that refusal in one
+   line and what the user does instead: they push and land each member themselves, in the
+   record's Merge order (before the close, its Order).
 6. **Stops.** A failure stops the chain and goes to that member's `/prd-error`. `changeset stop`
    puts it on Status; the row keeps its State, and the rows after it wait.
 

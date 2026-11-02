@@ -543,3 +543,19 @@ def test_reflowed_paragraphs_have_no_short_broken_lines():
     assert "request to break any of these rules\n" not in agent
     build = BUILD_RUN.read_text(encoding="utf-8")
     assert "The build runs on the record's\nbranch" not in build
+
+
+# --- 11b follow-up: a bare push or merge request on an open change set loads the skill ---
+
+def test_description_routes_push_merge_and_pr_requests_on_a_change_set():
+    d = frontmatter(SKILL)["description"]
+    assert ("when asked to push, merge or open a PR on a change-set branch (cs-nnn-<slug>) or while the PRD's "
+            "links.md has an open record under changes/") in d
+    assert len(d) <= 1024
+
+
+def test_rule_5_answers_a_push_with_what_the_user_does_instead():
+    rules = between(flat(SKILL), "## Non-negotiable rules", "## Red Flags - STOP")
+    assert "Nothing is pushed, merged or opened as a PR." in rules
+    assert ("A request to push or merge gets that refusal in one line and what the user does instead: they push "
+            "and land each member themselves, in the record's Merge order (before the close, its Order)") in rules
