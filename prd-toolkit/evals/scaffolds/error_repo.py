@@ -6,14 +6,16 @@ Usage (from the eval workspace; never write into the plugin tree):
     python3 -B <this file> <dst> <bug|failed-deploy|killed-step>
 
 bug            `ready`, then one ordinary code commit ("Match settings keys case-insensitively",
-               `Refs: FR-001`) that breaks AC-001.2 (`greet <name>` takes GREETING from the settings
-               file of its install): the code reads the key `greeting`, so a settings file holding
-               `GREETING` is ignored and the command prints `Hello`. The one existing test citing
-               T-001.2 (tests/unit/test_greet.py) now fails; T-001.1 still passes. Every requirement
+               `Refs: FR-001`) that makes `greet <name>` read the key `greeting`, so a settings file
+               holding `GREETING` is ignored and the command prints `Hello`. That breaks AC-001.2
+               (GREETING from the settings file of its install) and, once the build is deployed,
+               AC-002.1 too (both go through the changed line). At start only one test fails: the
+               unit test citing T-001.2 (tests/unit/test_greet.py); T-001.1 passes, and T-002.1
+               (a system test on a deployed install) fails once the build is deployed. Every requirement
                keeps its status: the bug is undetected, and the PRD, lint and trace are untouched.
 failed-deploy  `failing-check` plus a real failed `prd_deploy.py run --until staging` and its close,
                committed: an open `unclassified` E-001 in errors.md (written by the vendored
-               `prd_error.py new`, source "deploy run <id>, failed step 1"), so
+               `prd_error.py new`, source "deploy run <id>, failed step <n>", n read from the log), so
                `prd_deploy.py check` passes on the close. Last stdout line `run=<id>`.
 killed-step    `ready` plus a real run whose log is cut back to its header and one unfinished `start`
                record on step 1, as a killed process leaves it (the way test_deploy_recover.py builds
@@ -67,9 +69,13 @@ def _bug(repo: Path) -> None:
 
 def _failed_deploy(repo: Path) -> str:
     run_id = _run(repo, "--until", "staging", expect=4)
-    base = json.loads(_log(repo, run_id).read_text(encoding="utf-8").splitlines()[0])["head"]
+    records = [json.loads(line) for line in _log(repo, run_id).read_text(encoding="utf-8").splitlines()]
+    base = records[0]["head"]
+    failed = [r["step"] for r in records if r["kind"] == "step" and r["result"] == "fail"]
+    if len(failed) != 1:
+        sys.exit(f"error_repo: expected one failed step in the log, found {failed}")
     r = _tool(repo, str(repo / ".prd-toolkit/prd_error.py"), "new", PRD, "--title", "Staging deploy failed",
-              "--source", f"deploy run {run_id}, failed step 1")
+              "--source", f"deploy run {run_id}, failed step {failed[0]}")
     if r.returncode != 0:
         sys.exit(f"error_repo: prd_error new failed:\n{r.stdout}{r.stderr}")
     commit(repo, "Record the failed staging deploy as E-001", "docs", date="2026-01-07T12:00:00+0000")

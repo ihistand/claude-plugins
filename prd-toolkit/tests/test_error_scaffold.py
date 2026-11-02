@@ -1,4 +1,5 @@
 """The error_repo eval scaffold: three start states (a planted bug, a failed deploy, a killed step) of the greet repo."""
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -60,10 +61,14 @@ def test_failed_deploy_has_an_open_unclassified_entry_and_a_passing_close(tmp_pa
     run_id = last.removeprefix("run=")
     errors = (repo / PRD / "errors.md").read_text(encoding="utf-8")
     assert "### E-001" in errors and "Classification: unclassified" in errors
-    assert f"deploy run {run_id}, failed step 1" in errors
+    assert f"deploy run {run_id}, failed step " in errors
     log = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     head = (Path(log) / "prd-toolkit/deploys" / f"{run_id}.jsonl").read_text(encoding="utf-8").splitlines()[0]
-    base = __import__("json").loads(head)["head"]
+    base = json.loads(head)["head"]
+    fails = [r for r in map(json.loads, (Path(log) / "prd-toolkit/deploys" / f"{run_id}.jsonl").read_text(encoding="utf-8").splitlines())
+             if r["kind"] == "step" and r["result"] == "fail"]
+    assert len(fails) == 1
+    assert f"deploy run {run_id}, failed step {fails[0]['step']}" in errors
     r = tool(repo, ".prd-toolkit/prd_deploy.py", "check", PRD, "--run", run_id, "--diff", f"{base}..HEAD")
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -79,5 +84,9 @@ def test_killed_step_refuses_to_resume(tmp_path):
 def test_refuses_a_non_empty_destination_and_an_unknown_state(tmp_path):
     (tmp_path / "x").mkdir()
     (tmp_path / "x/f").write_text("a")
-    assert subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path / "x"), "bug"], capture_output=True).returncode != 0
-    assert subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path / "y"), "nope"], capture_output=True).returncode != 0
+    r = subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path / "x"), "bug"], capture_output=True, text=True)
+    assert r.returncode != 0 and "is not empty" in r.stderr and "Traceback" not in r.stderr, r.stderr
+    assert [p.name for p in (tmp_path / "x").iterdir()] == ["f"]
+    r = subprocess.run([sys.executable, "-B", str(SCRIPT), str(tmp_path / "y"), "nope"], capture_output=True, text=True)
+    assert r.returncode != 0 and "usage: error_repo.py" in r.stderr and "Traceback" not in r.stderr, r.stderr
+    assert not (tmp_path / "y").exists()
