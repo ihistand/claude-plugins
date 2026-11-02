@@ -121,6 +121,7 @@ class Testing:
     command_cells: dict[str, str] = field(default_factory=dict)  # level -> raw Harness command cell
     has_gate: bool = False
     levels_line: int = 0
+    level_envs: dict[str, str] = field(default_factory=dict)  # level -> Environment cell
     environments: dict[str, int] = field(default_factory=dict)
     fixtures: dict[str, int] = field(default_factory=dict)
     signoffs: list[Row] = field(default_factory=list)
@@ -173,6 +174,68 @@ class Operations:
     secrets: list[str] = field(default_factory=list)
 
 
+LINKS_FILE = "links.md"
+UPSTREAM_DIR = "contracts/upstream"
+CHANGES_DIR = "changes"
+SLUG = re.compile(r"[a-z][a-z0-9-]*")
+CROSSING = ("op", "table", "event", "job")
+STATES = ("proposed", "approved", "built", "verified")  # then `live in <env>`
+
+
+@dataclass
+class LinkRow:
+    name: str
+    location: str
+    line: int
+    version: str = ""
+    commit: str = ""
+    needs: str = ""
+
+
+@dataclass
+class Links:
+    upstreams: list[LinkRow]
+    consumers: list[LinkRow]
+    headings: dict[str, int]  # "# Links", "## Upstreams", "## Consumers" -> line; a missing one is absent
+
+
+@dataclass
+class SnapshotFile:
+    rel: str  # relative to the PRD folder
+    header: dict[str, str] | None  # prd, version, commit, and type or dialect when present; None without a header
+    text: str  # the file without its header line
+    data: Any  # the YAML mapping of a .yaml file, else None
+
+
+@dataclass
+class ChangeRow:
+    order: str
+    prd: str
+    location: str
+    branch: str
+    version: str
+    ids: str
+    waits_for: str
+    target: str
+    state: str
+    line: int
+
+
+@dataclass
+class ChangeSet:
+    id: str
+    file: str
+    title: str
+    line: int
+    started: str = ""  # the text after "Started:"
+    status: str = ""  # the text after "Status:"
+    approvals: list[str] = field(default_factory=list)  # the text after each "Approval:"
+    rows: list[ChangeRow] = field(default_factory=list)
+    log: list[str] = field(default_factory=list)  # the Log bullets, "- " stripped
+    merge_order: list[str] = field(default_factory=list)  # each "N. " line, number stripped
+    problems: list[tuple[int, str]] = field(default_factory=list)  # grammar faults (line, message)
+
+
 @dataclass
 class Prd:
     root: Path
@@ -192,6 +255,9 @@ class Prd:
     adoption_unmigrated: bool = False  # a 0.2 PRD: §8 still holds the table and adoption.md is absent
     errors_ledger: dict[str, ErrorEntry] = field(default_factory=dict)
     operations: Operations = field(default_factory=Operations)
+    links: Links | None = None  # None exactly when links.md is absent
+    snapshots: dict[str, list[SnapshotFile]] = field(default_factory=dict)  # upstream folder -> files
+    change_sets: dict[str, ChangeSet] = field(default_factory=dict)
 
 
 _HEADING = re.compile(r"^#{1,3}\s")
@@ -475,6 +541,158 @@ def _harness(body: list[tuple[int, str]]) -> Harness:
     return h
 
 
+def parse_ref(ref: str) -> tuple[str, str | None, str]:
+    """`<kind>:<name>` -> (kind, prefix, name); `<kind>:<a>/<b>` carries the prefix `a` when it is a slug and the kind is not code."""
+    kind, _, rest = ref.partition(":")
+    head, slash, tail = rest.partition("/")
+    if slash and kind != "code" and SLUG.fullmatch(head):
+        return kind, head, tail
+    return kind, None, rest
+
+
+def _links(text: str) -> Links:
+    out = Links([], [], {})
+    for n, line in enumerate(strip_code(text).split("\n"), 1):
+        h = line.strip()
+        if h in ("# Links", "## Upstreams", "## Consumers"):
+            out.headings.setdefault(h, n)
+    for s in sections(text):
+        title = s.title.strip().lower()
+        if title not in ("upstreams", "consumers"):
+            continue
+        ts = tables(s.body)
+        for r in ts[0].rows if ts else []:
+            c = [x.strip() for x in r.cells] + [""] * 5
+            name = c[0].strip("`")
+            if title == "upstreams":
+                out.upstreams.append(LinkRow(name, c[1], r.line, c[2], c[3], c[4]))
+            else:
+                out.consumers.append(LinkRow(name, c[1], r.line))
+    return out
+
+
+_SNAP_HEADER = re.compile(
+    r"^(?:-- |# |<!-- )Snapshot of (?P<prd>\S+) (?P<version>\S+) at (?P<commit>\S+), written by prd_links\.py sync\. Do not edit\."
+    r"(?: Type: (?P<type>[^\s.]+)\.)?(?: Dialect: (?P<dialect>[^\s.]+)\.)?(?: -->)?$")
+
+
+def _snapshots(prd_dir: Path) -> dict[str, list[SnapshotFile]]:
+    out: dict[str, list[SnapshotFile]] = {}
+    base = prd_dir / UPSTREAM_DIR
+    if not base.is_dir():
+        return out
+    for d in sorted(p for p in base.iterdir() if p.is_dir()):
+        files = []
+        for p in sorted(x for x in d.rglob("*") if x.is_file()):
+            raw = p.read_text(encoding="utf-8")
+            first, nl, rest = raw.partition("\n")
+            m = _SNAP_HEADER.match(first.rstrip())
+            header = {k: v for k, v in m.groupdict().items() if v} if m else None
+            text = rest if m else raw
+            rel = p.relative_to(prd_dir).as_posix()
+            data = None
+            if p.suffix == ".yaml":
+                data, _ = load_yaml(p, rel)
+            files.append(SnapshotFile(rel, header, text, data))
+        out[d.name] = files
+    return out
+
+
+_CS_FILE = re.compile(r"CS-\d{3}\.md")
+_CS_TITLE = re.compile(r"^# (CS-\d{3}) (\S.*?)\s*$")
+_CS_STARTED = re.compile(r"^\d{4}-\d{2}-\d{2} in [a-z][a-z0-9-]*$")
+_CS_STATUS = re.compile(r"^(?:proposed|approved|running|done|abandoned|stopped: [a-z][a-z0-9-]*: \S.*)$")
+_CS_APPROVAL = re.compile(r'^\d{4}-\d{2}-\d{2}, ".*"(?: \(amendment\))?$')
+_CS_HEADER = ["Order", "PRD", "Location", "Branch", "Version", "IDs", "Waits for", "Target", "State"]
+_CS_VERSION = re.compile(r"^\d+\.\d+\.\d+(?: → \d+\.\d+\.\d+)?$")
+_CS_IDS = re.compile(r"^(?:—|(?:UJ|FR|NFR)-\d+(?:, ?(?:UJ|FR|NFR)-\d+)*)$")
+_CS_WAIT = re.compile(r"^[a-z][a-z0-9-]* (?:verified|live in \S.*)$")
+_CS_STATE = re.compile(r"^(?:proposed|approved|built|verified|live in \S.*)$")
+_CS_LOG = re.compile(r"^- \d{4}-\d{2}-\d{2} \S")
+_CS_MERGE = re.compile(r"^(\d+)\. ([a-z][a-z0-9-]*) \(\S+\)$")
+
+
+def _change_set(rel: str, text: str) -> ChangeSet:
+    cs = ChangeSet(Path(rel).stem, rel, "", 1)
+    bad = cs.problems
+    lines = text.split("\n")
+    stripped = strip_code(text).split("\n")
+    tm = _CS_TITLE.match(lines[0]) if lines else None
+    if tm and tm.group(1) == cs.id:
+        cs.title = tm.group(2)
+    else:
+        bad.append((1, f"the first line must be `# {cs.id} <title>`"))
+        cs.title = lines[0].lstrip("# ").strip() if lines else ""
+    for n, (orig, st) in enumerate(zip(lines, stripped), 1):
+        if n == 1 or not st.strip():
+            continue
+        if orig.startswith("Started:"):
+            cs.started = orig[8:].strip()
+            if not _CS_STARTED.match(cs.started):
+                bad.append((n, "Started must read `YYYY-MM-DD in <prd>`"))
+        elif orig.startswith("Status:"):
+            cs.status = orig[7:].strip()
+            if not _CS_STATUS.match(cs.status):
+                bad.append((n, f"Status `{cs.status}` is not proposed, approved, running, stopped: <prd>: <reason>, done or abandoned"))
+        elif orig.startswith("Approval:"):
+            v = orig[9:].strip()
+            cs.approvals.append(v)
+            if not _CS_APPROVAL.match(v):
+                bad.append((n, 'Approval must read `YYYY-MM-DD, "<reply>"`, then optionally ` (amendment)`'))
+    for s in sections(text, 2):
+        title = s.title.strip().lower()
+        if title == "log":
+            for n, orig in s.body:
+                if orig.strip():
+                    if _CS_LOG.match(orig):
+                        cs.log.append(orig[2:].strip())
+                    else:
+                        bad.append((n, "a Log line must read `- YYYY-MM-DD <text>`"))
+        elif title == "merge order":
+            for n, orig in s.body:
+                if orig.strip():
+                    m = _CS_MERGE.match(orig.strip())
+                    if m:
+                        cs.merge_order.append(orig.strip().split(". ", 1)[1])
+                    else:
+                        bad.append((n, "a Merge order line must read `N. <prd> (<branch>)`"))
+    first2 = next((s.line for s in sections(text, 2)), len(lines) + 1)
+    ts = tables([(n, t) for n, t in enumerate(lines, 1) if 1 < n < first2])
+    if not ts:
+        bad.append((1, "the record has no table"))
+        return cs
+    t = ts[0]
+    if [h.strip() for h in t.header] != _CS_HEADER:
+        bad.append((t.line, "the table header must be `" + " | ".join(_CS_HEADER) + "`"))
+    for r in t.rows:
+        if len(r.cells) != 9:
+            bad.append((r.line, f"a row has {len(r.cells)} cells, not 9"))
+            continue
+        c = [x.strip() for x in r.cells]
+        cs.rows.append(ChangeRow(*c, line=r.line))
+        for name, val, rx in (("Version", c[4], _CS_VERSION), ("IDs", c[5], _CS_IDS), ("Target", c[7], _CS_STATE), ("State", c[8], _CS_STATE)):
+            if not rx.match(val):
+                bad.append((r.line, f"{name} `{val}` is malformed"))
+        if c[6] != "—" and not all(_CS_WAIT.match(w.strip()) for w in c[6].split(";")):
+            bad.append((r.line, f"Waits for `{c[6]}` is malformed"))
+    return cs
+
+
+def _change_sets(prd_dir: Path) -> dict[str, ChangeSet]:
+    d = prd_dir / CHANGES_DIR
+    out: dict[str, ChangeSet] = {}
+    for p in sorted(d.glob("*.md")) if d.is_dir() else []:
+        if _CS_FILE.fullmatch(p.name):
+            rel = p.relative_to(prd_dir).as_posix()
+            out[p.stem] = _change_set(rel, p.read_text(encoding="utf-8"))
+    return out
+
+
+def _linked_dir(prd_dir: Path, p: Path) -> bool:
+    rel = p.relative_to(prd_dir).as_posix()
+    return rel.startswith((UPSTREAM_DIR + "/", CHANGES_DIR + "/"))
+
+
 def load(prd_dir: Path) -> Prd:
     prd_dir = Path(prd_dir).resolve()
     # the exact name: on a case-insensitive filesystem `prd.md` also "exists" as PRD.md
@@ -484,7 +702,7 @@ def load(prd_dir: Path) -> Prd:
         hint = f"; found {other}; the file name is lowercase prd.md" if other else ""
         raise NotAPrd(f"{prd_dir}: no prd.md{hint}")
     findings: list[Finding] = []
-    docs = {p.relative_to(prd_dir).as_posix(): p.read_text(encoding="utf-8") for p in sorted(prd_dir.rglob("*.md"))}
+    docs = {p.relative_to(prd_dir).as_posix(): p.read_text(encoding="utf-8") for p in sorted(prd_dir.rglob("*.md")) if not _linked_dir(prd_dir, p)}
     fm, fm_line = frontmatter(docs["prd.md"])
     secs = sections(docs["prd.md"])
 
@@ -526,6 +744,8 @@ def load(prd_dir: Path) -> Prd:
 
     yml: dict[str, Any] = {}
     for p in sorted((prd_dir / "contracts").rglob("*.yaml")):
+        if _linked_dir(prd_dir, p):
+            continue
         rel = p.relative_to(prd_dir).as_posix()
         data, fs = load_yaml(p, rel)
         findings += fs
@@ -551,6 +771,12 @@ def load(prd_dir: Path) -> Prd:
                 for r in lv.rows:
                     cell = r.cells[gi] if gi < len(r.cells) else ""
                     testing.gates[r.cells[0].strip("`")] = cell.strip().strip("`").strip()
+        if lv:
+            hdr = [h.strip().strip("`").lower() for h in lv.header]
+            ei = hdr.index("environment") if "environment" in hdr else -1
+            if ei >= 0:
+                for r in lv.rows:
+                    testing.level_envs[r.cells[0].strip("`")] = (r.cells[ei] if ei < len(r.cells) else "").strip().strip("`").strip()
         testing.environments = _names(_table_under(tsecs, "Environments"))
         testing.fixtures = _names(_table_under(tsecs, "Fixtures"))
         so = _table_under(tsecs, "Sign-offs")
@@ -561,6 +787,7 @@ def load(prd_dir: Path) -> Prd:
     s8 = sec(8)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
                adoption=_adoption(docs), operations=_operations(docs.get("operations.md", "")), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
+               links=_links(docs[LINKS_FILE]) if LINKS_FILE in docs else None, snapshots=_snapshots(prd_dir), change_sets=_change_sets(prd_dir),
                adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
 
 
