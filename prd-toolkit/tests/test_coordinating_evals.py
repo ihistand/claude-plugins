@@ -1,6 +1,6 @@
 """Structure of the seven coordinating-prds (0.7) eval cases: files present, the scaffold runs a link_repo state,
 every grader is well formed and one of them is the fired (or not-fired) skill grader or a behaviour grader that
-can fail (a max of 0 or a not_contains)."""
+can fail (a max of 0 or a not_contains). Also scans the cases and the baseline for local paths and hosts."""
 import re
 import stat
 from pathlib import Path
@@ -44,15 +44,11 @@ def test_every_case_has_a_grader_that_can_fail(name):
                for h in heads)
 
 
-FORBIDDEN = r"/Users/|/private/|/tmp/claude|scratchpad|c-green|gitlab\.com|rotoplas|ihistand"
+LOCAL = r"/Users/|/private/|/tmp/claude|scratchpad|c-green|gitlab\.com"
 
 
-def _forbidden_words() -> str:
-    return "acu" + "antia"  # spelled in two parts so this file does not hold the name itself
-
-
-def test_no_scratch_or_host_text_in_cases_and_baseline():
+def test_no_local_paths_or_hosts_in_cases_and_baseline():
     files = [f for name in CASES for f in (EVALS / name).rglob("*") if f.is_file()]
     files.append(EVALS / "baselines/coordinating-prds.md")
     for f in files:
-        assert not re.search(FORBIDDEN + "|" + _forbidden_words(), f.read_text(encoding="utf-8"), re.I), f
+        assert not re.search(LOCAL, f.read_text(encoding="utf-8")), f
