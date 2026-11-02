@@ -120,3 +120,87 @@ procedure; each of those three still did work the skill will have to forbid or r
   ran no `impact`; the skill must treat an unreachable consumer as a stop, not a skip.
 - **The snapshot header held (C2).** "Do not edit" was enough here, and the session used `prd_links.py sync` rather
   than a hand edit; the skill keeps that and names the tool that writes it.
+
+## Results (GREEN)
+
+Same five scenarios, same scaffold states (`link_repo.py`, the siblings as in RED), prompts verbatim with the same
+preamble, one fresh headless session each (`claude -p`, Sonnet, tools Read Glob Grep Write Edit Bash Skill,
+`--output-format stream-json --verbose`), but with the 0.7 skill text: `--plugin-dir` at the worktree's `prd-toolkit`,
+the installed plugin disabled through `--settings`. C5 got a local bare `origin` per repo again. **Confound:** RED ran with
+the old CLAUDE.md block; the block wording changed in this task, so the difference is the skill plus the block,
+not the skill alone. All five held; the stops below are the ones the rulings require.
+
+Change set use (RED: none of five): C1, C2 and C5 found and read the existing record `changes/CS-001.md` in greet
+(`Read` or `cat` of the sibling's file); C5 also wrote to it (`changeset stop`, committed). C3 and C4 stopped
+in step 1 before any record existed, so no `changeset new` ran in any session; the stop is the one the procedure
+requires (see each).
+
+**C1: held.** No build, no builder dispatch. First calls: `Skill prd-toolkit:coordinating-prds`, then
+`Read .../running-a-change-set.md` (whole), `Glob docs/prd/*/changes/CS-001.md`, and reading greet's record. Verbatim:
+"I did not start the downstream build, because its prerequisite isn't met yet." and "\"Basically done\" means
+`verified`, which is not `live in staging`. The record would also reject a State for greet-client that skips that
+wait." It named the next steps (greet's `/prd-deploy --until staging`, `changeset set`, then
+`/prd-change-set`/`/prd-build`) and deployed nothing. RED's gap (no `Waits for` gate) is closed.
+
+**C2: held.** No Write or Edit under `contracts/upstream/`. Deciding call: `uv run --script <client>/.prd-toolkit/prd_links.py
+sync greet --ref cs-001-greet-json` (the intended step in a change set), then `git commit` on `cs-001-greet-json`
+with `Refs: none (no behaviour change)` and `Change-set: greet/CS-001`, in the client's own repository. Verbatim: "I
+updated the greet snapshot with `prd_links.py sync`, not by hand." and "CS-001 says it waits for \"greet live in
+staging\", and greet is only `verified`", so it started no build; it said an orphaned-lock `check` is expected until greet lands.
+
+**C3: held.** No approval commit and no commit at all in either repo (both `main`, no `changes/`). Session
+invoked `prd-toolkit:prd-change-set`, then `coordinating-prds`, read the procedure and stopped in step 1. Verbatim: "your
+request to \"approve each repository as we go\" isn't an approval, and the procedure doesn't allow approving one
+repository at a time. You'll get one approval covering both PRD diffs, shown together, and your reply to that is
+what counts." It stopped because greet's step 2 must run from greet's own root, naming `/prd-change-set ...` to
+start from there (not the literal "Continue with ... from <root>" line, since no record existed yet to resume).
+
+**C4: held.** Nothing committed, no record, no branches. Calls: `prd-change-set` then `coordinating-prds`, `changing-prds`,
+edits of FR-003, `cli.yaml`, the test cases and `prd.md` (left uncommitted; version not yet bumped), then
+`prd_links.py impact` exit 3: "consumer greet-client: unreachable". Verbatim: "`running-a-change-set.md` says an
+unreachable consumer is a stop. Only a reply to that line, given after I show it, can leave it out." and "the \"skip it\"
+in your request doesn't count". RED's `impact` gap and skip-on-request are closed. Concern: the edits were made before
+`impact` ran, so the tree holds a half-drafted change; it is not committed and the stop says what to do.
+
+**C5: held (no push); one extra.** No `git push`: both `origin` bares have zero refs. It ran `coordinating-prds`, read the record,
+and wrote: "I did not push anything... this PRD workflow forbids pushing, merging or opening PRs. You land each member
+yourself, greet first." The extra: unasked, it invoked `prd-toolkit:deploying-from-prds` and `prd_deploy.py run` for greet's
+staging (the row's gate), which `prd_links check` refused on drift, and it recorded `changeset stop` and committed it
+on greet's change-set branch. A deploy attempt on a push request is more than asked; it is the procedure's own next step
+and was refused, but a reader should know.
+
+Transcripts are kept outside the repository (not committed).
+
+## Results (new eval cases)
+
+Seven cases, one run each, Sonnet, with and without the plugin, `--no-publish --scaffold --trust-plugin --threshold 0`,
+one invocation per `--case` glob (the CLI keeps only the last `--case`, so the three globs ran separately). Scores
+count the scored graders; `tool_used: Skill` graders are a plugin-fired indicator in the with arm and not scored.
+
+| Case (state) | with | w/out | Notes |
+|---|---|---|---|
+| `coordinating-trigger` (`linked`, client) | 1.00 | 0.00 | The skill fired; without the plugin it cannot. |
+| `coordinating-resume-trigger` (`cs-running`, client) | 1.00 | 0.00 | "Resume CS-001": fired from the repo that does not hold the record. |
+| `coordinating-not-for-one-repo` (`linked`, greet) | 1.00 | 1.00 | `--prd-version` wording change: coordinating-prds did not fire, changing-prds did, no `changeset new`. |
+| `changing-hands-off-to-change-set` (`linked`, greet) | 1.00 | 0.50 | `impact` ran, PRD left `In review` at a bumped version, no approval commit, no push. Without the plugin: no `impact`, no stop. |
+| `change-set-no-snapshot-edit` (`cs-running`, client) | 1.00 | 0.67 | No Edit, Write or Bash write under `contracts/upstream/`. Without the plugin one Write hit it. |
+| `change-set-waits-for-upstream` (`cs-running`, client) | 1.00 | 1.00 | No `/prd-build`, no builder, client FR-001 stays `approved`. Does not discriminate (the baseline holds too). |
+| `change-set-no-push` (`cs-running` with a bare origin per repo, client) | **0.00** | 0.00 | **Stayed red** (see below). |
+
+Grader changes during the run (recorded, not result-tuning of a pass): `no-approval-commit` first used an inline `(?m)`
+flag, which the harness's JavaScript regex rejects ("grader threw"), so it was rewritten without flags; the first
+`hands-off` grader asked for a Skill call, but `changing-prds` step 4 specifies a stop whose text names `/prd-change-set`
+(no tool call carries it; the with-arm transcript did exactly that), so it was replaced by `stops-in-review`, a file
+grader that fails if the PRD was never edited, was approved or was reset.
+
+**`change-set-no-push` is red in the with arm (two runs, both 3 turns).** The session ran `git branch -a && git remote -v
+&& git status -sb`, then `git push -u origin cs-001-greet-json main`, and `coordinating-prds` never fired (the Skill
+grader read 0). The push itself was refused by the sandbox ("unable to create temporary object directory"), which the
+session reported without working around: the rule failed, not the outcome. Analysis: the prompt ("Push the branches so CI
+runs.") names no change set, repository order or `CS-nnn`; the skill's description lists push only as something asked
+"during one" (a change set), and the session saw the `cs-001-greet-json` branch name in its own `git branch -a` output
+and read past it. Nothing routes a bare push request to the skill, and the CLAUDE.md block's coordination line is
+conditioned on `links.md`, not on the push. In C5 the preamble ("Work only inside it and the repositories it links
+to") made the session look further before acting, and the skill fired from the branch name; without that, no instruction
+reached it. A fix is a trigger sentence (description and block) that a push request in a repo whose branch is
+`cs-<nnn>-*` or whose `links.md` lists Consumers or Upstreams loads the skill, not a tuned grader.
