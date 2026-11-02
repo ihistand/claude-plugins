@@ -28,6 +28,14 @@ def test_the_category_count_heading_and_skill_agree():
 
 def test_checklist_asks_about_packaging():
     line = next((l for l in CHECKLIST.splitlines() if "build backend" in l), "")
-    assert line.startswith("- [ ] Does ") and line.endswith("?")
+    assert line.startswith("- [ ] If the project ships code, does ") and line.endswith("?")
     for word in ("package layout", "entry points", "install command"):
         assert word in line, word
+
+
+def test_packaging_is_asked_whenever_the_project_ships_code():
+    line = next(l for l in _category_lines() if l.startswith("Packaging:"))
+    assert "whenever the project ships code" in line and "Not applicable" in line
+    assert "whenever the project ships code" in SKILL and "category 13" in SKILL
+    check = next(l for l in CHECKLIST.splitlines() if "build backend" in l)
+    assert "ships code" in check and "Not applicable" in check

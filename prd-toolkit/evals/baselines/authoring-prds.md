@@ -707,16 +707,25 @@ file included, now that lint reads them), and there was no offer to approve.
 ## A5: the interview asks about packaging (0.7, F-a)
 
 Eval case `authoring-asks-packaging` (the hello ticket, which says nothing about packaging; "Do not
-ask me questions"). One grader, `names-packaging`: the PRD's section 1 names a build backend and an
-install command, or a `NEEDS CLARIFICATION` marker mentions packaging, the build backend or the
-install command. Run 2026-11-02 with `claude plugin eval ./prd-toolkit --case 'authoring-asks-packaging' --runs 1 --model sonnet --no-publish --scaffold --trust-plugin --threshold 0` (Claude Code 2.1.316).
+ask me questions"). Four graders, one per element the `packaging` category names (`names-build-backend`,
+`names-package-layout`, `names-entry-points`, `names-install-command`); each passes when section 1
+(anchored on `## 1. Metadata & stack`) states the element, or a `NEEDS CLARIFICATION` marker names it. A
+fifth, `skill-fired`, checks the authoring skill ran. Run 2026-11-02 with Claude Code 2.1.316, one run
+per arm, `claude plugin eval <plugin> --case 'authoring-asks-packaging' --runs 1 --model sonnet --no-publish --scaffold --trust-plugin --ablation none --threshold 0`.
+Both arms are with-plugin: the reverted copy is the commit before F-a (no category 13, no checklist
+line, "twelve" wording); the branch has the text.
 
-| Arm | `names-packaging` | Score |
+| Grader | Reverted copy | Branch |
 |---|---|---|
-| With plugin (the `packaging` category in place) | pass | 1.00 |
-| Without plugin | fail (no `docs/prd/hello/prd.md`; the run wrote no PRD folder) | 0.00 |
+| names-build-backend | fail | fail |
+| names-package-layout | fail | fail |
+| names-entry-points | fail | fail |
+| names-install-command | fail | pass |
+| skill-fired | pass | pass |
+| Score (5 equal weights) | 0.20 | 0.40 |
 
-Delta +1.00. The first run of the case scored 0.00 on both arms because the grader's `(?s)` flag is
-not valid in the harness's regex engine; the pattern uses `[\s\S]` instead. One run per arm, so the
-delta shows the skill's effect, not the packaging category's alone: the case was not run against the
-skill without the category.
+The branch scores higher, but on one run and one grader: the run did not state or mark the backend,
+the layout or the entry points. The category lifts the install command only; a non-interactive run
+still leaves three of four elements silent. An earlier loose grader (any backend word and any install
+word in section 1) passed both arms' kind of PRD and is replaced. The case is a weak guard, and the
+text may need to say that a marker is the answer when the user cannot be asked.

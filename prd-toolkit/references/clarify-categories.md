@@ -19,7 +19,7 @@ then ask about the weakest.
 10. NFR bounds: latency, throughput, availability, size, each as a number with a unit.
 11. Terminology: glossary terms, banned synonyms, one word per concept.
 12. Done signals: how the owner knows each requirement is met; acceptance steps and who signs off; and the test harness conventions in `testing.md` `## Harness`, which every test case relies on.
-13. Packaging: the build backend, the package layout, the entry points and the install command, so the first build needs no guess.
+13. Packaging: the build backend, the package layout, the entry points and the install command, so the first build needs no guess. Ask it whenever the project ships code; for a PRD with no code, write `Not applicable: <reason>`.
 
 ## Scoring
 

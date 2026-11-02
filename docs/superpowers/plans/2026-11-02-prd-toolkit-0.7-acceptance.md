@@ -15,7 +15,13 @@ claude -p "/prd-status docs/prd/greet" --plugin-dir <worktree>/prd-toolkit \
 
 Finding: **the bare command did not register; the namespaced form did.**
 
-- The `init` event's `slash_commands` list (135 entries) held no bare `prd-status`. It held the
+- The `init` event's `slash_commands` list (135 entries) held no bare `prd-status`. Its entries matching `prd`, verbatim:
+
+  ```
+  ["prd-toolkit:prd-adopt", "prd-toolkit:prd-build", "prd-toolkit:prd-change", "prd-toolkit:prd-context", "prd-toolkit:prd-deploy", "prd-toolkit:prd-error", "prd-toolkit:prd-new", "prd-toolkit:prd-publish", "prd-toolkit:prd-status", "prd-toolkit:adopting-prds", "prd-toolkit:authoring-prds", "prd-toolkit:building-from-prds", "prd-toolkit:changing-prds", "prd-toolkit:deploying-from-prds", "prd-toolkit:handling-errors", "prd-toolkit:publishing-prds", "prd-toolkit:testing-from-prds"]
+  ```
+
+  It held the
   namespaced `prd-toolkit:prd-adopt`, `prd-build`, `prd-change`, `prd-context`, `prd-deploy`,
   `prd-error`, `prd-new`, `prd-publish` and `prd-status`, plus the eight skills as
   `prd-toolkit:<skill>`. The plugin loaded as `prd-toolkit@inline` version 0.6.1.
