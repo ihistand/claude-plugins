@@ -1,7 +1,9 @@
 """Where a PRD cites an upstream PRD's items: test-case targets, Traces tokens and prefixed prose spans.
 
 A target or token `<kind>:<a>/<b>` is prefixed when `<a>` is a slug and `<kind>` is not `code`, and only the
-crossing kinds (op, table, event, job, a custom type) cite across repositories. A prose span
+crossing kinds (op, table, event, job, a custom type) cite across repositories. A custom type is the upstream's:
+the citing PRD need not declare it (R-10b), so every prefixed kind that is not a built-in target kind crosses;
+`sync` resolves it in the upstream and `upstream-refs` in the snapshot, whose header names the type. A prose span
 `<a>/<t>.<c>` cites table `t` only when `<a>` is a name in the Upstreams table, so paths such as
 `src/importer.py` stay prose. `sync` and the `snapshot-cited` and `upstream-refs` rules share this.
 """
@@ -27,10 +29,11 @@ class Cite(NamedTuple):
     column: str | None = None  # a prose span's column
 
 
-def _crossing(prd: Prd) -> set[str]:
-    from .rules.testcases import TARGET_KINDS, target_kinds
+def crosses(kind: str) -> bool:
+    """A crossing built-in kind, or any kind that is not a built-in target kind (an upstream's custom type)."""
+    from .rules.testcases import TARGET_KINDS
 
-    return set(CROSSING) | (target_kinds(prd) - TARGET_KINDS)  # the custom types of section 7
+    return kind in CROSSING or kind not in TARGET_KINDS
 
 
 def _upstream_names(prd: Prd) -> set[str]:
@@ -40,12 +43,11 @@ def _upstream_names(prd: Prd) -> set[str]:
 def cites(prd: Prd) -> list[Cite]:
     from .rules.ids import _traces
 
-    crossing = _crossing(prd)
     out: list[Cite] = []
 
     def prefixed(ref: str):
         kind, prefix, name = parse_ref(ref)
-        return (kind, prefix, name) if prefix is not None and kind in crossing else None
+        return (kind, prefix, name) if prefix is not None and crosses(kind) else None
 
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None

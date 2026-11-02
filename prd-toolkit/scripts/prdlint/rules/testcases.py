@@ -296,7 +296,7 @@ def sufficiency(prd: Prd):
             kind, sep, name = target.partition(":")
             if not sep or not name.strip():
                 yield miss("target", f"target '{target}' must be <kind>:<name>")
-            elif kind not in kinds:
+            elif kind not in kinds and model.parse_ref(target)[1] is None:  # upstream-refs judges a prefixed kind
                 yield miss("target", f"target kind '{kind}' is unknown (known: {', '.join(sorted(kinds))})")
         if not isinstance(d.get("preconditions"), list):
             yield miss("preconditions", "preconditions must be a list (use [] for none)", tc.line if "preconditions" not in d else None)

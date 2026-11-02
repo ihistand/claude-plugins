@@ -107,6 +107,41 @@ def test_target_absent_from_snapshot(prd):
     assert found(prd, "upstream-refs") == [("upstream-refs", "T-002.5: target table:transform/nope: no table 'nope' in the transform snapshot")]
 
 
+CLI_HEAD = "# Snapshot of transform 2.3.0 at 4f1c9a2, written by prd_links.py sync. Do not edit. Type: cli.\n"
+
+
+def test_upstream_custom_type_resolves_from_the_snapshot_header(prd):
+    """R-10b: the downstream does not declare the upstream's custom type; the snapshot header's Type: names it."""
+    setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", "cli:transform/greet"])
+    put(prd, "contracts/upstream/transform/cli.yaml", CLI_HEAD + "greet:\n  output: a line\n")
+    assert [f for f in lint(prd)] == []
+
+
+@pytest.mark.parametrize("snap,message", [
+    (None, "T-002.5: target cli:transform/greet: no cli 'greet' in the transform snapshot"),
+    ("bye:\n  output: a line\n", "T-002.5: target cli:transform/greet: no cli 'greet' in the transform snapshot"),
+])
+def test_upstream_custom_target_absent_from_snapshot(prd, snap, message):
+    setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", "cli:transform/greet"])
+    if snap is not None:
+        put(prd, "contracts/upstream/transform/cli.yaml", CLI_HEAD + snap)
+    assert ("upstream-refs", message) in found(prd, "upstream-refs")
+
+
+@pytest.mark.parametrize("kind", ["component", "page"])
+def test_prefixed_target_of_a_kind_that_never_crosses(prd, kind):
+    setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", f"{kind}:transform/x"])
+    assert found(prd, "upstream-refs") == [
+        ("upstream-refs", f"T-002.5: target {kind}:transform/x: kind '{kind}' does not cross repositories")]
+
+
+def test_sufficiency_leaves_a_prefixed_custom_kind_to_upstream_refs(prd):
+    setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", "cli:transform/greet", "nope:greet"])
+    msgs = [m for _, m in found(prd, "sufficiency")]
+    assert not any("target kind 'cli' is unknown" in m for m in msgs), msgs
+    assert any(m.startswith("T-002.6: target kind 'nope' is unknown") for m in msgs), msgs
+
+
 def test_op_and_event_absent(prd):
     setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", "op:transform/getX", "event:transform/gone"])
     assert {m for _, m in found(prd, "upstream-refs")} == {
