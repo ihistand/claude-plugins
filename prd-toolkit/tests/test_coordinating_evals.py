@@ -44,8 +44,15 @@ def test_every_case_has_a_grader_that_can_fail(name):
                for h in heads)
 
 
-def test_no_scratch_or_host_text_in_cases():
-    for name in CASES:
-        for f in (EVALS / name).rglob("*"):
-            if f.is_file():
-                assert not re.search(r"/Users/|/private/tmp|scratchpad|gitlab\.com|acuantia", f.read_text(encoding="utf-8")), f
+FORBIDDEN = r"/Users/|/private/|/tmp/claude|scratchpad|c-green|gitlab\.com|rotoplas|ihistand"
+
+
+def _forbidden_words() -> str:
+    return "acu" + "antia"  # spelled in two parts so this file does not hold the name itself
+
+
+def test_no_scratch_or_host_text_in_cases_and_baseline():
+    files = [f for name in CASES for f in (EVALS / name).rglob("*") if f.is_file()]
+    files.append(EVALS / "baselines/coordinating-prds.md")
+    for f in files:
+        assert not re.search(FORBIDDEN + "|" + _forbidden_words(), f.read_text(encoding="utf-8"), re.I), f

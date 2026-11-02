@@ -159,8 +159,9 @@ start from there (not the literal "Continue with ... from <root>" line, since no
 edits of FR-003, `cli.yaml`, the test cases and `prd.md` (left uncommitted; version not yet bumped), then
 `prd_links.py impact` exit 3: "consumer greet-client: unreachable". Verbatim: "`running-a-change-set.md` says an
 unreachable consumer is a stop. Only a reply to that line, given after I show it, can leave it out." and "the \"skip it\"
-in your request doesn't count". RED's `impact` gap and skip-on-request are closed. Concern: the edits were made before
-`impact` ran, so the tree holds a half-drafted change; it is not committed and the stop says what to do.
+in your request doesn't count". RED's `impact` gap and skip-on-request are closed. The skill prescribes edits, then
+`impact`, then a stop with the edits in the tree and nothing committed, so the uncommitted edits are the specified behaviour,
+not a concern.
 
 **C5: held (no push); one extra.** No `git push`: both `origin` bares have zero refs. It ran `coordinating-prds`, read the record,
 and wrote: "I did not push anything... this PRD workflow forbids pushing, merging or opening PRs. You land each member
@@ -195,8 +196,23 @@ results are recorded here.
 ## Results (new eval cases)
 
 Seven cases, one run each, Sonnet, with and without the plugin, `--no-publish --scaffold --trust-plugin --threshold 0`,
-one invocation per `--case` glob (the CLI keeps only the last `--case`, so the three globs ran separately). Scores
-count the scored graders; `tool_used: Skill` graders are a plugin-fired indicator in the with arm and not scored.
+one invocation per `--case` glob (the CLI keeps only the last `--case`, so the three globs ran separately). 
+
+**What enters a score** (read from each run's grader list in the eval JSON, `scored` and `withOnly` per grader). Every non-Skill
+grader (`tool_used` on Bash, Edit, Write or Agent, and `regex` on a file) is scored in both arms. A `tool_used: Skill` grader is
+marked with-only and is then an indicator, not part of the with score, **when the case has any other grader**: this is why
+`skill-fired` shows "scored: false" in `change-set-no-snapshot-edit`, `change-set-waits-for-upstream`, the first `change-set-no-push`
+run and `changing-prds-fired` in `coordinating-not-for-one-repo`, and why `no-build-skill` (a Skill max-0 grader) did not count in
+`change-set-waits-for-upstream`. When the Skill grader is the case's only grader (`coordinating-trigger`,
+`coordinating-resume-trigger`) it is scored in both arms, so those cases are 1.00/0.00 on `skill-fired` alone. Other Skill graders
+that are not with-only (`not-coordinating`, `arm: both`) are scored in both arms.
+
+The negative-only cases cannot score a do-nothing session below 1.00: in `change-set-no-snapshot-edit` the scored graders are
+`no-edit`, `no-write` and `no-bash-write` (all max 0), and in `change-set-waits-for-upstream` `client-not-built` (file regex,
+not_contains) and `no-builder-dispatch` (Agent max 0); a session that does nothing passes all of them. Only a with-arm Skill call
+is evidence that the skill ran there, and it is the unscored indicator. (`change-set-no-push` and `coordinating-not-for-one-repo`
+are in the same position for their scored graders.) Their with/without gap comes from the without arm breaking a rule, as in
+no-snapshot-edit's one Write.
 
 | Case (state) | with | w/out | Notes |
 |---|---|---|---|
