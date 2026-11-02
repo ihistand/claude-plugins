@@ -441,3 +441,22 @@ def test_minor_commit_msg_gate_checks_unconfirmed_entries_outside_the_boundary(p
         "E-002 is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"]
     assert githook.commit_msg(p, top, "Bump", vendored, merging=False) == []  # no Refs: needed there
     assert githook.commit_msg(p, top, "Bump\n\nRefs: FR-099", vendored, merging=False) == []
+
+
+# --- item 1: the acceptance note records what V1d's trace really did ---
+
+def test_item1_acceptance_records_v1ds_step_7_trace():
+    text = ACCEPTANCE.read_text(encoding="utf-8")
+    summary = flat_text(text.split("**Earlier attempts.**", 1)[0].replace("\n> ", "\n"))  # the blockquote
+    assert "V1d's step-7 trace exited 1 on `known-failing-tags`" in summary and "F-5" in summary
+    q1 = flat_text(next(ln for ln in text.splitlines() if ln.startswith("| Q1 |")))
+    assert "V1d's step-7 trace exited 1" in q1 and "`known-failing-tags`" in q1
+    assert "continued against the text" in q1 and "fixed in this wave" in q1
+    v1d = flat_text(next(ln for ln in text.splitlines() if ln.startswith("| V1d |")))
+    assert "trace 0" not in v1d and "step-7 trace 1" in v1d
+    f5 = flat_text(next(ln for ln in text.splitlines() if ln.startswith("| F-5 |")))
+    assert "found by the final review" in f5 and "Fixed" in f5
+
+
+def flat_text(s: str) -> str:
+    return " ".join(s.split())

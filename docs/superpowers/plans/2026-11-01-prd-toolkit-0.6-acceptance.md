@@ -4,10 +4,14 @@
 > **Spec:** `2026-11-01-prd-toolkit-0.6-design.md`, §13
 > **Result:** **pass on every pass line, Q0 to Q6**, on the third attempt. The run resumed in place
 > after F-4 was fixed. Four toolkit defects found on the way (F-1 to F-4) were fixed on the branch.
+> A fifth, F-5, was found afterwards by the final review: V1d's step-7 trace exited 1 on
+> `known-failing-tags`, a stop the session read as expected and went past; it is fixed in the final
+> fix wave, and the Q1 `--fixes` close is not claimed to have passed its step-7 trace.
 > - **Q1.** A bug that no test caught was reported, reproduced, proposed as `code bug` with the ACs
 >   quoted, and confirmed. A patch added a new system T-id `known-failing: E-001`. Its strict
->   expected failure was the red proof, and CI stayed green. The `--fixes` build removed the marker,
->   the deploy's system tests passed it, and FR-002 went `live (since 1.0.1)`. E-001 was resolved
+>   expected failure was the red proof, and CI stayed green. The `--fixes` build removed the marker
+>   (its step-7 trace exited 1 first, F-5), the deploy's system tests passed it, and FR-002 went
+>   `live (since 1.0.1)`. E-001 was resolved
 >   with `check` 0.
 > - **Q2.** A spec gap went through a minor 1.1.0 change, build and deploy to
 >   `live (since 1.1.0)`.
@@ -79,7 +83,7 @@
 | V1pre | `/prd-deploy --until staging` | done; the bug passed the Check and T-002.1 | close |
 | V1a, V1b | `/prd-error <report>`, the reply | E-001 `code bug` proposed and confirmed; patch drafted | record, propose, confirm |
 | V1c | the owner's `approved` | approval; red round (strict xfail); `--fixes` build stopped on F-4 | approval, red test, fix, un-mark, close |
-| V1d | `/prd-build greet FR-002 --fixes E-001` | (after R21) marker line removed; FR-002 `verified`; trace 0 | close |
+| V1d | `/prd-build greet FR-002 --fixes E-001` | (after R21) step-7 trace 1 (`known-failing-tags`, T-002.3), not stopped; at the close the marker line removed and FR-002 `verified` (F-5) | close |
 | V1e, V1f | `/prd-deploy`, the reply | system tests `2 passed` incl. T-002.3; FR-002 `live (since 1.0.1)` | close |
 | V1g | `/prd-error E-001` | resolved `T-002.3 [system], PRD 1.0.1, fixed in e2d5935`; check 0 | resolve |
 | V2a, V2b | `/prd-error <report>`, the reply | E-002 `spec gap` (sections searched); confirmed; 1.1.0 drafted | record, propose, confirm |
@@ -98,7 +102,7 @@
 | # | Pass line (spec §13) | Result |
 |---|---|---|
 | Q0 | (start, R13) the scaffold taken to `live` | **Pass.** Exit 3 at step 3 with no self-confirm. After the reply: `confirm --reply 'deploy production'`, `resume` → done, both Deployed rows, both blocks `live (since 1.0.0)`. Lint, trace and `prd_deploy.py check` 0. |
-| Q1 | Reproduced; `code bug` proposed with a quote; confirmed; a patch adds a known-failing T-id; its test fails as expected and every CI job exits 0; `--fixes` build: tag gone, test passes; deploy `live`; `check` 0 | **Pass, after F-4/R21.** Reproduced with one run of the staging launcher. Proposed `code bug` quoting AC-001.2 and AC-002.1, `Touches: FR-001, FR-002`; confirmed `yes, it's a code bug`. The patch added T-002.3 [system] `known-failing: E-001`. The test was `@pytest.mark.xfail(strict=True)` with the citation `@prd T-002.3 known-failing E-001`, and RESULTS gave `T-002.3: known-failing E-001`. CI at 4a6b492: prd-lint 0, prd-trace 0, test-unit 0, drift-production 0, test-deploy-staging 0 (`1 passed, 1 xfailed`); test-deploy-production 1 (O-4, deferred). After the fix: marker and tag gone, the case line removed at the clean close (R21), FR-002 `verified`, trace 0. The deploy's step 2 gave `test_two_word_name.py .`, `2 passed`, and FR-002 went `live (since 1.0.1)`. Resolved; `check 1b33220..HEAD` 0. |
+| Q1 | Reproduced; `code bug` proposed with a quote; confirmed; a patch adds a known-failing T-id; its test fails as expected and every CI job exits 0; `--fixes` build: tag gone, test passes; deploy `live`; `check` 0 | **Pass, after F-4/R21.** Reproduced with one run of the staging launcher. Proposed `code bug` quoting AC-001.2 and AC-002.1, `Touches: FR-001, FR-002`; confirmed `yes, it's a code bug`. The patch added T-002.3 [system] `known-failing: E-001`. The test was `@pytest.mark.xfail(strict=True)` with the citation `@prd T-002.3 known-failing E-001`, and RESULTS gave `T-002.3: known-failing E-001`. CI at 4a6b492: prd-lint 0, prd-trace 0, test-unit 0, drift-production 0, test-deploy-staging 0 (`1 passed, 1 xfailed`); test-deploy-production 1 (O-4, deferred). After the fix: marker and tag gone. V1d's step-7 trace exited 1 on `known-failing-tags` (`T-002.3 is known-failing on E-001 but no citation is tagged`), which the text then made a stop; the session continued against the text, removed the case line at the close (R21), and wrote FR-002 `verified`. Found by the final review as F-5 and fixed in this wave: the line now comes off before step 7. The deploy's step 2 gave `test_two_word_name.py .`, `2 passed`, and FR-002 went `live (since 1.0.1)`. Resolved; `check 1b33220..HEAD` 0. |
 | Q2 | Spec gap: proposed with the sections searched; confirmed; minor change, build, deploy; the new blocks `live` | **Pass.** `greet ""` printed `Hi, !`. The proposal was `spec gap`, naming the sections searched (features/greet.md, test-cases/greet.yaml, testing.md, prd.md); confirmed. The minor 1.1.0 change added AC-001.3, `GREET_NAME_BLANK`, T-001.3 and T-001.4 [unit]. The `--fixes` build wrote tests first; resolved `T-001.3 [unit], PRD 1.1.0, fixed in c9448a0`. The deploy took FR-001 `live (since 1.1.0)`, and production `greet ""` now gives `usage: greet <name>`, exit 2. `check b649546..HEAD` 0. |
 | Q3 | Killed step: `resume` refuses; `recover` → failed; `rollback` runs; entry added; `check` 0 | **Pass.** `resume` refused ("step 1 started and did not finish"). After the owner's words, `recover` wrote `recover` and a step `fail` "recovered: no result after start" (exit 4). `rollback --step 1` passed; E-003 was added by `prd_error.py new`; the close touched only errors.md; `prd_deploy.py check` 0. |
 | Q4 | Not a defect: confirmed `not a defect`; no change outside errors.md | **Pass.** The report wanted a full stop; the PRD says `!` (AC-001.1, AC-001.2). The reply, "That's not a defect: the PRD says the greeting ends with '!'", was confirmed verbatim and resolved `not a defect:` quoting AC-001.2. `git diff --stat 5c206e9..HEAD` shows errors.md only; `check` 0. |
@@ -113,6 +117,7 @@
 | F-2 | No error class covered a test case or contract that contradicts its own AC (attempt 1). | Fixed, R16 (8c29514, 71dc403). |
 | F-3 | The ledger text the error loop wrote (a quoted `<name>`) turned `prd_lint` red, with no way out (attempt 2). | Fixed, R19 (bfb6fd0). |
 | F-4 | A deploy-gate regression T-id deadlocked the `--fixes` close (attempt 3). | Fixed, R21 (2f43350, e014fb3). |
+| F-5 | Every `--fixes` build with a non-unit regression T-id stopped at its own step 7: the tester un-marked the test, but the case's `known-failing:` line came off only at the close, so the trace's `known-failing-tags` exited 1. V1d hit it and went on; found by the final review, not by the run. | Fixed in the final fix wave: the line comes off before step 7's trace (2949dbb); a short proof rerun (R25) is to take a build-gate regression T-id through it. |
 | O-1 | An entry recorded before diagnosis could never gain `Touches:`. | Fixed, R17; held in V1a. |
 | O-2 | The first scaffold bug was caught by an existing unit T-id, so the known-failing path never ran. | Resolved by R18; exercised in Q1. |
 | O-3 | Minor procedure drift in sessions: chained commits, pipes to `tail`, a tester round as `Mode: suite` where `Mode: write` was written. | None; no effect on any outcome. |
