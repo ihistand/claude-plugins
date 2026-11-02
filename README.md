@@ -14,7 +14,8 @@ A living PRD as the single authority agents build, test and deploy from: a PRD f
 - **building-from-prds skill** - Takes approved requirements to verified code: a builder in its own worktree, tests written by prd-tester, statuses approved, built, verified
 - **deploying-from-prds skill** - Deploys a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, and records Deployed rows and `verified` → `live`
 - **handling-errors skill** - Records any error in `errors.md` with `prd_error.py`, proposes its class for the user to confirm, and fixes it from a failing test through `/prd-change` and `/prd-build`
-- **Slash commands**: `/prd-new`, `/prd-adopt`, `/prd-change`, `/prd-context`, `/prd-build`, `/prd-status`, `/prd-deploy` and `/prd-error`
+- **publishing-prds skill** - Renders the PRD with `prd_publish.py` as one self-contained HTML page with per-area summaries that cite their IDs, outside the PRD folder and never committed, offered as a private Artifact
+- **Slash commands**: `/prd-new`, `/prd-adopt`, `/prd-change`, `/prd-context`, `/prd-build`, `/prd-status`, `/prd-deploy`, `/prd-error` and `/prd-publish`
 - **Lint CLI**: `prd_lint.py` checks 32 rules; `prd_block.py` writes the CLAUDE.md block
 
 **For full documentation:** See [prd-toolkit/README.md](./prd-toolkit/README.md)
