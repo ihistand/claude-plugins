@@ -8,6 +8,7 @@ import tempfile
 import time
 import warnings
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from conftest import PLUGINS_FILE
@@ -213,6 +214,17 @@ def _fake_git(tmp_path: Path) -> tuple[Path, Path]:
     return bindir, log
 
 
+def test_drift_with_another_side_unreachable(tmp_path):
+    orders, reports = synced(tmp_path)
+    edit(rp(reports) / "links.md", "| orders | `../orders` |", "| billing | `../billing` | | | |\n| orders | `../orders` |")
+    change_orders(orders)
+    for args in ((), ("--ci",)):
+        r = run_links("check", rp(reports), *args)
+        assert r.code == 1, (args, r)
+        out = lines(r.out)
+        assert out[0].startswith("upstream billing: unreachable") and "upstream orders table:orders: changed" in out, out
+
+
 def test_unreachable_url_times_out(tmp_path):
     """Review Focus 4: a host that never answers is unreachable within the timeout, never a hang or a prompt."""
     _, reports = synced(tmp_path)
@@ -277,29 +289,51 @@ def test_no_main_names_the_way_out(tmp_path):
     assert lines(r.out) == ["consumer reports: unreachable (`../reports` has no ref main; pass --ref <branch>)"]
 
 
+class _Tracked(tempfile.TemporaryDirectory):
+    """A TemporaryDirectory that records itself and its explicit cleanup(); the list keeps it alive, so its
+    finalizer cannot clean up for a Side nobody closed."""
+    made: ClassVar[list] = []
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.closed = False
+        _Tracked.made.append(self)
+
+    def cleanup(self):
+        self.closed = True
+        super().cleanup()
+
+
 def test_sides_are_closed(tmp_path, monkeypatch):
-    """check and sync remove every temporary directory they make, with no finalizer left to do it."""
+    """sync, check (both sides) and impact (its own side and a consumer's) close every Side they open: each temporary
+    directory is removed by an explicit cleanup() before the command returns, never by a finalizer."""
     from prdlint import links, model
 
     orders, reports = synced(tmp_path)
-    tmp = tmp_path / "tmpdirs"
-    tmp.mkdir()
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("error", ResourceWarning)
-        assert links.check_exit(links.check(model.load(rp(reports)))) == 0
-        assert links.check_exit(links.check(model.load(op(orders)))) == 0
-        assert list(tmp.iterdir()) == []
-        warnings.simplefilter("always", ResourceWarning)
-        links.sync(model.load(rp(reports)), "orders")
-        assert list(tmp.iterdir()) == []
-        gc.collect()
-    assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", _Tracked)
+    monkeypatch.setattr(_Tracked, "made", [])
+
+    def closes(what: str, run, expect: int) -> None:
+        _Tracked.made.clear()
+        run()
+        made = list(_Tracked.made)
+        assert len(made) == expect, (what, len(made))
+        assert all(d.closed for d in made) and not any(Path(d.name).exists() for d in made), f"{what}: a Side left open"
+
+    closes("sync", lambda: links.sync(model.load(rp(reports)), "orders"), 1)
+    closes("check, upstream side", lambda: links.check(model.load(rp(reports))), 1)  # the upstream side
+    closes("check, consumer side", lambda: links.check(model.load(op(orders))), 1)  # the consumer side
+    edit(op(orders) / "contracts/schema.sql", "order_key text NOT NULL UNIQUE", "order_key varchar(40) NOT NULL UNIQUE")
+    closes("impact", lambda: links.impact(model.load(op(orders))), 2)  # its own side at base, and the consumer
     side = links.open_side(reports, links.parse_location("`../orders`"), expect="orders")
     with side:
         side.load("main")
-        assert len(list(tmp.iterdir())) == 1
-    assert list(tmp.iterdir()) == []
+        assert not _Tracked.made[-1].closed and Path(_Tracked.made[-1].name).exists()
+    assert _Tracked.made[-1].closed and not Path(_Tracked.made[-1].name).exists()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceWarning)
+        links.check(model.load(rp(reports)))
+        gc.collect()
 
 
 # ---------------------------------------------------------------- impact
