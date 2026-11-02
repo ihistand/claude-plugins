@@ -550,6 +550,12 @@ def parse_ref(ref: str) -> tuple[str, str | None, str]:
     return kind, None, rest
 
 
+def ref_prefix(prd: "Prd", ref: str) -> str | None:
+    """The upstream prefix of `ref` in a PRD that has links.md; None without one, where every reference is judged as
+    before 0.7 (R-10c: a PRD without links.md needs no edit)."""
+    return parse_ref(ref)[1] if prd.links is not None else None
+
+
 def _links(text: str) -> Links:
     out = Links([], [], {})
     for n, line in enumerate(strip_code(text).split("\n"), 1):

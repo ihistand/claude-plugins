@@ -134,10 +134,7 @@ def test_sync_copies_only_cited(tmp_path):
 def test_sync_copies_an_upstream_custom_type_the_downstream_does_not_declare(tmp_path):
     """R-10b: reports cites cli:orders/greet; only orders declares the custom type cli."""
     orders, reports = make_linked_repos(tmp_path)
-    edit_orders(orders, "prd.md", "| lookml | `contracts/custom/*.lkml` |",
-                "| cli | `contracts/cli.yaml` | `python3 -c \"import sys; sys.exit(0)\"` |\n| lookml | `contracts/custom/*.lkml` |")
-    (orders / "docs/prd/orders/contracts/cli.yaml").write_text("greet:\n  output: a line\nbye:\n  output: another\n", encoding="utf-8")
-    commit(orders, "Add the cli contract type", "docs")
+    _orders_cli(orders)
     assert "| cli |" not in (reports / "docs/prd/reports/prd.md").read_text(encoding="utf-8")
     link(reports, ["cli:orders/greet"])
     r = run_links("sync", reports / "docs/prd/reports", "orders")
@@ -148,6 +145,37 @@ def test_sync_copies_an_upstream_custom_type_the_downstream_does_not_declare(tmp
     assert "greet:" in text and "bye" not in text
     assert lint(reports / "docs/prd/reports") == []
     assert lint(orders / "docs/prd/orders") == []
+
+
+def _orders_cli(orders: Path) -> None:
+    edit_orders(orders, "prd.md", "| lookml | `contracts/custom/*.lkml` |",
+                "| cli | `contracts/cli.yaml` | `python3 -c \"import sys; sys.exit(0)\"` |\n| lookml | `contracts/custom/*.lkml` |")
+    (orders / "docs/prd/orders/contracts/cli.yaml").write_text("greet:\n  output: a line\nbye:\n  output: another\n", encoding="utf-8")
+    commit(orders, "Add the cli contract type", "docs")
+
+
+def test_sync_refuses_a_custom_kind_the_upstream_does_not_have(tmp_path):
+    _, reports = make_linked_repos(tmp_path)
+    link(reports, ["cli:orders/greet"])
+    before = (reports / "docs/prd/reports/links.md").read_text(encoding="utf-8")
+    r = run_links("sync", reports / "docs/prd/reports", "orders")
+    assert (r.code, r.out) == (1, ""), r.out + r.err
+    assert r.err.strip() == "refused: cli:greet: not in orders at main"
+    assert not snap(reports).exists()
+    assert (reports / "docs/prd/reports/links.md").read_text(encoding="utf-8") == before
+
+
+def test_sync_copies_a_custom_kind_cited_in_traces(tmp_path):
+    orders, reports = make_linked_repos(tmp_path)
+    _orders_cli(orders)
+    link(reports, [])
+    p = reports / "docs/prd/reports/features/api.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Traces: FR-002, FR-003", "Traces: FR-002, FR-003, cli:orders/greet", 1), encoding="utf-8")
+    r = run_links("sync", reports / "docs/prd/reports", "orders")
+    assert r.code == 0, r.err
+    text = (snap(reports) / "cli.yaml").read_text(encoding="utf-8")
+    assert text.split("\n")[0].endswith("Do not edit. Type: cli.") and "greet:" in text and "bye" not in text
+    assert lint(reports / "docs/prd/reports") == []
 
 
 def test_sync_reads_default_branch_not_worktree(tmp_path):

@@ -152,7 +152,7 @@ def test_linked_with_a_sibling_upstream(tmp_path):
 
 # ---------------------------------------------------------------- cs-running
 
-def test_cs_running_record_and_branches(states):
+def test_cs_running_record_and_branches(states, tmp_path):
     client, greet = states("cs-running")
     record = greet / GREET_PRD / "changes/CS-001.md"
     text = record.read_text(encoding="utf-8")
@@ -167,8 +167,12 @@ def test_cs_running_record_and_branches(states):
     # the record passes change-sets: lint is clean, and the vendored writer reads it back
     lint = tool(greet, str(ROOT / "scripts/prd_lint.py"), GREET_PRD)
     assert lint.returncode == 0 and "change-sets" not in lint.stdout, lint.stdout
-    assert tool(greet, ".prd-toolkit/prd_links.py", "changeset", "log", f"{GREET_PRD}/changes/CS-001.md", "probe").returncode == 0
-    git(greet, "checkout", "--", GREET_PRD)
+    copy = tmp_path / "changes/CS-001.md"  # a copy, so the shared state is never written
+    copy.parent.mkdir()
+    copy.write_text(text, encoding="utf-8")
+    r = tool(greet, ".prd-toolkit/prd_links.py", "changeset", "log", str(copy), "probe")
+    assert r.returncode == 0 and copy.read_text(encoding="utf-8").rstrip().endswith(" probe"), r.stdout + r.stderr
+    assert record.read_text(encoding="utf-8") == text
     for repo in (client, greet):
         assert git(repo, "branch", "--show-current").strip() == BRANCH
         assert BRANCH in git(repo, "log", "-1", "--format=%D")

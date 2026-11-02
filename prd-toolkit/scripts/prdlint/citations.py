@@ -41,8 +41,11 @@ def _upstream_names(prd: Prd) -> set[str]:
 
 
 def cites(prd: Prd) -> list[Cite]:
+    """Every citation of an upstream item; none in a PRD without links.md, which keeps its pre-0.7 meaning (R-10c)."""
     from .rules.ids import _traces
 
+    if prd.links is None:
+        return []
     out: list[Cite] = []
 
     def prefixed(ref: str):

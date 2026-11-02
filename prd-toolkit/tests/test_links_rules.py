@@ -142,6 +142,31 @@ def test_sufficiency_leaves_a_prefixed_custom_kind_to_upstream_refs(prd):
     assert any(m.startswith("T-002.6: target kind 'nope' is unknown") for m in msgs), msgs
 
 
+# ---- R-10c: without links.md every target is judged as before 0.7 (findings taken from main's prd_lint.py)
+
+def test_without_links_md_slug_like_targets_and_traces_are_not_prefixed(prd):
+    add_cases(prd, ["page:admin/users", "component:checkout/Cart"])
+    p = prd / "features/api.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Traces: FR-002, FR-003", "Traces: FR-002, FR-003, see:docs/x", 1), encoding="utf-8")
+    assert not (prd / "links.md").exists()
+    assert [(f.rule, f.message) for f in lint(prd)] == []
+
+
+def test_without_links_md_prefix_like_targets_keep_their_old_findings(prd):
+    add_cases(prd, ["table:transform/orders_daily", "cli:greet/greet"])
+    assert [(f.rule, f.message) for f in lint(prd)] == [
+        ("test-refs", "T-002.3: target table:transform/orders_daily: no table 'transform/orders_daily' in contracts/schema.sql"),
+        ("sufficiency", "T-002.4: target kind 'cli' is unknown (known: code, component, event, job, lookml, op, page, table)"),
+    ]
+
+
+def test_with_links_md_a_slug_like_traces_token_is_a_citation(prd):
+    setup(prd)
+    p = prd / "features/api.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("Traces: FR-002, FR-003", "Traces: FR-002, FR-003, see:docs/x", 1), encoding="utf-8")
+    assert found(prd, "upstream-refs") == [("upstream-refs", "UJ-01: target see:docs/x names no Upstreams row 'docs'")]
+
+
 def test_op_and_event_absent(prd):
     setup(prd, cited=["table:transform/orders_daily", "table:transform/customers", "op:transform/getX", "event:transform/gone"])
     assert {m for _, m in found(prd, "upstream-refs")} == {
@@ -185,9 +210,11 @@ def test_unprefixed_still_checked(prd):
     assert any(r == "test-refs" for r, _ in found(prd, "test-refs"))
 
 
-def test_no_links_file_target_names_no_row(prd):
+def test_no_links_file_target_is_judged_as_before_0_7(prd):
+    """R-10c: without links.md a slug-like target is not prefixed; test-refs judges it as main does."""
     add_cases(prd, ["table:transform/x"])
-    assert found(prd, "upstream-refs") == [("upstream-refs", "T-002.3: target table:transform/x names no Upstreams row 'transform'")]
+    assert found(prd, "upstream-refs") == []
+    assert found(prd, "test-refs") == [("test-refs", "T-002.3: target table:transform/x: no table 'transform/x' in contracts/schema.sql")]
 
 
 # ---- snapshot-cited

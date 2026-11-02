@@ -89,14 +89,16 @@ def _columns(c) -> dict[str, set[str]]:
 @rule("upstream-refs")
 def upstream_refs(prd: Prd):
     from ..citations import crosses
-    from ..model import parse_ref
+    from ..model import parse_ref, ref_prefix
     from ..snapshot import items
 
     names = {r.name for r in prd.links.upstreams} if prd.links else set()
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
-        kind, prefix, _ = parse_ref(target) if isinstance(target, str) else ("", None, "")
-        if prefix is not None and not crosses(kind):
+        if not isinstance(target, str) or ref_prefix(prd, target) is None:
+            continue
+        kind = parse_ref(target)[0]
+        if not crosses(kind):
             yield Finding(tc.file, tc.data.key_lines.get("target", tc.line), "upstream-refs",
                           f"{tc.id}: target {target}: kind '{kind}' does not cross repositories")
     have, cols = {}, {}
