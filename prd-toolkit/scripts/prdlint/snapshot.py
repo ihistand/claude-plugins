@@ -12,7 +12,7 @@ from .model import CROSSING, Prd, SnapshotFile
 from .rules.contracts import _EVENT_HEADING, _METHODS, create_tables, custom_types, operations_of, parse_schema
 
 yaml = require("yaml", "pyyaml")
-from sqlglot import exp  # noqa: E402
+from sqlglot import Dialect, TokenType, exp  # noqa: E402
 
 _REF = "#/components/"
 
@@ -65,6 +65,15 @@ def contracts_of_snapshot(snaps: list[SnapshotFile]) -> Contracts:
 
 # ---------------------------------------------------------------- parsing
 
+def _norm(node):
+    """Mapping keys as strings throughout, so a dump sorts a mapping that mixes 200 and default."""
+    if isinstance(node, dict):
+        return {str(k): _norm(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_norm(v) for v in node]
+    return node
+
+
 def _load(text: str | None):
     try:
         data = yaml.safe_load(text) if text is not None else None
@@ -97,6 +106,28 @@ def _table_sql(c: Contracts, name: str) -> list[str] | None:
         return None
     comments = sorted(s.sql(dialect=c.dialect, pretty=True) for s in stmts if _comment_table(s) == name)
     return [create.sql(dialect=c.dialect, pretty=True)] + comments
+
+
+def _chunks(c: Contracts):
+    """(source text, parsed statement) for each statement of schema.sql, the text exactly as written."""
+    text = c.files.get("schema.sql")
+    if text is None:
+        return []
+    try:
+        tokens = Dialect.get_or_raise(c.dialect).tokenize(text)
+    except Exception:
+        return []
+    cuts = [t.end + 1 for t in tokens if t.token_type == TokenType.SEMICOLON]
+    if not cuts or cuts[-1] < len(text.rstrip()):
+        cuts.append(len(text))
+    out, prev = [], 0
+    for cut in cuts:
+        chunk = text[prev:cut].strip()
+        prev = cut
+        parsed = parse_schema(chunk, c.dialect) if chunk else None
+        if parsed and parsed[0] is not None:
+            out.append((chunk if chunk.endswith(";") else chunk + ";", parsed[0]))
+    return out
 
 
 def _sections(text: str) -> list[tuple[str, list[str]]]:
@@ -193,7 +224,7 @@ def item_text(c: Contracts, kind: str, name: str) -> str | None:
         return None if sql is None else "\n".join(sql)
     if kind == "op":
         found = _op(c, name)
-        return None if found is None else yaml.safe_dump(_op_view(*found), sort_keys=True)
+        return None if found is None else yaml.safe_dump(_norm(_op_view(*found)), sort_keys=True)
     if kind in ("event", "job"):
         for n, lines in _sections(c.files.get("events.md", "")):
             if n == name:
@@ -203,7 +234,7 @@ def item_text(c: Contracts, kind: str, name: str) -> str | None:
     d = _load(c.files.get(fname)) if fname else None
     if d is None or name not in {str(k) for k in d}:
         return None
-    return yaml.safe_dump({k: v for k, v in d.items() if str(k) == name}, sort_keys=True)
+    return yaml.safe_dump(_norm({k: v for k, v in d.items() if str(k) == name}), sort_keys=True)
 
 
 def extract(c: Contracts, cited: set[tuple[str, str]]) -> dict[str, str]:
@@ -216,9 +247,12 @@ def extract(c: Contracts, cited: set[tuple[str, str]]) -> dict[str, str]:
     tables = [n for k, n in cited if k == "table"]
     if tables:
         body = []
-        for name in [n for n, _ in create_tables(_statements(c)) if n in tables]:
-            body += [s + ";" for s in _table_sql(c, name) or []]
-        out["schema.sql"] = "\n\n".join(body) + "\n"
+        for chunk, stmt in _chunks(c):
+            if any(isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "TABLE"
+                   and stmt.find(exp.Table) is not None and stmt.find(exp.Table).name == t for t in tables) \
+                    or _comment_table(stmt) in tables:
+                body.append(chunk)
+        out["schema.sql"] = "\n".join(body) + "\n"
     ops = sorted(n for k, n in cited if k == "op")
     if ops:
         data = _load(c.files["openapi.yaml"])

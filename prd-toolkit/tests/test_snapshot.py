@@ -111,6 +111,7 @@ def test_reformat_is_same(prd):
     sql = (prd / "contracts/schema.sql").read_text()
     sql = sql.replace("CREATE TABLE orders (\n  id bigint PRIMARY KEY,\n  order_key text NOT NULL UNIQUE,",
                       "create table orders (\n\n        id bigint primary key,\n\n        order_key text not null unique,")
+    assert sql != (prd / "contracts/schema.sql").read_text()
     (prd / "contracts/schema.sql").write_text(sql)
     spec = yaml.safe_load((prd / "contracts/openapi.yaml").read_text())
     op = spec["paths"]["/orders/{id}"]["get"]
@@ -146,3 +147,27 @@ def test_header_forms():
     assert snapshot.header("openapi.yaml", "orders", "1.2.0", "abc123") == f"# {h}"
     assert snapshot.header("events.md", "orders", "1.2.0", "abc123") == f"<!-- {h} -->"
     assert re.fullmatch(model._SNAP_HEADER.pattern, snapshot.header("events.md", "orders", "1.2.0", "abc123"))
+
+
+def test_table_extracted_verbatim(prd):
+    edit(prd, "contracts/schema.sql", "  email text NOT NULL,\n",
+         "  email   text NOT NULL, -- contact address\n\t\t")
+    src = (prd / "contracts/schema.sql").read_text()
+    c = contracts(prd)
+    out = snapshot.extract(c, {("table", "customers")})["schema.sql"]
+    create = src[src.index("CREATE TABLE customers"):src.index(");", src.index("CREATE TABLE customers")) + 2]
+    assert create in out and "-- contact address" in out and "COMMENT ON COLUMN customers.email IS 'Contact email. PII.';" in out
+    assert "CREATE TABLE orders" not in out
+    c2, snap = round_trip(prd, {("table", "customers")})
+    assert snapshot.item_text(snap, "table", "customers") == snapshot.item_text(c, "table", "customers") is not None
+
+
+def test_mixed_key_reorder_is_same(prd):
+    spec = yaml.safe_load((prd / "contracts/openapi.yaml").read_text())
+    get = spec["paths"]["/orders/{id}"]["get"]
+    get["responses"]["default"] = {"description": "Any other."}
+    (prd / "contracts/openapi.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
+    a = snapshot.item_text(contracts(prd), "op", "getOrder")
+    get["responses"] = dict(reversed(list(get["responses"].items())))
+    (prd / "contracts/openapi.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
+    assert snapshot.item_text(contracts(prd), "op", "getOrder") == a
