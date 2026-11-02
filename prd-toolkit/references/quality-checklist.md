@@ -18,6 +18,7 @@ judgement. Answer each with yes or no. A "no" is a gap: fix it, then re-run lint
 - [ ] Does every operation state its auth scheme, the role that may call it, and a fully typed request?
 - [ ] Does every operation that changes state say whether a retry is safe (idempotency)?
 - [ ] Does every error have a user-facing message a person could act on, without reading logs?
+- [ ] Does the PRD name the build backend, the package layout, the entry points and the install command, so a builder can create the package without a guess?
 - [ ] Does every dependency have a mock, and does the PRD say tests never call production?
 - [ ] Does every allow cell in `permissions.yaml` have a test, as well as every deny cell?
 - [ ] Does every test case that depends on something outside its contracts (a component contract, an architecture fact, a Harness slot) cite it in `refs:`?

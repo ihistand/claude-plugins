@@ -703,3 +703,20 @@ and close (`[…]` marks a trim):
 
 **Result:** pass. The skill triggered, every open gate was named (markers in every contract
 file included, now that lint reads them), and there was no offer to approve.
+
+## A5: the interview asks about packaging (0.7, F-a)
+
+Eval case `authoring-asks-packaging` (the hello ticket, which says nothing about packaging; "Do not
+ask me questions"). One grader, `names-packaging`: the PRD's section 1 names a build backend and an
+install command, or a `NEEDS CLARIFICATION` marker mentions packaging, the build backend or the
+install command. Run 2026-11-02 with `claude plugin eval ./prd-toolkit --case 'authoring-asks-packaging' --runs 1 --model sonnet --no-publish --scaffold --trust-plugin --threshold 0` (Claude Code 2.1.316).
+
+| Arm | `names-packaging` | Score |
+|---|---|---|
+| With plugin (the `packaging` category in place) | pass | 1.00 |
+| Without plugin | fail (no `docs/prd/hello/prd.md`; the run wrote no PRD folder) | 0.00 |
+
+Delta +1.00. The first run of the case scored 0.00 on both arms because the grader's `(?s)` flag is
+not valid in the harness's regex engine; the pattern uses `[\s\S]` instead. One run per arm, so the
+delta shows the skill's effect, not the packaging category's alone: the case was not run against the
+skill without the category.
