@@ -365,3 +365,79 @@ def test_item8_the_code_bug_route_takes_an_already_marked_case():
     assert ("When the regression T-id's case already carries `known-failing: <E-nnn>` and its block is `approved` "
             "(an entry from 0.5, or from adoption), the PRD already says it all: skip the patch, and the tester-only "
             "round below marks and tags its test.") in s5
+
+
+# --- minors ---
+
+DEPLOY_RUN = SKILLS / "deploying-from-prds/running-a-deploy.md"
+PUBLISH_SKILL = SKILLS / "publishing-prds/SKILL.md"
+PUBLISH_CMD = ROOT / "commands/prd-publish.md"
+
+
+def test_minor_stop_entry_and_deploy_entry_use_the_procedures_forms():
+    r = flat(RUN)
+    assert ("prd_error.py new docs/prd/<slug> --title '<the stop in one line>' --source 'build <area> <IDs>' "
+            "--touches <IDs> --evidence-file <SNAP>/stop-evidence.md; echo \"prd-error-exit=$?\"") in r
+    d = flat(DEPLOY_RUN)
+    assert ('--source "deploy run <run id>, failed step <N>"; echo "prd-error-exit=$?"') in d
+    assert "Never write the entry by hand" in d  # restored pin (0.5)
+
+
+def test_minor_deploy_names_prd_error_after_a_passing_regression_test():
+    five = flat(DEPLOY_RUN).split("5. **Report.**", 1)[1]
+    assert "prd_error.py list docs/prd/<slug> --open; echo \"prd-error-exit=$?\"" in five
+    assert ("for each `confirmed` entry whose `Touches:` names a block the run's `tests` step passed, name "
+            "`/prd-error E-nnn` as the next step: it resolves the entry from this run's log") in five
+
+
+def test_minor_recover_then_rollback_restores_the_previous_install():
+    d = flat(DEPLOY_RUN)
+    assert ("A rollback after `recover` runs the step's `Rollback:` as written: it restores the previous install "
+            "even when the killed step installed nothing, so say so when you ask") in d
+
+
+def test_minor_readme_names_resolves_exit_2():
+    s = _readme_errors()
+    two = s.split("Exit 2 (usage error, nothing written)", 1)[1]
+    assert "a fix without its T-id, level or commit (`a fix needs a T-id, its level and a commit`)" in two
+
+
+def test_minor_spec_revisions_note_recover_without_a_log():
+    rev = between(flat(SPEC), "> **Revisions.**", "## 1. Scope")
+    assert "`recover` on a run with no log exits 2 (`no log for run <id>`)" in rev
+
+
+def test_minor_r24_publish_goes_under_the_git_common_dir():
+    s = flat(PUBLISH_SKILL)
+    assert "git rev-parse --path-format=absolute --git-common-dir" in s
+    assert "`<publish>` is `<git-common-dir>/prd-toolkit/publish`, outside the working tree" in s
+    assert "`<publish>/<project>-prd-<version>.html`" in s
+    assert "`<publish>/<project>-prd-<version>.summaries.json`" in s
+    assert "the page's absolute path" in s
+    assert "`./<project>-prd-<version>.html`" not in s and "in the repository root" not in s
+    c = flat(PUBLISH_CMD)
+    assert "`<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`" in c
+    readme = flat(README)
+    assert "(default `<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`" in readme
+
+
+def test_minor_r24_render_creates_the_publish_directory(prd, tmp_path):
+    out = tmp_path / "common/prd-toolkit/publish/orders-prd-1.0.0.html"
+    r = subprocess.run([sys.executable, str(ROOT / "scripts/prd_publish.py"), "render", str(prd), "--out", str(out)],
+                       capture_output=True, text=True, env=_no_git_env(prd.parent.parent.parent))
+    assert r.returncode == 0, r.stderr
+    assert out.is_file()
+
+
+def test_minor_commit_msg_gate_checks_unconfirmed_entries_outside_the_boundary(prd):
+    from prdlint import githook
+    top = prd.parent.parent.parent
+    subprocess.run(["git", "init", "-q"], cwd=top, check=True)
+    (prd / "errors.md").write_text(
+        "# Error ledger\n\n### E-002 x\nDetected: 2026-11-03, report\nClassification: code bug\nDiagnosis: d\nResolution: -\nRecurrence of: -\n")
+    p = model.load(prd)
+    vendored = [".prd-toolkit/prd_lint.py"]  # outside the PRD folder, outside the Boundary
+    assert githook.commit_msg(p, top, "Bump\n\nRefs: E-002", vendored, merging=False) == [
+        "E-002 is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"]
+    assert githook.commit_msg(p, top, "Bump", vendored, merging=False) == []  # no Refs: needed there
+    assert githook.commit_msg(p, top, "Bump\n\nRefs: FR-099", vendored, merging=False) == []

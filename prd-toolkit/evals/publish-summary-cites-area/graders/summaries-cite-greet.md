@@ -2,7 +2,7 @@
 type: regex
 pattern: '"greet"\s*:\s*\{[^{}]*"FR-00[12]"'
 match: contains
-target: { source: file, path: greet-prd-1.0.0.summaries.json }
+target: { source: file, path: .git/prd-toolkit/publish/greet-prd-1.0.0.summaries.json }
 ---
 
 The summaries file the skill names holds a summary of the `greet` area citing its own IDs. A run that

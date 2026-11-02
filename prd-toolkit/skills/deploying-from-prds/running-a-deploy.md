@@ -181,10 +181,11 @@ step 3 for a finished run they ask you to record.
      reads it). Never write the entry by hand:
 
      ```bash
-     uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "Deploy <run id> failed at step <N>" --source "deploy run <run id>, failed step <N>"
+     uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "Deploy <run id> failed at step <N>" --source "deploy run <run id>, failed step <N>"; echo "prd-error-exit=$?"
      ```
 
-     It prints the new entry's `E-<nnn>` and numbers it after the ledger's last one. It never
+     `prd-error-exit=` must be `0`; a `refused:` line is reported, never worked around. It prints
+     the new entry's `E-<nnn>` and numbers it after the ledger's last one. It never
      classifies: the entry stays open (`Classification: unclassified`), and
      `--touches` and `--evidence-file` are optional.
 
@@ -212,7 +213,9 @@ step 3 for a finished run they ask you to record.
      It records the reply and a failed step `recovered: no result after start` (never a pass),
      prints `recovered: step <N> run=<id>` and ends `prd-deploy: failed step=<N> run=<id>`,
      exit 4. The run is now an ordinary failed run: go on as **4, failed** above, from the
-     failure's output through the rollback question, the failure entry and the close. It refuses
+     failure's output through the rollback question, the failure entry and the close. A rollback
+     after `recover` runs the step's `Rollback:` as written: it restores the previous install even
+     when the killed step installed nothing, so say so when you ask. It refuses
      a step with no unfinished start (`step <N> has no unfinished start in run <id>`) or that
      already has a result, and another PRD's run; an empty reply exits 2. A step that finished
      without saying so is never marked done: the environment is fixed by its cause and a new run
@@ -293,4 +296,13 @@ step 3 for a finished run they ask you to record.
    added; a trace finding at the close, with where it went; the close commit and the close
    check's result. A rollback not run before the close stays unrun: the close commit moved
    HEAD, so the rollback can no longer run through the script and is never run by hand. Name
-   its command for the user only as information.
+   its command for the user only as information. After a run whose `tests` step passed, run, as
+   its own call:
+
+   ```bash
+   uv run --script <scripts>/prd_error.py list docs/prd/<slug> --open; echo "prd-error-exit=$?"
+   ```
+
+   and for each `confirmed` entry whose `Touches:` names a block the run's `tests` step passed, name
+   `/prd-error E-nnn` as the next step: it resolves the entry from this run's log (a deploy-gate
+   regression T-id's entry resolves only from a run that passed it).

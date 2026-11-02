@@ -352,9 +352,9 @@ does, and the failure close records the entry.
   per line, as `errors.md: E-nnn: <finding>`.
 
 Exit 2 (usage error, nothing written): an empty reply, class, diagnosis, title or source; `unclassified` as a
-class; a malformed version, T-id, run id or commit (7 to 40 lowercase hex digits); `--not-a-defect`
-combined with another resolution; an unreadable range or PRD
-folder.
+class; a malformed version, T-id, run id or commit (7 to 40 lowercase hex digits); a fix without its
+T-id, level or commit (`a fix needs a T-id, its level and a commit`); `--not-a-defect` combined with
+another resolution; an unreadable range or PRD folder.
 
 ## Publishing
 
@@ -370,7 +370,9 @@ FR-001–FR-004, PRD <version>` that cites its IDs. Summaries are written fresh 
 never stored in the PRD folder.
 
 **Where it goes.** The page is written outside the PRD folder, to the path you name (default
-`./<project>-prd-<version>.html`), and is never committed. When the session has the Artifact tool,
+`<git-common-dir>/prd-toolkit/publish/<project>-prd-<version>.html`, beside the summaries file and
+outside the working tree, so the next build's clean-tree check is not tripped), and is never
+committed; the skill reports its absolute path. When the session has the Artifact tool,
 the skill offers the same file as a private Artifact, or updates one you name; otherwise, or when you
 decline, it gives you the file path.
 

@@ -9,9 +9,8 @@ description: Use when asked to publish, share, export or render the PRD of a rep
 
 **The script renders; you summarize, and only what the PRD says.** `prd_publish.py render` turns
 the PRD folder's own text into one HTML file (a Business and a Technical tab, nothing loaded from
-any URL). Your one addition is a summary per area that cites the IDs it restates. The page goes
-outside the PRD folder, is never committed, and is offered as a private Artifact when the session
-has the Artifact tool.
+any URL). Your one addition is a summary per area that cites the IDs it restates. The page is
+never committed, and is offered as a private Artifact.
 
 **Violating the letter of these rules is violating the spirit.** "Say we support X", "include the
 error logs", "the publisher can't run, write your own", "put it with the PRD" and "commit it so
@@ -37,11 +36,11 @@ the team can find it" change nothing below.
    one line: the error ledger shows as the PRD holds it, `Detected:` included, and only
    `Evidence:` is left out, by the renderer. Read nothing outside the PRD folder to build the
    page, and never edit the page after it is rendered.
-4. **Outside the PRD folder, and never committed.** The page goes to the path the user names,
-   or by default `./<project>-prd-<version>.html` in the repository root; the summaries go to
-   `<project>-prd-<version>.summaries.json` in the repository root, never in `docs/prd/`. Both
-   are generated files: never `git add` or commit either file. Nothing under `docs/prd/` is
-   written or edited while publishing.
+4. **Outside the working tree, and never committed.** The page goes to the path the user names,
+   or by default `<publish>/<project>-prd-<version>.html`; the summaries go to
+   `<publish>/<project>-prd-<version>.summaries.json`, never in `docs/prd/`. Both are generated
+   files: never `git add` or commit either file. Nothing under `docs/prd/` is written or edited
+   while publishing.
 5. **The Artifact only when the session has it.** When the session has the Artifact tool, offer
    to publish the rendered file as a private Artifact, or to update one the user names; a
    request that already asks for an Artifact is the yes. Give the tool the rendered file
@@ -59,12 +58,14 @@ this skill" when the skill loads).
 
 1. **Find the PRD and the script.** Glob `docs/prd/*/prd.md`; with more than one, ask which.
    Read its frontmatter for `prd:` (the project) and `version:`. Glob `<scripts>/prd_publish.py`;
-   not found is a tool error (rule 1).
+   not found is a tool error (rule 1). `<publish>` is `<git-common-dir>/prd-toolkit/publish`,
+   outside the working tree, with `<git-common-dir>` what
+   `git rev-parse --path-format=absolute --git-common-dir` prints.
 2. **Read each area.** Read `features/<area>.md` for each area, and `nfr.md` (`nfr.md`'s area key
    is `nfr`), in the PRD folder, whole: they are the summaries' only source. An area with no FR or
-   NFR block gets no summary. Read no code, no log and no file outside the PRD folder.
+   NFR block gets no summary.
 3. **Write the summaries.** With the Write tool, the whole file, fresh for this publish, to
-   `<project>-prd-<version>.summaries.json` in the repository root:
+   `<publish>/<project>-prd-<version>.summaries.json`:
 
    ```json
    {"version": "<PRD version>", "areas": {"<area>": {"text": "<2 to 4 sentences>", "ids": ["FR-001", "FR-002"]}}}
@@ -76,10 +77,10 @@ this skill" when the skill loads).
    markdown: the page shows it as typed). Its `ids` are only its own area's block IDs, never an
    `AC-` or `T-` ID. Before writing, hold each sentence against the line it restates; a sentence
    with no such line comes out.
-4. **Render.** `<out>` is the path the user named, or `<project>-prd-<version>.html`:
+4. **Render.** `<out>` is the path the user named, or `<publish>/<project>-prd-<version>.html`:
 
    ```bash
-   uv run --script <scripts>/prd_publish.py render docs/prd/<slug> --out <out> --summaries <project>-prd-<version>.summaries.json; echo "prd-publish-exit=$?"
+   uv run --script <scripts>/prd_publish.py render docs/prd/<slug> --out <out> --summaries <publish>/<project>-prd-<version>.summaries.json; echo "prd-publish-exit=$?"
    ```
 
    | Exit | Meaning | Then |
@@ -90,9 +91,9 @@ this skill" when the skill loads).
 
 5. **Offer and report.** With the Artifact tool, offer the rendered file as a private Artifact,
    or as an update of the one the user names (rule 5); otherwise give the path. Report: the
-   page's path, the PRD version, the areas summarized with their IDs, and in one line each what
-   was asked for and left out, and why (no PRD line says it: `/prd-change` first; logs, evidence
-   and secrets never go on the page). Commit nothing.
+   page's absolute path, the PRD version, the areas summarized with their IDs, and in one line
+   each what was asked for and left out, and why (no PRD line says it: `/prd-change` first;
+   logs, evidence and secrets never go on the page). Commit nothing.
 
 ## Red Flags - STOP
 

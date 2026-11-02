@@ -169,6 +169,17 @@ def refs_problems(prd: Prd, message: str, code_commit: bool = False) -> list[str
     return problems
 
 
+def unconfirmed_refs(prd: Prd, message: str) -> list[str]:
+    """The `Refs:` problems a code commit outside the Boundary still has: each cited entry not yet confirmed."""
+    out = []
+    for m in _REFS.finditer(message):
+        for ref in (x.strip() for x in m.group(1).split(",")):
+            entry = prd.errors_ledger.get(ref) if _ERR_ID.fullmatch(ref) else None
+            if entry is not None and entry.confirmed_raw is None and UNCONFIRMED.format(ref) not in out:
+                out.append(UNCONFIRMED.format(ref))
+    return out
+
+
 def _commits(repo_root: Path, rng: str) -> list[tuple[str, str, list[str]]]:
     proc = subprocess.run(
         ["git", "-c", "core.quotePath=false", "-c", "log.showSignature=false", "log", "--format=%H%x00%B%x00", "--name-only", "--end-of-options", rng],

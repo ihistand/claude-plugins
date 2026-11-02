@@ -67,6 +67,7 @@ def main(argv: list[str]) -> int:
         print(f"prd_publish: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     try:
+        out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(page, encoding="utf-8")
     except OSError as e:
         print(f"prd_publish: cannot write {out}: {e}", file=sys.stderr)

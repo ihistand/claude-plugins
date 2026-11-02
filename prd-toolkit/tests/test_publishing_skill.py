@@ -12,7 +12,8 @@ DEPLOY_SKILL = ROOT / "skills/deploying-from-prds/SKILL.md"
 EVALS = ROOT / "evals"
 
 RENDER = ("uv run --script <scripts>/prd_publish.py render docs/prd/<slug> --out <out> "
-          "--summaries <project>-prd-<version>.summaries.json; echo \"prd-publish-exit=$?\"")
+          "--summaries <publish>/<project>-prd-<version>.summaries.json; "
+          "echo \"prd-publish-exit=$?\"")
 
 
 def flat(path: Path) -> str:
@@ -196,7 +197,7 @@ def test_baseline_rows_are_filled_and_the_green_record_appended():
 
 def test_summaries_never_in_the_prd_folder():
     s = flat(SKILL)
-    assert "`<project>-prd-<version>.summaries.json` in the repository root" in s
+    assert "`<publish>/<project>-prd-<version>.summaries.json`" in s
     assert "never in `docs/prd/`" in s
     assert "Nothing under `docs/prd/` is written or edited while publishing" in s
 
@@ -205,8 +206,8 @@ def test_summaries_never_in_the_prd_folder():
 
 def test_default_out_and_never_committed():
     s = flat(SKILL)
-    assert "`./<project>-prd-<version>.html`" in s and "the path the user names" in s
-    assert "**Outside the PRD folder, and never committed.**" in s
+    assert "`<publish>/<project>-prd-<version>.html`" in s and "the path the user names" in s
+    assert "**Outside the working tree, and never committed.**" in s
     assert "never `git add` or commit either file" in s
     assert "refused: --out is inside the PRD folder" in s
 
@@ -290,6 +291,7 @@ def _counts(case: str, name: str, tool_input: dict) -> bool:
 
 CITES = "publish-summary-cites-area"
 SUMMARIES = "greet-prd-1.0.0.summaries.json"
+PUBLISH_DIR = ".git/prd-toolkit/publish/"  # R24: the grader path is relative to the workspace
 
 
 def test_the_new_evals_exist_with_their_graders():
@@ -314,10 +316,10 @@ def test_the_new_evals_exist_with_their_graders():
 
 
 def test_the_summaries_graders_read_the_file_the_skill_names():
-    assert f"`{SUMMARIES.replace('greet', '<project>').replace('1.0.0', '<version>')}`" in flat(SKILL)
+    assert f"/{SUMMARIES.replace('greet', '<project>').replace('1.0.0', '<version>')}`" in flat(SKILL)
     for name in ("summaries-cite-greet", "summaries-no-french-or-spanish"):
-        assert _grader(CITES, name)["target"] == {"source": "file", "path": SUMMARIES}, name
-    assert _grader("publishing-trigger", "page-written")["path"] == "greet-prd-1.0.0.html"
+        assert _grader(CITES, name)["target"] == {"source": "file", "path": PUBLISH_DIR + SUMMARIES}, name
+    assert _grader("publishing-trigger", "page-written")["path"] == PUBLISH_DIR + "greet-prd-1.0.0.html"
 
 
 def test_the_claim_grader_fails_the_claim():

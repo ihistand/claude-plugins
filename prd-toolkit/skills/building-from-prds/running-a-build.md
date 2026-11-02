@@ -86,10 +86,12 @@ commits nothing. Save the stop's failure lines verbatim (the RESULTS lines, or t
 the failing test) with the Write tool to `<SNAP>/stop-evidence.md`, then run:
 
 ```bash
-uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "<the stop in one line>" --source "build <area> <IDs>" --touches <IDs> --evidence-file <SNAP>/stop-evidence.md; echo "prd-error-exit=$?"
+uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title '<the stop in one line>' --source 'build <area> <IDs>' --touches <IDs> --evidence-file <SNAP>/stop-evidence.md; echo "prd-error-exit=$?"
 ```
 
-`--touches` takes the blocks the stop concerns, as `FR-001,FR-002`. On a `--fixes` build the
+Free text goes in single quotes, each `'` in it written as `'\''`, as `running-an-error.md` says:
+inside double quotes a backtick or a `$` runs as shell. `--touches` takes the blocks the stop
+concerns, as `FR-001,FR-002`. On a `--fixes` build the
 `--source` is `build <area> <IDs> --fixes E-nnn`, naming the entry being fixed. `prd-error-exit=`
 must be `0`; it prints the new `E-nnn`, which goes in the stop report. The commit's message is
 `docs(prd): <IDs> <built, or stopped>` with `Refs: E-nnn` and the blocks' IDs, as

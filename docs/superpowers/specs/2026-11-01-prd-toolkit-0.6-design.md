@@ -14,6 +14,7 @@
 >   to 0.5 hold free text, so a lint check would fail every existing ledger, against §14.
 >   `prd_error.py check` checks the form of each resolution added inside its range (§4).
 > - §4 (proof, R17): `propose` also takes `--touches`, because an entry recorded before diagnosis has no `Touches:` and the recurrence check needs it.
+> - §7 (final review): `recover` on a run with no log exits 2 (`no log for run <id>`), a usage error, as 0.5's run commands do.
 
 ## 1. Scope
 

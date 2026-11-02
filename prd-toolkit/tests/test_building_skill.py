@@ -668,7 +668,7 @@ def test_stop_entry_order_and_commit():
               "`Refs: E-nnn` and the blocks' IDs",
               "A stop before the builder's merge still records its entry",
               "A dirty-tree stop records none and commits nothing",
-              '--source "build <area> <IDs>"', "`--source` is `build <area> <IDs> --fixes E-nnn`"):
+              "--source 'build <area> <IDs>'", "`--source` is `build <area> <IDs> --fixes E-nnn`"):
         assert s in r, s
 
 
