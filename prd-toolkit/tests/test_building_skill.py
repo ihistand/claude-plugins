@@ -699,10 +699,19 @@ def test_r21_deploy_gate_regression_tid_line_comes_off_at_a_clean_close():
               "A build-gate regression T-id still needs `pass`"):
         assert s in r, s
     close = r.split("**`--fixes E-nnn` only:**", 1)[1]
-    assert close.index("deploy-gate level") < close.index("A regression T-id that is not `pass` keeps its line")
+    assert close.index("deploy-gate level") < close.index("A build-gate or unit regression T-id that is not `pass` keeps its line")
 
 
 def test_r21_build_gate_not_passing_keeps_r4_text():
     r = flat(RUN)
-    assert "A regression T-id that is not `pass` keeps its line, and its block stays `built`" in r
+    assert "A build-gate or unit regression T-id that is not `pass` keeps its line, and its block stays `built`" in r
     assert "stops the build at step 7" in r
+
+
+def test_r21_exceptions_in_the_callers_rules():
+    k = flat(SKILL)
+    assert "once their T-ids pass, or, for a deploy-gate regression T-id, at a clean close" in k
+    assert "other than a deploy-gate regression T-id of the `--fixes` entry, removed at a clean close" in k
+    r = flat(RUN)
+    assert "and no other test-case line, except a deploy-gate regression T-id's line, removed at a clean close as below" in r
+    assert "(the tester's un-mark committed and the fix merged)" in r
