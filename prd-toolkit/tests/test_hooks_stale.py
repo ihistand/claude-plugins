@@ -139,3 +139,24 @@ def test_changing_prds_close_reruns_ci():
 
 def test_changing_prds_entry_change_cites_it_in_refs():
     assert "`Refs: FR-002, E-003`" in flat(SKILL)
+
+
+# ---- 0.7: the links line ----
+
+LINKS_LINE = "uv run --script .prd-toolkit/prd_links.py check --ci docs/prd/orders"
+
+
+def add_links(prd):
+    (prd / "links.md").write_text(
+        "# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n\n"
+        "## Consumers\n\n| Consumer | Location |\n|---|---|\n", encoding="utf-8")
+
+
+def test_stale_ci_after_links_md_is_added(repo):
+    run(repo, "ci", "--gitlab", PRD)
+    assert stale(repo) == []
+    add_links(repo / PRD)
+    assert stale(repo) == [f"stale: {GITLAB}: re-run prd_hooks.py ci --gitlab --force"]
+    assert run(repo, "ci", "--gitlab", "--force", PRD).returncode == 0
+    assert stale(repo) == []
+    assert LINKS_LINE in (repo / GITLAB).read_text()

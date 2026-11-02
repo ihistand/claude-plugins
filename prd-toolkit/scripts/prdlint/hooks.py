@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VENDOR_DIR = ".prd-toolkit"
-VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py")
+VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
@@ -243,6 +243,8 @@ def ci_jobs(prd, prd_rel: str) -> list[CiJob]:
     q = shlex.quote(prd_rel)
     out = [CiJob("prd-lint", [f"uv run --script {VENDOR_DIR}/prd_lint.py --ci {q}", f"uv run --script {VENDOR_DIR}/prd_hooks.py check --ci {q}"]),
            CiJob("prd-trace", [f"uv run --script {VENDOR_DIR}/prd_trace.py {q} --range {RANGE}"])]
+    if prd.links is not None:
+        out[0].script.append(f"uv run --script {VENDOR_DIR}/prd_links.py check --ci {q}")
     n = 0
     for row in standards_rows(prd):
         if row.decision == "enforced" and row.command:

@@ -248,3 +248,8 @@ def test_another_prds_newer_run_does_not_hide_this_prds(prd_repo):
     write_log(prd_repo, mine, step(1, "staging", "fail"))
     write_log(prd_repo, other, step(1, "staging", "pass"), *levels(2, "staging", "system", "e2e"), prd="docs/prd/other")
     assert deployed(build(prd_repo))[0] == f"staging: run {mine} stopped (failed) at step 1"
+
+
+def test_link_parts_say_none_on_a_plain_prd(items):
+    for name in ("Upstreams", "Consumers", "Change sets"):
+        assert [i.text for i in items if i.part == name] == ["None."]

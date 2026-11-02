@@ -297,3 +297,16 @@ def test_test_deploy_exports_the_environment_for_a_compound_command(prd, tmp_pat
     (tmp_path / "gate.sh").write_text('echo "$PRD_ENV|$TEST_ENV"\n', encoding="utf-8")
     out = subprocess.run(["bash", "-c", script[0]], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "TOOLS": str(tmp_path)})
     assert out.stdout.strip() == "production|production", out.stderr
+
+
+# ---- 0.7: links.md adds the check line to prd-lint only ----
+
+def test_links_line_only_with_links_md(prd):
+    line = "uv run --script .prd-toolkit/prd_links.py check --ci docs/prd/orders"
+    assert not any(line in j.script for j in jobs(prd))
+    (prd / "links.md").write_text(
+        "# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n\n"
+        "## Consumers\n\n| Consumer | Location |\n|---|---|\n", encoding="utf-8")
+    by = {j.name: j for j in jobs(prd)}
+    assert by["prd-lint"].script[-1] == line
+    assert [s for j in by.values() for s in j.script].count(line) == 1

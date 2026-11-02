@@ -79,6 +79,12 @@ def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
     for b in prd.blocks:
         if b.status == "built":
             reasons.append(f"{b.id} is built; its tests have not passed (run /prd-build)")
+    if prd.links is not None:
+        from . import links  # lazy: links imports git machinery a plain deploy does not need
+        lines = links.check(prd)
+        if links.check_exit(lines) == 1:  # exit 3 (unreachable only) adds nothing; the run's report prints that line
+            drift = [x.item or f"{x.side} {x.name}" for x in lines if x.verdict in links.DRIFT or x.verdict.startswith("needs env ")]
+            reasons.append("prd_links check found drift: " + ", ".join(dict.fromkeys(drift)))
     if any(s.env in production_envs(prd) for s in plan_steps(prd, until)):
         # trace lets a verified block lack deploy-gate citations, but `live` needs every one: such a run cannot close
         cited = trace.citations(prd, repo_root)

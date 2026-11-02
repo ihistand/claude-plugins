@@ -1,13 +1,14 @@
 """The status report: where every requirement of a PRD stands. Read-only and deterministic."""
 import json
 from dataclasses import asdict, dataclass
+from collections import Counter
 from itertools import groupby
 from pathlib import Path
 
 from . import deploy, errors, hooks, trace
 from .model import Prd, gate_of, git_toplevel
 
-PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "CI", "Deployed", "Matrix")
+PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Upstreams", "Consumers", "Change sets", "CI", "Deployed", "Matrix")
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,36 @@ def _by_status(prd: Prd, part: str, status: str) -> list[StatusItem]:
 def _open_errors(prd: Prd) -> list[StatusItem]:
     rows = [StatusItem("Open errors", e.id, f"{e.id} {errors.summary(e)} — {e.title}") for e in prd.errors_ledger.values() if e.open]
     return rows or [StatusItem("Open errors", None, "None.")]
+
+
+def _upstreams(prd: Prd, here: Path) -> list[StatusItem]:
+    if prd.links is None or not prd.links.upstreams:
+        return [StatusItem("Upstreams", None, "None.")]
+    try:
+        from . import links
+        lines = links.check(prd)
+    except Exception:  # a link that cannot be read is the check's finding, not the status report's
+        lines = None
+    out = []
+    for row in prd.links.upstreams:
+        text = f"{row.name} {row.version or '-'} at {row.commit or '-'}, needs {row.needs.strip() or 'default'}"
+        mine = [x for x in lines or [] if x.side == "upstream" and x.name == row.name]
+        if lines is not None and not any(x.verdict == "unreachable" for x in mine):
+            counts = Counter(x.verdict for x in mine)
+            text += ", check: " + (", ".join(f"{v} {counts[v]}" for v in sorted(counts)) or "no items")
+        out.append(StatusItem("Upstreams", row.name, text))
+    return out
+
+
+def _consumers(prd: Prd) -> list[StatusItem]:
+    rows = [StatusItem("Consumers", r.name, f"{r.name} {r.location.strip('`')}") for r in prd.links.consumers] if prd.links else []
+    return rows or [StatusItem("Consumers", None, "None.")]
+
+
+def _change_sets(prd: Prd) -> list[StatusItem]:
+    rows = [StatusItem("Change sets", cs.id, f"{cs.id} {cs.status}: " + "; ".join(f"{r.prd} {r.state}" for r in cs.rows))
+            for cs in prd.change_sets.values() if cs.status not in ("done", "abandoned")]
+    return rows or [StatusItem("Change sets", None, "None.")]
 
 
 def _ci(prd: Prd, repo_root: Path) -> list[StatusItem]:
@@ -107,7 +138,8 @@ def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusIte
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
     return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
-            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
+            + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _upstreams(prd, repo_root)
+            + _consumers(prd) + _change_sets(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 
 
 def render_text(items: list[StatusItem]) -> str:
