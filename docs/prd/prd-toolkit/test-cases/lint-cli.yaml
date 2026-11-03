@@ -274,7 +274,6 @@ T-005.3:
   target: cli:prd_lint
   environment: local
   identity: none
-  known-failing: E-001
   preconditions: []
   input:
     setup: [create the directory <tmp>/p and, inside it, the directory <tmp>/p/prd.md]
