@@ -1,2 +1,4 @@
 # Format: references/prd-format.md, "Contract YAML shapes". CODE: {meaning, when, status, message, log_level, retryable, metric}
+# No error codes, by design: every script reports a failure as an exit code and a stderr line,
+# and contracts/cli.yaml holds both for each script.
 {}

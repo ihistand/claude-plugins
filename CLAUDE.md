@@ -203,3 +203,33 @@ Following Strunk & White principles (elements-of-style skill):
 - Red flags and common rationalizations
 - Integration with other skills
 - Practical examples with "WRONG" vs "CORRECT" comparisons
+
+<!-- prd-toolkit:start -->
+## Product requirements (by prd_block.py; do not edit)
+
+The PRD at `docs/prd/prd-toolkit` (version 1.0.0) is the authority.
+
+- To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
+  files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code
+  implements the PRD; it never defines behaviour the PRD lacks.
+- Every behaviour change starts with `/prd-change` (`prd-toolkit:changing-prds`), before code.
+- Gap rule: if the PRD is silent on what you need, stop and raise it with `/prd-change`.
+  Do not guess or read the code to fill the gap.
+- Deploy with `/prd-deploy`; never run a runbook command yourself.
+- A bug, a failing test, an error or a failed deploy goes to `/prd-error` (skill
+  `prd-toolkit:handling-errors`) before any code changes.
+- Commits cite IDs: `Refs: FR-012`.
+- Run `.prd-toolkit/prd_hooks.py install` once per clone:
+  `uv run --script .prd-toolkit/prd_hooks.py install docs/prd/prd-toolkit`.
+- Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`.
+
+Required skills:
+- `superpowers:writing-skills` for a change to `prd-toolkit/skills/**`
+- `superpowers-developing-for-claude-code:developing-claude-code-plugins` for a change to the plugin's layout or manifests
+- `superpowers:test-driven-development` for any code change
+- `superpowers:systematic-debugging` for a bug or a failing test
+- `superpowers:verification-before-completion` for a claim that work is done
+- `superpowers:writing-plans` for planning a change
+
+Adopted areas: lint-cli
+<!-- prd-toolkit:end -->

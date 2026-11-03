@@ -1,7 +1,7 @@
 ---
 prd: prd-toolkit
-version: 0.1.0
-status: Draft
+version: 1.0.0
+status: Approved
 owner: Ivan Histand
 updated: 2026-11-03
 ---
@@ -19,6 +19,7 @@ updated: 2026-11-03
 - Hosting: the plugin is installed from the `ihistand` marketplace into each user's Claude Code; a target repository runs a vendored copy of the scripts under `.prd-toolkit/` from its git hooks and CI.
 - Repository: https://github.com/ihistand/claude-plugins, folder `prd-toolkit/`. This PRD covers `prd-toolkit/` only. The repository's other plugins (`sqlanvil-toolkit`, `stl-generator-toolkit`) and the `web/` docs site are outside it, which is why the slug is `prd-toolkit` and not the repository's name.
 - Not used: a network service, a database, a published Python package (target repositories run the vendored copy).
+- Packaging: no build backend (`prd-toolkit/pyproject.toml` has `[tool.uv] package = false` and serves only the tests); the layout is `prd-toolkit/` with `scripts/` (the CLI scripts and the `prdlint` package), `skills/`, `agents/`, `commands/`, `hooks/`, `templates/` and `references/`; the entry points are the CLI scripts, each run as `uv run --script prd-toolkit/scripts/prd_<name>.py`; the install command is `/plugin install prd-toolkit@ihistand` after `/plugin marketplace add ihistand/claude-plugins`, and in a target repository `prd_hooks.py install docs/prd/<slug>` vendors the scripts.
 - Not applicable: `contracts/openapi.yaml` — no HTTP API
 - Not applicable: `contracts/schema.sql` — no database
 - Not applicable: `contracts/events.md` — no events, jobs or queues
@@ -34,7 +35,7 @@ author, adopt, change, build, deploy, handle errors in, publish and link PRDs.
 
 Goals:
 
-- [NEEDS CLARIFICATION: first measurable goal for the toolkit]
+- Self-hosting: every area of the toolkit's own PRD (`adoption.md`) is `adopted`, with its characterization suite run in CI, before the plugin's version reaches 1.0.0.
 
 Personas: an engineer working in a repository with Claude Code; the agents the toolkit
 dispatches (`prd-builder`, `prd-tester`); a reviewer reading a published PRD page.
@@ -56,8 +57,6 @@ own code.
 
 ## 4. Architecture
 
-[NEEDS CLARIFICATION: confirm this picture of the components and how they connect]
-
 ```mermaid
 flowchart LR
   user[engineer in Claude Code] --> cmds[slash commands]
@@ -69,24 +68,27 @@ flowchart LR
   hooks[git hooks and CI in a target repo] --> vend[.prd-toolkit vendored copy]
   vend --> lib
   guard[plugin hook prd_tester_guard.py] --> agents
+  cli --> form[local confirmation form on 127.0.0.1]
+  form --> user
 ```
 
 ## 5. Standards registry
 
 | Object (glob) | Linter command | Rules live in | Applies to | Decision |
 |---|---|---|---|---|
-| `prd-toolkit/**` | `claude plugin validate ./prd-toolkit` | Claude Code's plugin manifest schema | code | proposed |
+| `prd-toolkit/**` | `claude plugin validate ./prd-toolkit` | Claude Code's plugin manifest schema | code | enforced |
 
 ## 6. Skills registry
 
 | Object or activity | Skill | Decision |
 |---|---|---|
-| a change to `prd-toolkit/skills/**` | superpowers:writing-skills | proposed |
-| a change to the plugin's layout or manifests | superpowers-developing-for-claude-code:developing-claude-code-plugins | proposed |
-| any code change | superpowers:test-driven-development | proposed |
-| a bug or a failing test | superpowers:systematic-debugging | proposed |
-| a claim that work is done | superpowers:verification-before-completion | proposed |
-| a review of a change | code-review | proposed |
+| a change to `prd-toolkit/skills/**` | superpowers:writing-skills | required |
+| a change to the plugin's layout or manifests | superpowers-developing-for-claude-code:developing-claude-code-plugins | required |
+| any code change | superpowers:test-driven-development | required |
+| a bug or a failing test | superpowers:systematic-debugging | required |
+| a claim that work is done | superpowers:verification-before-completion | required |
+| planning a change | superpowers:writing-plans | required |
+| a review of a change | code-review | recommended |
 
 ## 7. Contract types
 
@@ -106,11 +108,11 @@ See adoption.md.
 
 ## 9. Versioning
 
-- Breaking for the API: [NEEDS CLARIFICATION: what counts as breaking for a script's arguments, output lines and exit codes]
-- Breaking for the schema: [NEEDS CLARIFICATION: what counts as breaking for the PRD folder format, for example a change that makes a valid PRD fail lint]
+- Breaking for the API: a removed or renamed script or option, a changed output-line format, or a changed exit-code meaning.
+- Breaking for the schema: a change that makes a PRD folder that linted clean fail lint, or drops a field or file the format accepted.
 - Breaking for events: Not applicable: no events.
-- Compatibility window: [NEEDS CLARIFICATION: how long an old format or option keeps working]
-- Migration rule: [NEEDS CLARIFICATION: how a format change reaches existing PRDs (an upgrade note, a patch bump with a format row in §14)]
+- Compatibility window: an old form keeps working, with a finding that names its replacement, for at least one minor version of the plugin.
+- Migration rule: every format change has an upgrade note in the README changelog; a breaking one also has a lint finding that says how to fix the PRD.
 
 ## 10. Design & UI
 
@@ -120,6 +122,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 
 | ID | Title | Status | File | Since |
 |---|---|---|---|---|
+| UJ-01 | An engineer lints a PRD folder and fixes what it reports | live | features/lint-cli.md | 1.0.0 |
 | FR-001 | Lint a PRD folder and print its findings | live | features/lint-cli.md | 1.0.0 |
 | FR-002 | Name each finding's file from the working directory | live | features/lint-cli.md | 1.0.0 |
 | FR-003 | List the rules | live | features/lint-cli.md | 1.0.0 |
@@ -140,9 +143,11 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 
 ## 13. Open questions
 
+None.
 
 ## 14. Changelog
 
 | Version | Date | Change | IDs |
 |---|---|---|---|
 | 0.1.0 | 2026-11-03 | Draft started (adoption bootstrap) | none |
+| 1.0.0 | 2026-11-03 | Approved; lint-cli area adopted; suite 29 pass, T-005.3 known-failing E-001, T-006.3 known-failing E-005, T-007.5 known-failing E-006, T-010.2 known-failing E-002, T-011.6 known-failing E-003, T-012.3 known-failing E-003, T-012.2 known-failing E-004; dry run T-004.1, T-007.1, T-007.5, T-011.1, T-011.2, 0 open questions, 0 dismissed by quote (an earlier dry run's 2 testing.md gaps were fixed) | UJ-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012 |

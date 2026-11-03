@@ -11,8 +11,8 @@
 
 ## Harness
 
-- **Lifecycle.** Nothing runs between tests: there is no service or database. A test runs a CLI script as a subprocess (`uv run --script <script>`) or calls the script's library, in a fresh temporary directory it creates itself.
-- **Environment switch.** Not applicable: one environment, `local`.
+- **Lifecycle.** Nothing runs between tests: there is no service or database. A test runs a CLI script as a subprocess with the test's own interpreter, `python <repo>/prd-toolkit/scripts/<script>` (not `uv run --script`, whose own stderr lines would break the stderr assertions), or calls the script's library, in a fresh temporary directory it creates itself.
+- **Environment switch.** Not applicable: one environment, `local`; no test touches `production` (the marketplace).
 - **Database access.** Not applicable: no database.
 - **Tools on the runner.** python3 3.11 or later, uv and git on PATH; the tests directory is `prd-toolkit/tests/`.
 - **Clean state.** Every test starts from its own pytest `tmp_path`; a PRD folder or git repository it needs is copied or built there, and nothing is shared between tests.
@@ -20,7 +20,7 @@
 - **Persistent environments.** Not applicable: no environment keeps data.
 - **Layout.** Unit tests are `prd-toolkit/tests/test_*.py`, written by the builder; the black-box characterization tests are `prd-toolkit/tests/prd/test_<area>_*.py`, with a hyphen in the area's name written as an underscore (`test_lint_cli_*.py`), with the area's shared helper beside them as `<area>_support.py` (`lint_cli_support.py`), each citing its T-id in its docstring as `@prd T-nnn.n`. Test roots: `prd-toolkit/tests/`
 - **HTTP requests.** Not applicable: no HTTP API.
-- **Fixtures.** A fixture is a PRD folder (or a file of one) under `contracts/fixtures/<name>/`; a test copies it into its `tmp_path` before running the script on it. Load paths are relative to `contracts/fixtures/`.
+- **Fixtures.** A fixture is a PRD folder (or a file of one) under `contracts/fixtures/<name>/`; a test copies it into its `tmp_path` before running the script on it. Load paths are relative to this PRD folder's `contracts/fixtures/`, which a test reaches as `<repo>/docs/prd/prd-toolkit/contracts/fixtures/` (`<repo>` is the repository root).
 - **Browser identity.** Not applicable: no UI.
 - **Assertions.** A case's `expect.output` gives the exit code and the output lines it asserts; output lines a case does not list are not asserted unless the case says the output is exact. A finding line compares exactly, as `<file>:<line>: <rule>: <message>`.
 - **Waits.** Not applicable: every command runs to completion before the test asserts.

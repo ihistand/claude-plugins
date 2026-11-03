@@ -2,6 +2,14 @@
 
 # lint-cli: the lint command and the PRD loader
 
+### UJ-01 An engineer lints a PRD folder and fixes what it reports
+Status: live (since 1.0.0)
+Flow: 1. run `prd_lint.py` on `docs/prd/<slug>`
+      → 2. read each finding line, `<file>:<line>: <rule>: <message>`
+      → 3. fix the file it names
+      → 4. run lint again, until it prints nothing and exits 0
+Traces: FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
+
 ### FR-001 Lint a PRD folder and print its findings
 Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:79 @d1a4146

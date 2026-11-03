@@ -2,12 +2,8 @@
 
 # Non-functional requirements
 
-[NEEDS CLARIFICATION: add `### NFR-nnn <title>` blocks, each with a measurable bound, a unit and a test]
+None yet: the owner set no non-functional requirement at adoption (2026-11-03); a later change adds `### NFR-nnn` blocks.
 
 ## Observability
 
-[NEEDS CLARIFICATION: log fields on every line, and what must never be logged]
-
-| Metric | Error code | Alert threshold |
-|---|---|---|
-| [NEEDS CLARIFICATION: first metric] | [NEEDS CLARIFICATION: error code] | [NEEDS CLARIFICATION: threshold] |
+Not applicable: CLI scripts with no service; output goes to stdout and stderr, and there are no logs or metrics.
