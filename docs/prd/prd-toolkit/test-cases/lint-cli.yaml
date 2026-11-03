@@ -333,7 +333,6 @@ T-006.3:
   target: cli:prd_lint
   environment: local
   identity: none
-  known-failing: E-005
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup: [S0, create the empty directory <tmp>/docs/prd/orders/notes.md]
