@@ -43,7 +43,7 @@ def test_document_manifest_loads():
     p = packs.load_manifest(TOOLKIT_PACKS / "document", "prd-toolkit")
     assert (p.name, p.version, p.builder_tests) == ("document", "1.0.0", "none")
     assert p.contract_types == [{"type": "outline", "files": "contracts/outline.yaml",
-                                 "validator": "uv run --script ${PACK}/validate_outline.py"}]
+                                 "validator": "uv run --quiet --script ${PACK}/validate_outline.py"}]
     assert p.target_kinds == {"doc": "outline"}
     assert [(x["level"], x["command"], x["gate"]) for x in p.levels] == [
         ("checks", "uv run pytest tests/checks", "build"), ("judged", "uv run pytest tests/judged", "build")]
@@ -84,7 +84,7 @@ def test_pack_row_no_pack_declares(tmp_path):
     assert found[0].file == "prd.md"
 
 
-def test_pack_row_found_in_service_fallback_only_for_named_order(tmp_path):
+def test_pack_row_with_no_pack_line_is_not_declared_by_service(tmp_path):
     """No Pack: line: the service default declares only built-in types, so a pack row for outline is not declared."""
     root = document_prd(tmp_path)
     edit(root, "prd.md", "- Pack: document 1.0.0 (prd-toolkit)\n", "")
@@ -138,7 +138,7 @@ def test_validator_passes_good_file(tmp_path):
 def test_validator_fails_defect(tmp_path, name, data, message):
     r = _run(tmp_path, data)
     assert r.returncode == 1, r.stderr
-    assert message in r.stderr.splitlines()[0] or message in r.stderr
+    assert message in r.stderr.splitlines()[0]
 
 
 def test_validator_fails_path_inside_prd_folder(tmp_path):
@@ -175,4 +175,39 @@ def test_contracts_valid_runs_a_plugin_pack_under_a_spaced_path(tmp_path, monkey
     assert [f for f in _lint(root) if f.rule in ("contracts-valid", "pack-resolves")] == []
     (root / "contracts/outline.yaml").write_text("g: {path: docs/x.md}\n", encoding="utf-8")
     msgs = [f.message for f in _lint(root) if f.rule == "contracts-valid"]
-    assert len(msgs) == 1 and msgs[0].startswith("custom type outline: validator failed: ")
+    assert msgs == ["custom type outline: validator failed: contracts/outline.yaml: g: missing audience"]
+
+
+# --- the repository root of a document path ------------------------------------------------------------------------
+
+def _run_in(root: Path, path: str):
+    f = root / "o.yaml"
+    f.write_text(yaml.safe_dump({"g": {**GOOD, "path": path}}), encoding="utf-8")
+    return subprocess.run(["uv", "run", "--quiet", "--script", str(VALIDATOR), "o.yaml"], cwd=root, capture_output=True, text=True)
+
+
+def test_root_from_the_layout_before_any_git(tmp_path):
+    (tmp_path / ".git").mkdir()
+    root = tmp_path / "sub/docs/prd/guide"
+    root.mkdir(parents=True)
+    assert _run_in(root, "sub/docs/prd/guide/x.md").returncode == 0  # git-first would read this as inside the PRD
+    r = _run_in(root, "docs/prd/guide/x.md")
+    assert r.returncode == 1 and "path must be outside the PRD folder" in r.stderr
+
+
+def test_root_from_git_when_not_in_the_layout(tmp_path):
+    (tmp_path / ".git").mkdir()
+    root = tmp_path / "specs/guide"
+    root.mkdir(parents=True)
+    assert _run_in(root, "docs/x.md").returncode == 0
+    r = _run_in(root, "specs/guide/x.md")
+    assert r.returncode == 1 and "path must be outside the PRD folder" in r.stderr
+
+
+def test_no_root_known_skips_only_the_inside_check(tmp_path):
+    root = tmp_path / "loose/guide"
+    root.mkdir(parents=True)
+    assert _run_in(root, "docs/x.md").returncode == 0
+    assert _run_in(root, "specs/guide/x.md").returncode == 0
+    r = _run_in(root, "x.txt")  # the other checks still run
+    assert r.returncode == 1 and "path must be a relative .md path" in r.stderr

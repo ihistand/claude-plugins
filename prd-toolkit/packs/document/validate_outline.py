@@ -27,15 +27,15 @@ def _int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-def repo_root(cwd: Path) -> Path:
-    """The repository root a document `path` is relative to: the nearest ancestor holding `.git`; else the third
-    ancestor of a PRD folder at `<root>/docs/prd/<name>`; else the PRD root itself."""
+def repo_root(cwd: Path) -> Path | None:
+    """The repository root a document `path` is relative to: `<root>` when the PRD folder is `<root>/docs/prd/<name>`
+    (the toolkit's layout); else the nearest ancestor holding `.git`; else None (no root is known)."""
+    if cwd.parent.name == "prd" and cwd.parent.parent.name == "docs":
+        return cwd.parent.parent.parent
     for d in (cwd, *cwd.parents):
         if (d / ".git").exists():
             return d
-    if cwd.parent.name == "prd" and cwd.parent.parent.name == "docs":
-        return cwd.parent.parent.parent
-    return cwd
+    return None
 
 
 def check_entry(key: str, entry) -> list[str]:
@@ -52,7 +52,8 @@ def check_entry(key: str, entry) -> list[str]:
             out.append(f"{key}: path must be a relative .md path")
         else:
             cwd = Path.cwd().resolve()
-            if (repo_root(cwd) / path).resolve().is_relative_to(cwd):
+            root = repo_root(cwd)
+            if root is not None and (root / path).resolve().is_relative_to(cwd):
                 out.append(f"{key}: path must be outside the PRD folder")
     if not (_strings(entry.get("sections")) and entry["sections"]):
         out.append(f"{key}: sections must be a non-empty list of strings")
