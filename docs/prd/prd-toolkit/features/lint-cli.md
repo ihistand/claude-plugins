@@ -1,6 +1,6 @@
 <!-- Format: references/prd-format.md, "Requirement blocks". -->
 
-# Core features
+# lint-cli: the lint command and the PRD loader
 
 <!--
 Block shape (EARS = Easy Approach to Requirements Syntax; each AC starts with When, While, If, Where or "The system shall"):
