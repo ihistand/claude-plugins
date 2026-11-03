@@ -553,7 +553,6 @@ T-010.2:
   target: cli:prd_publish
   environment: local
   identity: none
-  known-failing: E-002
   preconditions: []
   input:
     setup: [create a virtual environment with `python3 -m venv <tmp>/venv` (no packages installed)]
