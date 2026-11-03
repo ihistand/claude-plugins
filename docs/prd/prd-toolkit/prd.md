@@ -120,18 +120,18 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 
 | ID | Title | Status | File | Since |
 |---|---|---|---|---|
-| FR-001 | Lint a PRD folder and print its findings | as-built | features/lint-cli.md |  |
-| FR-002 | Name each finding's file from the working directory | as-built | features/lint-cli.md |  |
-| FR-003 | List the rules | as-built | features/lint-cli.md |  |
-| FR-004 | Reject a bad command line | as-built | features/lint-cli.md |  |
-| FR-005 | Refuse a folder without prd.md | as-built | features/lint-cli.md |  |
-| FR-006 | Report an internal error without a traceback | as-built | features/lint-cli.md |  |
-| FR-007 | Sample T-ids for the dry run | as-built | features/lint-cli.md |  |
-| FR-008 | Mark a CI run for the rules | as-built | features/lint-cli.md |  |
-| FR-009 | Write UTF-8 in any locale | as-built | features/lint-cli.md |  |
-| FR-010 | Name a missing dependency | as-built | features/lint-cli.md |  |
-| FR-011 | Load the test-case files | as-built | features/lint-cli.md |  |
-| FR-012 | Load the contract YAML files | as-built | features/lint-cli.md |  |
+| FR-001 | Lint a PRD folder and print its findings | live | features/lint-cli.md | 1.0.0 |
+| FR-002 | Name each finding's file from the working directory | live | features/lint-cli.md | 1.0.0 |
+| FR-003 | List the rules | live | features/lint-cli.md | 1.0.0 |
+| FR-004 | Reject a bad command line | live | features/lint-cli.md | 1.0.0 |
+| FR-005 | Refuse a folder without prd.md | approved | features/lint-cli.md |  |
+| FR-006 | Report an internal error without a traceback | approved | features/lint-cli.md |  |
+| FR-007 | Sample T-ids for the dry run | approved | features/lint-cli.md |  |
+| FR-008 | Mark a CI run for the rules | live | features/lint-cli.md | 1.0.0 |
+| FR-009 | Write UTF-8 in any locale | live | features/lint-cli.md | 1.0.0 |
+| FR-010 | Name a missing dependency | approved | features/lint-cli.md |  |
+| FR-011 | Load the test-case files | approved | features/lint-cli.md |  |
+| FR-012 | Load the contract YAML files | approved | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 
@@ -140,9 +140,6 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 
 ## 13. Open questions
 
-- Q-01 `PRD_LINT_CI=1` already in the environment, without `--ci`, has the same effect as `--ci` (the registries rule reads only the variable, and prd_error.py sets it by default). Is that intended, and who owns the setting? (FR-008)
-- Q-02 `--sample-tids` compares the level with `unit` case-sensitively, so `level: Unit` is sampled, and a test case whose value is not a mapping loads with no level and is sampled. Are both intended? (FR-007)
-- Q-03 A directory in the PRD folder whose name ends in `.md` makes lint exit 2 as an internal error, as a `.md` file that is not UTF-8 does. Is the directory case intended too? (FR-006)
 
 ## 14. Changelog
 

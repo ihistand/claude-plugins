@@ -25,3 +25,10 @@ prd_lint:
     0: "clean lint, --list-rules, --help, or a sample printed"
     1: "one or more findings, or --sample-tids with no non-unit test case"
     2: "usage error, folder without prd.md, missing dependency, or internal error (load or rule)"
+prd_publish:
+  # Only what lint-cli's FR-010 needs so far; the publish area adds the rest when it is adopted.
+  invocation: "uv run --script prd-toolkit/scripts/prd_publish.py <arguments>"
+  output:
+    missing_package: "stderr: prd_publish: missing Python package '<package>'. Run with: uv run --script prd_publish.py …, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py (FR-010)"
+  exit_codes:
+    2: "missing dependency (FR-010)"

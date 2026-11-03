@@ -268,6 +268,25 @@ T-005.2:
     effects: []
     errors: []
     leaks: none
+T-005.3:
+  ac: AC-005.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create the directory <tmp>/p and, inside it, the directory <tmp>/p/prd.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py <tmp>/p
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_lint: <resolved tmp>/p: prd.md must be a file\n"
+    effects: []
+    errors: []
+    leaks: none
 T-006.1:
   ac: AC-006.1
   level: integration
@@ -305,6 +324,26 @@ T-006.2:
       return: 2
       stdout: ""
       stderr: "prd_lint: internal error in rule zz-crash: ZeroDivisionError: division by zero\n"
+    effects: []
+    errors: []
+    leaks: none
+T-006.3:
+  ac: AC-006.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, create the empty directory <tmp>/docs/prd/orders/notes.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: with the directory gone the folder lints clean (T-001.1), so the one line is the loader's
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/notes.md:0: sufficiency: a .md entry that is not a file\n"
+      stderr: ""
     effects: []
     errors: []
     leaks: none
@@ -398,6 +437,28 @@ T-007.4:
     effects: []
     errors: []
     leaks: none
+T-007.5:
+  ac: AC-007.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/odd.yaml with the full text `T-009.1: plain text`, newline, `T-009.2: {level: Unit}`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
+    note: T-009.1 loads with no level (AC-011.4); T-009.2's level is not lowercase
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout: "exactly the nine lines of T-007.1, in any order; no line names T-009.1 or T-009.2"
+    effects: []
+    errors: []
+    leaks: none
 T-008.1:
   ac: AC-008.1
   level: integration
@@ -420,6 +481,26 @@ T-008.1:
         exit: 1
         stdout_contains_line: "docs/prd/orders/prd.md:65: registries: required skill 'superpowers:writing-plans' is not installed; if it is built into Claude Code, mark the row 'recommended'"
       run_2: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-008.2:
+  ac: AC-008.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_none]
+  input:
+    setup:
+      - copy fixture lint-cli/orders to <tmp>/docs/prd/orders
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json
+    cwd: <tmp>
+    env: {PRD_LINT_CI: "1"}
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: without --ci; T-008.1 run 1 shows the same folder fails its installed-skill check when the variable is unset
+  expect:
+    output: {exit: 0, stdout: "", stderr: ""}
     effects: []
     errors: []
     leaks: none
@@ -461,6 +542,27 @@ T-010.1:
       exit: 2
       stdout: ""
       stderr: "prd_lint: missing Python package 'pyyaml'. Run with: uv run --script prd_lint.py …, or: pip install pyyaml sqlglot openapi-spec-validator\n"
+    effects: []
+    errors: []
+    leaks: none
+T-010.2:
+  ac: AC-010.2
+  level: integration
+  target: cli:prd_publish
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create a virtual environment with `python3 -m venv <tmp>/venv` (no packages installed)]
+    cwd: <tmp>
+    env: {LC_ALL: C.UTF-8}
+    command: <tmp>/venv/bin/python <repo>/prd-toolkit/scripts/prd_publish.py --help
+    note: prd_publish.py's dependency header lists pyyaml, sqlglot, openapi-spec-validator and markdown-it-py
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_publish: missing Python package 'pyyaml'. Run with: uv run --script prd_publish.py …, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py\n"
     effects: []
     errors: []
     leaks: none
@@ -585,6 +687,27 @@ T-011.5:
     effects: []
     errors: []
     leaks: none
+T-011.6:
+  ac: AC-011.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/keys.yaml with the full text `? [a, b]`, newline, `: x`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/test-cases/keys.yaml:1: sufficiency: YAML parse error: found unhashable key\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
 T-012.1:
   ac: AC-012.1
   level: integration
@@ -610,6 +733,47 @@ T-012.1:
         docs/prd/orders/contracts/extra/a.yaml:3: contracts-valid: duplicate key 'K' (first at line 1, again at line 3)
         docs/prd/orders/contracts/extra/b.yaml:1: contracts-valid: top level must be a mapping
         docs/prd/orders/contracts/extra/c.yaml:1: contracts-valid: YAML parse error: mapping values are not allowed here
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-012.2:
+  ac: AC-012.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/contracts/fixtures/extra/dup.yaml with the full text `K: 1`, newline, `K: 2`, newline"
+      - write <tmp>/docs/prd/orders/contracts/fixtures/extra/notes.md as the two bytes 0xff 0xfe
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: read as contract YAML, dup.yaml would draw a contracts-valid duplicate-key line; read as a document, notes.md would end lint with an internal error (AC-006.1)
+  expect:
+    output: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-012.3:
+  ac: AC-012.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/contracts/extra/keys.yaml with the full text `? [a, b]`, newline, `: x`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/contracts/extra/keys.yaml:1: contracts-valid: YAML parse error: found unhashable key\n"
       stderr: ""
     effects: []
     errors: []

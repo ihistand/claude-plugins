@@ -3,7 +3,7 @@
 # lint-cli: the lint command and the PRD loader
 
 ### FR-001 Lint a PRD folder and print its findings
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:79 @d1a4146
 Flow: 1. load the folder (prdlint.model.load) → 2. run every registered rule (prdlint.registry.run)
       → 3. print the loader's and the rules' findings, sorted → 4. exit 0 or 1
@@ -20,7 +20,7 @@ Tests: T-001.1 [integration], T-001.2 [integration], T-001.3 [integration]  (tes
 Traces: cli:prd_lint; `prdlint/registry.py` run (lines 25-36); `prdlint/findings.py` Finding
 
 ### FR-002 Name each finding's file from the working directory
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:23 @d1a4146
 Acceptance (EARS):
 - AC-002.1 When the PRD folder is below the working directory, the lint command shall print a
@@ -36,7 +36,7 @@ Tests: T-002.1 [integration], T-002.2 [integration], T-002.3 [integration]  (tes
 Traces: cli:prd_lint
 
 ### FR-003 List the rules
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:42 @d1a4146
 Acceptance (EARS):
 - AC-003.1 When run with `--list-rules`, the lint command shall print the name of every registered
@@ -48,7 +48,7 @@ Tests: T-003.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RULES
 
 ### FR-004 Reject a bad command line
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:37 @d1a4146
 Acceptance (EARS):
 - AC-004.1 If neither a folder argument nor `--list-rules` is given, the lint command shall print its
@@ -63,23 +63,26 @@ Tests: T-004.1 [integration], T-004.2 [integration], T-004.3 [integration], T-00
 Traces: cli:prd_lint
 
 ### FR-005 Refuse a folder without prd.md
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prdlint/model.py:711 @d1a4146
   prd-toolkit/scripts/prd_lint.py:58 @d1a4146
 Acceptance (EARS):
 - AC-005.1 If the folder argument names no directory, or a directory with no regular file named
   exactly `prd.md`, the lint command shall print `prd_lint: <resolved folder>: no prd.md` to stderr
   and exit 2.
-- AC-005.2 If no entry of that directory is named exactly `prd.md` and an entry's name equals
+- AC-005.2 If no entry of that directory is named exactly `prd.md` and another entry's name equals
   `prd.md` ignoring case, the lint command shall append
   `; found <name>; the file name is lowercase prd.md` to that message.
+- AC-005.3 If the entry named exactly `prd.md` is a directory, the lint command shall print
+  `prd_lint: <resolved folder>: prd.md must be a file` to stderr and exit 2, with no lowercase-name
+  hint.
 Errors: -
-Edge cases: `prd.md` is a directory → E-001 (not covered here)
-Tests: T-005.1 [integration], T-005.2 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: `prd.md` is a directory → AC-005.3 (E-001 is open until the code does this)
+Tests: T-005.1 [integration], T-005.2 [integration], T-005.3 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/model.py` NotAPrd
 
 ### FR-006 Report an internal error without a traceback
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prd_lint.py:61 @d1a4146
   prd-toolkit/scripts/prdlint/registry.py:35 @d1a4146
 Acceptance (EARS):
@@ -89,41 +92,49 @@ Acceptance (EARS):
 - AC-006.2 If a rule raises an error, the lint command shall print
   `prd_lint: internal error in rule <rule>: <exception type>: <message>` to stderr, print no finding
   on stdout, and exit 2.
+- AC-006.3 If an entry of the folder whose name ends in `.md` is not a regular file, the loader shall
+  report `sufficiency` at line 0 of that entry with `a .md entry that is not a file`, load no
+  document from it, and lint shall go on to run the rules.
 Errors: -
-Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1
-Tests: T-006.1 [integration], T-006.2 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1; a directory named `<name>.md` → AC-006.3, not an internal error
+Tests: T-006.1 [integration], T-006.2 [integration], T-006.3 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RuleCrash
 
 ### FR-007 Sample T-ids for the dry run
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prd_lint.py:65 @d1a4146
 Acceptance (EARS):
 - AC-007.1 When run with `--sample-tids N`, the lint command shall print min(N, M) distinct test
   cases chosen at random from the M loaded cases whose `level` value, as text with surrounding
-  whitespace removed, is not `unit`, each as `<T-id> <test-case file>` with the file relative to the
-  folder, and exit 0.
+  whitespace removed, is all lowercase and is not `unit`, each as `<T-id> <test-case file>` with the
+  file relative to the folder, and exit 0.
 - AC-007.2 When run with `--sample-tids N`, the lint command shall run no rule and print none of the
   loader's findings.
 - AC-007.3 If the folder has no loaded test case whose level is not `unit`, the lint command shall
   print `prd_lint: no non-unit T-ids to sample` to stderr, nothing to stdout, and exit 1.
+- AC-007.4 When run with `--sample-tids N`, the lint command shall not sample a test case that has
+  no `level` value, or whose `level` holds an uppercase letter (`Unit`).
 Errors: -
-Edge cases: N larger than M prints every non-unit case once; N = 0 prints nothing → AC-007.1
-Tests: T-007.1 [integration], T-007.2 [integration], T-007.3 [integration], T-007.4 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: N larger than M prints every non-unit case once; N = 0 prints nothing → AC-007.1; level names are lowercase only, and lint without `--sample-tids` reports a level such as `Unit`, or a missing level, through `test-level` (lint-testcases)
+Tests: T-007.1 [integration], T-007.2 [integration], T-007.3 [integration], T-007.4 [integration], T-007.5 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-008 Mark a CI run for the rules
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:76 @d1a4146
 Acceptance (EARS):
 - AC-008.1 When run with `--ci`, the lint command shall set the environment variable `PRD_LINT_CI`
   to `1` before the rules run.
+- AC-008.2 While `PRD_LINT_CI` is `1` in its environment, the lint command shall run the rules as a
+  CI run whether or not `--ci` is given: the variable is the switch, and `--ci` is a shortcut that
+  sets it.
 Errors: -
-Edge cases: the effect (registries skips its on-PATH and installed-skill checks) belongs to lint-registries
-Tests: T-008.1 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: the effect (registries skips its on-PATH and installed-skill checks) belongs to lint-registries; prd_error.py sets the variable by default
+Tests: T-008.1 [integration], T-008.2 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; setting PRD_LINT_CI (contracts/config.yaml)
 
 ### FR-009 Write UTF-8 in any locale
-Status: as-built
+Status: live (since 1.0.0)
 Source: prd-toolkit/scripts/prd_lint.py:93 @d1a4146
 Acceptance (EARS):
 - AC-009.1 When prd_lint.py runs as a script, it shall write stdout and stderr as UTF-8 whatever the
@@ -133,7 +144,7 @@ Tests: T-009.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-010 Name a missing dependency
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prdlint/deps.py:7 @d1a4146
   prd-toolkit/scripts/prd_lint.py:17 @d1a4146
 Acceptance (EARS):
@@ -141,13 +152,18 @@ Acceptance (EARS):
   shall print, for the first one missing in that order,
   `prd_lint: missing Python package '<package>'. Run with: uv run --script <script name> …, or: pip install pyyaml sqlglot openapi-spec-validator`
   to stderr and exit 2.
+- AC-010.2 If a package cannot be imported by another prd-toolkit script that uses the same helper,
+  that script shall print
+  `<script>: missing Python package '<package>'. Run with: uv run --script <script name> …, or: pip install <packages>`
+  to stderr, where `<script>` is its own name without `.py` and `<packages>` lists only the packages
+  of its own dependency header, and exit 2.
 Errors: -
-Edge cases: the same helper serves the other CLI scripts → E-002 (not covered here)
-Tests: T-010.1 [integration]  (test-cases/lint-cli.yaml)
-Traces: cli:prd_lint
+Edge cases: prd_publish.py is the one script whose header adds a package (`markdown-it-py`) → AC-010.2 (E-002 is open until the code does this)
+Tests: T-010.1 [integration], T-010.2 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; cli:prd_publish; `prdlint/deps.py` require
 
 ### FR-011 Load the test-case files
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prdlint/yamlload.py:45 @d1a4146
   prd-toolkit/scripts/prdlint/model.py:746 @d1a4146
 Acceptance (EARS):
@@ -162,20 +178,27 @@ Acceptance (EARS):
   key's line with `<T-id>: a test case must be a mapping` and load the case with no fields.
 - AC-011.5 The loader shall read test cases only from `.yaml` files directly in `test-cases/`; a
   file in a subfolder of `test-cases/`, or with another extension, yields no finding and no case.
+- AC-011.6 If a test-case file has a mapping key that is a list or a mapping, the loader shall
+  report `sufficiency` at that key's line with `YAML parse error: found unhashable key`, load no
+  case from that file, and lint shall go on to run the rules.
 Errors: -
-Edge cases: an unhashable mapping key → E-003 (not covered here)
-Tests: T-011.1 [integration], T-011.2 [integration], T-011.3 [integration], T-011.4 [integration], T-011.5 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: a list or mapping key → AC-011.6, not an internal error (E-003 is open until the code does this)
+Tests: T-011.1 [integration], T-011.2 [integration], T-011.3 [integration], T-011.4 [integration], T-011.5 [integration], T-011.6 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-012 Load the contract YAML files
-Status: as-built
+Status: approved
 Source: prd-toolkit/scripts/prdlint/model.py:758 @d1a4146
 Acceptance (EARS):
-- AC-012.1 When a `.yaml` file anywhere under `contracts/` repeats a key, does not parse, or has a
-  top level that is not a mapping, the loader shall report it with the messages of AC-011.1 to
-  AC-011.3 under the rule `contracts-valid`, and shall keep every file that loads as a mapping under
-  its path relative to the folder.
+- AC-012.1 When a `.yaml` file under `contracts/`, outside `contracts/fixtures/`, repeats a key, does
+  not parse, has a mapping key that is a list or a mapping, or has a top level that is not a
+  mapping, the loader shall report it with the messages of AC-011.1 to AC-011.3 and AC-011.6 under
+  the rule `contracts-valid`, and shall keep every file that loads as a mapping under its path
+  relative to the folder.
+- AC-012.2 The loader shall read no file under `contracts/fixtures/`, neither as a document nor as
+  contract YAML, and shall report no finding for such a file (the `classified-fixtures` rule still
+  reads fixtures for real personal data).
 Errors: -
-Edge cases: files under `contracts/fixtures/` are loaded too → E-004
-Tests: T-012.1 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: fixture data under `contracts/fixtures/` is not scanned (prd-format.md) → AC-012.2 (E-004 is open until the code does this); a list or mapping key → AC-012.1 (E-003)
+Tests: T-012.1 [integration], T-012.2 [integration], T-012.3 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
