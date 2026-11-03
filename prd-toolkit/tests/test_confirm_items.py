@@ -278,8 +278,8 @@ def test_ids_caps_words_digits_and_paths_on_traces_name_nothing(tmp_path):
     # review of 0.7.2: requirement IDs, all-caps prose, versions and path parts are not key names
     _, prd = make_confirm_repo(tmp_path)
     rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
-            "Traces: FR-001; AC-008.2; UJ-02 UNIQUE; POST /orders; src/utils_2/x.py; api v2; fixture orders/one_existing")
-    keys = ["FR", "AC", "UJ", "UNIQUE", "POST", "utils_2", "v2", "one_existing", "orders"]
+            "Traces: FR-001; AC-008.2; UJ-02 UNIQUE; POST /orders; src/notes/app.my_key; api v2; fixture orders/one_existing")
+    keys = ["FR", "AC", "UJ", "UNIQUE", "POST", "my_key", "v2", "one_existing", "orders"]
     (prd / "contracts/config.yaml").write_text(
         "settings:\n" + "".join(f'  {k}:\n    owner: "[NEEDS CLARIFICATION: {k}]"\n' for k in keys))
     assert [i for i in ids(prd) if i.startswith("config.yaml:")] == []
@@ -303,3 +303,16 @@ def test_extensionless_detected_file_is_cited(tmp_path):
     assert len(ex) == 1 and "  10 | rule10:" in ex[0]
     rewrite(prd, "errors.md", "wrong result at Makefile:10", "wrong result at Nofile:10")
     assert by_id(confirm.build_items(model.load(prd), "notes"))["E-001"].excerpts == []
+
+
+def test_punctuated_and_prefixed_identifiers_name_their_keys(tmp_path):
+    # re-review of 0.7.2: a trailing colon or quotes, and the <kind>:<prd>/<name> form, still name the key
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: setting NOTES_LIMIT: caps it; 'MAX_ROWS'; table:transform/orders_daily")
+    (prd / "contracts/config.yaml").write_text(
+        "settings:\n" + "".join(f'  {k}:\n    owner: "[NEEDS CLARIFICATION: {k}]"\n'
+                                  for k in ("NOTES_LIMIT", "MAX_ROWS", "orders_daily")))
+    got = ids(prd)
+    for k in ("NOTES_LIMIT", "MAX_ROWS", "orders_daily"):
+        assert f"config.yaml:{k}.owner" in got, k

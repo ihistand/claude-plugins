@@ -160,8 +160,12 @@ def _walk(node: Any, path: list[str], start: int | None, named: set[str], hits: 
 def _bare_name(chunk: str) -> str | None:
     """The key a word outside backticks names, or None. Only an identifier with an underscore (NOTES_LIMIT)
     or in camelCase (maxSize) names one: a dotted or kind:name word names its last part, and a path part,
-    an ID prefix (FR-001), an all-caps word (UNIQUE, POST) or a version (v2) names nothing."""
-    if "/" in chunk:
+    an ID prefix (FR-001), an all-caps word (UNIQUE, POST) or a version (v2) names nothing. Quotes and a
+    trailing colon or full stop are dropped, and the <kind>:<prd>/<name> form names <name>."""
+    chunk = chunk.strip("'\"").rstrip(":.")
+    if re.fullmatch(r"[a-z]+:[a-z][a-z0-9-]*/[^/\s]+", chunk):
+        chunk = chunk.rsplit("/", 1)[1]
+    elif "/" in chunk:
         return None
     name = re.split(r"[:.]", chunk.strip("."))[-1]
     if re.fullmatch(r"[A-Za-z_]\w*", name) and re.search(r"[A-Za-z]", name) and re.search(r"_|[a-z][A-Z]", name):
