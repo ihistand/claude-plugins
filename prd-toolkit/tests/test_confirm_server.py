@@ -1,6 +1,8 @@
 """The confirmation form's answers file and local server."""
 import json
+import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -14,15 +16,15 @@ PAGE = "<html><body>stub</body></html>"
 
 
 class Live:
-    def __init__(self, tmp_path, idle_minutes=120, repo=None):
+    def __init__(self, tmp_path, idle_minutes=120, repo=None, request_timeout=30):
         self.repo, self.prd = repo or make_confirm_repo(tmp_path)
-        self.start(idle_minutes)
+        self.start(idle_minutes, request_timeout)
 
-    def start(self, idle_minutes=120):
+    def start(self, idle_minutes=120, request_timeout=30):
         prd = model.load(self.prd)
         self.items = confirm.build_items(prd, "notes")
         self.server, self.token = confirm.make_server(prd, "notes", self.items, {"FR-001": "FR-001 adds."}, PAGE,
-                                                      idle_minutes=idle_minutes)
+                                                      idle_minutes=idle_minutes, request_timeout=request_timeout)
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
         self.code = []
         self.thread = threading.Thread(target=lambda: self.code.append(confirm.run(self.server)))
@@ -239,7 +241,8 @@ def test_exclude_line_once(tmp_path):
     repo, _ = make_confirm_repo(tmp_path)
     info = repo / ".git/info"
     (info / "exclude").unlink(missing_ok=True)
-    info.rmdir() if info.exists() and not any(info.iterdir()) else None
+    if info.exists() and not any(info.iterdir()):
+        info.rmdir()
     confirm.ensure_excluded(repo)
     confirm.ensure_excluded(repo)
     lines = (repo / ".git/info/exclude").read_text().splitlines()
@@ -261,3 +264,132 @@ def test_open_ids_pure(tmp_path):
                        items[1].id: {"decision": "confirm", "fingerprint": "stale"}}}
     assert confirm.open_ids(items, ans) == [i.id for i in items[1:]]
     assert confirm.load_answers(repo / "missing.json") == {}
+
+
+def raw(lv, head: bytes, body: bytes = b"", wait=5.0):
+    """Send raw bytes; return (status, body) of the reply, or (None, b"") when the server just closed."""
+    with socket.create_connection(("127.0.0.1", lv.server.server_address[1]), timeout=wait) as c:
+        c.sendall(head + body)
+        buf = b""
+        try:
+            while chunk := c.recv(65536):
+                buf += chunk
+        except OSError:
+            pass
+    if not buf:
+        return None, b""
+    status = int(buf.split(b" ", 2)[1])
+    return status, buf.split(b"\r\n\r\n", 1)[1]
+
+
+def post_head(lv, length=None, path="/answer"):
+    h = f"POST {path}?token={lv.token} HTTP/1.0\r\n"
+    if length is not None:
+        h += f"Content-Length: {length}\r\n"
+    return (h + "\r\n").encode()
+
+
+def test_malformed_requests_get_json_errors(live):
+    lv = live()
+    assert raw(lv, post_head(lv, 5), b"{nope")[0] == 400
+    assert raw(lv, post_head(lv, 2), b"[]")[0] == 400
+    assert raw(lv, post_head(lv, -5))[0] == 400
+    assert raw(lv, post_head(lv))[0] == 400  # no Content-Length on a POST
+    assert raw(lv, post_head(lv, 3), b"abc")[0] == 400
+    for body in ({"id": ["a"], "decision": "confirm"}, {"id": "FR-001", "decision": ["confirm"]},
+                 {"id": "FR-001", "decision": "correct", "text": 5},
+                 {"id": "FR-001", "decision": "correct", "acs": ["AC-001.1"]},
+                 {"id": "FR-001", "decision": "correct", "acs": {"AC-001.1": 7}},
+                 {"id": {"a": 1}, "decision": "confirm"}):
+        status, out = lv.json("/answer", body)
+        assert status == 400 and "error" in out, body
+    assert lv.json("/undo", {"id": ["a"]})[0] == 400
+    assert not lv.file.exists()
+    assert lv.json("/items")[0] == 200
+
+
+def test_short_body_times_out_with_408(live):
+    lv = live(request_timeout=0.3)
+    t = time.monotonic()
+    status, _ = raw(lv, post_head(lv, 100), b"{}")
+    assert status in (408, None) and time.monotonic() - t < 3
+    assert lv.json("/items")[0] == 200
+
+
+def test_unexpected_error_is_500_and_changes_nothing(live, monkeypatch, capfd):
+    lv = live()
+
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(confirm, "save_answers", boom)
+    status, out = lv.json("/answer", {"id": "FR-001", "decision": "confirm"})
+    assert status == 500 and out == {"error": "internal error"}
+    assert "Traceback" not in capfd.readouterr().err
+    assert not lv.file.exists()
+
+
+def test_corrupt_answers_file_refuses_server(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    f = confirm.answers_path(repo, "notes")
+    for bad in ("{not json", "[1]", ""):
+        f.write_text(bad)
+        p = model.load(prd)
+        with pytest.raises(confirm.Refused, match="is not valid JSON; move it aside to start over"):
+            confirm.make_server(p, "notes", confirm.build_items(p, "notes"), {}, PAGE)
+        assert f.read_text() == bad
+    f.unlink()
+    assert confirm.load_answers(f) == {}
+
+
+def test_corrupt_answers_file_midrun_is_500_and_kept(live):
+    lv = live()
+    lv.file.write_text("{broken")
+    status, out = lv.json("/answer", {"id": "FR-001", "decision": "confirm"})
+    assert status == 500 and "not valid JSON" in out["error"]
+    assert lv.file.read_text() == "{broken"
+    assert lv.json("/undo", {"id": "FR-001"})[0] == 500
+    assert lv.file.read_text() == "{broken"
+
+
+def test_unauthenticated_requests_do_not_keep_server_alive(live):
+    lv = live(idle_minutes=0.03)  # 1.8 s
+    end = time.monotonic() + 6
+    while lv.thread.is_alive() and time.monotonic() < end:
+        lv.call("/items", token=False)
+        time.sleep(0.1)
+    assert lv.code == [3]
+
+
+def test_other_routes_without_token_are_403(live):
+    lv = live()
+    lv.json("/answer", {"id": "FR-001", "decision": "confirm"})
+    before = lv.file.read_text()
+    assert lv.call("/undo", {"id": "FR-001"}, token=False)[0] == 403
+    assert lv.call("/done", {}, token=False)[0] == 403
+    assert lv.call("/nowhere", token=False)[0] == 403
+    assert lv.file.read_text() == before
+    assert lv.json("/nowhere")[0] == 404
+
+
+def test_correct_with_blank_acs_is_refused_and_blanks_dropped(live):
+    lv = live()
+    assert lv.json("/answer", {"id": "FR-001", "decision": "correct", "acs": {"AC-001.1": "  "}})[0] == 400
+    status, _ = lv.json("/answer", {"id": "FR-001", "decision": "correct",
+                                    "acs": {"AC-001.1": " new ", "AC-001.2": " "}})
+    assert status == 200
+    assert json.loads(lv.file.read_text())["answers"]["FR-001"]["acs"] == {"AC-001.1": "new"}
+
+
+def test_ctrl_c_returns_3(tmp_path, monkeypatch):
+    repo, prd = make_confirm_repo(tmp_path)
+    p = model.load(prd)
+    server, _ = confirm.make_server(p, "notes", confirm.build_items(p, "notes"), {}, PAGE)
+    try:
+        def interrupt(*a, **k):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(server, "serve_forever", interrupt)
+        assert confirm.run(server) == 3
+    finally:
+        server.server_close()

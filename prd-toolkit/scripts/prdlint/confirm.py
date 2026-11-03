@@ -248,12 +248,22 @@ def answers_path(repo_root: Path, area: str) -> Path:
 
 
 def load_answers(path: Path) -> dict:
-    """The saved file, or {} when it is missing or unreadable."""
+    """The saved file; {} when it does not exist. A file that exists but is not an answers object is refused,
+    so an accepted answer is never silently thrown away."""
+    path = Path(path)
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
-    return data if isinstance(data, dict) else {}
+    except OSError as e:
+        raise Refused(f"answers file {path} cannot be read: {e}") from e
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        raise Refused(f"answers file {path} is not valid JSON; move it aside to start over")
+    return data
 
 
 def save_answers(path: Path, data: dict) -> None:
@@ -310,8 +320,9 @@ class _State:
     """Everything a request needs; every write to the answers file goes through `change`."""
 
     def __init__(self, prd: Prd, area: str, items: list[Item], summaries: dict, page: str, token: str,
-                 idle_minutes: float):
+                 idle_minutes: float, request_timeout: float):
         self.prd, self.area, self.items, self.summaries, self.page, self.token = prd, area, items, summaries, page, token
+        self.request_timeout = request_timeout
         self.by_id = {i.id: i for i in items}
         self.root = repo_root(prd.root)
         self.path = answers_path(self.root, area)
@@ -321,6 +332,7 @@ class _State:
         self.lock = threading.Lock()
         self.head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root, capture_output=True, text=True,
                                    encoding="utf-8", timeout=30).stdout.strip()
+        load_answers(self.path)  # a corrupt file refuses the server before anything is served
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -333,12 +345,15 @@ class _State:
             if fcntl is not None:
                 try:
                     dirfd = os.open(self.root, os.O_RDONLY)
-                    fcntl.flock(dirfd, fcntl.LOCK_EX)
+                    try:
+                        fcntl.flock(dirfd, fcntl.LOCK_EX)
+                    except OSError:
+                        os.close(dirfd)
+                        dirfd = None
                 except OSError:
                     dirfd = None
             try:
-                data = load_answers(self.path)
-                answers = data.get("answers")
+                answers = load_answers(self.path).get("answers")
                 data = {"prd": self.prd.frontmatter.get("project", ""), "area": self.area,
                         "commit": self.head, "answers": answers if isinstance(answers, dict) else {}}
                 apply(data["answers"])
@@ -349,11 +364,11 @@ class _State:
                     os.close(dirfd)
 
     def answer(self, body: dict) -> dict:
-        item = self.by_id.get(body.get("id"))
-        if item is None:
-            raise _Bad(400, f"unknown item {body.get('id')!r}")
-        decision = body.get("decision")
-        if decision not in {d for ds in ALLOWED.values() for d in ds}:
+        iid, decision = body.get("id"), body.get("decision")
+        if not isinstance(iid, str) or iid not in self.by_id:
+            raise _Bad(400, f"unknown item {iid!r}")
+        item = self.by_id[iid]
+        if not isinstance(decision, str) or decision not in {d for ds in ALLOWED.values() for d in ds}:
             raise _Bad(400, f"unknown decision {decision!r}")
         if decision not in ALLOWED[item.kind]:
             raise _Bad(400, f"decision {decision} is not allowed for a {item.kind}")
@@ -363,11 +378,11 @@ class _State:
         text = (text or "").strip()
         if acs is not None and not (isinstance(acs, dict) and all(isinstance(v, str) for v in acs.values())):
             raise _Bad(400, "acs must map an AC ID to text")
-        acs = acs or {}
         known = {a for a, _ in item.acs}
-        for k in acs:
+        for k in acs or {}:
             if k not in known:
                 raise _Bad(400, f"{k} is not an AC of {item.id}")
+        acs = {k: v.strip() for k, v in (acs or {}).items() if v.strip()}
         if decision == "correct":
             if not text and not acs:
                 raise _Bad(400, "correct needs text or an edited AC")
@@ -383,9 +398,18 @@ class _State:
         return self.change(lambda a: a.__setitem__(item.id, entry))
 
     def undo(self, body: dict) -> dict:
-        if body.get("id") not in self.by_id:
-            raise _Bad(400, f"unknown item {body.get('id')!r}")
-        return self.change(lambda a: a.pop(body["id"], None))
+        iid = body.get("id")
+        if not isinstance(iid, str) or iid not in self.by_id:
+            raise _Bad(400, f"unknown item {iid!r}")
+        return self.change(lambda a: a.pop(iid, None))
+
+    def finish(self) -> list[str]:
+        """The open IDs; when there are none, mark the run done. Check and mark share the write lock."""
+        with self.lock:
+            pending = open_ids(self.items, load_answers(self.path))
+            if not pending:
+                self.end = "done"
+            return pending
 
     def listing(self) -> dict:
         data = self.snapshot()
@@ -397,11 +421,15 @@ class _State:
                 "changed": changed}
 
 
-def _handler(state: _State):
+def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
+        timeout = state.request_timeout  # a stalled client frees its thread
 
         def log_message(self, *args) -> None:  # no per-request log
+            pass
+
+        def handle_error(self, *args) -> None:  # never a traceback on the owner's terminal
             pass
 
         def _send(self, status: int, body: bytes, ctype: str) -> None:
@@ -422,55 +450,75 @@ def _handler(state: _State):
             return hmac.compare_digest(given.encode("utf-8"), state.token.encode("utf-8"))
 
         def _body(self) -> dict:
+            raw = self.headers.get("Content-Length")
             try:
-                n = int(self.headers.get("Content-Length") or 0)
+                n = int(raw) if raw is not None else -1
             except ValueError:
-                raise _Bad(400, "bad Content-Length") from None
+                n = -1
+            if n < 0:
+                raise _Bad(400, "a POST needs a Content-Length")
             if n > MAX_BODY:
                 left = n
-                while left > 0:  # read it off the wire so the client sees the reply, not a reset
-                    chunk = self.rfile.read(min(65536, left))
-                    if not chunk:
-                        break
-                    left -= len(chunk)
+                try:
+                    while left > 0:  # read it off the wire so the client sees the reply, not a reset
+                        chunk = self.rfile.read(min(65536, left))
+                        if not chunk:
+                            break
+                        left -= len(chunk)
+                except OSError:
+                    pass
                 raise _Bad(413, "request body is over 1 MB")
             try:
-                obj = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                data = self.rfile.read(n)
+            except OSError:  # timed out waiting for the rest of the body
+                raise _Bad(408, "request timed out") from None
+            if len(data) < n:
+                raise _Bad(400, "body is shorter than its Content-Length")
+            try:
+                obj = json.loads(data.decode("utf-8") or "{}")
             except ValueError:
                 raise _Bad(400, "body is not JSON") from None
             if not isinstance(obj, dict):
                 raise _Bad(400, "body must be a JSON object")
             return obj
 
+        def _route(self, method: str, route: str) -> None:
+            if method == "GET" and route == "/":
+                self._send(200, state.page.encode("utf-8"), "text/html; charset=utf-8")
+            elif method == "GET" and route == "/items":
+                self._json(200, state.listing())
+            elif method == "POST" and route in ("/answer", "/undo"):
+                body = self._body()
+                data = state.answer(body) if route == "/answer" else state.undo(body)
+                self._json(200, {"open": open_ids(state.items, data)})
+            elif method == "POST" and route == "/done":
+                self._body()
+                pending = state.finish()
+                if pending:
+                    self._json(409, {"open": pending})
+                else:
+                    self._json(200, {"open": []})
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+            else:
+                raise _Bad(404, "no such request")
+
         def _handle(self, method: str) -> None:
-            state.last = time.monotonic()
             parts = urlsplit(self.path)
             query = parse_qs(parts.query)
             route = parts.path
             try:
                 if not self._authorized(query, header=route != "/"):
                     raise _Bad(403, "missing or wrong token")
-                if method == "GET" and route == "/":
-                    self._send(200, state.page.encode("utf-8"), "text/html; charset=utf-8")
-                elif method == "GET" and route == "/items":
-                    self._json(200, state.listing())
-                elif method == "POST" and route in ("/answer", "/undo"):
-                    body = self._body()
-                    data = state.answer(body) if route == "/answer" else state.undo(body)
-                    self._json(200, {"open": open_ids(state.items, data)})
-                elif method == "POST" and route == "/done":
-                    self._body()
-                    pending = open_ids(state.items, state.snapshot())
-                    if pending:
-                        self._json(409, {"open": pending})
-                    else:
-                        self._json(200, {"open": []})
-                        state.end = "done"
-                        threading.Thread(target=self.server.shutdown, daemon=True).start()
-                else:
-                    raise _Bad(404, "no such request")
+                state.last = time.monotonic()  # only an authorized request keeps the server alive
+                self._route(method, route)
             except _Bad as e:
                 self._json(e.status, {"error": e.why})
+            except Refused as e:
+                self._json(500, {"error": str(e)})
+            except (BrokenPipeError, ConnectionError):
+                pass
+            except Exception:  # noqa: BLE001 - nothing may reset the connection or print a traceback
+                self._json(500, {"error": "internal error"})
 
         def do_GET(self) -> None:
             self._handle("GET")
@@ -485,20 +533,25 @@ class _Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 128  # a burst of browser requests must not be reset
 
+    def __init__(self, address: tuple[str, int], state: _State):
+        self.state = state
+        super().__init__(address, _handler(state))
+
 
 def make_server(prd: Prd, area: str, items: list[Item], summaries: dict, page: str, port: int = 0,
-                idle_minutes: float = 120) -> tuple[ThreadingHTTPServer, str]:
-    """A server bound to 127.0.0.1 only, and its token. Raises OSError when `port` is in use."""
+                idle_minutes: float = 120, request_timeout: float = 30) -> tuple[ThreadingHTTPServer, str]:
+    """A server bound to 127.0.0.1 only, and its token. Raises OSError when `port` is in use, and Refused
+    when the answers file exists but is not valid."""
     token = secrets.token_urlsafe(24)
-    state = _State(prd, area, items, summaries, page, token, idle_minutes)
-    server = _Server(("127.0.0.1", port), _handler(state))
-    server.state = state  # type: ignore[attr-defined]
-    return server, token
+    state = _State(prd, area, items, summaries, page, token, idle_minutes, request_timeout)
+    return _Server(("127.0.0.1", port), state), token
 
 
 def run(server: ThreadingHTTPServer) -> int:
     """Serve until Done (0), Ctrl-C or the idle timeout (3)."""
-    state: _State = server.state  # type: ignore[attr-defined]
+    if not isinstance(server, _Server):
+        raise TypeError("run() takes a server made by make_server")
+    state = server.state
     stop = threading.Event()
 
     def watch() -> None:
