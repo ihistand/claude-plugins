@@ -230,6 +230,10 @@ def test_step_3_one_approval():
 def test_step_4_build_in_order():
     four = step(4)
     assert "once its Waits for holds" in four
+    # R-F1: a later environment satisfies an environment wait, and a State never moves back to an earlier one
+    assert ("`<prd> live in <env>` when it is `live in` that environment or one after it in that member's "
+            "`operations.md` Environments table") in four
+    assert "`live in` an earlier environment than its State is refused" in four
     assert four.index("/prd-build") < four.index("prd_links.py sync --ref <branch>")  # the build runs it (Important 3)
     assert "/prd-deploy --until <env>" in four and "deploying-from-prds" in four
     assert "prd_links.py changeset set" in four and "state=" in four

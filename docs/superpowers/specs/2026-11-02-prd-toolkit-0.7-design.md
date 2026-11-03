@@ -25,6 +25,7 @@
 > - §9 (execution, R-11d): `prd-builder` carries the `Change-set:` trailer on its commits when the dispatch passes one.
 > - §6 (execution, R-11e): a session never begins a member's step 2 that it cannot finish. For a member that is not the session's repository it logs the stop and stops before editing, and that member's own session runs the whole of step 2 for its row.
 > - §8 (proof, R-13a): the deploy pre-flight lets a drift line through when an open change-set record (Status not `done` or `abandoned`, under the PRD's own `changes/` or in a member repository its links point to, as **Where to enter** finds it) lists both this PRD and the drifting side as members, and the run's report prints each such line as `drift allowed by <start-prd>/CS-nnn: <line>`. Any other drift still refuses. `prd_links.py check` is unchanged, so CI still reports it; production deploys follow the merges in Merge order, when the consumer's default branch holds the re-lock.
+> - §6 (final review, R-F1): an environment wait holds for that environment or any later one in the upstream member's `operations.md` Environments order (read through the row's Location); a wait for `verified` holds for `verified` or any `live in`. `set` refuses a State `live in <e1>` after `live in <e2>` when e1 is before e2 (`<prd>: live in <e1> is before live in <e2>`), and an environment missing from the order by name. Before, a wait held only for its exact environment, so an upstream already `live in production` blocked a downstream waiting for `live in staging` for good.
 
 ## 1. Scope
 
@@ -218,13 +219,16 @@ Approval: 2026-11-03, "<the user's reply, quoted>"
 - **Target:** the highest Needs any downstream member has of this row, else `verified`. When two
   downstream members need different `live in` environments, the one later in the upstream's
   `operations.md` Environments table. Order of
-  states: `proposed` < `approved` < `built` < `verified` < `live in <env>`.
+  states: `proposed` < `approved` < `built` < `verified` < `live in <env>`, and among `live in`
+  states the member's `operations.md` Environments order, read through the row's Location: a wait
+  for `live in <e1>` holds for `live in <e2>` when e2 is e1 or after it, a wait for `verified` holds
+  for `verified` or any `live in`, and an environment missing from that table is refused by name.
 - **State:** the row's place in that order. A stop is recorded on Status and in Log; the row keeps its State.
 
 | `changeset` subcommand | Does |
 |---|---|
 | `new <PRD> --title <text> --member <location>…` | Numbers the record, reads every member's `links.md`, computes Order, Waits for and Target, writes `Status: proposed` |
-| `set <record> <prd> <field>=<value>…` | Sets Branch, Version, IDs or State; refuses a State that goes backward or skips its Waits for |
+| `set <record> <prd> <field>=<value>…` | Sets Branch, Version, IDs or State; refuses a State that goes backward (`live in` an earlier environment among them) or skips its Waits for |
 | `approve <record> --reply <text> [--amendment]` | Quotes the reply on the Approval line (an amendment adds a dated line); moves every `proposed` row to `approved` |
 | `stop <record> <prd> <reason>`, `log <record> <text>` | Records a stop (Status `stopped: <prd>: <reason>`, and Log) or a line in Log; `set` of any State moves Status back to `running` |
 | `close <record>` | Refuses unless every row's State equals its Target; writes `Status: done` and a **Merge order** list, upstream first |

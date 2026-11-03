@@ -177,9 +177,10 @@ Text with no record is a new change set: step 1.
    of the PRD folder and CLAUDE.md), its message carrying the trailer too:
    `-m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"`.
 4. **Build in order.** For each row in Order, once its Waits for holds (a wait `<prd> verified`
-   holds when that row is `verified` or `live in` any environment; `<prd> live in <env>` only when
-   it is `live in <env>`): `/prd-build <area> <IDs>` in that member, from a session started in its
-   root (**One record drives a change set**). This step runs no sync of its own: on a change-set
+   holds when that row is `verified` or `live in` any environment; `<prd> live in <env>` when it is
+   `live in` that environment or one after it in that member's `operations.md` Environments table):
+   `/prd-build <area> <IDs>` in that member, from a session started in its root (**One record drives
+   a change set**). This step runs no sync of its own: on a change-set
    branch `running-a-build.md` runs the `prd_links.py sync --ref <branch>` against each upstream
    member and commits the re-lock before its clean-tree preflight. When a downstream row waits for
    `live in <env>`, the upstream's `/prd-deploy --until <env>` runs before it, from this session,
@@ -194,9 +195,10 @@ Text with no record is a new change set: step 1.
    ```
 
    `changeset set` refuses a State that skips its Waits for: the row's upstream has not reached
-   it, and the build waits. An upstream that is `verified` is not `live in staging`, and "basically
-   done" is not a State. A build of a member other than this session's repository stops here, as
-   **One record drives a change set** says.
+   it, and the build waits. A `set` to `live in` an earlier environment than its State is refused.
+   An upstream that is `verified` is not `live in staging`, and "basically done" is not a State. A
+   build of a member other than this session's repository stops here, as **One record drives a
+   change set** says.
 5. **Stops.** A failed build, a human step without a reply, or an error stops the chain:
 
    ```bash

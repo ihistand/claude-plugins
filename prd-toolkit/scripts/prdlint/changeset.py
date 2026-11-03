@@ -59,9 +59,24 @@ def rank(state: str) -> int:
     return model.STATES.index(state) if state in model.STATES else len(model.STATES)  # `live in <env>` is the last
 
 
-def holds(state: str, need: str) -> bool:
-    """A need `verified` holds for `verified` or any `live in`; a need `live in <env>` only for that environment."""
-    return state == "verified" or state.startswith("live in ") if need == "verified" else state == need
+_LIVE = "live in "
+
+
+def _env_at(envs: list[str], env: str, prd: str) -> int:
+    if env not in envs:
+        raise Refused(f"{prd}'s operations.md Environments has no {env}")
+    return envs.index(env)
+
+
+def holds(state: str, need: str, envs, prd: str) -> bool:
+    """R-F1: a need `verified` holds for `verified` or any `live in`; a need `live in <e1>` for `live in <e2>` with e2 at
+    or after e1 in `prd`'s operations.md Environments order (`envs()`, read only when both are `live in`)."""
+    if need == "verified":
+        return state == "verified" or state.startswith(_LIVE)
+    if not state.startswith(_LIVE):
+        return False
+    order = envs()
+    return _env_at(order, state.removeprefix(_LIVE), prd) >= _env_at(order, need.removeprefix(_LIVE), prd)
 
 
 def default_needs(prd: model.Prd) -> str:
@@ -284,6 +299,28 @@ def _write(path: Path, cs: model.ChangeSet) -> Path:
 
 # ---------------------------------------------------------------- the commands on a record
 
+def _env_order(path: Path, cs: model.ChangeSet, prd: str):
+    """A function giving member `prd`'s operations.md Environments, in table order, read once from its working tree
+    through the row's Location (relative to the starting repository's root, where the record is)."""
+    found: list[list[str]] = []
+
+    def envs() -> list[str]:
+        if not found:
+            row = _row(cs, prd)
+            try:
+                loc = parse_location(row.location)
+            except BadArgument as e:
+                raise Refused(f"{cs.id} row {prd}: {e}") from None
+            if loc.url is not None:
+                raise Refused(f"{loc.raw.strip('`')} is not cloned on this machine")
+            with open_side(toplevel(path.parent.resolve()).resolve(), loc, expect=prd) as side:
+                table = side.load(None).operations.environments
+            found.append(sorted(table, key=table.get))
+        return found[0]
+
+    return envs
+
+
 def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
     """Set Branch, Version, IDs or State of row `prd`; a State moves Status to running."""
     parsed = []
@@ -321,11 +358,13 @@ def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
                 raise Refused(f"{cs.id} is not approved yet")
             if rank(value) < rank(row.state):
                 raise Refused(f"{prd} cannot go back from {row.state} to {value}")
+            if value.startswith(_LIVE) and row.state.startswith(_LIVE) and not holds(value, row.state, _env_order(path, cs, prd), prd):
+                raise Refused(f"{prd}: {value} is before {row.state}")
             if rank(value) >= rank("built") and row.waits_for != NONE:
                 for wait in row.waits_for.split(";"):
                     up, _, need = wait.strip().partition(" ")
                     up_row = _row(cs, up)
-                    if not holds(up_row.state, need):
+                    if not holds(up_row.state, need, _env_order(path, cs, up), up):
                         raise Refused(f"{prd} waits for {up} {need}; {up} is {up_row.state}")
             row.state = value
             cs.status = "running"

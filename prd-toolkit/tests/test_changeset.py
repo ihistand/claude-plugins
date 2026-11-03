@@ -244,12 +244,62 @@ def test_set_refusals(tmp_path):
 
 
 def test_set_verified_need(tmp_path):
-    """A need `verified` holds for `verified` or any `live in`; a need `live in <env>` only for that env exactly."""
+    """R-F1: a need `verified` holds for `verified` or any `live in`; a need `live in <env>` for that env or any later
+    one in the upstream's operations.md Environments order."""
     _, cs = started(tmp_path, {("reports", "transform"): "verified"})
     ok("approve", cs, "--reply", "yes")
     ok("set", cs, "transform", "state=live in production")
     ok("set", cs, "reports", "state=built")
-    assert refused("set", cs, "dashboards", "state=built") == "refused: dashboards waits for transform live in staging; transform is live in production"
+    # dashboards' wait for transform live in staging holds (production is later); its wait for reports does not
+    assert refused("set", cs, "dashboards", "state=built") == "refused: dashboards waits for reports live in staging; reports is built"
+
+
+def fan_out(tmp_path) -> Path:
+    """transform with two downstream members: reports needs it live in production, dashboards live in staging; CS-001
+    started in transform and approved. Returns the record."""
+    from linked import _links_md
+
+    graph = {"transform": [], "reports": [("transform", "live in production")], "dashboards": [("transform", "live in staging")]}
+    for name, ups in graph.items():
+        repo = _repo(tmp_path, name)
+        prd = prd_of(repo)
+        edit(prd, "prd.md", "prd: orders", f"prd: {name}")
+        (prd / "links.md").write_text(_links_md(ups, [d for d, us in graph.items() if any(u == name for u, _ in us)]),
+                                      encoding="utf-8")
+        commit(repo, "Add the PRD", "docs")
+    transform = tmp_path / "transform"
+    assert new(transform, "../reports", "../dashboards").code == 0
+    cs = changes(transform) / "CS-001.md"
+    assert rows(cs)["transform"].target == "live in production"
+    ok("approve", cs, "--reply", "yes")
+    return cs
+
+
+def test_env_wait_holds_for_a_later_env(tmp_path):
+    """R-F1, the final review's probe: once the upstream is live in production, a wait for live in staging holds."""
+    cs = fan_out(tmp_path)
+    for state in ("built", "verified", "live in production"):
+        ok("set", cs, "transform", f"state={state}")
+    ok("set", cs, "dashboards", "state=verified")
+    ok("set", cs, "reports", "state=verified")
+    ok("close", cs)
+    assert record(cs).status == "done"
+
+
+def test_env_state_cannot_go_back_to_an_earlier_env(tmp_path):
+    cs = fan_out(tmp_path)
+    ok("set", cs, "transform", "state=live in production")
+    before = cs.read_text(encoding="utf-8")
+    assert refused("set", cs, "transform", "state=live in staging") == "refused: transform: live in staging is before live in production"
+    assert cs.read_text(encoding="utf-8") == before
+    ok("set", cs, "transform", "state=live in production")  # the same environment again is no move back
+
+
+def test_env_not_in_the_order_is_refused(tmp_path):
+    cs = fan_out(tmp_path)
+    ok("set", cs, "transform", "state=live in qa")
+    assert refused("set", cs, "dashboards", "state=built") == "refused: transform's operations.md Environments has no qa"
+    assert refused("set", cs, "transform", "state=live in staging") == "refused: transform's operations.md Environments has no qa"
 
 
 def test_record_argument_checked(tmp_path):
@@ -322,12 +372,11 @@ def test_close(tmp_path):
     transform, cs = started(tmp_path)
     ok("approve", cs, "--reply", "approve CS-001")
     assert refused("close", cs) == "refused: CS-001: transform is approved, not its target live in staging"
-    walk(cs)
-    ok("set", cs, "transform", "state=live in production")
+    ok("set", cs, "transform", "state=built")
     before = cs.read_text(encoding="utf-8")
-    assert refused("close", cs) == "refused: CS-001: transform is live in production, not its target live in staging"
+    assert refused("close", cs) == "refused: CS-001: transform is built, not its target live in staging"
     assert cs.read_text(encoding="utf-8") == before
-    ok("set", cs, "transform", "state=live in staging")
+    walk(cs)
     r = ok("close", cs)
     assert r.out.strip() == str(cs)
     text = cs.read_text(encoding="utf-8")
