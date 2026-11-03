@@ -129,9 +129,9 @@ def frontmatter(prd: Prd):
 
 @rule("language-table")
 def language_table(prd: Prd):
-    lang = languages.code(prd)
-    if re.fullmatch(r"[a-z]{2,3}", lang) and languages.load(lang, languages.pack_dirs(prd)) is None:
-        yield Finding("prd.md", _fm_line(prd, "language"), "language-table", f"language '{lang}' has no table")
+    why = languages.problem(prd)
+    if why:
+        yield Finding("prd.md", _fm_line(prd, "language"), "language-table", why)
 
 
 @rule("sections")
@@ -271,7 +271,10 @@ def _removed_ac_lines(b) -> set[int]:
 
 @rule("vague-word")
 def vague_word(prd: Prd):
-    vague = languages.for_prd(prd).vague
+    table = languages.for_prd(prd)
+    if table is None:
+        return
+    vague = table.vague
 
     def check(file, n, text):
         m = vague.search(text)

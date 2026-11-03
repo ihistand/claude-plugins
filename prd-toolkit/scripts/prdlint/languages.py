@@ -57,15 +57,13 @@ def _build(code: str, data: dict) -> Table:
     )
 
 
-# 0.7's table, used only when a vendored copy has no languages/ folder yet (older vendoring), so lint output never changes
-_EN = {
-    "ears": {"openers": ["When", "While", "If", "Where"], "ubiquitous": r"^The \S.*? shall\b", "ubiquitous_hint": "'The <thing> shall'", "modal": r"\bshall\b", "modal_word": "shall"},
-    "vague": ["fast", "secure", "scalable", "robust", "intuitive", "seamless", "user-friendly"],
-}
+class TableError(Exception):
+    """A table file that is present but cannot be used; the message reads `language table <path>: <problem>`."""
 
 
 def load(code: str, extra_dirs=()) -> Table | None:
-    """The table for `code`: the toolkit's own first, then each extra dir; None when none has it."""
+    """The table for `code`: the toolkit's own first, then each extra dir; None when none has it, TableError when a
+    file is present but unreadable or malformed."""
     if not re.fullmatch(r"[a-z]{2,3}", code):
         return None
     yaml = require("yaml", "pyyaml")
@@ -73,10 +71,17 @@ def load(code: str, extra_dirs=()) -> Table | None:
         path = d / f"{code}.yaml"
         if path.is_file():
             try:
-                return _build(code, yaml.safe_load(path.read_text(encoding="utf-8")) or {})
-            except (OSError, KeyError, TypeError, re.error, yaml.YAMLError):
-                return None
-    return _build("en", _EN) if code == "en" else None
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                if not isinstance(data, dict):
+                    raise TypeError("the top level must be a mapping")
+                return _build(code, data)
+            except KeyError as e:
+                raise TableError(f"language table {path}: missing key {e.args[0]}") from None
+            except yaml.YAMLError as e:
+                raise TableError(f"language table {path}: {str(e).splitlines()[0] if str(e) else 'not valid YAML'}") from None
+            except (OSError, ValueError, TypeError, AttributeError, re.error) as e:
+                raise TableError(f"language table {path}: {e}") from None
+    return None
 
 
 def code(prd) -> str:
@@ -90,6 +95,29 @@ def pack_dirs(prd) -> list[Path]:
     return packs.languages_dirs(prd)
 
 
-def for_prd(prd) -> Table:
-    """The PRD's language table, or `en` when `language:` is absent or has no table."""
-    return load(code(prd), pack_dirs(prd)) or load("en")
+def problem(prd) -> str | None:
+    """Why the PRD's language table cannot be used, or None. A broken table file is named; `en` missing is a
+    problem too, since it backs every language without a table of its own."""
+    lang = code(prd)
+    if not re.fullmatch(r"[a-z]{2,3}", lang):
+        return None
+    try:
+        own = load(lang, pack_dirs(prd))
+        if own is None and lang != "en":
+            if load("en") is None:
+                return f"language table {toolkit_dir() / 'en.yaml'}: not found"
+            return f"language '{lang}' has no table"
+        if own is None:
+            return f"language table {toolkit_dir() / 'en.yaml'}: not found"
+    except TableError as e:
+        return str(e)
+    return None
+
+
+def for_prd(prd) -> Table | None:
+    """The PRD's language table, or `en` when `language:` has no table; None when no table can be used (the
+    language-table rule reports why, and the rules that need a table skip)."""
+    try:
+        return load(code(prd), pack_dirs(prd)) or load("en")
+    except TableError:
+        return None

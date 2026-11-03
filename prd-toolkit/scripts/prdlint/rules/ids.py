@@ -231,6 +231,8 @@ def fr_has_ac(prd: Prd):
 @rule("ac-ears")
 def ac_ears(prd: Prd):
     table = languages.for_prd(prd)
+    if table is None:
+        return
     head = table.opener()
     for b in prd.blocks:
         for ac in (a for a in b.acs if not a.removed):
