@@ -293,7 +293,7 @@ checked. **The `commit-msg` hook** applies the same form check when a trailer is
   fails the job; the job runs `check --ci`, which prints the unreachable side on exit 3 and passes. `prd_hooks.py` vendors
   `prd_links.py`, and the stale-CI check covers the new lines. In an upstream, the same job reads
   each reachable consumer's snapshot, so an upstream merge that breaks a cited item fails there too.
-- **Deploy pre-flight.** `prd_deploy.py run` refuses to start (exit 2, naming the drifted items)
+- **Deploy pre-flight.** `prd_deploy.py run` refuses to start (exit 1, naming the drifted items)
   when `prd_links.py check` exits 1. Exit 3 is reported and does not refuse. Drift between two members of
   an open change set does not refuse either: the run prints `drift allowed by <start-prd>/CS-nnn: <line>`
   for each such line, because an upstream's staging deploy precedes the downstream's re-lock.

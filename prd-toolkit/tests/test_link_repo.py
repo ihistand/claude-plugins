@@ -104,7 +104,7 @@ def test_unlinked_has_no_links_and_greet_deployed_to_staging(states):
     # the harness answers what a system test's dry run asks: what GREET's path is relative to, and an unset TEST_ENV
     switch = re.search(r"^- \*\*Environment switch\.\*\* .*$", (client / CLIENT_PRD / "testing.md").read_text(encoding="utf-8"), re.M)
     assert switch and "relative to the repository root" in switch.group(0) and "must be set" in switch.group(0), switch
-    feats ="".join(p.read_text(encoding="utf-8") for p in (client / CLIENT_PRD / "features").glob("*.md"))
+    feats = "".join(p.read_text(encoding="utf-8") for p in (client / CLIENT_PRD / "features").glob("*.md"))
     assert feats.count("Status: verified (since 1.0.0)") == 2 and "*** <greeting> ***" in feats
     # the client's deploy-gate system test passes against its own staging install, which runs greet's
     assert run(client, sys.executable, "scripts/deploy.py", "staging").returncode == 0
