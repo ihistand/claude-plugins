@@ -16,11 +16,12 @@ def test_descriptions_match_and_name_new_commands():
         assert cmd in plugin["description"]
 
 
-def test_versions_are_0_7_0():
+def test_versions_agree_and_are_semver():
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
     market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
     entry = next(p for p in market["plugins"] if p["name"] == "prd-toolkit")
-    assert plugin["version"] == entry["version"] == "0.7.0"
+    assert plugin["version"] == entry["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", plugin["version"])
 
 
 def test_web_description_matches():
@@ -33,3 +34,8 @@ def test_web_description_matches():
 def test_description_says_links_across_repositories():
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
     assert "links PRDs across repositories" in plugin["description"]
+
+
+def test_version_is_0_7_1():
+    plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
+    assert plugin["version"] == "0.7.2"

@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Version 0.7.0.
+repositories. Version 0.7.2.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -14,7 +14,8 @@ for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/su
 for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md),
 for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md),
 for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md),
-and for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md).
+for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md),
+and for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md).
 
 ## Install
 
@@ -80,6 +81,36 @@ map in `adoption.md`, and each area moves forward one state at a time:
 - **adopted:** only after a `prd-tester` suite where every T-id is `pass` or `known-failing E-nnn`,
   plus lint, the checklist, a dry run, `prd_trace.py` and the user's approval. Adoption changes no
   code. The first adopted area takes the PRD to `1.0.0`; each later area is a minor bump.
+
+### Confirming through the form
+
+Step 3 of adoption confirms an area through a local form, not a list of questions in the chat:
+
+```
+uv run --script .prd-toolkit/prd_confirm.py serve docs/prd/<slug> --area <area> [--summaries F] [--port N] [--no-open] [--idle-minutes N]
+uv run --script .prd-toolkit/prd_confirm.py status docs/prd/<slug> --area <area>
+```
+
+- `serve` builds the area's items: the as-built requirements, the open `E-nnn` entries that touch the
+  area, the area's section 13 questions, and the contract `[NEEDS CLARIFICATION]` markers the area
+  names. It serves them on `127.0.0.1` behind a random token and prints
+  `url=http://127.0.0.1:<port>/?token=...` as its first line. `--summaries` takes a JSON object of
+  item ID to a short text that cites its own ID; `--port` fixes the port (in use, or any other bind
+  error: exit 2); `--no-open` does not open the browser; `--idle-minutes` (default 120) ends an idle
+  server. Two items under one ID are refused (exit 2).
+- The page, `templates/confirm/form.html`, is one self-contained file that loads nothing. It shows one
+  item at a time with the list on the left. Keys: C confirms, R corrects, B marks a bug, S asks, and
+  the arrows move between items.
+- Each answer is saved as it is given to `.prd-confirm-<area>.json` at the repo root, with the item's
+  `where` and `served` text. Before anything else, `serve` adds the line `/.prd-confirm-*.json` to
+  `.git/info/exclude`, once. An item whose text changed since it was answered counts as open again.
+- `serve` ends with exit 0 when Done: every item answered and none changed since. It ends with exit 2 for
+  a usage error or a refusal, with `prd_confirm: <why>` on stderr, and with exit 3 when stopped without
+  Done (Ctrl-C, SIGTERM or the idle time).
+- `status` prints `<answered>/<total>` and one `open <ID>` line per open item, and exits 0 when it
+  prints and 2 on error.
+- Without a browser, the fallbacks are `AskUserQuestion` and then the checklist file. A headless run
+  leaves the area `extracted`, as before.
 
 ## Testing from the PRD
 
@@ -464,6 +495,14 @@ deploys run for any member from any session.
 A headless run registers only `prd-toolkit:<command>` (a bare `/prd-status` is not listed, as probed in
 0.7 on Claude Code 2.1.316): invoke `prd-toolkit:prd-change-set` and the other commands in that form.
 
+## Known limits (0.7.1)
+
+- The form has one owner at one machine: the server is local, and the answers are trusted to be that
+  owner's.
+- A plain-words correction is turned into acceptance-criteria text by the session after Done, not by
+  the form.
+- Only adoption step 3 uses the form; other confirmations keep their commands.
+
 ## Known limits (0.7)
 
 - A git URL location is read with your own credentials; CI without them gets exit 3, so CI catches a
@@ -498,6 +537,8 @@ the user cannot state.
 
 ## Changelog
 
+- **0.7.2:** Three fixes from the 0.7.1 acceptance run. The form now serves a clarification marker whose key a requirement's `Traces:` line names without backticks, when the word is an identifier with an underscore or in camelCase (`PRD_LINT_CI`, `maxSize`; a dotted or `kind:name` word names its last part). A prose word, an all-caps word, an ID such as `FR-001`, a version and a path part still name nothing, and backticks remain the sure way to name a key. A bare `settings.KEY` now names `KEY`, which 0.7.1 did not. The answers file's `prd` field holds the PRD's slug (it read the wrong frontmatter key and was empty). Every text box in the form now has a one-line hint: a bug's box asks for the behaviour you want, not the code fix, and a question's or a setting's box says what its answer needs. Upgrading from 0.7.1: re-run `prd_hooks.py install`, which vendors the fixed scripts and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.
+- **0.7.1:** `prd_confirm.py` and `templates/confirm/form.html`: adoption step 3 confirms an area's as-built requirements, open errors, questions and clarification markers through a local form, with answers saved as they are given (see Adopting an existing repo). `AskUserQuestion` and the checklist file remain the fallbacks. Upgrading from 0.7.0: re-run `prd_hooks.py install`, which vendors `prd_confirm.py` and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.
 - **0.7.0:**
   - `/prd-change-set` and the `coordinating-prds` skill: `links.md`, the pinned snapshot `contracts/upstream/<prd>/` and `prd_links.py` (`add`, `sync`, `check`, `impact`, `changeset`) link PRDs across repositories; one record, `changes/CS-nnn.md`, drives a change with one approval and a build per repository in dependency order (see Links and Change sets).
   - Four lint rules (`links-format`, `upstream-refs`, `snapshot-cited`, `change-sets`; 36 in all). `commit-refs` checks the `Change-set:` trailer. The generated `prd-lint` job runs `check --ci`, and the deploy pre-flight runs the link check. The interview asks about packaging.

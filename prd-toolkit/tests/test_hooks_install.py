@@ -299,6 +299,7 @@ def test_every_vendored_script_runs_from_the_vendored_copy(repo):
         "prd_block.py": [PRD, "--claude-md", "CLAUDE.md"], "prd_build_check.py": [PRD, "--diff", "HEAD..HEAD"],
         "prd_deploy.py": ["plan", PRD], "prd_drift.py": [PRD], "prd_hooks.py": ["check", PRD],
         "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"], "prd_error.py": ["list", PRD], "prd_links.py": ["check", PRD],
+        "prd_confirm.py": ["status", PRD, "--area", "none"],
     }
     assert set(calls) == set(hooks.VENDORED), set(hooks.VENDORED) ^ set(calls)
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
@@ -327,3 +328,26 @@ def test_vendored_prd_links_checks_a_linked_prd(repo):
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     r = subprocess.run([sys.executable, ".prd-toolkit/prd_links.py", "check", "--ci", PRD], cwd=repo, capture_output=True, text=True, env=env)
     assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_vendors_the_confirm_script_and_page(repo):
+    assert "prd_confirm.py" in hooks.VENDORED
+    files = hooks._source_files(hooks.SCRIPTS, hooks.PLUGIN_ROOT / "templates/hooks")
+    assert "prd_confirm.py" in files and "confirm/form.html" in files
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/confirm/form.html").read_bytes() == (PLUGIN_ROOT / "templates/confirm/form.html").read_bytes()
+    assert (repo / ".prd-toolkit/prd_confirm.py").is_file()
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+
+
+def test_check_reports_a_stale_vendored_confirm_page(repo):
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/confirm/form.html").write_text("old\n")
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/confirm/form.html differs from the plugin copy"]
+    (repo / ".prd-toolkit/confirm/form.html").unlink()
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/confirm/form.html is missing"]
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/confirm/extra.html").write_text("x\n")
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/confirm/extra.html is not in the plugin"]
+    hooks.install(repo, PRD)
+    assert not (repo / ".prd-toolkit/confirm/extra.html").exists()

@@ -216,6 +216,73 @@ requirement, as long as it answers each one. A reply that names no ID ("looks fi
 When nobody can answer (a headless run, no reply), stop and present the confirmations, and
 leave the area `extracted`.
 
+**The form.** Ask here first: the owner answers every item in a local page, not in the chat.
+Write `.prd-confirm-<area>-summaries.json` at the repository root, never inside the PRD folder or a
+test root, because the tester reads those folders. It is a JSON object mapping each item ID to one
+or two plain sentences that say what the item means to the business, each sentence contains its ID
+and is at most 400 characters. Run `prd_confirm.py status docs/prd/<slug> --area <area>` before
+you write the summaries: its `open <ID>` lines are the exact item IDs. They are `FR-nnn` for a
+requirement, `E-nnn` for an entry, `Q-nn` for a §13 question of the area, and for a marker
+`<file under contracts/>:<key path from the named key>`, where `#n` is the n-th marker in one
+value and `~n` a last-resort collision suffix. Start the form with the Bash tool's
+`run_in_background`, one command per Bash call, written with the `<scripts>` path above, never
+`${CLAUDE_PLUGIN_ROOT}`:
+`uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> --summaries .prd-confirm-<area>-summaries.json`.
+The `url=` line is the first line of its output: re-read the output until the `url=` line
+appears, give the owner that address as a clickable link, and wait for the completion notice:
+never poll for the exit and never sleep. Then by its exit code:
+
+- exit `0`: the owner pressed Done. Read `.prd-confirm-<area>.json`, then run
+  `prd_confirm.py status docs/prd/<slug> --area <area>`. Any `open <ID>` line is an item that
+  changed since it was answered, and a changed item is no answer: ask for that item again, through
+  serve again or a fallback below. Apply the answers of the other items, and write each into the
+  PRD as soon as you apply it, by its `decision`. `text` is the intended behaviour for `correct`
+  and `bug`, the person for `ask`, the answer for a question's `answer`, the value for a marker's
+  `answer`, and an optional note for `intended` and `fix`. `acs` (`correct` only) maps an AC ID to
+  its full new text, which replaces that AC verbatim. Each answer also records the item's `where`
+  and `served` text: find a marker by its `served` line in the contract file that `where` names.
+  - `confirm`: status `live (since <version>)`, the §11 row `live` with that Since.
+  - `correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`.
+  - `bug`: the `E-nnn` stays open, and the requirement is corrected to the intended behaviour, status
+    `approved`, its test cases revised to match.
+  - `bug` on a requirement that no open `E-nnn` touches: write a new `E-nnn` with
+    `Detected: <today>, confirmation of <FR-nnn>`, `Touches:` that FR, a Diagnosis taken from the
+    item and `Resolution: open, intended: <text>`; then correct the requirement to that behaviour.
+  - A `bug` or `ask` on an `E-nnn` overrides a `confirm` on any requirement the entry touches: that
+    requirement is `approved`, never `live`; on `bug` it is corrected to the entry's intended
+    behaviour, on `ask` it carries the assumption.
+  - `bug` on an `E-nnn` whose `Touches:` is `-`: the entry stays open as
+    `Resolution: open, intended: <text>` (an entry is open while its Resolution starts with
+    `open`), and no requirement changes.
+  - `ask`: status `approved`, an `[ASSUMPTION A-nn]` and a §12 `awaiting <who>` row, as above.
+  - `ask` on an `E-nnn`: the entry stays `Resolution: open`; §12 gets
+    `| A-nn | E-nnn: <the behaviour> is intended | awaiting <who> |`; every requirement the entry
+    touches is `approved`, never `live`, and carries
+    `[ASSUMPTION A-nn: <the behaviour>; <who> would confirm it]` on the AC the entry concerns.
+  - `intended`: the behaviour becomes requirement text, and the entry's Resolution names who
+    confirmed it and when.
+  - `intended` on a question: the behaviour it asks about is intended; write it as requirement text
+    of the requirement the bullet names, with the owner's note as the answer, and remove the §13
+    bullet; it is not a correction.
+  - `answer` on a question: the answer goes into the PRD. `fix` on a question: the requirement it
+    blocks becomes a correction; when `fix` carries no note and the intended behaviour is not
+    evident from the question, ask the owner for it in the chat, for that one item. `answer`, `fix`
+    and `intended` on a question each remove the §13 bullet. `answer` on a marker: the value
+    replaces the marker.
+
+  When every answer is applied, delete `.prd-confirm-<area>.json` and
+  `.prd-confirm-<area>-summaries.json`; both are never committed.
+- exit `3`: the owner stopped (Ctrl-C, SIGTERM or the idle timeout). Run `prd_confirm.py status docs/prd/<slug> --area <area>`,
+  say how many items are answered and that a new serve resumes them, and leave the area `extracted`.
+- exit `2`: a refusal, with `prd_confirm: <why>` on stderr. Delete
+  `.prd-confirm-<area>-summaries.json`, then fix what it names, write the summaries again and
+  serve again, or take a fallback.
+
+When the form cannot be served (a headless run, where nobody can open the URL, or the owner asks
+for another way), delete `.prd-confirm-<area>-summaries.json` and take the fallbacks:
+AskUserQuestion when the tool is available, otherwise the checklist file. A headless run stops
+with the area `extracted`.
+
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
 per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:
