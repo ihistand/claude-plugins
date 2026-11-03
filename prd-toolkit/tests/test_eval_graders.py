@@ -199,3 +199,42 @@ def test_the_version_graders_look_at_prd_md_only():
     assert _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": prd, "content": "---\nversion: 2.0.0\nupdated: x"})
     assert not _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": prd, "content": "---\nversion: 1.1.0\nupdated: x"})
     assert not _tool_input_counts("build-close-no-bump", "no-version-write", {"file_path": "/w/pkg.py", "content": "version: 2"})
+
+
+# --- 0.7.1: adopting-confirm-headless-fallback ---
+
+CONFIRM = "adopting-confirm-headless-fallback"
+
+
+def test_the_confirm_graders_catch_a_live_status_by_edit_or_write_and_pass_other_edits():
+    base = "/w/docs/prd/notes/features/notes.md"
+    live_edits = [{"file_path": base, "old_string": "Status: as-built", "new_string": "Status: live (since 1.0.0)"},
+                  {"file_path": "/w/docs/prd/notes/prd.md", "old_string": "x",
+                   "new_string": "| FR-001 | Add a note | live | features/notes.md | 1.0.0 |"}]
+    for ti in live_edits:
+        assert _tool_input_counts(CONFIRM, "no-edit-sets-live", ti), ti
+    for ti in ({"file_path": base, "old_string": "a", "new_string": "Status: as-built\nSource: x"},
+               {"file_path": base, "old_string": "a", "new_string": "Status: approved"}):
+        assert not _tool_input_counts(CONFIRM, "no-edit-sets-live", ti), ti
+    assert _tool_input_counts(CONFIRM, "no-write-sets-live", {"file_path": base, "content": "### FR-001\nStatus: live (since 1.0.0)\n"})
+    assert not _tool_input_counts(CONFIRM, "no-write-sets-live", {"file_path": base, "content": "Status: as-built\n"})
+    assert not _tool_input_counts(CONFIRM, "no-write-sets-live", {"file_path": "/w/.prd-confirm-notes.md", "content": "Status: live"})
+
+
+def test_the_confirm_file_graders_hold_on_the_extracted_start_repo_and_fail_on_a_confirmation(tmp_path):
+    import subprocess
+    import sys
+
+    dst = tmp_path / "repo"
+    subprocess.run([sys.executable, "-B", str(EVALS / "scaffolds/notes_repo.py"), str(dst), "extracted"], check=True, capture_output=True)
+    feature = (dst / "docs/prd/notes/features/notes.md").read_text(encoding="utf-8")
+    adoption = (dst / "docs/prd/notes/adoption.md").read_text(encoding="utf-8")
+    live = _grader(CONFIRM, "no-block-live")["pattern"]
+    extracted = _grader(CONFIRM, "area-stays-extracted")["pattern"]
+    assert feature.count("Status: as-built") == 2 and not re.search(live, feature)
+    assert re.search(live, feature.replace("Status: as-built", "Status: live (since 1.0.0)", 1))
+    assert re.search(extracted, adoption)
+    assert not re.search(extracted, adoption.replace("| notes | extracted |", "| notes | confirmed |"))
+    lint = subprocess.run([sys.executable, str(ROOT / "scripts/prd_lint.py"), str(dst / "docs/prd/notes")],
+                          capture_output=True, text=True)
+    assert lint.returncode == 0, lint.stdout + lint.stderr

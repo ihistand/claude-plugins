@@ -26,19 +26,19 @@ def section(text: str, title: str) -> str:
 
 def test_versions():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.7.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", plugin["version"])
     market = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
-    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == ["0.7.0"]
+    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == [plugin["version"]]
     js = (REPO / "web/src/data/plugins.js").read_text()
     block = js[js.index("id: 'prd-toolkit'"):]
-    assert "version: '0.7.0'" in block
+    assert f"version: '{plugin['version']}'" in block
     assert "/prd-change-set" in block and "coordinating-prds" in block
     assert SPEC_07.split("docs/superpowers/specs/")[1] in block
     assert "links PRDs across repositories" in plugin["description"] and "/prd-change-set" in plugin["description"]
 
 
 def test_readme_version_spec_link_and_rules():
-    assert "Version 0.7.0." in README
+    assert re.search(r"Version \d+\.\d+\.\d+\.", README)
     assert f"(../{SPEC_07})" in README and (REPO / SPEC_07).is_file()
     assert "a 36-rule linter" in flat(README) and "prints the 36 rules" in flat(README)
     assert "- **0.7.0:**" in README
