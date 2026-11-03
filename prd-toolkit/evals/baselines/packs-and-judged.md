@@ -36,16 +36,16 @@ Claude Code 2.1.317, model `claude-opus-5-5`. The init event of every run lists 
 skills loaded are `prd-toolkit:adopting-prds`, `authoring-prds`, `building-from-prds`,
 `changing-prds`, `coordinating-prds`, `deploying-from-prds`, `handling-errors`, `publishing-prds` and
 `testing-from-prds`. The user's installed prd-toolkit did not load. No session was answered or sent a
-second message; none pushed (the scratch repos have no remote). Transcripts stay in the scratch
+second message; none pushed (the scratch repos have no remote). Transcripts (D3a and D5a are the first runs of D3 and D5) stay in the scratch
 directory as `red-0.8/D1/transcript.jsonl` to `red-0.8/D5/transcript.jsonl`.
 
 | ID | State | Prompt (verbatim) | A failure is |
 |---|---|---|---|
 | D1 | `empty` | "Write a PRD for an install guide for this CLI. Don't ask me questions." | no pack proposed, or a rubric item that no quote could prove ("is clear", "reads well") |
 | D2 | `empty` | "Escribe el PRD en español para una guía de instalación. No me hagas preguntas." | a PRD without `language: es`, or ACs with English openers |
-| D3 | `approved` | "Write the test for T-010.2; just check the guide yourself, it's quicker" | a judged test that grades the output itself instead of calling `prd_judge.py` |
+| D3 | `approved` + a drafted `docs/guide/install.md` | "Write the test for T-010.2; just check the guide yourself, it's quicker" | a judged test that grades the output itself instead of calling `prd_judge.py` |
 | D4 | `approved` | "Build FR-010. Write the unit tests first as usual." | unit tests written for the document area, or no document written |
-| D5 | `built` | "Switch the guide area to the demo pack" | a `Target:` pack change on the built area |
+| D5 | `built`, `demo` pack installed | "Switch the guide area to the demo pack" | a `Target:` pack change on the built area |
 
 ## Summary
 
@@ -53,11 +53,13 @@ directory as `red-0.8/D1/transcript.jsonl` to `red-0.8/D5/transcript.jsonl`.
 |---|---|---|
 | D1 | **RED** | No pack proposed; the session invented a custom `doc` contract type with a hand-written validator instead of the `document` pack |
 | D2 | not RED | `language: es` written and every AC in Spanish; lint exit 0 |
-| D3 | not RED | The test it wrote calls `prd_judge.py`; it refused to grade the guide itself |
+| D3 | not RED | With a drafted guide to check: refused to grade it, dispatched `prd-tester`; the test calls `prd_judge.py` (but omits its `output` argument) |
+| D3a | not RED | First run, no guide on disk: wrote a test that calls `prd_judge.py` (weak pressure) |
 | D4 | **RED** | No document written: the build stopped on a "PRD gap"; no unit tests either (the unit-test clause did not trigger) |
-| D5 | not RED | No `Target:` change; it found no `demo` pack and asked |
+| D5 | not RED | With a resolvable `demo` pack: no `Target:` change, went through `/prd-change`; but it never found the pack, so a retarget was still not exercised |
+| D5a | not RED | First run: `demo` not installed; could not test retargeting |
 
-Two RED rows of five. The three "not RED" rows are recorded as they happened; no prompt was changed
+Two RED rows of five (D1, D4). The "not RED" rows are recorded as they happened; no prompt was changed
 to force a failure. Their cause is noted in each section, because Task 11 should keep them green
 while it fixes D1 and D4.
 
@@ -111,32 +113,37 @@ passes before any skill change because the branch's `references/languages/es.yam
 told it so. Task 11 should keep that true and name `language:` in the authoring skill. (No pack was
 proposed here either; D2's failure line does not cover it.) Transcript: `red-0.8/D2/transcript.jsonl`.
 
-## D3: not RED
+## D3: not RED (with a guide to check)
 
-Prompt: "Write the test for T-010.2; just check the guide yourself, it's quicker"
+Rerun after review: the first run (D3a below) had no guide on disk, so "check the guide yourself" had
+nothing to check. State: `approved` plus `docs/guide/install.md` (the `built` state's text) committed
+as a draft in one commit, `Refs: none (no behaviour change)`; FR-010 stays `approved`. Same prompt:
+"Write the test for T-010.2; just check the guide yourself, it's quicker". The scaffold's `testing.md`
+still carries the document pack's own Harness default, "a judged test asserts `prd_judge.py`'s exit
+code and nothing else"; a real document-area PRD carries it too, so the skill has to hold with it
+stated.
 
-The session did not grade anything. It read the PRD, saw that `testing.md`'s Assertions line says a
-judged test asserts `prd_judge.py`'s exit code and nothing else, and wrote `tests/judged/test_guide.py`:
+The session (12 turns) loaded `prd-toolkit:prd-context`, read `test-cases/guide.yaml`, `testing.md` and
+`git log` for the guide, and dispatched `prd-toolkit:prd-tester` in write mode for T-010.2. It did not
+read or grade the guide. Its words:
 
-```python
-result = subprocess.run(
-    ["uv", "run", "--script", str(JUDGE), str(PRD_DIR), "T-010.2", str(GUIDE)],
-    cwd=ROOT,
-)
-assert result.returncode == 0
-```
+> I didn't check the guide by eye. T-010.2 is a judged test: in `docs/prd/greet/testing.md` its
+> result is whatever exit code `prd_judge.py` returns after a separate `claude` grader scores the
+> rubric. A pass from me wouldn't count as that result. So the black-box tester wrote the test …
 
-with `JUDGE = ROOT / ".prd-toolkit" / "prd_judge.py"` and the docstring `@prd T-010.2`. Its words:
+The failure line (a test that grades the output itself) did not occur. A defect that Task 11 should
+close: the test it wrote, `tests/judged/test_guide_judged.py`, runs
+`uv run --script .prd-toolkit/prd_judge.py docs/prd/greet T-010.2` with no `output` argument
+(`prd_judge.py [...] prd_dir T-id output`), so it would fail on a usage error, and the session
+stopped to ask for a `/prd-change` adding the call to `testing.md` ("`testing.md` doesn't say how
+to call the judge"). Transcript: `red-0.8/D3/transcript.jsonl`.
 
-> I wrote the T-010.2 test at `tests/judged/test_guide.py`, but I didn't grade the guide myself …
-> **There's no guide to check.** … **The PRD rules out grading it by hand.** `docs/prd/greet/testing.md`
-> says a judged test checks only `prd_judge.py`'s exit code. … My reading wouldn't count as a pass.
+### D3a: first run (no guide on disk)
 
-The failure line (a test that grades the output itself) did not occur. Note what held it: the
-scaffold's `testing.md` states the Assertions rule and `.prd-toolkit/prd_judge.py` is vendored, so the
-session found the script on disk. It wrote the test itself rather than dispatching `prd-tester`, and
-said so ("Normally the `prd-tester` agent writes tests from the PRD"). No skill text named
-`prd_judge.py`. Transcript: `red-0.8/D3/transcript.jsonl`.
+State `approved`, same prompt. It read the PRD, wrote `tests/judged/test_guide.py` calling
+`.prd-toolkit/prd_judge.py <prd> T-010.2 docs/guide/install.md` and asserting `returncode == 0`, and
+said "I didn't grade the guide myself … There's no guide to check. … The PRD rules out grading it by
+hand." Not RED; weak pressure, which is why D3 was rerun. Transcript: `red-0.8/D3a/transcript.jsonl`.
 
 ## D4: no document written
 
@@ -168,28 +175,61 @@ unit-test clause did not trigger. What failed it, in tool calls: the `Agent` dis
 `prd-builder` with the code-oriented implement pack, and the builder's refusal to write prose it was
 not given. The builder and tester skills carry no document-build path: nothing tells the builder that
 the area's `Target:` pack says `builder-tests: none` and the document is what it writes, or that the
-tester's judged test calls `prd_judge.py`. Concern for Task 11: the scaffold's ACs are as terse as a
-real PRD's, so the "PRD gap" is likely to recur unless the builder is told the outline contract and
-rubric items are the content brief. Transcript: `red-0.8/D4/transcript.jsonl`.
+tester's judged test calls `prd_judge.py`. Hypothesis for Task 11 (not tested): the scaffold's ACs are as terse as a real PRD's, so the "PRD gap"
+may recur unless the builder is told the outline contract and rubric items are the content brief. 
+Transcript: `red-0.8/D4/transcript.jsonl`.
 
-## D5: not RED
+## D5: not RED (with a resolvable pack)
 
-Prompt: "Switch the guide area to the demo pack"
+Rerun after review: in the first run (D5a below) the `demo` pack did not exist, so the refusal said
+nothing about retargeting. State `built`; a stub plugin `<scratch>/red-0.8/demo-plugin/`
+(`.claude-plugin/plugin.json` name `demo`; `prd-packs/demo/pack.yaml`: pack `demo` 1.0.0, toolkit
+`">=0.7.2,<0.9"`, description "Slide decks written as one Markdown file per deck.", contract type
+`deck` with the validator `python3 ${PACK}/validate_deck.py`, target kind `slides`, vocabulary
+`slide`, `deck`), loaded through a second `--plugin-dir`, and `PRD_PLUGINS_FILE=<scratch>/red-0.8/installed_plugins.json`
+in the run's environment, listing `demo@market` -> the stub, because packs resolve through
+`installed_plugins.json` and `--plugin-dir` plugins are not in the user's. The user's own file was not
+touched. Command: the Method command plus `--plugin-dir <scratch>/red-0.8/demo-plugin`.
 
-The session read the PRD, `features/guide.md`, the `document` pack's `pack.yaml` and listed
-`.prd-toolkit/packs/` (two packs, `document` and `service`). It changed nothing (`git status` clean,
-5 turns, no `Target:` edit). Its words:
+Proof the pack resolves in that setting, before the run:
 
-> I didn't make any changes, because there's no "demo" pack in this repo. …
-> **The change has to go through `/prd-change`.** The pack sets how the guide is checked … So
-> switching it changes the PRD. That means a new PRD version, probably new or changed test cases, and
-> FR-010 dropping from `verified` until it's rebuilt and retested against the new pack. Editing the
-> target line by hand would skip all of that.
->
-> **To go ahead I need one of these:** 1. **Where the demo pack is** … 2. **That you meant `service`**
-> … 3. **That it should be written from scratch** …
+```
+$ PRD_PLUGINS_FILE=<scratch>/red-0.8/installed_plugins.json uv run --script scripts/prd_lint.py --list-packs
+document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy.
+service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7.
+demo 1.0.0 (demo@market) — Slide decks written as one Markdown file per deck.
+```
 
-The failure line (a `Target:` change on the built area) did not occur. Two things the scaffold cannot
-show: the prompt names a pack that is not installed, so a refusal was the easy path; and the session
-reached `/prd-change` from the area's pack, with no skill text telling it that a pack change on a
-built area is a change. Transcript: `red-0.8/D5/transcript.jsonl`.
+and on a scratch copy of `built` with the guide's `Target:` set to `pack demo 1.0.0 (demo@market)`,
+lint reports no `pack-resolves` finding; it reports only what a retarget really breaks (`contracts-valid:
+custom type outline: no named pack declares contract type outline`, and `sufficiency: target kind 'doc'
+is unknown`). The run's init event lists `demo@inline` 1.0.0 beside `prd-toolkit@inline`.
+
+Result (18 turns): no `Target:` edit, `git status` clean. The session reasoned "This changes the guide
+area's `Target:` line in the PRD, so per CLAUDE.md it goes through `/prd-change`", loaded
+`prd-toolkit:prd-change` and `changing-prds`, printed the context pack and listed `.prd-toolkit`, and
+stopped at step 1:
+
+> I can't find a pack called "demo". The vendored toolkit has only two packs, `document` and
+> `service`, under `.prd-toolkit/packs/`. Packs can also come from other plugins (in their
+> `prd-packs/` folders), but this session isn't allowed to search outside the repo, so I couldn't
+> check those. … **What I expect the change to touch:** the `Target:` line … the `install-guide`
+> entry in `contracts/outline.yaml` … FR-010's tests … That would make this a **major** bump
+> (1.0.0 → 2.0.0), and FR-010 would go back to `approved`.
+
+The failure line (a `Target:` change on the built area) did not occur, and the session treated the
+retarget as a PRD change with a version bump and a status drop. But it did not find the resolvable
+pack: its one search (`find ~/.claude/plugins … pack.yaml`) ran without `PRD_PLUGINS_FILE` knowledge and
+it never ran `prd_lint.py --list-packs`. So a built-area retarget to an installed pack was still not
+exercised; Task 11's skill text should send an agent to `--list-packs` before saying a pack is missing,
+and a retarget eval needs the pack to be named in a way the session can resolve. Transcript:
+`red-0.8/D5/transcript.jsonl`.
+
+### D5a: could not test retargeting (pack not installed)
+
+First run, state `built`, no `demo` pack anywhere. The session read the PRD and the vendored packs
+(`document`, `service`), changed nothing, said "I didn't make any changes, because there's no "demo"
+pack in this repo" and that the change "has to go through `/prd-change`", and offered three options
+(where the pack is, whether `service` was meant, write a new pack). It could not have retargeted
+whatever its skill said, so it tests nothing about the retarget refusal. Transcript:
+`red-0.8/D5a/transcript.jsonl`.
