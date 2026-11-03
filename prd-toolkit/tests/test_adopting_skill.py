@@ -284,7 +284,7 @@ def test_the_form_is_served_in_the_background_one_command_per_call_never_with_th
     assert "`run_in_background`" in f and "one command per Bash call" in f
     assert "first line of its output" in f and "`url=`" in f
     assert "clickable link" in f
-    assert "never poll it and never sleep" in f
+    assert "never poll for the exit and never sleep" in f
     assert "never `${CLAUDE_PLUGIN_ROOT}`" in f
 
 
@@ -358,3 +358,65 @@ def test_each_field_of_an_answer_is_named():
     assert "`acs` (`correct` only) maps an AC ID to its full new text, which replaces that AC verbatim" in f
     after = f.split("exit `0`", 1)[1].split("exit `3`", 1)[0]
     assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
+
+
+# ---- final-review fix ----
+
+def test_a_bug_answer_with_no_entry_or_no_touches_and_an_entry_overriding_a_confirm():
+    f = form_part()
+    assert ("`bug` on a requirement that no open `E-nnn` touches: write a new `E-nnn` with "
+            "`Detected: <today>, confirmation of <FR-nnn>`, `Touches:` that FR, a Diagnosis taken from the item and "
+            "`Resolution: open, intended: <text>`; then correct the requirement to that behaviour") in f
+    assert ("A `bug` or `ask` on an `E-nnn` overrides a `confirm` on any requirement the entry touches: that "
+            "requirement is `approved`, never `live`; on `bug` it is corrected to the entry's intended behaviour, on "
+            "`ask` it carries the assumption") in f
+    assert ("`bug` on an `E-nnn` whose `Touches:` is `-`: the entry stays open as `Resolution: open, intended: <text>` "
+            "(an entry is open while its Resolution starts with `open`), and no requirement changes") in f
+
+
+ENTRIES = ("\n### E-002 Blank rows are imported\nDetected: 2026-11-03, confirmation of FR-001\nTouches: FR-001\n"
+           "Diagnosis: the importer keeps a blank row\nResolution: open, intended: the importer skips blank rows\n"
+           "\n### E-003 Slow import\nDetected: 2026-11-03, review\nTouches: -\nDiagnosis: no index\n"
+           "Resolution: open, intended: an import of 10k rows takes under a second\n")
+
+
+def test_the_intended_behaviour_field_lints_clean_and_keeps_the_entry_open(prd):
+    from conftest import lint
+    from prdlint import model
+
+    (prd / "errors.md").write_text((prd / "errors.md").read_text() + ENTRIES)
+    assert lint(prd) == []
+    led = model.load(prd).errors_ledger
+    assert led["E-002"].open and led["E-003"].open
+
+
+def test_how_to_find_an_item_again_and_learn_its_id():
+    f = form_part()
+    assert ("Run `prd_confirm.py status docs/prd/<slug> --area <area>` before you write the summaries: its "
+            "`open <ID>` lines are the exact item IDs") in f
+    assert ("`<file under contracts/>:<key path from the named key>`, where `#n` is the n-th marker in one value and "
+            "`~n` a last-resort collision suffix") in f
+    assert ("Each answer also records the item's `where` and `served` text: find a marker by its `served` line in "
+            "the contract file that `where` names") in f
+    assert f.index("before you write the summaries") < f.index("run_in_background")
+
+
+def test_the_summaries_file_is_deleted_on_exit_two_and_on_a_fallback():
+    f = form_part()
+    two = f.split("exit `2`", 1)[1]
+    assert "Delete `.prd-confirm-<area>-summaries.json`, then fix what it names" in two
+    assert "delete `.prd-confirm-<area>-summaries.json` and take the fallbacks" in two
+
+
+def test_fix_with_no_note_asks_and_every_question_answer_removes_its_bullet():
+    f = form_part()
+    assert ("when `fix` carries no note and the intended behaviour is not evident from the question, ask the owner "
+            "for it in the chat, for that one item") in f
+    assert "`answer`, `fix` and `intended` on a question each remove the §13 bullet" in f
+
+
+def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
+    f = form_part()
+    assert "re-read the output until the `url=` line appears" in f
+    assert "never poll for the exit and never sleep" in f
+    assert "never poll it and never sleep" not in f
