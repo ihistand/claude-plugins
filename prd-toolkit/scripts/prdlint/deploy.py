@@ -25,7 +25,7 @@ except ImportError:  # Windows
 from . import registry, trace
 from .buildcheck import _resolve, _show
 from .markdown import sections
-from .model import Prd, Step, gate_of, load, production_envs
+from .model import CHANGES_DIR, ChangeSet, Prd, Step, _CS_FILE, _change_set, gate_of, load, production_envs
 from .trace import BadRange
 
 EXIT = {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
@@ -67,8 +67,41 @@ def plan_steps(prd: Prd, until: str | None) -> list[Step]:
     return cut
 
 
-def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
-    """Reasons a run must not start; empty when clear."""
+def _open_change_sets(prd: Prd, repo_root: Path) -> list[tuple[str, set[str]]]:
+    """(`<start-prd>/CS-nnn`, its member slugs) of each open record (Status not done or abandoned) whose rows name this
+    PRD: under its own changes/, and under docs/prd/*/changes/ in each path Location of links.md (Where to enter's
+    lookup), read from the working tree."""
+    from . import links  # lazy, as in preflight
+    me = prd.frontmatter.get("prd", "")
+    found: list[tuple[str, ChangeSet]] = [(c.id, c) for c in prd.change_sets.values()]
+    seen = {prd.root.resolve()}
+    for row in (prd.links.upstreams + prd.links.consumers) if prd.links else []:
+        try:
+            loc = links.parse_location(row.location)
+        except ValueError:
+            continue
+        if loc.path is None:
+            continue
+        for folder in sorted((repo_root / loc.path / "docs/prd").glob("*/")):
+            if folder.resolve() in seen or not (folder / CHANGES_DIR).is_dir():
+                continue
+            seen.add(folder.resolve())
+            for p in sorted((folder / CHANGES_DIR).glob("CS-*.md")):
+                if _CS_FILE.fullmatch(p.name):
+                    found.append((p.stem, _change_set(f"{CHANGES_DIR}/{p.name}", p.read_text(encoding="utf-8"))))
+    out = []
+    for cid, cs in found:
+        members = {r.prd for r in cs.rows}
+        if cs.status in ("done", "abandoned") or me not in members:
+            continue
+        start = cs.started.rpartition(" in ")[2].strip() or me
+        out.append((f"{start}/{cid}", members))
+    return out
+
+
+def preflight(prd: Prd, repo_root: Path, until: str | None = None, notes: list[str] | None = None) -> list[str]:
+    """Reasons a run must not start; empty when clear. Drift between members of an open change set (R-13a) is no
+    reason: each such check line goes to `notes` as `drift allowed by <start-prd>/CS-nnn: <line>`."""
     reasons: list[str] = []
     if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
         reasons.append("the tracked tree has changes")
@@ -83,8 +116,18 @@ def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
         from . import links  # lazy: links imports git machinery a plain deploy does not need
         lines = links.check(prd)
         if links.check_exit(lines) == 1:  # exit 3 (unreachable only) adds nothing; the run's report prints that line
-            drift = [f"{x.name} {x.item}" if x.item else f"{x.side} {x.name}" for x in lines if x.verdict in links.DRIFT or x.verdict.startswith("needs env ")]
-            reasons.append("prd_links check found drift: " + ", ".join(dict.fromkeys(drift)))
+            drifted = [x for x in lines if x.verdict in links.DRIFT or x.verdict.startswith("needs env ")]
+            sets = _open_change_sets(prd, repo_root)
+            kept = []
+            for x in drifted:
+                by = next((cid for cid, members in sets if x.name in members), None)
+                if by is None:
+                    kept.append(x)
+                elif notes is not None:
+                    notes.append(f"drift allowed by {by}: {x}")
+            drift = [f"{x.name} {x.item}" if x.item else f"{x.side} {x.name}" for x in kept]
+            if drift:
+                reasons.append("prd_links check found drift: " + ", ".join(dict.fromkeys(drift)))
     if any(s.env in production_envs(prd) for s in plan_steps(prd, until)):
         # trace lets a verified block lack deploy-gate citations, but `live` needs every one: such a run cannot close
         cited = trace.citations(prd, repo_root)

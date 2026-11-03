@@ -28,6 +28,68 @@ def test_preflight_refuses_on_drift(tmp_path):
     assert drift_reasons(reports) == ["prd_links check found drift: orders op:deleteOrder, orders table:orders"]
 
 
+def _record(folder, status, members, number="001"):
+    """A change-set record under `folder`/changes/ with one row per member slug (the first is where it started)."""
+    rows = "".join(f"| {i} | {m} | `.` | cs-{number}-x | 1.0.0 | — | — | verified | approved |\n" for i, m in enumerate(members, 1))
+    (folder / "changes").mkdir(exist_ok=True)
+    (folder / "changes" / f"CS-{number}.md").write_text(
+        f"# CS-{number} x\n\nStarted: 2026-11-02 in {members[0]}\nStatus: {status}\n\n"
+        "| Order | PRD | Location | Branch | Version | IDs | Waits for | Target | State |\n|---|---|---|---|---|---|---|---|---|\n"
+        f"{rows}\n## Log\n\n- 2026-11-02 started\n", encoding="utf-8")
+
+
+def preflight_with_notes(reports):
+    notes: list[str] = []
+    reasons = [r for r in deploy.preflight(model.load(rp(reports)), reports, notes=notes) if r.startswith("prd_links")]
+    return reasons, notes
+
+
+ALLOWED = ["drift allowed by orders/CS-001: upstream orders table:orders: changed",
+           "drift allowed by orders/CS-001: upstream orders op:deleteOrder: removed"]
+
+
+def test_preflight_lets_drift_through_between_members_of_an_open_change_set(tmp_path):
+    """R-13a (F-3): the upstream's record, found through links.md, lists both PRDs; the drift is reported, not refused."""
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), "running", ["orders", "reports"])
+    reasons, notes = preflight_with_notes(reports)
+    assert reasons == [] and sorted(notes) == sorted(ALLOWED), (reasons, notes)
+
+
+def test_preflight_lets_drift_through_with_its_own_record(tmp_path):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(rp(reports), "approved", ["reports", "orders"])
+    reasons, notes = preflight_with_notes(reports)
+    assert reasons == [] and sorted(notes) == sorted(n.replace("orders/CS-001", "reports/CS-001") for n in ALLOWED), notes
+
+
+@pytest.mark.parametrize("status", ["done", "abandoned"])
+def test_preflight_refuses_drift_when_the_record_is_closed(tmp_path, status):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), status, ["orders", "reports"])
+    reasons, notes = preflight_with_notes(reports)
+    assert reasons == ["prd_links check found drift: orders op:deleteOrder, orders table:orders"] and notes == []
+
+
+@pytest.mark.parametrize("members", [["orders", "dashboards"], ["reports", "dashboards"]])
+def test_preflight_refuses_drift_when_a_side_is_not_a_member(tmp_path, members):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), "running", members)
+    reasons, notes = preflight_with_notes(reports)
+    assert reasons == ["prd_links check found drift: orders op:deleteOrder, orders table:orders"] and notes == []
+
+
+def test_preflight_refuses_drift_with_no_record(tmp_path):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    reasons, notes = preflight_with_notes(reports)
+    assert reasons == ["prd_links check found drift: orders op:deleteOrder, orders table:orders"] and notes == []
+
+
 def test_preflight_passes_on_unreachable(tmp_path):
     orders, reports = synced(tmp_path)
     (orders.parent / "orders").rename(orders.parent / "moved")
@@ -143,3 +205,26 @@ def test_status_check_error_is_shown(tmp_path):
     links_md.write_text(links_md.read_text(encoding="utf-8").replace("| orders | `../orders` |", "| reports | `../orders` |", 1), encoding="utf-8")
     up = part(_items(reports), "Upstreams")
     assert up and ", check: error (a PRD cannot link to itself)" in up[0], up
+
+
+def test_a_run_prints_each_drift_line_it_let_through(tmp_path, monkeypatch, capsys):
+    """R-13a: the run's report shows every let-through line before the run starts."""
+    import prd_deploy
+
+    orders, reports = synced(tmp_path)
+
+    def fake_preflight(prd, root, until=None, notes=None):
+        notes.append("drift allowed by orders/CS-001: upstream orders table:orders: changed")
+        return []
+
+    class Started(Exception):
+        pass
+
+    def stop(*a, **k):
+        raise Started
+
+    monkeypatch.setattr(deploy, "preflight", fake_preflight)
+    monkeypatch.setattr(deploy, "new_run_id", stop)
+    with pytest.raises(Started):
+        prd_deploy._new_run(type("A", (), {"until": None, "timeout": 60})(), model.load(rp(reports)), reports, [])
+    assert capsys.readouterr().out == "drift allowed by orders/CS-001: upstream orders table:orders: changed\n"

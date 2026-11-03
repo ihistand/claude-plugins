@@ -149,9 +149,12 @@ def _resume(args, prd: model.Prd, repo_root) -> int:
 
 
 def _new_run(args, prd: model.Prd, repo_root, steps) -> int:
-    reasons = deploy.preflight(prd, repo_root, args.until)
+    notes: list[str] = []
+    reasons = deploy.preflight(prd, repo_root, args.until, notes=notes)
     if reasons:
         raise deploy.Refused(reasons)
+    for note in notes:  # drift between members of an open change set, let through (R-13a)
+        print(note, flush=True)
     run_id = deploy.new_run_id(repo_root, args.until)
     try:
         deploy.start_run(prd, repo_root, run_id, args.until)

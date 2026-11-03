@@ -24,6 +24,7 @@
 > - §6, §15, §13 Q2 (execution, R-11c): one record drives a change set. Record writes, `impact`, `sync`, `check` and deploys run for any member from any session. A dry run and a build dispatch agents whose worktree and guard bind to the session's own repository, so they run in a session started in that member's root. This revises §6's "one session drives it all", §15's "One session drives a change set", and Q2's pass line, which now allows a resume per member.
 > - §9 (execution, R-11d): `prd-builder` carries the `Change-set:` trailer on its commits when the dispatch passes one.
 > - §6 (execution, R-11e): a session never begins a member's step 2 that it cannot finish. For a member that is not the session's repository it logs the stop and stops before editing, and that member's own session runs the whole of step 2 for its row.
+> - §8 (proof, R-13a): the deploy pre-flight lets a drift line through when an open change-set record (Status not `done` or `abandoned`, under the PRD's own `changes/` or in a member repository its links point to, as **Where to enter** finds it) lists both this PRD and the drifting side as members, and the run's report prints each such line as `drift allowed by <start-prd>/CS-nnn: <line>`. Any other drift still refuses. `prd_links.py check` is unchanged, so CI still reports it; production deploys follow the merges in Merge order, when the consumer's default branch holds the re-lock.
 
 ## 1. Scope
 
@@ -293,7 +294,9 @@ checked. **The `commit-msg` hook** applies the same form check when a trailer is
   `prd_links.py`, and the stale-CI check covers the new lines. In an upstream, the same job reads
   each reachable consumer's snapshot, so an upstream merge that breaks a cited item fails there too.
 - **Deploy pre-flight.** `prd_deploy.py run` refuses to start (exit 2, naming the drifted items)
-  when `prd_links.py check` exits 1. Exit 3 is reported and does not refuse.
+  when `prd_links.py check` exits 1. Exit 3 is reported and does not refuse. Drift between two members of
+  an open change set does not refuse either: the run prints `drift allowed by <start-prd>/CS-nnn: <line>`
+  for each such line, because an upstream's staging deploy precedes the downstream's re-lock.
 - **`/prd-status`.** Upstreams (lock, Needs, the verdict counts of `check`, for a path location only; a git URL location shows `check: not run`), Consumers, and
   each record under `changes/` that is not `done` or `abandoned`, with its rows' States.
 - **`prd_context.py`.** A task whose `Touches:` or test cases cite a `<prd>/` reference gets the
