@@ -65,13 +65,13 @@
     Q2a after the `impact` lines and the proposed members were shown.
   - `approved`, in Q2d: Q2c resumed, after both members' PRD diffs were shown together. This is the one approval
     of CS-001.
-  - **Driver-originated, for the owner to ratify:** in Q2g, resuming Q2f after its build stopped on the PRD
+  - **Driver-originated, ratified by the owner on 2026-11-03:** in Q2g, resuming Q2f after its build stopped on the PRD
     contradiction: "The banner is `*** <greeting>, <name>! ***`, built from the JSON's `greeting` and `name`, so
     T-001.1's `*** Hi, World! ***` is right. Amend AC-001.1, AC-001.2 and the glossary to say so." (R-6)
     - The driver chose this banner text, not the owner. It is the scaffold's intended text, and it settles a
       contradiction in a PRD the owner had approved.
     - It is not the owner's own wording.
-  - **Driver-originated in part, for the owner to ratify:** in Q2h, resuming Q2g after the amendment's diff and
+  - **Driver-originated in part, ratified by the owner on 2026-11-03:** in Q2h, resuming Q2g after the amendment's diff and
     dry run were shown: "approved; remove the stale tests/system/test_welcome_staging.py and discard the old
     builder branch". The `approved` is the amendment's own approval.
     - The driver added the two deletions. The session had only mentioned them as options; it had not asked for
@@ -147,7 +147,7 @@
   - The driver originated the answer, not the owner, and it is not the owner's own wording. It is the scaffold's
     own text for this change. `link_repo.py`'s `CLIENT_JSON_AC` reads "print
     `*** <greeting>, <name>! ***` from the `greeting` and `name` of its JSON output".
-  - The owner approved the contradicted PRD, so the owner should ratify this choice.
+  - The owner approved the contradicted PRD and ratified this choice on 2026-11-03.
   - The fix went through step 5's amendment: edit, dry run, its diff shown, and approved alone.
 - **R-13a (controller, F-3).** The deploy pre-flight lets a drift line through when an open record (Status not
   `done` or `abandoned`, under the PRD's own `changes/` or in a repository its links point to) lists both this PRD
