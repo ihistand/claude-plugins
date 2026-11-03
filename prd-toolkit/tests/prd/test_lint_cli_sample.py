@@ -56,9 +56,8 @@ def test_t007_4_no_non_unit_case(tmp_path, monkeypatch):
     assert r.stderr == "prd_lint: no non-unit T-ids to sample\n"
 
 
-@pytest.mark.xfail(strict=True, reason="E-006")
 def test_t007_5_no_level_or_uppercase_level_not_sampled(tmp_path, monkeypatch):
-    """@prd T-007.5 known-failing E-006"""
+    """@prd T-007.5"""
     root = s0(tmp_path, monkeypatch)
     (root / "test-cases" / "odd.yaml").write_bytes(b"T-009.1: plain text\nT-009.2: {level: Unit}\n")
     r = run(["--sample-tids", "99", "docs/prd/orders"], cwd=tmp_path)
