@@ -26,7 +26,7 @@ def prd_repo(tmp_path, monkeypatch):
     git(tmp_path, "init", "-q")
     shutil.copytree(FIXTURE, tmp_path / "docs/prd/orders")
     (tmp_path / "tests/unit").mkdir(parents=True)
-    (tmp_path / "tests/unit/test_import.py").write_text('def test_a():\n    """@prd T-001.1"""\n')
+    (tmp_path / "tests/unit/test_import.py").write_text('def test_a():\n    """@' 'prd T-001.1"""\n')
     return tmp_path
 
 

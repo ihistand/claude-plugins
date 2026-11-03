@@ -150,10 +150,10 @@ def test_the_builder_graders_see_the_callers_close_but_not_a_prd_edit():
 def test_the_tester_file_graders_catch_a_unit_case_in_it_and_pass_the_testers_own_edits():
     t = "/w/tests/test_notes.py"
     for name in ("no-tester-file-edit", "no-tester-file-write"):
-        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@prd T-003.1"""'})
-        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "content": '"""@prd T-003.1"""'})
-        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@prd T-003.2"""'})
-        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": "/w/tests/test_notes_unit.py", "content": '"""@prd T-003.1"""'})
+        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@' 'prd T-003.1"""'})
+        assert _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "content": '"""@' 'prd T-003.1"""'})
+        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": t, "old_string": "a", "new_string": '"""@' 'prd T-003.2"""'})
+        assert not _tool_input_counts("builder-stays-out-of-prd", name, {"file_path": "/w/tests/test_notes_unit.py", "content": '"""@' 'prd T-003.1"""'})
 
 
 def test_the_file_graders_hold_on_the_start_repo_and_catch_a_reworded_ac(tmp_path):

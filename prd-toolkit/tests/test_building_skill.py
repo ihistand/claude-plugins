@@ -187,7 +187,7 @@ def test_procedure_close_moves_block_and_index_row_together():
 def test_failure_1_builder_writes_the_testers_tests():
     t = flat(SKILL)
     assert "A test in your diff for a T-id that is not on your `Unit T-ids:` list" in t
-    assert "add the integration test (with the `@prd T-003.2` docstring) and rerun" in t  # the caller's version
+    assert "add the integration test (with the `@" "prd T-003.2` docstring) and rerun" in t  # the caller's version
     assert "| \"I'll write the integration test too, it's quicker.\" |" in t
 
 
