@@ -211,14 +211,15 @@ def test_plugin_pack_found_through_the_plugins_file(prd, tmp_path, monkeypatch):
     assert (pack.name, pack.version, pack.source, pack.root) == ("demo", "1.0.0", "demo@test", install / "prd-packs/demo")
 
 
-def test_pack_not_found_names_three_places(prd, tmp_path, monkeypatch):
+def test_plugin_pack_not_found_names_only_the_plugin(prd, tmp_path, monkeypatch):
+    """R13: a plugin source looks in that plugin only; no .prd-toolkit/, so no vendored place."""
     install = tmp_path / "My Plugins/demo"
     install.mkdir(parents=True)
     monkeypatch.setenv("PRD_PLUGINS_FILE", str(plugins_file(tmp_path, {"demo@test": install})))
     _s1(prd, "- Pack: demo 1.0.0 (demo@test)")
     n = _line(prd, "prd.md", "- Pack: demo 1.0.0 (demo@test)")
     assert _found(prd) == [f"prd.md:{n}: pack-resolves: pack demo 1.0.0 (demo@test) not found; looked in: "
-                           f"{prd}/.prd-toolkit/packs/demo/, {TOOLKIT_PACKS}/demo/, {install}/prd-packs/demo/"]
+                           f"{install}/prd-packs/demo/"]
     assert packs.pack_for(model.load(prd), None) is None
 
 
@@ -226,15 +227,43 @@ def test_pack_not_found_when_the_plugin_is_not_installed(prd):
     _s1(prd, "- Pack: demo 1.0.0 (demo@test)")
     with pytest.raises(packs.PackNotFound) as e:
         packs.resolve(model.load(prd).pack_ref, prd)
-    assert len(e.value.looked) == 3 and e.value.looked[2] == "plugin demo@test (not installed)"
+    assert e.value.looked == ["plugin demo@test (not installed)"]
+
+
+def test_vendored_place_listed_only_when_the_repo_vendors(prd, tmp_path):
+    _git_init(tmp_path)
+    (tmp_path / ".prd-toolkit").mkdir()
+    _s1(prd, "- Pack: demo 1.0.0 (demo@test)")
+    with pytest.raises(packs.PackNotFound) as e:
+        packs.resolve(model.load(prd).pack_ref, tmp_path)
+    assert e.value.looked == [f"{tmp_path}/.prd-toolkit/packs/demo/", "plugin demo@test (not installed)"]
+
+
+def test_a_plugin_source_never_resolves_to_a_builtin(prd, tmp_path):
+    """R13: `service 1.0.0 (demo@test)` is not the built-in service, and its source is never rewritten."""
+    _s1(prd, "- Pack: service 1.0.0 (demo@test)")
+    with pytest.raises(packs.PackNotFound) as e:
+        packs.resolve(model.load(prd).pack_ref, tmp_path)
+    assert e.value.looked == ["plugin demo@test (not installed)"]
+    n = _line(prd, "prd.md", "- Pack: service 1.0.0 (demo@test)")
+    assert _found(prd) == [f"prd.md:{n}: pack-resolves: pack service 1.0.0 (demo@test) not found; looked in: "
+                           "plugin demo@test (not installed)"]
+
+
+def test_a_builtin_source_never_consults_plugins(prd, tmp_path, monkeypatch):
+    install = _demo_plugin(tmp_path, monkeypatch)
+    ref = PackRef("demo", "1.0.0", "prd-toolkit", "prd.md", 1)
+    with pytest.raises(packs.PackNotFound) as e:
+        packs.resolve(ref, tmp_path)
+    assert e.value.looked == [f"{TOOLKIT_PACKS}/demo/"]
+    assert (install / "prd-packs/demo/pack.yaml").is_file()
 
 
 def test_pack_at_another_version_is_not_a_hit(prd, tmp_path, monkeypatch):
     install = _demo_plugin(tmp_path, monkeypatch, version="1.0.0")
     _s1(prd, "- Pack: demo 1.1.0 (demo@test)")
     (msg,) = _found(prd)
-    assert msg.endswith(f"pack demo 1.1.0 (demo@test) not found; looked in: {prd}/.prd-toolkit/packs/demo/, "
-                        f"{TOOLKIT_PACKS}/demo/, {install}/prd-packs/demo/ (holds 1.0.0)")
+    assert msg.endswith(f"pack demo 1.1.0 (demo@test) not found; looked in: {install}/prd-packs/demo/ (holds 1.0.0)")
 
 
 def test_vendored_version_differs(prd, tmp_path, monkeypatch):

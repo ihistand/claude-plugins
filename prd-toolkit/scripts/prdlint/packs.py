@@ -254,37 +254,46 @@ def _peek_version(folder: Path) -> str | None:
     return v if isinstance(v, str) else None
 
 
+def _plugin_candidates(source: str) -> tuple[list[Path], str | None]:
+    """The prd-packs/ folders of plugin `source`'s installs, or ([], why) when it has none to look in."""
+    installs = installed_plugins().get(source)
+    paths = [p / PLUGIN_PACKS for p in _install_paths(installs or [])]
+    if paths:
+        return paths, None
+    return [], f"plugin {source} ({'not installed' if installs is None else 'no installPath'})"
+
+
 def resolve(ref: PackRef, repo_root: Path, vendored: bool = True) -> Pack:
-    """The pack `ref` names: the vendored copy (the only candidate when it exists), the toolkit's own packs/, then the
-    plugin `ref.source`'s prd-packs/. A version of None (the service default) takes the first hit, unlocked."""
+    """The pack `ref` names (spec section 4): the vendored copy when the repository has .prd-toolkit/ (the only
+    candidate once it holds the pack), then the toolkit's own packs/ for source prd-toolkit, or the prd-packs/ of plugin
+    `<plugin>@<marketplace>` for any other source. A version of None (the service default) takes the first hit,
+    unlocked. PackNotFound lists only the places looked in."""
     looked: list[str] = []
     vend = Path(repo_root) / VENDOR_DIR / "packs" / ref.name
-    if vendored:
+    if vendored and (Path(repo_root) / VENDOR_DIR).is_dir():
         if (vend / MANIFEST).is_file():
             have = _peek_version(vend)
             if ref.version is not None and have != ref.version:
                 raise PackMismatch(ref.name, have or "(no version)", ref.version)
             return load_manifest(vend, ref.source)
         looked.append(f"{vend}/")
-    candidates = [(toolkit_packs_dir() / ref.name, BUILT_IN)]
-    if ref.source != BUILT_IN:
-        installs = installed_plugins().get(ref.source)
-        paths = _install_paths(installs or [])
-        if not paths:
-            looked_plugin = f"plugin {ref.source} ({'not installed' if installs is None else 'no installPath'})"
-        candidates += [(p / PLUGIN_PACKS / ref.name, ref.source) for p in paths]
-    for folder, source in candidates:
-        if vendored and folder.resolve() == vend.resolve():
-            continue  # running vendored: the toolkit's own packs/ is the vendored copy, already looked at
+    if ref.source == BUILT_IN:
+        bases, missing = [toolkit_packs_dir()], None
+    else:
+        bases, missing = _plugin_candidates(ref.source)
+    for base in bases:
+        folder = base / ref.name
+        if looked and looked[0] == f"{vend}/" and folder.resolve() == vend.resolve():
+            continue  # running vendored: the toolkit's own packs/ is the vendored folder, already looked in
         if (folder / MANIFEST).is_file():
             have = _peek_version(folder)
             if ref.version is None or have == ref.version:
-                return load_manifest(folder, source)
+                return load_manifest(folder, ref.source)
             looked.append(f"{folder}/ (holds {have})")
         else:
             looked.append(f"{folder}/")
-    if ref.source != BUILT_IN and not paths:
-        looked.append(looked_plugin)
+    if missing:
+        looked.append(missing)
     raise PackNotFound(ref, looked)
 
 
