@@ -354,11 +354,43 @@ def test_corrupt_answers_file_midrun_is_500_and_kept(live):
 
 def test_unauthenticated_requests_do_not_keep_server_alive(live):
     lv = live(idle_minutes=0.03)  # 1.8 s
-    end = time.monotonic() + 6
-    while lv.thread.is_alive() and time.monotonic() < end:
-        lv.call("/items", token=False)
+    start = time.monotonic()
+    while lv.thread.is_alive() and time.monotonic() - start < 6:
+        try:
+            req = urllib.request.Request(f"{lv.base}/items")
+            urllib.request.urlopen(req, timeout=0.5)
+        except urllib.error.HTTPError as e:
+            e.close()
+        except OSError:  # the server stopped between the check and the request
+            break
         time.sleep(0.1)
-    assert lv.code == [3]
+    lv.thread.join(3)
+    assert lv.code == [3] and time.monotonic() - start < 5
+
+
+def test_client_gone_before_error_reply_prints_nothing(live, capfd):
+    lv = live()
+    port = lv.server.server_address[1]
+    for _ in range(20):
+        c = socket.create_connection(("127.0.0.1", port))
+        c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, b"\x01\x00\x00\x00\x00\x00\x00\x00")  # reset on close
+        c.sendall(post_head(lv, 5, path="/answer").replace(lv.token.encode(), b"wrong") + b"{nope")
+        c.close()
+    time.sleep(0.3)
+    assert lv.json("/items")[0] == 200
+    assert capfd.readouterr().err == ""
+
+
+def test_short_body_then_client_closes_is_400(live):
+    lv = live()
+    with socket.create_connection(("127.0.0.1", lv.server.server_address[1]), timeout=5) as c:
+        c.sendall(post_head(lv, 10) + b"abc")
+        c.shutdown(socket.SHUT_WR)
+        buf = b""
+        while chunk := c.recv(65536):
+            buf += chunk
+    assert int(buf.split(b" ", 2)[1]) == 400
+    assert not lv.file.exists()
 
 
 def test_other_routes_without_token_are_403(live):

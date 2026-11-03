@@ -429,9 +429,6 @@ def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *args) -> None:  # no per-request log
             pass
 
-        def handle_error(self, *args) -> None:  # never a traceback on the owner's terminal
-            pass
-
         def _send(self, status: int, body: bytes, ctype: str) -> None:
             self.send_response(status)
             self.send_header("Content-Type", ctype)
@@ -532,6 +529,9 @@ def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 128  # a burst of browser requests must not be reset
+
+    def handle_error(self, request, client_address) -> None:  # never a traceback on the owner's terminal
+        pass
 
     def __init__(self, address: tuple[str, int], state: _State):
         self.state = state
