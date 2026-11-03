@@ -90,11 +90,13 @@ def test_main_prints_the_greeting(capsys):
 
 def test_main_rejects_an_empty_name(capsys):
     assert main([" "]) == 2
+    assert capsys.readouterr().out == "usage: greet <name>\\n"
 '''
 
 UNIT_TESTS_CITED = UNIT_TESTS.replace(
     "def test_format_greeting():\n", 'def test_format_greeting():\n    """@prd T-001.1"""\n').replace(
-    "def test_main_prints_the_greeting(capsys):\n", 'def test_main_prints_the_greeting(capsys):\n    """@prd T-001.2"""\n')
+    "def test_main_prints_the_greeting(capsys):\n", 'def test_main_prints_the_greeting(capsys):\n    """@prd T-001.2"""\n').replace(
+    "def test_main_rejects_an_empty_name(capsys):\n", 'def test_main_rejects_an_empty_name(capsys):\n    """@prd T-001.3"""\n')
 
 PRD_MD = """---
 prd: greet
@@ -199,7 +201,7 @@ None.
 
 | Version | Date | Change | IDs |
 |---|---|---|---|
-| 1.0.0 | 2026-11-03 | Approved | FR-001, FR-010, T-001.1, T-001.2, T-010.1, T-010.2 |
+| 1.0.0 | 2026-11-03 | Approved | FR-001, FR-010, T-001.1, T-001.2, T-001.3, T-010.1, T-010.2 |
 """
 
 GREET_FEATURE = """# Greeting
@@ -209,8 +211,9 @@ Status: approved
 Acceptance (EARS):
 - AC-001.1 When `greet.cli.format_greeting(name)` is called, it shall return `Hello, <name>!`.
 - AC-001.2 When `greet <name>` runs, it shall print `Hello, <name>!`.
+- AC-001.3 If `greet` runs with no name, more than one argument or a blank name, it shall print `usage: greet <name>` and exit with code 2.
 Errors: -
-Tests: T-001.1 [unit], T-001.2 [unit]  (test-cases/greet.yaml)
+Tests: T-001.1 [unit], T-001.2 [unit], T-001.3 [unit]  (test-cases/greet.yaml)
 """
 
 GUIDE_FEATURE = """# Install guide
@@ -258,6 +261,22 @@ T-001.2:
     name: "World"
   expect:
     output: "Hello, World!"
+    effects: []
+    errors: []
+    leaks: none
+
+T-001.3:
+  ac: AC-001.3
+  level: unit
+  refs: ["testing.md#Harness"]
+  target: code:greet.cli.main
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    argv: [" "]
+  expect:
+    output: {stdout: "usage: greet <name>", exit_code: 2}
     effects: []
     errors: []
     leaks: none

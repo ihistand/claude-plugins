@@ -71,6 +71,17 @@ def test_approved_has_every_requirement_approved_and_no_guide(tmp_path):
     assert statuses and all(s == "Status: approved" for s in statuses)
 
 
+@pytest.mark.parametrize("state", ["approved", "built"])
+def test_the_prd_specifies_every_behaviour_the_cli_ships(tmp_path, state):
+    """The CLI's usage line is in FR-001, so a build of FR-001 meets no code the PRD lacks (0.8.0 proof, P2)."""
+    r = build(tmp_path, state)
+    assert "it shall print `usage: greet <name>` and exit with code 2" in read(r, "features/greet.md")
+    assert "T-001.3 [unit]" in read(r, "features/greet.md") and "T-001.3:" in read(r, "test-cases/greet.yaml")
+    tests = (r / "tests/unit/test_greet.py").read_text(encoding="utf-8")
+    assert tests.count("def test_") == tests.count('"""@prd T-'), tests
+    assert '"usage: greet <name>\\n"' in tests
+
+
 def test_built_has_the_guide_and_fr_010_verified(tmp_path):
     r = build(tmp_path, "built")
     guide = (r / "docs/guide/install.md").read_text(encoding="utf-8")
