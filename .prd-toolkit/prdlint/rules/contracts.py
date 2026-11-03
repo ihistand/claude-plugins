@@ -19,6 +19,7 @@ from sqlglot import exp  # noqa: E402
 
 osv = require("openapi_spec_validator", "openapi-spec-validator")
 
+PACK_VALIDATOR = "pack"  # a section-7 Validator cell naming the validator of the pack that declares the type
 _EVENT_HEADING = re.compile(r"^###\s+`?([^`\s]+)`?\s*$")
 _METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
@@ -391,8 +392,49 @@ def _check_dependency(rel: str, data: dict) -> Iterator[Finding]:
                     yield Finding(rel, _kl(fails, "failures"), "contracts-valid", f"failures: missing {k}")
 
 
+def pack_list(prd: Prd) -> list:
+    """The resolved packs a `pack` row or a pack target kind looks in: each named pack that resolves, in named order,
+    then `service`. Resolved once per loaded PRD."""
+    cached = getattr(prd, "_pack_list", None)
+    if cached is None:
+        from .. import packs  # local: packs imports the rules package
+
+        cached = []
+        for ref in [*packs.named(prd), packs.SERVICE_DEFAULT]:
+            try:
+                pack = packs.resolve_cached(prd, ref)
+            except (packs.ManifestError, packs.PackNotFound, packs.PackMismatch, OSError, ValueError):
+                continue
+            if all(pack.name != c.name for c in cached):
+                cached.append(pack)
+        prd._pack_list = cached
+    return cached
+
+
+def pack_validator(prd: Prd, kind: str) -> str | None:
+    """The command of the first pack (named order, then service) that declares contract type `kind` with a validator
+    other than built-in, its `${PACK}` expanded and quoted so shlex.split gives it back; None when none does."""
+    from .. import packs
+
+    for pack in pack_list(prd):
+        for ct in pack.contract_types:
+            if ct["type"] == kind and ct["validator"] != "built-in":
+                return shlex.join(packs.expand(ct["validator"], pack))
+    return None
+
+
+def pack_kinds(prd: Prd) -> dict[str, str]:
+    """Each target kind a resolved pack declares -> the contract type its names resolve in."""
+    out: dict[str, str] = {}
+    for pack in pack_list(prd):
+        for kind, ctype in pack.target_kinds.items():
+            out.setdefault(kind, ctype)
+    return out
+
+
 def custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
-    """(type, validator command, matching files, row line) for each section-7 row with a validator other than built-in."""
+    """(type, validator command, matching files, row line) for each section-7 row with a validator other than built-in.
+    A `pack` row yields the command of the pack that declares its type, or `pack` itself when none does."""
     sec = next((s for s in prd.sections if s.number == 7), None)
     for t in tables(sec.body) if sec else []:
         for r in t.rows:
@@ -401,9 +443,12 @@ def custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
             validator = r.cells[2].strip().strip("`").strip()
             if not validator or validator == "built-in":
                 continue
+            kind = r.cells[0].strip("`").strip()
+            if validator == PACK_VALIDATOR:
+                validator = pack_validator(prd, kind) or PACK_VALIDATOR
             globs = [g for g in re.split(r"[,\s]+", r.cells[1].replace("`", "")) if g]
             files = sorted({f for g in globs for f in glob.glob(g, root_dir=prd.root, recursive=True) if (prd.root / f).is_file() and not (prd.links is not None and f.startswith(UPSTREAM_DIR + "/"))})
-            yield r.cells[0].strip("`").strip(), validator, files, r.line
+            yield kind, validator, files, r.line
 
 
 _custom_types = custom_types
@@ -418,6 +463,9 @@ def custom_items(prd: Prd) -> dict[str, set[str]]:
             data = prd.yaml.get(f)
             if isinstance(data, dict):
                 out.setdefault(kind, set()).update(str(k) for k in data)
+    for kind, ctype in pack_kinds(prd).items():
+        if ctype in out:
+            out[kind] = out[ctype]
     return out
 
 
@@ -434,6 +482,9 @@ def _check_custom(prd: Prd) -> Iterator[Finding]:
         def bad(msg):
             return Finding("prd.md", line, "contracts-valid", f"custom type {kind}: {msg}")
 
+        if validator == PACK_VALIDATOR:
+            yield bad(f"no named pack declares contract type {kind}")
+            continue
         if not files:
             yield bad("glob matches no file")
             continue

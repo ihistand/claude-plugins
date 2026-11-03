@@ -4,6 +4,7 @@ It reads the working trees of other repositories named by path-location links (a
 git-URL links are not fetched here, so the report stays fast and offline.
 """
 import json
+import re
 from dataclasses import asdict, dataclass, replace
 from collections import Counter
 from itertools import groupby
@@ -12,7 +13,7 @@ from pathlib import Path
 from . import deploy, errors, hooks, trace
 from .model import Prd, gate_of, git_toplevel
 
-PARTS = ("Header", "Requirements", "Adoption map", "Not built", "Not verified", "Open errors", "Upstreams", "Consumers", "Change sets", "CI", "Deployed", "Matrix")
+PARTS = ("Header", "Requirements", "Areas", "Adoption map", "Not built", "Not verified", "Open errors", "Upstreams", "Consumers", "Change sets", "CI", "Deployed", "Matrix")
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,18 @@ def _requirements(prd: Prd) -> list[StatusItem]:
     order = sorted(counts, key=lambda a: (a == "nfr", list(counts).index(a)))
     return [StatusItem("Requirements", None, f"{a}: " + ", ".join(f"{s} {n}" for s, n in sorted(counts[a].items())))
             for a in order] or [StatusItem("Requirements", None, "None.")]
+
+
+def _areas(prd: Prd) -> list[StatusItem]:
+    from . import packs
+
+    out = []
+    for rel in prd.docs:
+        m = re.fullmatch(r"features/([^/]+)\.md", rel)
+        if m:
+            ref, lang = packs.profile(prd, m.group(1))
+            out.append(StatusItem("Areas", m.group(1), f"{m.group(1)}: pack {ref.name} {ref.version or 'default'}, output language {lang}"))
+    return out or [StatusItem("Areas", None, "None.")]
 
 
 def _adoption(prd: Prd) -> list[StatusItem]:
@@ -156,7 +169,7 @@ def _matrix(prd: Prd, repo_root: Path) -> list[StatusItem]:
 def build_status(prd: Prd, repo_root: Path, display: str = "") -> list[StatusItem]:
     header = StatusItem("Header", None, f"PRD: {display or prd.root.as_posix()}\n"
                         f"version {prd.frontmatter.get('version', '-')}\nstatus {prd.frontmatter.get('status', '-')}")
-    return ([header] + _requirements(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
+    return ([header] + _requirements(prd) + _areas(prd) + _adoption(prd) + _by_status(prd, "Not built", "approved")
             + _by_status(prd, "Not verified", "built") + _open_errors(prd) + _upstreams(prd)
             + _consumers(prd) + _change_sets(prd) + _ci(prd, repo_root) + _deployed(prd, repo_root) + _matrix(prd, repo_root))
 

@@ -6,3 +6,4 @@ __pycache__/
 # Python tooling
 .venv/
 prd-toolkit/evals/results/
+.prd-judge/

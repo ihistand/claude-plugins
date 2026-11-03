@@ -10,11 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VENDOR_DIR = ".prd-toolkit"
-VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py")
+VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py", "prd_judge.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
 CONFIRM_PAGE = "confirm/form.html"  # templates/confirm/form.html in the plugin, .prd-toolkit/confirm/form.html vendored
+JUDGE_DIR = "judge"  # templates/judge/ in the plugin, .prd-toolkit/judge/ vendored
+LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit/languages/ vendored
+PACKS_DIR = "packs"  # .prd-toolkit/packs/<name>/
+RECORD_DIR = ".prd-judge/"
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
@@ -66,7 +70,59 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
     files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
+    for f in sorted((templates.parent / JUDGE_DIR).rglob("*")):
+        if f.is_file():
+            files[f"{JUDGE_DIR}/{f.relative_to(templates.parent / JUDGE_DIR).as_posix()}"] = f
+    for f in sorted((scripts.parent / "references" / LANGUAGES_DIR).glob("*.yaml")):
+        files[f"{LANGUAGES_DIR}/{f.name}"] = f
     return files
+
+
+class InstallRefused(Exception):
+    """An install that vendors nothing: a named pack cannot be resolved from its source."""
+
+
+def _pack_refs(prd) -> list:
+    """Every pack to vendor: the ones the PRD names, then `service`, one per name."""
+    from . import packs
+
+    refs = list(packs.named(prd))
+    if not any(r.name == "service" for r in refs):
+        refs.append(packs.SERVICE_DEFAULT)
+    out, seen = [], set()
+    for r in refs:
+        if r.name not in seen:
+            seen.add(r.name)
+            out.append(r)
+    return out
+
+
+def _resolve_sources(repo_root: Path, prd) -> list:
+    """The source Pack of each ref, or InstallRefused naming where it looked."""
+    from . import packs
+
+    out = []
+    for ref in _pack_refs(prd):
+        try:
+            out.append(packs.resolve(ref, repo_root, vendored=False))
+        except packs._FAILURES as e:
+            raise InstallRefused(str(e)) from None
+    return out
+
+
+def _pack_tree(folder: Path) -> dict[str, bytes]:
+    return {f.relative_to(folder).as_posix(): f.read_bytes() for f in sorted(folder.rglob("*"))
+            if f.is_file() and "__pycache__" not in f.parts and f.suffix != ".pyc"}
+
+
+def _ignore_record(repo_root: Path) -> None:
+    """Append `.prd-judge/` to the root .gitignore once."""
+    path = repo_root / ".gitignore"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if RECORD_DIR in (ln.strip() for ln in text.splitlines()):
+        return
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text + ("" if not text or text.endswith("\n") else "\n") + RECORD_DIR + "\n")
 
 
 def _git(repo_root: Path, *args: str) -> str:
@@ -80,7 +136,7 @@ def _hooks_dir(repo_root: Path) -> tuple[Path, str]:
     return (p if p.is_absolute() else repo_root / p), raw
 
 
-def _vendor(repo_root: Path) -> None:
+def _vendor(repo_root: Path, sources_packs=()) -> None:
     dest = repo_root / VENDOR_DIR
     sources = _source_files(SCRIPTS, PLUGIN_ROOT / "templates/hooks")
     dest.mkdir(exist_ok=True)
@@ -88,7 +144,7 @@ def _vendor(repo_root: Path) -> None:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
-    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm"):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", JUDGE_DIR, LANGUAGES_DIR):
         base = dest / sub
         if base.is_dir():
             for f in sorted(base.rglob("*"), reverse=True):
@@ -97,6 +153,16 @@ def _vendor(repo_root: Path) -> None:
                     f.unlink()
                 elif f.is_dir() and "__pycache__" in f.parts or (f.is_dir() and not any(f.iterdir())):
                     shutil.rmtree(f, ignore_errors=True)
+    packs_dest = dest / PACKS_DIR
+    packs_dest.mkdir(exist_ok=True)
+    keep = {p.name for p in sources_packs}
+    for old in packs_dest.iterdir():
+        if old.name not in keep:
+            shutil.rmtree(old, ignore_errors=True) if old.is_dir() else old.unlink()
+    for pack in sources_packs:
+        target = packs_dest / pack.name
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(pack.root, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (dest / "VERSION").write_text(plugin_version(PLUGIN_ROOT) + "\n", encoding="utf-8")
     (dest / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
 
@@ -123,7 +189,11 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     repo_root = Path(repo_root)
     lines: list[str] = []
     if is_plugin():
-        _vendor(repo_root)
+        from .model import load  # local: the model imports this package
+
+        sources_packs = _resolve_sources(repo_root, load(repo_root / prd_rel))  # before anything is copied
+        _vendor(repo_root, sources_packs)
+        _ignore_record(repo_root)
         lines.append(f"vendored the toolkit into {VENDOR_DIR}/ (version {plugin_version(PLUGIN_ROOT)})")
     configured = _hooks_path_config(repo_root)
     hooks_dir, shown = _hooks_dir(repo_root)
@@ -161,6 +231,32 @@ def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
     return out
 
 
+def _stale_packs(repo_root: Path, prd) -> list[str]:
+    """One line per vendored pack that is missing or differs from its source."""
+    out = []
+    for ref in _pack_refs(prd):
+        try:
+            src = _resolve_sources_one(repo_root, ref)
+        except InstallRefused:
+            continue  # pack-resolves reports a pack that cannot be found
+        vend = repo_root / VENDOR_DIR / PACKS_DIR / ref.name
+        what = f"{src.source} {src.version}"
+        if not vend.is_dir():
+            out.append(f"{PACKS_DIR}/{ref.name}: missing; source {what}; run prd_hooks.py install")
+        elif _pack_tree(vend) != _pack_tree(src.root):
+            out.append(f"{PACKS_DIR}/{ref.name}: differs from {what}; run prd_hooks.py install")
+    return out
+
+
+def _resolve_sources_one(repo_root: Path, ref):
+    from . import packs
+
+    try:
+        return packs.resolve(ref, repo_root, vendored=False)
+    except packs._FAILURES as e:
+        raise InstallRefused(str(e)) from None
+
+
 def check(repo_root: Path, plugin_root: Path, prd=None, prd_rel: str = "") -> list[str]:
     repo_root, plugin_root = Path(repo_root), Path(plugin_root)
     dest = repo_root / VENDOR_DIR
@@ -178,12 +274,13 @@ def check(repo_root: Path, plugin_root: Path, prd=None, prd_rel: str = "") -> li
             problems.append(f"{VENDOR_DIR}/{rel} is missing")
         elif target.read_bytes() != src.read_bytes():
             problems.append(f"{VENDOR_DIR}/{rel} differs from the plugin copy")
-    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm"):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", JUDGE_DIR, LANGUAGES_DIR):
         for f in sorted((dest / sub).rglob("*")) if (dest / sub).is_dir() else []:
             rel = f.relative_to(dest).as_posix()
             if f.is_file() and "__pycache__" not in f.parts and rel not in sources:
                 problems.append(f"{VENDOR_DIR}/{rel} is not in the plugin")
     if prd is not None:
+        problems += _stale_packs(repo_root, prd)
         problems += stale_ci(repo_root, prd, prd_rel)
     return problems
 

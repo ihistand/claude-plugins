@@ -82,6 +82,9 @@ def main(argv: list[str]) -> int:
             out = hooks.stale_ci(root, prd, prd_rel) if args.ci else hooks.check(root, hooks.PLUGIN_ROOT, prd, prd_rel)
         else:
             out = hooks.uninstall(root)
+    except hooks.InstallRefused as e:
+        print(f"prd_hooks: install refused: {e}", file=sys.stderr)
+        return 2
     except Exception as e:
         print(f"prd_hooks: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2

@@ -32,6 +32,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.")
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--list-rules", action="store_true")
+    parser.add_argument("--list-packs", action="store_true", help="print every pack on this machine, built-ins first")
     parser.add_argument("--ci", action="store_true", help="skip the checks that need this machine's skills and linters")
     parser.add_argument("--sample-tids", type=int, metavar="N")
     try:
@@ -43,7 +44,14 @@ def main(argv: list[str]) -> int:
         from prdlint import rules  # noqa: F401
 
         for name in sorted(registry.RULES):
-            print(name)
+            print(f"{name} {registry.SEVERITY.get(name, 'error')}")
+        return 0
+    if args.list_packs:
+        from prdlint import packs
+
+        for pack in packs.discover():
+            about = f" — {pack.description}" if pack.description else ""
+            print(f"{pack.name} {pack.version} ({pack.source}){about}")
         return 0
     if not args.prd_dir:
         parser.print_usage(sys.stderr)
@@ -78,7 +86,7 @@ def main(argv: list[str]) -> int:
     if args.ci:
         os.environ["PRD_LINT_CI"] = "1"
     try:
-        findings = registry.run(prd)
+        findings = registry.run(prd, warnings=True)
     except registry.RuleCrash as e:
         print(f"prd_lint: {e}", file=sys.stderr)
         return 2
@@ -87,8 +95,8 @@ def main(argv: list[str]) -> int:
         return 2
     prefix = _display_root(prd.root)
     for f in findings:
-        print(f"{os.path.join(prefix, f.file)}:{f.line}: {f.rule}: {f.message}" if prefix != "." else str(f))
-    return 1 if findings else 0
+        print(f"{os.path.join(prefix, f.file)}:{f.line}: {'warn: ' if f.severity == 'warn' else ''}{f.rule}: {f.message}" if prefix != "." else str(f))
+    return 1 if any(f.severity != "warn" for f in findings) else 0
 
 
 if __name__ == "__main__":
