@@ -300,7 +300,7 @@ def test_exit_zero_rechecks_with_status_and_a_changed_item_is_no_answer():
     f = form_part()
     after = f.split("exit `0`", 1)[1]
     assert "Read `.prd-confirm-<area>.json`" in after
-    assert "run `status`" in after
+    assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
     assert "Any `open <ID>` line" in after and "changed since it was answered" in after
     assert "is no answer" in after and "serve again" in after
 
@@ -318,7 +318,7 @@ def test_each_decision_maps_to_its_prd_change():
         "`answer` on a marker: the value replaces the marker",
     ):
         assert needle in f, needle
-    assert "Write each answer into the PRD as soon as you apply it" in f
+    assert "write each into the PRD as soon as you apply it" in f
 
 
 def test_both_files_are_deleted_once_every_answer_is_applied_and_neither_is_committed():
@@ -338,3 +338,23 @@ def test_a_form_that_cannot_be_served_takes_the_fallbacks_and_a_headless_run_sto
     assert "`.prd-confirm-<area>.md` at the repository top" in c
     assert "Confirmation is the user's word, requirement by requirement" in c
     assert "A reply that names no ID" in c
+
+
+def test_intended_on_a_question_and_ask_on_an_entry_have_their_own_instruction():
+    f = form_part()
+    assert ("`intended` on a question: the behaviour it asks about is intended; write it as requirement text "
+            "of the requirement the bullet names, with the owner's note as the answer, and remove the §13 bullet; "
+            "it is not a correction") in f
+    assert ("`ask` on an `E-nnn`: the entry stays `Resolution: open`; §12 gets "
+            "`| A-nn | E-nnn: <the behaviour> is intended | awaiting <who> |`; every requirement the entry touches "
+            "is `approved`, never `live`, and carries `[ASSUMPTION A-nn: <the behaviour>; <who> would confirm it]` "
+            "on the AC the entry concerns") in f
+
+
+def test_each_field_of_an_answer_is_named():
+    f = form_part()
+    assert ("`text` is the intended behaviour for `correct` and `bug`, the person for `ask`, the answer for a "
+            "question's `answer`, the value for a marker's `answer`, and an optional note for `intended` and `fix`") in f
+    assert "`acs` (`correct` only) maps an AC ID to its full new text, which replaces that AC verbatim" in f
+    after = f.split("exit `0`", 1)[1].split("exit `3`", 1)[0]
+    assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after

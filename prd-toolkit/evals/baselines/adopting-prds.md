@@ -573,7 +573,7 @@ changed. Answer, verbatim:
 >
 > Once you answer both, I'll rerun the suite. The gate is T-001.1 `pass` and T-002.1 `known-failing E-001`. After that comes step 5: clearing the open items, the dry run, and your approval for `1.0.0`.
 
-## E1 (0.7.1): adopting-confirm-headless-fallback
+## D6 (0.7.1): adopting-confirm-headless-fallback
 
 Step 3 now confirms through the form (`prd_confirm.py serve`); a headless run cannot open it and
 takes the fallbacks. Start repo: `scaffolds/notes_repo.py` state `extracted` (a Draft PRD, the

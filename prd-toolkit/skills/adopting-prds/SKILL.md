@@ -228,19 +228,28 @@ the form with the Bash tool's `run_in_background`, one command per Bash call, wr
 Read the `url=` line, the first line of its output, give the owner that address as a clickable
 link, and wait for the completion notice: never poll it and never sleep. Then by its exit code:
 
-- exit `0`: the owner pressed Done. Read `.prd-confirm-<area>.json`, then run `status`. Any
-  `open <ID>` line is an item that changed since it was answered, and a changed item is no answer:
-  ask for that item again, through serve again or a fallback below. Apply the answers of the other
-  items. Write each answer into the PRD as soon as you apply it, by
-  its `decision`:
+- exit `0`: the owner pressed Done. Read `.prd-confirm-<area>.json`, then run
+  `prd_confirm.py status docs/prd/<slug> --area <area>`. Any `open <ID>` line is an item that
+  changed since it was answered, and a changed item is no answer: ask for that item again, through
+  serve again or a fallback below. Apply the answers of the other items, and write each into the
+  PRD as soon as you apply it, by its `decision`. `text` is the intended behaviour for `correct`
+  and `bug`, the person for `ask`, the answer for a question's `answer`, the value for a marker's
+  `answer`, and an optional note for `intended` and `fix`. `acs` (`correct` only) maps an AC ID to
+  its full new text, which replaces that AC verbatim.
   - `confirm`: status `live (since <version>)`, the §11 row `live` with that Since.
-  - `correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`
-    (the full new text of each edited AC).
+  - `correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`.
   - `bug`: the `E-nnn` stays open, and the requirement is corrected to the intended behaviour, status
     `approved`, its test cases revised to match.
   - `ask`: status `approved`, an `[ASSUMPTION A-nn]` and a §12 `awaiting <who>` row, as above.
+  - `ask` on an `E-nnn`: the entry stays `Resolution: open`; §12 gets
+    `| A-nn | E-nnn: <the behaviour> is intended | awaiting <who> |`; every requirement the entry
+    touches is `approved`, never `live`, and carries
+    `[ASSUMPTION A-nn: <the behaviour>; <who> would confirm it]` on the AC the entry concerns.
   - `intended`: the behaviour becomes requirement text, and the entry's Resolution names who
     confirmed it and when.
+  - `intended` on a question: the behaviour it asks about is intended; write it as requirement text
+    of the requirement the bullet names, with the owner's note as the answer, and remove the §13
+    bullet; it is not a correction.
   - `answer` on a question: the answer goes into the PRD. `fix` on a question: the requirement it
     blocks becomes a correction. `answer` on a marker: the value replaces the marker.
 
