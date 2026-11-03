@@ -96,7 +96,7 @@ Acceptance (EARS):
   report `sufficiency` at line 0 of that entry with `a .md entry that is not a file`, load no
   document from it, and lint shall go on to run the rules.
 Errors: -
-Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1; a directory named `<name>.md` → AC-006.3, not an internal error
+Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1; a directory named `<name>.md` → AC-006.3, not an internal error (E-005 is open until the code does this)
 Tests: T-006.1 [integration], T-006.2 [integration], T-006.3 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RuleCrash
 
@@ -115,7 +115,7 @@ Acceptance (EARS):
 - AC-007.4 When run with `--sample-tids N`, the lint command shall not sample a test case that has
   no `level` value, or whose `level` holds an uppercase letter (`Unit`).
 Errors: -
-Edge cases: N larger than M prints every non-unit case once; N = 0 prints nothing → AC-007.1; level names are lowercase only, and lint without `--sample-tids` reports a level such as `Unit`, or a missing level, through `test-level` (lint-testcases)
+Edge cases: N larger than M prints every non-unit case once; N = 0 prints nothing → AC-007.1; level names are lowercase only, and lint without `--sample-tids` reports a level such as `Unit`, or a missing level, through `test-level` (lint-testcases); E-006 is open until the sample leaves them out
 Tests: T-007.1 [integration], T-007.2 [integration], T-007.3 [integration], T-007.4 [integration], T-007.5 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 

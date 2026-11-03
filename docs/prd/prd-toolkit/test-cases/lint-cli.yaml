@@ -274,6 +274,7 @@ T-005.3:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-001
   preconditions: []
   input:
     setup: [create the directory <tmp>/p and, inside it, the directory <tmp>/p/prd.md]
@@ -333,6 +334,7 @@ T-006.3:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-005
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup: [S0, create the empty directory <tmp>/docs/prd/orders/notes.md]
@@ -443,6 +445,7 @@ T-007.5:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-006
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:
@@ -551,6 +554,7 @@ T-010.2:
   target: cli:prd_publish
   environment: local
   identity: none
+  known-failing: E-002
   preconditions: []
   input:
     setup: [create a virtual environment with `python3 -m venv <tmp>/venv` (no packages installed)]
@@ -693,6 +697,7 @@ T-011.6:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-003
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:
@@ -743,6 +748,7 @@ T-012.2:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-004
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:
@@ -763,6 +769,7 @@ T-012.3:
   target: cli:prd_lint
   environment: local
   identity: none
+  known-failing: E-003
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:

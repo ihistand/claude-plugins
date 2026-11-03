@@ -38,3 +38,21 @@ Touches: FR-012
 Diagnosis: `load` reads every `*.md` below the folder into its documents (model.py:717) and every `*.yaml` below `contracts/` into its contract YAML (model.py:758), reporting their parse errors, duplicate keys and non-mapping top levels under `contracts-valid`; neither glob leaves out `contracts/fixtures/`. prd-format.md (lines 168-169) says fixture data under `contracts/fixtures/` is not scanned, and the sibling `all_lines` skips raw YAML/SQL/JSON fixture files (rules/structure.py:62-64) but starts from `prose(prd)`, which walks fixture `.md` files too. So a fixture `.md` is read by placeholder, glossary-synonym, id-format, schema-refs, markers-open and assumption-indexed, and a fixture `.yaml` by the loader's contracts-valid findings, placeholder's YAML-value check, id-format and id-removed-reused.
 Resolution: open, intended: Lint skips everything under contracts/fixtures/, as prd-format.md says.
 Recurrence of: -
+
+### E-005 A directory named `<name>.md` in the PRD folder is an internal error
+Detected: 2026-11-03, lint-cli characterization suite, T-006.3 (prd-toolkit/scripts/prdlint/model.py:717 @709d385)
+Classification: code bug
+Confirmed: 2026-11-03, "Real bug (Recommended)"
+Touches: FR-006
+Diagnosis: `load` reads every path that `prd_dir.rglob("*.md")` yields with `read_text` (model.py:717) and does not check that it is a file, so a directory named `notes.md` raises `IsADirectoryError`. prd_lint reports it as `prd_lint: internal error: IsADirectoryError: [Errno 21] Is a directory: '…/notes.md'` and exits 2, where AC-006.3 (the owner's answer to Q-03) wants a `sufficiency` finding and the rules run.
+Resolution: open, intended: Report it as a finding (a .md entry that is not a file) and keep going.
+Recurrence of: -
+
+### E-006 --sample-tids samples a case with no level or a non-lowercase level
+Detected: 2026-11-03, lint-cli characterization suite, T-007.5 (prd-toolkit/scripts/prd_lint.py:67 @709d385)
+Classification: code bug
+Confirmed: 2026-11-03, "Real bug (Recommended)"
+Touches: FR-007
+Diagnosis: The sample keeps every loaded case whose `str(level).strip()` is not `unit` (prd_lint.py:67). A case with no `level` gives `""` and one with `level: Unit` gives `Unit`, so both are sampled. T-007.5 printed `T-009.1 test-cases/odd.yaml` and `T-009.2 test-cases/odd.yaml` beside the nine expected lines, where AC-007.4 (the owner's answer to Q-02) samples neither.
+Resolution: open, intended: Level names are lowercase only, so lint should report Unit instead of sampling it; a test case with no level should not be sampled.
+Recurrence of: -
