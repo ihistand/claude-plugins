@@ -106,3 +106,111 @@ def test_summaries_rules(tmp_path):
         with pytest.raises(confirm.Refused) as e:
             load(obj)
         assert str(e.value) == msg
+
+
+# ---- fix round 1 ----
+
+def rewrite(prd, rel, old, new):
+    f = prd / rel
+    text = f.read_text()
+    assert old in text, old
+    f.write_text(text.replace(old, new, 1))
+
+
+def ids(prd):
+    return [i.id for i in confirm.build_items(model.load(prd), "notes")]
+
+
+def test_question_ids_are_their_own(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "prd.md", "- Q-01 Should FR-001 keep empty notes?\n- Q-02 Is the retention period settled for FR-099?\n  It was never decided.",
+            "- Q-01 Should FR-001 keep empty notes?\n- Q-02 Is X settled for FR-099?\n- Q-03 May FR-002 match case?\n- Does FR-001 need a limit?")
+    got = [i for i in ids(prd) if i.startswith("Q-")]
+    assert got == ["Q-01", "Q-03", "Q-04"]  # the unnumbered bullet is the 4th among all bullets
+
+
+def test_indented_dash_continues_the_bullet(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "prd.md", "  It was never decided.", "  - a sub point")
+    rewrite(prd, "prd.md", "- Q-01 Should", "- Q-01 Should FR-001\n  - first sub point\n- Q-05 Should")
+    items = by_id(confirm.build_items(model.load(prd), "notes"))
+    assert "Q-02" not in items and "first sub point" in items["Q-01"].text
+
+
+def test_marker_named_only_by_own_area_test_cases(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: none")
+    (prd / "test-cases").mkdir()
+    (prd / "test-cases/other.yaml").write_text("T-009.1:\n  target: config:NOTES_LIMIT\n")
+    assert "config.yaml:NOTES_LIMIT.owner" not in ids(prd)
+    (prd / "test-cases/notes.yaml").write_text("T-001.1:\n  target: config:NOTES_LIMIT\n")
+    assert "config.yaml:NOTES_LIMIT.owner" in ids(prd)
+
+
+def test_dotted_traces_names_the_key(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: settings.NOTES_LIMIT")
+    assert "config.yaml:NOTES_LIMIT.owner" in ids(prd)
+
+
+def test_same_named_keys_get_distinct_ids(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: owner")
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  A:\n    owner: "[NEEDS CLARIFICATION: a]"\n  B:\n    owner: "[NEEDS CLARIFICATION: b]"\n')
+    got = [i for i in ids(prd) if i.endswith("owner")]
+    assert got == ["config.yaml:A.owner", "config.yaml:B.owner"]
+
+
+def test_two_markers_in_one_string(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  NOTES_LIMIT:\n    owner: "[NEEDS CLARIFICATION: a] and [NEEDS CLARIFICATION: b]"\n')
+    got = [i for i in ids(prd) if i.startswith("config")]
+    assert got == ["config.yaml:NOTES_LIMIT.owner", "config.yaml:NOTES_LIMIT.owner#2"]
+
+
+def test_subfolder_contract_ids_carry_the_path(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    (prd / "contracts/sub").mkdir()
+    (prd / "contracts/sub/config.yaml").write_text('NOTES_LIMIT:\n  owner: "[NEEDS CLARIFICATION: x]"\n')
+    assert "sub/config.yaml:NOTES_LIMIT.owner" in ids(prd)
+
+
+def test_detected_time_is_not_a_citation(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "errors.md", "wrong result at src/notes/app.py:17", "seen at 12:30 on host:8080")
+    assert by_id(confirm.build_items(model.load(prd), "notes"))["E-001"].excerpts == []
+
+
+def test_one_git_show_per_file_and_commit(tmp_path, monkeypatch):
+    _, prd = make_confirm_repo(tmp_path)
+    calls = []
+    real = confirm.subprocess.run
+    monkeypatch.setattr(confirm.subprocess, "run", lambda cmd, **kw: (calls.append(cmd), real(cmd, **kw))[1])
+    confirm.build_items(model.load(prd), "notes")
+    shows = [c for c in calls if c[:2] == ["git", "show"]]
+    assert len(shows) == len(set(map(tuple, shows))) and shows
+
+
+def test_summaries_stricter(tmp_path):
+    _, _, items = build(tmp_path)
+    p = tmp_path / "s2.json"
+
+    def load(raw):
+        p.write_text(raw)
+        return confirm.load_summaries(p, items, "notes")
+
+    for raw in ("{not json", '["FR-001"]'):
+        with pytest.raises(confirm.Refused):
+            load(raw)
+    with pytest.raises(confirm.Refused) as e:
+        load('{"FR-001": 5}')
+    assert str(e.value) == "summary for FR-001 must be text"
+    with pytest.raises(confirm.Refused) as e:
+        load(json.dumps({"FR-001": "FR-0010 is it"}))
+    assert str(e.value) == "summary for FR-001 does not mention FR-001"
+    ok = "FR-001 " + "x" * 393
+    assert len(ok) == 400 and load(json.dumps({"FR-001": ok}))
+    with pytest.raises(confirm.Refused):
+        load(json.dumps({"FR-001": ok + "x"}))

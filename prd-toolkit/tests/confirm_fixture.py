@@ -27,8 +27,8 @@ None.
 
 ## 13. Open questions
 
-- Should FR-001 keep empty notes?
-- Is the retention period settled for FR-099?
+- Q-01 Should FR-001 keep empty notes?
+- Q-02 Is the retention period settled for FR-099?
   It was never decided.
 
 ## 14. Changelog
