@@ -28,6 +28,25 @@ claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plug
 The table's rows are the final runs, all on the final scaffold (`tester-judged-calls-judge` and
 `changing-refuses-retarget` were run once more after the scaffold's last fix, with the same scores).
 
+### Rerun after scaffold fixes 66abe07..0c4ba32
+
+The 0.8.0 proof (Task 13) changed `doc_repo.py`'s `approved` state:
+- AC-001.3 and T-001.3 for the usage line (66abe07).
+- FR-001 `verified`, plus a new approved FR-002 (540501b).
+- AC-010.2 reworded to the two rubric items of T-010.2 (0c4ba32).
+- Then a Harness sentence, "Each `sections` entry heads exactly one section; a repeated one fails." (9754966).
+
+The two cases built on `approved` were rerun with the command above, 2026-11-03, `--runs 3`, sonnet, Claude Code
+2.1.317, plugin 0.8.0:
+
+| Case | Round | with | w/out | Δ | Notes |
+|---|---|---|---|---|---|
+| `tester-judged-calls-judge` | at 0c4ba32 | 1.00 | 0.50 | +0.50 | With: 3/3. Without: `judge-called-with-output`, `no-guide-read` and `tester-dispatched` fail (3/3). |
+| `tester-judged-calls-judge` | at 9754966 | 1.00 | 0.50 | +0.50 | The same graders. |
+| `builder-document-no-unit` | at 0c4ba32 | 0.90 | 0.86 | +0.05 | One with run scored 0.71. Its tester asked whether a section heading may repeat, and the build stopped on that PRD gap before the builder ran (no worktree isolation in the sandbox, so the tester went first): `guide-written` and `guide-sections-in-order` fail. Fixed in the scaffold (9754966). |
+| `builder-document-no-unit` | at 9754966 | 0.95 | 0.86 | +0.10 | One with run scored 0.86: it reached the close and added `Source:` after `Traces: -`, which `no-prd-edit-beyond-status` read as a PRD edit. The grader was wrong (F-2 of the proof, 97ae256). |
+| `builder-document-no-unit` | at 97ae256 | 1.00 | 0.86 | +0.14 | With: 3/3. Without: only `builder-dispatched` fails (3/3), as before. |
+
 ### Re-score after R26 (the lint-exit-0 graders)
 
 The review found the three `lint-exit-0` graders vacuous: phase 1 ran `--list-packs; echo "prd-lint-exit=$?"`,
