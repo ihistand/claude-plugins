@@ -5,7 +5,10 @@
 # ///
 """Confirm an adopted area in the browser: serve the form, or print what is still open. Exit 0 Done, 2 usage or tool error, 3 stopped without Done."""
 import argparse
+import errno
+import signal
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -33,7 +36,22 @@ def _status(prd, area: str) -> int:
     return 0
 
 
+def _stop(signum, frame) -> None:
+    raise KeyboardInterrupt  # SIGTERM ends the run as Ctrl-C does: stopped without Done, exit 3
+
+
 def _serve(prd, args) -> int:
+    confirm.ensure_excluded(model.repo_root(prd.root))  # first, so the summaries file never shows as untracked
+    if threading.current_thread() is not threading.main_thread():  # a signal handler needs the main thread
+        return _serve_items(prd, args)
+    previous = signal.signal(signal.SIGTERM, _stop)
+    try:
+        return _serve_items(prd, args)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _serve_items(prd, args) -> int:
     items = confirm.build_items(prd, args.area)
     summaries = confirm.load_summaries(Path(args.summaries), items, args.area) if args.summaries else {}
     try:
@@ -43,9 +61,12 @@ def _serve(prd, args) -> int:
     try:
         server, token = confirm.make_server(prd, args.area, items, summaries, page, port=args.port or 0, idle_minutes=args.idle_minutes)
     except OSError as e:
-        return _fail(f"port {args.port} is in use" if args.port else f"cannot start the server: {e}")
+        if not args.port:
+            return _fail(f"cannot start the server: {e}")
+        if e.errno == errno.EADDRINUSE:
+            return _fail(f"port {args.port} is in use")
+        return _fail(f"cannot bind port {args.port}: {e.strerror or e}")
     try:
-        confirm.ensure_excluded(model.repo_root(prd.root))
         print(f"url=http://127.0.0.1:{server.server_address[1]}/?token={token}", flush=True)
         if not args.no_open:
             try:
@@ -82,6 +103,8 @@ def main(argv: list[str]) -> int:
         return _serve(prd, args) if args.command == "serve" else _status(prd, args.area)
     except (model.NotAPrd, confirm.Refused) as e:
         return _fail(str(e))
+    except KeyboardInterrupt:  # Ctrl-C or SIGTERM before the server ran (say, while the browser opened)
+        return 3
     except Exception as e:
         return _fail(f"internal error: {type(e).__name__}: {e}")
 

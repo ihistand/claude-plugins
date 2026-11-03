@@ -1,10 +1,12 @@
 """prd_confirm.py serve and status, run as subprocesses."""
+import errno
 import json
 import re
 import signal
 import socket
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -41,6 +43,19 @@ def serve(procs, prd, *extra):
     return p
 
 
+def first_line(p, timeout=30):
+    """The child's first stdout line, read with a deadline so a hung child fails the test instead of hanging it."""
+    got = []
+    reader = threading.Thread(target=lambda: got.append(p.stdout.readline()), daemon=True)
+    reader.start()
+    reader.join(timeout)
+    if reader.is_alive():
+        p.kill()
+        reader.join(5)
+        pytest.fail(f"no stdout line within {timeout} s")
+    return got[0].strip()
+
+
 def call(base, token, path, body=None):
     req = urllib.request.Request(f"{base}{path}?token={token}", data=None if body is None else json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
@@ -54,7 +69,7 @@ def call(base, token, path, body=None):
 def test_serve_prints_url_first_and_serves_until_done(tmp_path, procs):
     repo, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd)
-    m = URL.match(p.stdout.readline().strip())
+    m = URL.match(first_line(p))
     assert m, "first stdout line is the url line"
     base, token = f"http://127.0.0.1:{m.group(1)}", m.group(2)
     status, listing = call(base, token, "/items")
@@ -73,7 +88,7 @@ def test_serve_prints_url_first_and_serves_until_done(tmp_path, procs):
 def test_serve_excludes_the_answers_file_and_page_is_served(tmp_path, procs):
     repo, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd)
-    m = URL.match(p.stdout.readline().strip())
+    m = URL.match(first_line(p))
     with urllib.request.urlopen(f"http://127.0.0.1:{m.group(1)}/?token={m.group(2)}", timeout=10) as r:
         assert b"<title>" in r.read()
     assert confirm.EXCLUDE_LINE in (repo / ".git/info/exclude").read_text().splitlines()
@@ -152,7 +167,7 @@ def test_usage_error_exits_2(tmp_path):
 def test_sigint_exits_3(tmp_path, procs):
     _, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd, "--idle-minutes", "0.5")
-    assert URL.match(p.stdout.readline().strip())
+    assert URL.match(first_line(p))
     p.send_signal(signal.SIGINT)
     assert p.wait(15) == 3
 
@@ -160,7 +175,7 @@ def test_sigint_exits_3(tmp_path, procs):
 def test_idle_exits_3(tmp_path, procs):
     _, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd, "--idle-minutes", "0.01")
-    assert URL.match(p.stdout.readline().strip())
+    assert URL.match(first_line(p))
     assert p.wait(30) == 3
 
 
@@ -172,7 +187,7 @@ def test_a_failing_browser_is_ignored(tmp_path, procs, monkeypatch):
     p = subprocess.Popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     procs.append(p)
-    assert URL.match(p.stdout.readline().strip())
+    assert URL.match(first_line(p))
     p.send_signal(signal.SIGINT)
     assert p.wait(15) == 3 and p.stderr.read() == ""
 
@@ -188,3 +203,65 @@ def test_token_shape_is_64_hex(tmp_path):
 def test_page_path_from_the_plugin():
     assert confirm.page_path() == SCRIPT.parent.parent / "templates/confirm/form.html"
     assert confirm.page_path().is_file()
+
+
+# ---- final-review fix ----
+
+def test_first_line_fails_a_hung_child():
+    p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], stdout=subprocess.PIPE, text=True)
+    try:
+        with pytest.raises(pytest.fail.Exception, match="no stdout line"):
+            first_line(p, timeout=0.5)
+        assert p.wait(5) != 0
+    finally:
+        p.stdout.close()
+
+
+def test_sigterm_exits_3(tmp_path, procs):
+    _, prd = make_confirm_repo(tmp_path)
+    p = serve(procs, prd)
+    assert URL.match(first_line(p))
+    p.terminate()
+    assert p.wait(15) == 3
+    assert p.stderr.read() == ""
+
+
+def test_exclude_is_written_before_a_refusal(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    (repo / ".git/info/exclude").unlink(missing_ok=True)
+    r = run("serve", str(prd), "--area", "nope", "--no-open")
+    assert r.returncode == 2
+    assert confirm.EXCLUDE_LINE in (repo / ".git/info/exclude").read_text().splitlines()
+
+
+def test_ctrl_c_while_opening_the_browser_exits_3(tmp_path, procs):
+    _, prd = make_confirm_repo(tmp_path)
+    sc = tmp_path / "sitecustomize.py"
+    sc.write_text("import webbrowser\ndef _stop(*a, **k):\n    raise KeyboardInterrupt\nwebbrowser.open = _stop\n")
+    env = {"PYTHONPATH": str(tmp_path), "PATH": "/usr/bin:/bin"}
+    p = subprocess.Popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    procs.append(p)
+    assert URL.match(first_line(p))
+    assert p.wait(15) == 3 and p.stderr.read() == ""
+
+
+def test_a_bind_failure_other_than_in_use_names_its_reason(tmp_path, monkeypatch, capsys):
+    import prd_confirm
+
+    _, prd = make_confirm_repo(tmp_path)
+
+    def refuse(*a, **k):
+        raise OSError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(confirm, "make_server", refuse)
+    assert prd_confirm.main(["serve", str(prd), "--area", "notes", "--no-open", "--port", "80"]) == 2
+    out = capsys.readouterr()
+    assert out.out == "" and out.err.strip() == "prd_confirm: cannot bind port 80: Permission denied"
+
+    def in_use(*a, **k):
+        raise OSError(errno.EADDRINUSE, "Address already in use")
+
+    monkeypatch.setattr(confirm, "make_server", in_use)
+    assert prd_confirm.main(["serve", str(prd), "--area", "notes", "--no-open", "--port", "80"]) == 2
+    assert capsys.readouterr().err.strip() == "prd_confirm: port 80 is in use"
