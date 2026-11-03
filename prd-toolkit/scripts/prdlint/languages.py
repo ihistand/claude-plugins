@@ -83,6 +83,13 @@ def code(prd) -> str:
     return prd.frontmatter.get("language") or "en"
 
 
+def pack_dirs(prd) -> list[Path]:
+    """The `languages:` folders of the packs the PRD names, searched after the toolkit's own tables."""
+    from . import packs  # local: packs imports this module
+
+    return packs.languages_dirs(prd)
+
+
 def for_prd(prd) -> Table:
     """The PRD's language table, or `en` when `language:` is absent or has no table."""
-    return load(code(prd)) or load("en")
+    return load(code(prd), pack_dirs(prd)) or load("en")

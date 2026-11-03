@@ -130,7 +130,7 @@ def frontmatter(prd: Prd):
 @rule("language-table")
 def language_table(prd: Prd):
     lang = languages.code(prd)
-    if re.fullmatch(r"[a-z]{2,3}", lang) and languages.load(lang) is None:
+    if re.fullmatch(r"[a-z]{2,3}", lang) and languages.load(lang, languages.pack_dirs(prd)) is None:
         yield Finding("prd.md", _fm_line(prd, "language"), "language-table", f"language '{lang}' has no table")
 
 

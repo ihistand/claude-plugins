@@ -237,6 +237,24 @@ class ChangeSet:
 
 
 @dataclass
+class PackRef:
+    name: str
+    version: str | None  # None only for the service default, which is not locked
+    source: str  # prd-toolkit, or <plugin>@<marketplace>
+    file: str  # the PRD-relative file that names it; "" for the default
+    line: int
+
+
+@dataclass
+class Target:
+    area: str  # the features file stem
+    file: str
+    line: int
+    pack: PackRef | None  # None: inherits section 1
+    output_language: str | None  # None: inherits section 1
+
+
+@dataclass
 class Prd:
     root: Path
     frontmatter: dict[str, str]
@@ -258,6 +276,10 @@ class Prd:
     links: Links | None = None  # None exactly when links.md is absent
     snapshots: dict[str, list[SnapshotFile]] = field(default_factory=dict)  # upstream folder -> files
     change_sets: dict[str, ChangeSet] = field(default_factory=dict)
+    pack_ref: PackRef | None = None  # section 1's `- Pack:` line; None means the service default
+    output_language: tuple[str, int] | None = None  # section 1's `- Output language:` (code, line)
+    targets: dict[str, Target] = field(default_factory=dict)  # area -> its well-formed `Target:` line
+    profile_problems: list[tuple[str, int, str]] = field(default_factory=list)  # (file, line, message)
 
 
 _HEADING = re.compile(r"^#{1,3}\s")
@@ -705,6 +727,105 @@ def _linked_dir(prd_dir: Path, p: Path) -> bool:
     return rel.startswith((UPSTREAM_DIR + "/", CHANGES_DIR + "/")) and (prd_dir / LINKS_FILE).is_file()
 
 
+_PACK_VALUE = re.compile(r"([a-z][a-z0-9-]*) (\d+\.\d+\.\d+) \((prd-toolkit|[^\s()@]+@[^\s()@]+)\)")
+_LANG_TAG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*")
+_S1_PACK = re.compile(r"^- Pack:(.*)$")
+_S1_OUTPUT = re.compile(r"^- Output language:(.*)$")
+_TARGET_LINE = re.compile(r"^Target:(.*)$")
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
+PACK_GRAMMAR = "Pack: must be <name> <X.Y.Z> (<source>)"
+OUTPUT_GRAMMAR = "Output language: must be a BCP 47 tag such as es or pt-BR"
+TARGET_GRAMMAR = "Target: must be pack <name> <X.Y.Z> (<source>)[, output language <code>] or output language <code>"
+TARGET_PLACE = "Target: must come before the first requirement"
+TARGET_ABOVE = "Target: must come after the file's level-1 heading"
+
+
+def _masked(text: str) -> list[str]:
+    """Lines with fenced code, inline code and HTML comments blanked; line numbers survive."""
+    return _COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), strip_code(text)).split("\n")
+
+
+def _pack_ref(value: str, rel: str, n: int) -> PackRef | None:
+    m = _PACK_VALUE.fullmatch(value.strip())
+    return PackRef(m.group(1), m.group(2), m.group(3), rel, n) if m else None
+
+
+def _section_1_profile(s1: Section | None, problems: list) -> tuple[PackRef | None, tuple[str, int] | None]:
+    pack: PackRef | None = None
+    output: tuple[str, int] | None = None
+    first: dict[str, int] = {}
+    if not s1:
+        return pack, output
+    for (n, orig), st in zip(s1.body, _masked("\n".join(t for _, t in s1.body))):
+        for label, rx in (("Pack", _S1_PACK), ("Output language", _S1_OUTPUT)):
+            m = rx.match(orig) if rx.match(st) else None
+            if not m:
+                continue
+            if label in first:
+                problems.append(("prd.md", n, f"{label}: repeated (first at line {first[label]}); one {label}: line per PRD"))
+                continue
+            first[label] = n
+            value = m.group(1).strip()
+            if label == "Pack":
+                pack = _pack_ref(value, "prd.md", n)
+                if pack is None:
+                    problems.append(("prd.md", n, PACK_GRAMMAR))
+            elif _LANG_TAG.fullmatch(value):
+                output = (value, n)
+            else:
+                problems.append(("prd.md", n, OUTPUT_GRAMMAR))
+    return pack, output
+
+
+def _target_value(value: str, rel: str, n: int) -> tuple[PackRef | None, str | None] | None:
+    """The parts of a `Target:` value; None when it is malformed or names neither part."""
+    parts = [x.strip() for x in value.split(",")] if value.strip() else []
+    pack: PackRef | None = None
+    lang: str | None = None
+    if not 1 <= len(parts) <= 2:
+        return None
+    for i, part in enumerate(parts):
+        if part.startswith("pack ") and i == 0 and pack is None:
+            pack = _pack_ref(part[5:], rel, n)
+            if pack is None:
+                return None
+        elif part.startswith("output language ") and lang is None and _LANG_TAG.fullmatch(part[16:].strip()):
+            lang = part[16:].strip()
+        else:
+            return None
+    return pack, lang
+
+
+def _targets(docs: dict[str, str], problems: list) -> dict[str, Target]:
+    """Each features file's `Target:` line: column 0, after the level-1 heading, before the first level-3 heading."""
+    out: dict[str, Target] = {}
+    for rel in (r for r in docs if re.fullmatch(r"features/[^/]+\.md", r)):
+        area = Path(rel).stem
+        masked = _masked(docs[rel])
+        h1 = next((n for n, st in enumerate(masked, 1) if st.startswith("# ")), 0)
+        seen_h3 = False
+        for n, (orig, st) in enumerate(zip(docs[rel].split("\n"), masked), 1):
+            if st.startswith("### "):
+                seen_h3 = True
+            m = _TARGET_LINE.match(orig) if _TARGET_LINE.match(st) else None
+            if not m:
+                continue
+            if seen_h3:
+                problems.append((rel, n, TARGET_PLACE))
+            elif n < h1:
+                problems.append((rel, n, TARGET_ABOVE))
+            elif area in out:
+                problems.append((rel, n, f"Target: repeated (first at line {out[area].line}); one Target: line per area"))
+            else:
+                parts = _target_value(m.group(1), rel, n)
+                if parts is None:
+                    problems.append((rel, n, TARGET_GRAMMAR))
+                    out[area] = None  # the line is taken: a later one is still a repeat
+                else:
+                    out[area] = Target(area, rel, n, *parts)
+    return {a: t for a, t in out.items() if t is not None}
+
+
 def load(prd_dir: Path) -> Prd:
     prd_dir = Path(prd_dir).resolve()
     # the exact name: on a case-insensitive filesystem `prd.md` also "exists" as PRD.md
@@ -798,10 +919,14 @@ def load(prd_dir: Path) -> Prd:
 
     s8 = sec(8)
     snapshots = _snapshots(prd_dir, findings) if LINKS_FILE in docs else {}  # R-10c: no links.md, no snapshot
+    problems: list[tuple[str, int, str]] = []
+    pack_ref, output_language = _section_1_profile(s1, problems)
+    targets = _targets(docs, problems)
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
                adoption=_adoption(docs), operations=_operations(docs.get("operations.md", "")), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
                links=_links(docs[LINKS_FILE]) if LINKS_FILE in docs else None, snapshots=snapshots, change_sets=_change_sets(prd_dir),
-               adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)))
+               adoption_unmigrated=ADOPTION_FILE not in docs and bool(s8 and tables(s8.body)),
+               pack_ref=pack_ref, output_language=output_language, targets=targets, profile_problems=problems)
 
 
 def gate_of(prd: Prd, level: str) -> str | None:

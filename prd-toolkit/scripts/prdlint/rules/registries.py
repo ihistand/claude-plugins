@@ -1,5 +1,4 @@
 """Registry rules (registries, runbook-actors) and the skill-installed lookup."""
-import json
 import os
 import re
 import shlex
@@ -11,6 +10,7 @@ from pathlib import Path
 from ..findings import Finding
 from ..markdown import sections, tables
 from ..model import DRIFT_CHECKS, Prd, gate_of, production_envs, repo_root
+from ..packs import installed_plugins
 from ..registry import rule
 
 STANDARDS_DECISIONS = {"enforced", "declined", "proposed"}
@@ -24,18 +24,10 @@ def installed_skill(skill: str, repo_root: Path) -> bool:
     `installPath`, `<installPath>/skills/<skill>/SKILL.md` must also exist; without one, plugin presence is enough."""
     if ":" in skill:
         plugin, name = skill.split(":", 1)
-        path = Path(os.environ.get("PRD_PLUGINS_FILE") or Path.home() / ".claude/plugins/installed_plugins.json")
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return False
-        plugins = data.get("plugins", data) if isinstance(data, dict) else {}
-        if not isinstance(plugins, dict):
-            return False
-        entries = [v for k, v in plugins.items() if str(k).startswith(plugin + "@")]
+        entries = [v for k, v in installed_plugins().items() if k.startswith(plugin + "@")]
         if not entries:
             return False
-        installs = [i for v in entries for i in (v if isinstance(v, list) else [v])]
+        installs = [i for v in entries for i in v]
         paths = [i["installPath"] for i in installs if isinstance(i, dict) and isinstance(i.get("installPath"), str)]
         return not paths or any((Path(p) / "skills" / name / "SKILL.md").is_file() for p in paths)
     return any((base / ".claude/skills" / skill / "SKILL.md").is_file() for base in (Path.home(), repo_root))

@@ -32,6 +32,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.")
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--list-rules", action="store_true")
+    parser.add_argument("--list-packs", action="store_true", help="print every pack on this machine, built-ins first")
     parser.add_argument("--ci", action="store_true", help="skip the checks that need this machine's skills and linters")
     parser.add_argument("--sample-tids", type=int, metavar="N")
     try:
@@ -44,6 +45,13 @@ def main(argv: list[str]) -> int:
 
         for name in sorted(registry.RULES):
             print(f"{name} {registry.SEVERITY.get(name, 'error')}")
+        return 0
+    if args.list_packs:
+        from prdlint import packs
+
+        for pack in packs.discover():
+            about = f" — {pack.description}" if pack.description else ""
+            print(f"{pack.name} {pack.version} ({pack.source}){about}")
         return 0
     if not args.prd_dir:
         parser.print_usage(sys.stderr)
