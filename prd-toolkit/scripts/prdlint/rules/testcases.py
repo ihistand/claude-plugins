@@ -103,6 +103,12 @@ def _expect(tc: TestCase) -> dict:
     return e if isinstance(e, dict) else {}
 
 
+def is_judged(tc: TestCase) -> bool:
+    """A judged case: `expect` is a mapping holding `rubric` (a model grader scores it)."""
+    e = tc.data.get("expect")
+    return isinstance(e, dict) and "rubric" in e
+
+
 def _blank(v) -> bool:
     return v is None or (isinstance(v, (str, list, dict)) and len(v) == 0)
 
@@ -308,7 +314,7 @@ def sufficiency(prd: Prd):
             yield miss("expect", "expect is missing", tc.line if "expect" not in d else None)
             expect = {}
         eline = _line(tc, "expect")
-        if _blank(expect.get("output")):
+        if not is_judged(tc) and _blank(expect.get("output")):
             yield miss("expect", "expect.output is missing", expect.key_lines.get("output", eline) if hasattr(expect, "key_lines") else eline)
         for key in ("effects", "errors"):
             if not isinstance(expect.get(key), list):
@@ -321,6 +327,30 @@ def sufficiency(prd: Prd):
                 yield miss("steps", "an acceptance case needs steps: a non-empty list of strings", tc.line if "steps" not in d else None)
             if not isinstance(d.get("signoff"), str) or not d["signoff"].strip():
                 yield miss("signoff", "an acceptance case needs signoff: the business owner", tc.line if "signoff" not in d else None)
+
+
+@rule("judged-case")
+def judged_case(prd: Prd):
+    for tc in _cases(prd):
+        if not is_judged(tc):
+            continue
+        e = tc.data["expect"]
+        kl = getattr(e, "key_lines", {})
+        eline = _line(tc, "expect")
+
+        def bad(key: str, msg: str):
+            return Finding(tc.file, kl.get(key, eline), "judged-case", f"{tc.id}: {msg}")
+
+        r = e["rubric"]
+        if not (isinstance(r, list) and r and all(isinstance(x, str) and x.strip() for x in r)):
+            yield bad("rubric", "rubric must be a non-empty list of non-empty strings")
+        th = e.get("threshold")
+        if isinstance(th, bool) or not isinstance(th, (int, float)) or not 0 < th <= 1:
+            yield bad("threshold" if "threshold" in e else "rubric", "threshold must be a number in (0, 1]")
+        if "runs" in e and (isinstance(e["runs"], bool) or not isinstance(e["runs"], int) or e["runs"] < 1):
+            yield bad("runs", "runs must be an integer of at least 1")
+        if "output" in e:
+            yield bad("output", "a judged case has no expect.output")
 
 
 @rule("test-refs")

@@ -1,7 +1,7 @@
 # prd-toolkit
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
-repo with contracts and black-box test cases, a 38-rule linter and trace checks, a test agent
+repo with contracts and black-box test cases, a 39-rule linter and trace checks, a test agent
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
@@ -61,7 +61,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
   other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
-- `--list-rules` prints the 38 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
+- `--list-rules` prints the 39 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 

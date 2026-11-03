@@ -61,9 +61,7 @@ def test_document_manifest_loads():
 
 def test_document_prd_lints_clean_but_for_the_judged_case(tmp_path):
     found = _lint(document_prd(tmp_path))
-    # Task 5 exempts judged cases; this becomes []
-    assert [(f.rule, f.file, "T-001.2" in f.message) for f in found] == [("sufficiency", "test-cases/install.yaml", True)]
-    assert "output" in found[0].message
+    assert found == []
 
 
 def test_doc_target_resolves_both_ways(tmp_path):
