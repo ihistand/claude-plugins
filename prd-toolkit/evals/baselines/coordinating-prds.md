@@ -222,7 +222,7 @@ no-snapshot-edit's one Write.
 | `changing-hands-off-to-change-set` (`linked`, greet) | 1.00 | 0.50 | `impact` ran, PRD left `In review` at a bumped version, no approval commit, no push. Without the plugin: no `impact`, no stop. |
 | `change-set-no-snapshot-edit` (`cs-running`, client) | 1.00 | 0.67 | No Edit, Write or Bash write under `contracts/upstream/`. Without the plugin one Write hit it. |
 | `change-set-waits-for-upstream` (`cs-running`, client) | 1.00 | 1.00 | No `/prd-build`, no builder, client FR-001 stays `approved`. Does not discriminate (the baseline holds too). |
-| `change-set-no-push` (`cs-running` with a bare origin per repo, client) | **0.00** | 0.00 | **Stayed red** (see below). |
+| `change-set-no-push` (`cs-running` with a bare origin per repo, client) | **0.00** | 0.00 | **Stayed red** in this run (see below); GREEN on the rerun after the trigger fix, 1.00/0.00 over two runs (see **`change-set-no-push` rerun after the trigger fix** above). |
 
 Grader changes during the run (recorded, not result-tuning of a pass): `no-approval-commit` first used an inline `(?m)`
 flag, which the harness's JavaScript regex rejects ("grader threw"), so it was rewritten without flags; the first

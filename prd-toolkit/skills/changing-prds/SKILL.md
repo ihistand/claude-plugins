@@ -152,6 +152,9 @@ cite the entry: `Refs: FR-001, E-004`.
    when each unreachable one is a consumer the record's Log leaves out: go on, and step 5's
    approval is the change set's (`running-a-change-set.md` step 3), its commit adding
    `-m "Change-set: <start-prd>/CS-<nnn>"`.
+   **A new link.** When this change adds a link, `prd_links.py add` writes the upstream's
+   `links.md` Consumers row, uncommitted, in the upstream repository. That row needs its own
+   `/prd-change` there (a patch bump); until it lands, `check` reports `missing row`.
 3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
    §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
    lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
