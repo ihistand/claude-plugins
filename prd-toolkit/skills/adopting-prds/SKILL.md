@@ -216,6 +216,44 @@ requirement, as long as it answers each one. A reply that names no ID ("looks fi
 When nobody can answer (a headless run, no reply), stop and present the confirmations, and
 leave the area `extracted`.
 
+**The form.** Ask here first: the owner answers every item in a local page, not in the chat.
+Write `.prd-confirm-<area>-summaries.json` at the repository root, never inside the PRD folder or a
+test root, because the tester reads those folders. It is a JSON object mapping each item ID to one
+or two plain sentences that say what the item means to the business, each sentence contains its ID
+and is at most 400 characters. The items are `FR-nnn` for a requirement, `E-nnn` for an `E-nnn`
+entry, `Q-nn` for a §13 question of the area and `<contract file>:<key path>` for a marker. Start
+the form with the Bash tool's `run_in_background`, one command per Bash call, written with the
+`<scripts>` path above, never `${CLAUDE_PLUGIN_ROOT}`:
+`uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> --summaries .prd-confirm-<area>-summaries.json`.
+Read the `url=` line, the first line of its output, give the owner that address as a clickable
+link, and wait for the completion notice: never poll it and never sleep. Then by its exit code:
+
+- exit `0`: the owner pressed Done. Read `.prd-confirm-<area>.json`, then run `status`. Any
+  `open <ID>` line is an item that changed since it was answered, and a changed item is no answer:
+  ask for that item again, through serve again or a fallback below. Apply the answers of the other
+  items. Write each answer into the PRD as soon as you apply it, by
+  its `decision`:
+  - `confirm`: status `live (since <version>)`, the §11 row `live` with that Since.
+  - `correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`
+    (the full new text of each edited AC).
+  - `bug`: the `E-nnn` stays open, and the requirement is corrected to the intended behaviour, status
+    `approved`, its test cases revised to match.
+  - `ask`: status `approved`, an `[ASSUMPTION A-nn]` and a §12 `awaiting <who>` row, as above.
+  - `intended`: the behaviour becomes requirement text, and the entry's Resolution names who
+    confirmed it and when.
+  - `answer` on a question: the answer goes into the PRD. `fix` on a question: the requirement it
+    blocks becomes a correction. `answer` on a marker: the value replaces the marker.
+
+  When every answer is applied, delete `.prd-confirm-<area>.json` and
+  `.prd-confirm-<area>-summaries.json`; both are never committed.
+- exit `3`: the owner stopped (Ctrl-C, or the idle timeout). Run `prd_confirm.py status docs/prd/<slug> --area <area>`,
+  say how many items are answered and that a new serve resumes them, and leave the area `extracted`.
+- exit `2`: a refusal, with `prd_confirm: <why>` on stderr. Fix what it names, or take a fallback.
+
+When the form cannot be served (a headless run, where nobody can open the URL, or the owner asks
+for another way), take the fallbacks: AskUserQuestion when the tool is available, otherwise the
+checklist file. A headless run stops with the area `extracted`.
+
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
 per call, one question per requirement, its header the ID. Its preview is the whole block and its `Source:` excerpt, as the `implement` pack prints them, for that one requirement, because a confirmation covers only what the user was shown. Run it once per requirement, one command per Bash call:

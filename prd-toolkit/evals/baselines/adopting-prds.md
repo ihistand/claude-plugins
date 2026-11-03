@@ -572,3 +572,24 @@ changed. Answer, verbatim:
 > 2. **`test_search_finds_a_note` now fails.** This older test cites no T-id. It only passed because it used the note an earlier test left behind, and the new empty-store fixture stops that. T-002.1 covers searching now, so I'd delete it. The alternatives are rewriting it to add its own note, or leaving it red. Which do you want?
 >
 > Once you answer both, I'll rerun the suite. The gate is T-001.1 `pass` and T-002.1 `known-failing E-001`. After that comes step 5: clearing the open items, the dry run, and your approval for `1.0.0`.
+
+## E1 (0.7.1): adopting-confirm-headless-fallback
+
+Step 3 now confirms through the form (`prd_confirm.py serve`); a headless run cannot open it and
+takes the fallbacks. Start repo: `scaffolds/notes_repo.py` state `extracted` (a Draft PRD, the
+`notes` area `extracted`, FR-001 and FR-002 `as-built` with their `Source:` lines, E-001 open). The
+prompt asks for the confirmation step, says nobody is there and no browser can open, and forbids
+questions. Graders: the skill fired; no Edit or Write sets a block `live`; no block in
+`features/notes.md` is `live`; the `notes` row of `adoption.md` is still `extracted`.
+
+One run each, Sonnet, with and without the plugin, Claude Code 2.1.317:
+
+```
+claude plugin eval ./prd-toolkit --case 'adopting-confirm-headless-fallback' --runs 1 --model sonnet --no-publish --scaffold --trust-plugin --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" --threshold 0 --json
+```
+
+| Arm | Score | Turns | Notes |
+|---|---|---|---|
+| with plugin | 1.00 | 8 | The skill fired (a with-only indicator); nothing `live`; the area stayed `extracted`. |
+| without plugin | 1.00 | 5 | Same outcome; the four scored graders pass. |
+| Δ | 0.00 | | A safety case, not a discriminating one: a model told nobody can answer does not confirm on its own either. It guards against the skill's new route writing answers nobody gave. |

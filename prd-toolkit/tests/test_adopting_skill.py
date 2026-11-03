@@ -253,3 +253,88 @@ def test_confirmation_falls_back_to_a_checklist_file_outside_the_prd_folder():
     assert "a `Decision:` line the user fills in" in confirm
     assert "A blank or unrecognised `Decision:` line is no answer" in confirm
     assert "Delete the checklist file once every item is answered" in confirm
+
+
+# --- 0.7.1: step 3 confirms through the form ---
+
+def confirm_step() -> str:
+    return step(SKILL.read_text(encoding="utf-8"), 3)
+
+
+def form_part() -> str:
+    """The text of step 3 about the form, up to the fallbacks."""
+    c = confirm_step()
+    assert "**The form.**" in c
+    return c.split("**The form.**", 1)[1].split("**How to ask.**", 1)[0]
+
+
+def test_the_form_is_the_first_route_and_its_summaries_sit_outside_the_prd_and_test_roots():
+    c = confirm_step()
+    assert c.index("**The form.**") < c.index("**How to ask.**") < c.index("**The checklist file.**")
+    f = form_part()
+    assert "`.prd-confirm-<area>-summaries.json`" in f
+    assert "at the repository root, never inside the PRD folder or a test root" in f
+    assert "one or two plain sentences" in f and "contains its ID" in f and "at most 400 characters" in f
+
+
+def test_the_form_is_served_in_the_background_one_command_per_call_never_with_the_plugin_root_variable():
+    f = form_part()
+    assert ("uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> "
+            "--summaries .prd-confirm-<area>-summaries.json") in f
+    assert "`run_in_background`" in f and "one command per Bash call" in f
+    assert "first line of its output" in f and "`url=`" in f
+    assert "clickable link" in f
+    assert "never poll it and never sleep" in f
+    assert "never `${CLAUDE_PLUGIN_ROOT}`" in f
+
+
+def test_the_form_exit_codes_are_handled_and_exit_three_leaves_the_area_extracted():
+    f = form_part()
+    assert "exit `0`" in f and "exit `3`" in f and "exit `2`" in f
+    assert "Run `prd_confirm.py status docs/prd/<slug> --area <area>`" in f
+    assert "leave the area `extracted`" in f.split("exit `3`", 1)[1]
+    assert "prd_confirm:" in f.split("exit `2`", 1)[1]
+
+
+def test_exit_zero_rechecks_with_status_and_a_changed_item_is_no_answer():
+    f = form_part()
+    after = f.split("exit `0`", 1)[1]
+    assert "Read `.prd-confirm-<area>.json`" in after
+    assert "run `status`" in after
+    assert "Any `open <ID>` line" in after and "changed since it was answered" in after
+    assert "is no answer" in after and "serve again" in after
+
+
+def test_each_decision_maps_to_its_prd_change():
+    f = form_part()
+    for needle in (
+        "`confirm`: status `live (since <version>)`",
+        "`correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`",
+        "`bug`: the `E-nnn` stays open, and the requirement is corrected to the intended behaviour",
+        "`ask`: status `approved`, an `[ASSUMPTION A-nn]` and a §12 `awaiting <who>` row",
+        "`intended`: the behaviour becomes requirement text, and the entry's Resolution names who confirmed it and when",
+        "`answer` on a question: the answer goes into the PRD",
+        "`fix` on a question: the requirement it blocks becomes a correction",
+        "`answer` on a marker: the value replaces the marker",
+    ):
+        assert needle in f, needle
+    assert "Write each answer into the PRD as soon as you apply it" in f
+
+
+def test_both_files_are_deleted_once_every_answer_is_applied_and_neither_is_committed():
+    f = form_part()
+    assert "delete `.prd-confirm-<area>.json` and `.prd-confirm-<area>-summaries.json`" in f
+    assert "never committed" in f
+
+
+def test_a_form_that_cannot_be_served_takes_the_fallbacks_and_a_headless_run_stops_extracted():
+    c = confirm_step()
+    f = form_part()
+    assert "cannot be served" in f and "nobody can open the URL" in f
+    assert "AskUserQuestion when the tool is available, otherwise the checklist file" in f
+    assert "A headless run stops with the area `extracted`" in f
+    # the earlier fallbacks stay
+    assert "ask with the AskUserQuestion tool, at most four requirements per call" in c
+    assert "`.prd-confirm-<area>.md` at the repository top" in c
+    assert "Confirmation is the user's word, requirement by requirement" in c
+    assert "A reply that names no ID" in c

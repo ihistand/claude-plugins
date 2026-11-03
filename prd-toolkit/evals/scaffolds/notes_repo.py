@@ -2,9 +2,10 @@
 optionally the notes PRD at docs/prd/notes in one of its adoption states.
 
 Usage (from the eval workspace; never write into the plugin tree):
-    python3 -B <this file> <dst> <bare|confirmed|export-confirmed>
+    python3 -B <this file> <dst> <bare|extracted|confirmed|export-confirmed>
 
 bare       the legacy service with an export module and a pyproject, no PRD
+extracted  a Draft PRD whose `notes` area is `extracted`: FR-001 and FR-002 `as-built`, E-001 open
 confirmed  a Draft PRD whose `notes` area is `confirmed` (FR-001 confirmed, FR-002 corrected)
 export-confirmed  first the PRD Approved at 1.0.0 with `notes` adopted (T-002.1 known-failing
            E-001, characterization tests in tests/), then the `export` area extracted and
@@ -415,6 +416,29 @@ def export_confirmed_files(sha_app: str, sha_export: str) -> dict[str, str]:
     return files
 
 
+def extracted_files(sha_app: str) -> dict[str, str]:
+    """The Draft PRD straight after step 2: both requirements `as-built` (FR-002 as the code does it)."""
+    files = prd_files(sha_app)
+    prd = files["prd.md"]
+    prd = _sub(prd, "| FR-001 | Add a note | live | features/notes.md | 1.0.0 |\n",
+               "| FR-001 | Add a note | as-built | features/notes.md |  |\n")
+    prd = _sub(prd, "| FR-002 | Search notes | approved |", "| FR-002 | Search notes | as-built |")
+    prd = _sub(prd, "| 0.1.0 | 2026-10-29 | notes area confirmed: FR-001 confirmed, FR-002 corrected (ignore case) | FR-001, FR-002, AC-002.1 |\n", "")
+    files["prd.md"] = prd
+    files["adoption.md"] = _sub(files["adoption.md"], "| notes | confirmed |", "| notes | extracted |")
+    feat = files["features/notes.md"]
+    feat = _sub(feat, "Status: live (since 1.0.0)", "Status: as-built")
+    feat = _sub(feat, "Status: approved", "Status: as-built")
+    feat = _sub(feat, "it shall return, in insertion order, the\n  text of every stored note that contains `term`, ignoring case.",
+                "it shall return, in insertion order, the\n  text of every stored note that contains `term`, matching case exactly.")
+    files["features/notes.md"] = feat
+    cases = files["test-cases/notes.yaml"]
+    cases = _sub(cases, 'notes_added_first: ["Buy Milk", "call bob"]', 'notes_added_first: ["buy milk", "call bob"]')
+    cases = _sub(cases, 'output: ["Buy Milk"]', 'output: ["buy milk"]')
+    files["test-cases/notes.yaml"] = cases
+    return files
+
+
 def main(dst: str, state: str) -> None:
     repo = make_legacy_repo(Path(dst))
     (repo / "src/notes/export.py").write_text(EXPORT, encoding="utf-8")
@@ -427,6 +451,10 @@ def main(dst: str, state: str) -> None:
     if state == "bare":
         return
     sha_app = git(repo, "log", "-1", "--format=%h", "--", "src/notes/app.py").strip()
+    if state == "extracted":
+        _write_prd(repo, extracted_files(sha_app))
+        commit(repo, "PRD: notes area extracted", "docs", date="2026-01-07T12:00:00+0000")
+        return
     if state == "confirmed":
         _write_prd(repo, prd_files(sha_app))
         commit(repo, "PRD: notes area confirmed", "docs", date="2026-01-07T12:00:00+0000")
@@ -447,6 +475,6 @@ def _write_prd(repo: Path, files: dict[str, str]) -> None:
         p.write_text(text, encoding="utf-8")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[2] not in ("bare", "confirmed", "export-confirmed"):
-        sys.exit("usage: notes_repo.py <dst> <bare|confirmed|export-confirmed>")
+    if len(sys.argv) != 3 or sys.argv[2] not in ("bare", "extracted", "confirmed", "export-confirmed"):
+        sys.exit("usage: notes_repo.py <dst> <bare|extracted|confirmed|export-confirmed>")
     main(sys.argv[1], sys.argv[2])
