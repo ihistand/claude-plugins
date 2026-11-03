@@ -479,7 +479,7 @@ TESTING = """# Testing
 ## Harness
 
 - **Lifecycle.** Not applicable: nothing is started; system tests call the installed launcher, which exits.
-- **Environment switch.** The environment variable `TEST_ENV` names the environment (`staging`); the tests call `.deploy/$TEST_ENV/bin/welcome`, and the install of greet that GREET names for it in `contracts/config.yaml`.
+- **Environment switch.** The environment variable `TEST_ENV` names the environment (`staging`) and must be set: a run without it fails before any test. The tests call `.deploy/$TEST_ENV/bin/welcome`, and the install of greet that GREET names for it in `contracts/config.yaml`, a path relative to the repository root.
 - **Database access.** Not applicable: no database.
 - **Tools on the runner.** `uv` and `python3` on PATH; `tests/` sits at the repository root; greet's staging install at the path GREET names.
 - **Clean state.** Not applicable: the tests keep no state.
