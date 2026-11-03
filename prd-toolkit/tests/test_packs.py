@@ -17,7 +17,7 @@ TOOLKIT_PACKS = Path(packs.__file__).resolve().parents[2] / "packs"
 
 @pytest.fixture(autouse=True)
 def toolkit_080(monkeypatch):
-    """The toolkit is 0.7.2 until the release task; the range tests run as 0.8.0."""
+    """The range tests pin the toolkit to 0.8.0, whatever the manifest says."""
     monkeypatch.setattr(packs, "toolkit_version", lambda: "0.8.0")
 
 
@@ -200,7 +200,7 @@ def test_service_manifest_holds_the_spec_values():
                                                          "classification", "dependencies", "fixtures"]
     assert {c["validator"] for c in pack.contract_types} == {"built-in"}
     assert (pack.target_kinds, pack.levels, pack.harness, pack.vocabulary, pack.builder_tests) == ({}, [], {}, [], "unit")
-    assert packs.in_range("0.7.2", pack.data["toolkit"]) and packs.in_range("0.8.9", pack.data["toolkit"])
+    assert packs.in_range("0.8.0", pack.data["toolkit"]) and packs.in_range("0.8.9", pack.data["toolkit"])
 
 
 def test_plugin_pack_found_through_the_plugins_file(prd, tmp_path, monkeypatch):

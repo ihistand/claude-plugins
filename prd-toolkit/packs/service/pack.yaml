@@ -1,6 +1,6 @@
 pack: service
 version: 1.0.0
-toolkit: ">=0.7.2,<0.9"
+toolkit: ">=0.8.0,<0.9"
 description: Services with an API, a database or events; the PRD of prd-toolkit 0.7.
 contract-types:
   - {type: openapi, files: contracts/openapi.yaml, validator: built-in}

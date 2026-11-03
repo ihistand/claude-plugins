@@ -300,6 +300,57 @@ Required, not machine-checked:
 - `testing.md` has a Fixtures row per dataset: the state it creates and the load and teardown commands.
 - The state it creates is stated in plain words, so a tester can predict results without opening the file.
 
+## pack
+
+A pack is a folder with a `pack.yaml` that adds contract types, target kinds, test levels and defaults to
+a PRD. The built-in `service` pack declares the types above (each `validator: built-in`); the built-in
+`document` pack declares `outline`. A plugin ships a pack in `prd-packs/<name>/`, and a PRD that names it
+gets it vendored into `.prd-toolkit/packs/<name>/` by `prd_hooks.py install`.
+
+A pack's contract type is a §7 row with the Validator cell `pack`:
+
+| Type | Files (glob) | Validator |
+|---|---|---|
+| outline | `contracts/outline.yaml` | pack |
+
+Manifest keys: `pack` (the folder name), `version` and `toolkit` (a version range) are required;
+`description`, `contract-types` (`{type, files, validator}`), `target-kinds` (a kind and the type its names
+resolve in), `levels`, `harness`, `standards`, `skills`, `vocabulary`, `builder-tests` (`unit` or `none`),
+`rubrics`, `clarify`, `grader` and `languages` are optional.
+
+Lint-checked: the validator command runs from the PRD root with the matching files appended, and exit 0
+passes, as for a custom type. `${PACK}` in a manifest command expands to the pack's folder, after the
+command is split into arguments, so a path with spaces stays one argument. It is the only expansion. Only
+the `service` pack may use `validator: built-in`. A `pack` row whose type no resolved pack declares is a
+`contracts-valid` violation.
+
+Required, not machine-checked: a validator that fails on a real defect (prove it can fail).
+`levels`, `harness`, `standards` and `skills` are defaults the authoring skill copies into `testing.md`
+and §5/§6 as `proposed` rows; lint never reads them from the manifest.
+
+## outline
+
+`contracts/outline.yaml`, from the `document` pack: one top-level key per document. `target-kinds` maps
+`doc` to it, so a test case's `target: doc:install-guide` resolves.
+
+```yaml
+# file: contracts/outline.yaml
+install-guide:
+  path: docs/guide/install.md
+  audience: first-time users on Windows or macOS
+  purpose: install the CLI and run it once
+  sections: [Requirements, Install, First run, Common problems]
+  terms: [CLI, token]
+  length: {min-words: 300, max-words: 1200}
+```
+
+Lint-checked, by the pack's `validate_outline.py`: every key has `path`, `audience`, `purpose` and a
+non-empty `sections`; `path` is a relative `.md` path outside the PRD folder; `terms` and `sections` are
+lists of strings; `length`, when present, holds integers with `min-words` at most `max-words`.
+
+Required, not machine-checked: `audience` names the reader's prior knowledge, and every `terms` entry is in
+the glossary.
+
 ## components
 
 UI component contracts live in `prd.md` §10, not under `contracts/`. Lint does not check them.

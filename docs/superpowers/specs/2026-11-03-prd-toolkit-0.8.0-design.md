@@ -13,6 +13,24 @@
 >   which the builder neither writes nor waits for (0.4), so the builder instead runs the §5
 >   standards linters the area's pack proposes, and the `checks` level runs at reconcile like every
 >   non-unit level. Ratified by the owner 2026-11-03.
+> - §7 (plan ruling): the quote check collapses every run of whitespace to one space on both the quote
+>   and the output, and normalizes nothing else (case, punctuation and quotes stay exact), so a grader
+>   that re-wraps a line passes and one that paraphrases does not.
+> - §7 (plan ruling): the default grader runs `claude -p --output-format json --json-schema <schema>
+>   --tools "" --strict-mcp-config --setting-sources "" --disable-slash-commands --no-session-persistence
+>   [--model M]` with the prompt on stdin and a fresh temporary directory as cwd. It does not use `--bare`,
+>   which requires `ANTHROPIC_API_KEY`. The binary is `$PRD_JUDGE_CLAUDE` when set (tests), else `claude`.
+> - §9 (plan ruling): authoring phase 1 lists packs with `prd_lint.py --list-packs`, one line per pack,
+>   `<name> <version> (<source>) — <description>`, built-ins first, then installed plugins in
+>   `installed_plugins.json` order; no new script.
+> - §4 (plan ruling): `${PACK}` is substituted per argument after `shlex.split`, so a pack path with
+>   spaces stays one argument.
+> - §3 (plan ruling): the `Target:` line is the first line at column 0 matching `^Target:` after the
+>   level-1 heading and before the first level-3 heading, with blank lines and HTML comments allowed
+>   between. A `Target:` line after the first level-3 heading is a `pack-resolves` finding (`Target: must
+>   come before the first requirement`), and one above the level-1 heading is another (`Target: must come
+>   after the file's level-1 heading`).
+> - §13 P3 (R28): the stub plugin is found through a `PRD_PLUGINS_FILE` list, since discovery does not see `--plugin-dir` plugins.
 > - §1, §9, §16 (owner, 2026-11-03): the 0.8 line is renumbered (umbrella Revisions): the machine
 >   interface is 0.8.1, best practices 0.8.2, conversion 0.8.3. The changing-prds refusal names 0.8.3.
 
@@ -476,6 +494,9 @@ a patch bump with the §14 row `format: target profiles (prd-toolkit 0.8)`.
   `claude -p` from its harness command, which needs network access in that sandbox.
 - **PRD languages** are `en` and `es` unless a pack adds a table; labels stay English.
 - **Documents** are Markdown only; another format needs a pack.
+- **Pack discovery reads `~/.claude/plugins/installed_plugins.json`** (override: the `PRD_PLUGINS_FILE`
+  environment variable). A plugin loaded only with `claude --plugin-dir` is not in that file, so its
+  pack is not found as a source.
 
 ## 16. Out of scope for 0.8.0
 

@@ -1,6 +1,6 @@
 pack: document
 version: 1.0.0
-toolkit: ">=0.7.2,<0.9"
+toolkit: ">=0.8.0,<0.9"
 description: "Markdown documents written for people: a user guide, a runbook for humans, a policy."
 contract-types:
   - {type: outline, files: contracts/outline.yaml, validator: "uv run --quiet --script ${PACK}/validate_outline.py"}

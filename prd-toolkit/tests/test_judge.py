@@ -351,7 +351,7 @@ def test_not_a_prd_exits_2(guide, tmp_path):
 def test_a_pack_grader_under_a_spaced_path_runs_and_the_quote_check_applies(guide, tmp_path, monkeypatch):
     root, out = guide
     install = tmp_path / "My Plugins/demo"
-    folder = write_pack(install / "prd-packs", "demo", "1.0.0", toolkit=">=0.7.2,<0.9", description="Demo.",
+    folder = write_pack(install / "prd-packs", "demo", "1.0.0", toolkit=">=0.8.0,<0.9", description="Demo.",
                         grader="${PACK}/grade.py")
     shutil.copy(FAKE, folder / "grade.py")
     (folder / "grade.py").chmod((folder / "grade.py").stat().st_mode | stat.S_IXUSR)
