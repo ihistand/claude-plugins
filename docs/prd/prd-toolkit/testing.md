@@ -18,7 +18,7 @@
 - **Clean state.** Every test starts from its own pytest `tmp_path`; a PRD folder or git repository it needs is copied or built there, and nothing is shared between tests.
 - **Subprocess environment.** A script runs with the runner's environment minus `PYTHONIOENCODING`, `PYTHONPATH` and `PYTHONHOME`, which would hide the locale or reach a bare virtual environment, plus the case's own `env`.
 - **Persistent environments.** Not applicable: no environment keeps data.
-- **Layout.** Unit tests are `prd-toolkit/tests/test_*.py`, written by the builder; the black-box characterization tests are `prd-toolkit/tests/prd/test_<area>_*.py`, with a hyphen in the area's name written as an underscore (`test_lint_cli_*.py`), each citing its T-id in its docstring as `@prd T-nnn.n`. Test roots: `prd-toolkit/tests/`
+- **Layout.** Unit tests are `prd-toolkit/tests/test_*.py`, written by the builder; the black-box characterization tests are `prd-toolkit/tests/prd/test_<area>_*.py`, with a hyphen in the area's name written as an underscore (`test_lint_cli_*.py`), with the area's shared helper beside them as `<area>_support.py` (`lint_cli_support.py`), each citing its T-id in its docstring as `@prd T-nnn.n`. Test roots: `prd-toolkit/tests/`
 - **HTTP requests.** Not applicable: no HTTP API.
 - **Fixtures.** A fixture is a PRD folder (or a file of one) under `contracts/fixtures/<name>/`; a test copies it into its `tmp_path` before running the script on it. Load paths are relative to `contracts/fixtures/`.
 - **Browser identity.** Not applicable: no UI.
