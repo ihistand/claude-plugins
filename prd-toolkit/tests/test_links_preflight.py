@@ -207,6 +207,20 @@ def test_status_check_error_is_shown(tmp_path):
     assert up and ", check: error (a PRD cannot link to itself)" in up[0], up
 
 
+def test_status_shows_git_that_cannot_run_as_a_check_error(tmp_path, monkeypatch):
+    """R-F3 as ruled for the git-missing error: an environment condition, shown as `check: error (<message>)`."""
+    from prdlint import links
+
+    orders, reports = synced(tmp_path)
+
+    def no_git(*args, **kwargs):
+        raise links.GitMissing("git cannot run: [Errno 2] No such file or directory: 'git'")
+
+    monkeypatch.setattr(links, "_git", no_git)
+    up = part(_items(reports), "Upstreams")
+    assert up and up[0].endswith(", check: error (git cannot run: [Errno 2] No such file or directory: 'git')"), up
+
+
 def test_a_run_prints_each_drift_line_it_let_through(tmp_path, monkeypatch, capsys):
     """R-13a: the run's report shows every let-through line before the run starts."""
     import prd_deploy

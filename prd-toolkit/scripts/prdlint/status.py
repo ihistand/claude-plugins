@@ -67,7 +67,7 @@ def _upstreams(prd: Prd) -> list[StatusItem]:
                                        consumers=[r for r in prd.links.consumers if not _is_url(r)]))
     try:
         lines, error = links.check(local), None
-    except (links.Refused, links.Unreachable, links.BadArgument) as e:
+    except (links.Refused, links.Unreachable, links.BadArgument, links.GitMissing) as e:  # GitMissing: the machine's, not a bug
         lines, error = [], str(e)
     out = []
     for row in prd.links.upstreams:
