@@ -274,6 +274,8 @@ Approval: 2026-11-03, "go ahead"
 
 
 def record(prd, text, name="CS-001"):
+    if not (prd / "links.md").is_file():  # R-10c: change-sets runs only in a linked PRD
+        put(prd, "links.md", links_md(upstreams=""))
     put(prd, f"changes/{name}.md", text)
 
 

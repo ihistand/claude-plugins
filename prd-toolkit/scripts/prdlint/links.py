@@ -47,6 +47,10 @@ class BadArgument(ValueError):
     """A malformed location or Needs value: a usage error."""
 
 
+class GitMissing(Exception):
+    """git cannot run at all: a tool error (exit 2), never an unreachable side."""
+
+
 # ---------------------------------------------------------------- git
 
 def _timeout() -> float:
@@ -58,8 +62,8 @@ def _timeout() -> float:
 
 def _git(cwd: Path, *args: str, input: bytes | None = None) -> subprocess.CompletedProcess:
     """Run git in `cwd`: no terminal prompt (nor an ssh passphrase prompt, unless the user set GIT_SSH_COMMAND), no
-    optional locks, bounded by the timeout. Raises Unreachable on a timeout or when git cannot start; a non-zero
-    exit is the caller's to judge."""
+    optional locks, bounded by the timeout. Raises Unreachable on a timeout and GitMissing when git cannot start; a
+    non-zero exit is the caller's to judge."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
     env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     limit = _timeout()
@@ -67,7 +71,7 @@ def _git(cwd: Path, *args: str, input: bytes | None = None) -> subprocess.Comple
         p = subprocess.Popen(["git", *args], cwd=cwd, env=env, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     except OSError as e:
-        raise Unreachable(f"git cannot run: {e}") from e
+        raise GitMissing(f"git cannot run: {e}") from e
     try:
         out, err = p.communicate(input, timeout=limit)
     except subprocess.TimeoutExpired:
@@ -130,7 +134,8 @@ def parse_location(cell: str) -> Location:
 
 
 def _cache_dir(url: str) -> Path:
-    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    xdg = os.environ.get("XDG_CACHE_HOME", "")
+    base = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".cache"  # a relative value is ignored, per XDG
     return base / "prd-toolkit/links" / hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
 
 

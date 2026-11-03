@@ -5,7 +5,9 @@ crossing kinds (op, table, event, job, a custom type) cite across repositories. 
 the citing PRD need not declare it (R-10b), so every prefixed kind that is not a built-in target kind crosses;
 `sync` resolves it in the upstream and `upstream-refs` in the snapshot, whose header names the type. A prose span
 `<a>/<t>.<c>` cites table `t` only when `<a>` is a name in the Upstreams table, so paths such as
-`src/importer.py` stay prose. `sync` and the `snapshot-cited` and `upstream-refs` rules share this.
+`src/importer.py` stay prose, and a span whose last part is a file extension (`greet/cli.py`) is a path, not a table
+citation. A table name is cited lowercased, as `test-refs` matches it; the snapshot folds case the same way. `sync` and
+the `snapshot-cited` and `upstream-refs` rules share this.
 """
 import re
 from typing import NamedTuple
@@ -48,9 +50,13 @@ def cites(prd: Prd) -> list[Cite]:
         return []
     out: list[Cite] = []
 
+    from .rules.contracts import _FILE_EXTENSIONS
+
+    paths = _FILE_EXTENSIONS | {"py"}
+
     def prefixed(ref: str):
         kind, prefix, name = parse_ref(ref)
-        return (kind, prefix, name) if prefix is not None and crosses(kind) else None
+        return (kind, prefix, name.lower() if kind == "table" else name) if prefix is not None and crosses(kind) else None
 
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
@@ -77,8 +83,8 @@ def cites(prd: Prd) -> list[Cite]:
                 continue
             for m in _SPAN.finditer(line):
                 q = _PROSE_REF.fullmatch(m.group(2).strip())
-                if q and q.group(1) in names:
-                    out.append(Cite(q.group(1), "table", q.group(2), rel, n, f"`{q.group(0)}`", q.group(0), q.group(3)))
+                if q and q.group(1) in names and q.group(3) not in paths:
+                    out.append(Cite(q.group(1), "table", q.group(2).lower(), rel, n, f"`{q.group(0)}`", q.group(0), q.group(3)))
     return out
 
 

@@ -423,7 +423,8 @@ bounded by a 60-second timeout (`PRD_LINKS_TIMEOUT`); the commands never prompt.
 that holds another PRD than the row names, a PRD linking to itself, a cited item that is not in the
 upstream (nothing is written), an item of `contracts/asyncapi.yaml` (not citable across repositories),
 and drift in `check` or a consumer that cites a changed item in `impact`. Exit 2: a usage or tool error
-with nothing on stdout. Exit 3 (`check` and `impact` only): nothing drifted but a side was unreachable.
+with nothing on stdout (`prd_links: <why>` on stderr), git that cannot run in any command among them, and
+a refusal or failure of `impact` itself, so its exit 1 always means a consumer cites a changed item. Exit 3 (`check` and `impact` only): nothing drifted but a side was unreachable.
 `check --ci` exits 0 where `check` would exit 3, after printing the unreachable line; the generated
 `prd-lint` job runs it, so CI catches a break only where the other side is reachable. The deploy
 pre-flight refuses to start on exit 1 and reports exit 3. `/prd-status` shows the verdict counts for

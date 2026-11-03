@@ -643,9 +643,7 @@ def _change_set(rel: str, text: str) -> ChangeSet:
             if not _CS_STARTED.match(cs.started):
                 bad.append((n, "Started must read `YYYY-MM-DD in <prd>`"))
         elif orig.startswith("Status:"):
-            cs.status = orig[7:].strip()
-            if not _CS_STATUS.match(cs.status):
-                bad.append((n, f"Status `{cs.status}` is not proposed, approved, running, stopped: <prd>: <reason>, done or abandoned"))
+            cs.status = orig[7:].strip()  # its grammar is the change-sets rule's to report, once
         elif orig.startswith("Approval:"):
             v = orig[9:].strip()
             cs.approvals.append(v)
@@ -682,7 +680,7 @@ def _change_set(rel: str, text: str) -> ChangeSet:
             continue
         c = [x.strip() for x in r.cells]
         cs.rows.append(ChangeRow(*c, line=r.line))
-        for name, val, rx in (("Version", c[4], _CS_VERSION), ("IDs", c[5], _CS_IDS), ("Target", c[7], _CS_STATE), ("State", c[8], _CS_STATE)):
+        for name, val, rx in (("Version", c[4], _CS_VERSION), ("IDs", c[5], _CS_IDS)):  # Target and State: the rule's
             if not rx.match(val):
                 bad.append((r.line, f"{name} `{val}` is malformed"))
         if c[6] != "—" and not all(_CS_WAIT.match(w.strip()) for w in c[6].split(";")):
@@ -701,8 +699,10 @@ def _change_sets(prd_dir: Path) -> dict[str, ChangeSet]:
 
 
 def _linked_dir(prd_dir: Path, p: Path) -> bool:
+    """A file under contracts/upstream/ or changes/ of a PRD with links.md (R-10c): kept out of docs and yaml. Without
+    links.md those folders load as any other."""
     rel = p.relative_to(prd_dir).as_posix()
-    return rel.startswith((UPSTREAM_DIR + "/", CHANGES_DIR + "/"))
+    return rel.startswith((UPSTREAM_DIR + "/", CHANGES_DIR + "/")) and (prd_dir / LINKS_FILE).is_file()
 
 
 def load(prd_dir: Path) -> Prd:
@@ -797,7 +797,7 @@ def load(prd_dir: Path) -> Prd:
         testing.harness = _harness(hs.body) if hs else Harness()
 
     s8 = sec(8)
-    snapshots = _snapshots(prd_dir, findings)
+    snapshots = _snapshots(prd_dir, findings) if LINKS_FILE in docs else {}  # R-10c: no links.md, no snapshot
     return Prd(prd_dir, fm, fm_line, docs, secs, blocks, index, test_cases, yml, testing, na, assumptions, findings,
                adoption=_adoption(docs), operations=_operations(docs.get("operations.md", "")), errors_ledger=_errors_ledger(docs.get("errors.md", "")),
                links=_links(docs[LINKS_FILE]) if LINKS_FILE in docs else None, snapshots=snapshots, change_sets=_change_sets(prd_dir),

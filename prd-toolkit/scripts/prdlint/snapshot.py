@@ -88,20 +88,22 @@ def _statements(c: Contracts):
 
 
 def _comment_table(stmt) -> str | None:
+    """The table a COMMENT ON names, lowercased (a table name is matched without case, as `test-refs` does)."""
     if not isinstance(stmt, exp.Comment):
         return None
     target = stmt.this
     if isinstance(target, exp.Table):
-        return target.name
+        return target.name.lower()
     if isinstance(target, exp.Column):
-        return target.table
+        return target.table.lower()
     return None
 
 
 def _table_sql(c: Contracts, name: str) -> list[str] | None:
     """Rendered statements of one table: its CREATE, then its COMMENT ON lines sorted."""
     stmts = _statements(c)
-    create = next((s for n, s in create_tables(stmts) if n == name), None)
+    name = name.lower()
+    create = next((s for n, s in create_tables(stmts) if n.lower() == name), None)
     if create is None:
         return None
     comments = sorted(s.sql(dialect=c.dialect, pretty=True) for s in stmts if _comment_table(s) == name)
@@ -221,7 +223,7 @@ def _op_view(data: dict, section: str, path: str, method: str, op: dict) -> dict
 def items(c: Contracts) -> dict[str, set[str]]:
     """Kind -> names for the crossing kinds and each YAML custom type."""
     out: dict[str, set[str]] = {k: set() for k in CROSSING}
-    out["table"] = {n for n, _ in create_tables(_statements(c))}
+    out["table"] = {n.lower() for n, _ in create_tables(_statements(c))}  # matched without case, as test-refs does
     data = _load(c.files.get("openapi.yaml"))
     out["op"] = {oid for oid, *_ in operations_of(data)}
     names = {n for n, _ in _sections(c.files.get("events.md", ""))}
@@ -256,16 +258,16 @@ def item_text(c: Contracts, kind: str, name: str) -> str | None:
 def extract(c: Contracts, cited: set[tuple[str, str]]) -> dict[str, str]:
     """Snapshot file name -> body (no header) holding exactly the cited items."""
     have = items(c)
-    missing = sorted((k, n) for k, n in cited if n not in have.get(k, set()))
+    missing = sorted((k, n) for k, n in cited if (n.lower() if k == "table" else n) not in have.get(k, set()))
     if missing:
         raise Missing(missing)
     out: dict[str, str] = {}
-    tables = [n for k, n in cited if k == "table"]
+    tables = {n.lower() for k, n in cited if k == "table"}
     if tables:
         body = []
         for chunk, stmt in _chunks(c):
-            if any(isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "TABLE"
-                   and stmt.find(exp.Table) is not None and stmt.find(exp.Table).name == t for t in tables) \
+            if (isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "TABLE"
+                    and stmt.find(exp.Table) is not None and stmt.find(exp.Table).name.lower() in tables) \
                     or _comment_table(stmt) in tables:
                 body.append(chunk)
         out["schema.sql"] = "\n".join(body) + "\n"

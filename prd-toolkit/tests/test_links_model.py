@@ -60,6 +60,7 @@ def test_links_rows(prd):
 
 
 def test_snapshot_kept_out_of_docs_and_yaml(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     put(prd, "contracts/upstream/transform/schema.sql", SQL_HEADER + "CREATE TABLE t (id int);\n")
     put(prd, "contracts/upstream/transform/cli.yaml", YAML_HEADER + "greet:\n  args: []\n")
     put(prd, "contracts/upstream/transform/events.md", "<!-- Snapshot of transform 2.3.0 at 4f1c9a2, written by prd_links.py sync. Do not edit. -->\n# Events\n")
@@ -73,12 +74,14 @@ def test_snapshot_kept_out_of_docs_and_yaml(prd):
 
 
 def test_snapshot_without_header(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     put(prd, "contracts/upstream/transform/schema.sql", "CREATE TABLE t (id int);\n")
     s = model.load(prd).snapshots["transform"][0]
     assert s.header is None and s.text == "CREATE TABLE t (id int);\n"
 
 
 def test_change_set_parsed(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     put(prd, "changes/CS-001.md", RECORD)
     p = model.load(prd)
     cs = p.change_sets["CS-001"]
@@ -90,6 +93,7 @@ def test_change_set_parsed(prd):
 
 
 def test_change_set_problems(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     bad = RECORD.replace("| Order | PRD |", "| Number | PRD |").replace("| 2 | greet-client | `../greet-client` | cs-001-json-greeting | 1.0.0 → 1.1.0 | FR-002 | greet live in staging | verified |", "| 2 | greet-client | `../greet-client` | cs-001-json-greeting | 1.0.0 → 1.1.0 | FR-002 | greet live in staging |")
     put(prd, "changes/CS-001.md", bad)
     cs = model.load(prd).change_sets["CS-001"]
@@ -99,6 +103,7 @@ def test_change_set_problems(prd):
 
 
 def test_snapshot_dotfile_ignored_and_unreadable_reported(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     put(prd, "contracts/upstream/transform/.DS_Store", "x")
     (prd / "contracts/upstream/transform/x.sql").write_bytes(b"\xff\xfe\x00bad")
     p = model.load(prd)
@@ -109,6 +114,7 @@ def test_snapshot_dotfile_ignored_and_unreadable_reported(prd):
 
 
 def test_snapshot_yaml_error_is_a_load_finding(prd):
+    put(prd, "links.md", LINKS)  # R-10c: the 0.7 folders are read only in a linked PRD
     put(prd, "contracts/upstream/transform/cli.yaml", YAML_HEADER + "greet: [unclosed\n")
     p = model.load(prd)
     assert p.snapshots["transform"][0].data is None

@@ -279,9 +279,10 @@ Upstreams row, so `src/importer.py` stays prose. The kinds that cross are `op`, 
 `component:` or `page:` is refused (`kind '<kind>' does not cross repositories`). A PRD without
 `links.md` reads every target as before.
 
-**The snapshot.** `contracts/upstream/<prd>/` holds only the cited items, copied verbatim by
-`prd_links.py sync`, in files named as in the upstream's `contracts/`: a table's `CREATE TABLE` and
-`COMMENT ON` lines (`schema.sql`), an operation with every `components` entry it `$ref`s and the
+**The snapshot.** `contracts/upstream/<prd>/` holds only the cited items, written by
+`prd_links.py sync` in files named as in the upstream's `contracts/`: SQL statements and events.md
+sections copied verbatim; OpenAPI operations and custom YAML keys re-emitted from the parsed YAML
+(comments and flow style are not kept). They are a table's `CREATE TABLE` and `COMMENT ON` lines (`schema.sql`), an operation with every `components` entry it `$ref`s and the
 `info` block (`openapi.yaml`), an event or job's `### <name>` section (`events.md`), and the cited
 top-level keys of a custom YAML type. `--` comment lines directly above a cited `CREATE TABLE` travel
 with it; `/* */` comments directly above it are not copied. An item of `contracts/asyncapi.yaml` is not

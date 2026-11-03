@@ -131,6 +131,8 @@ def upstream_refs(prd: Prd):
 def snapshot_cited(prd: Prd):
     from ..snapshot import contracts_of_snapshot, items
 
+    if prd.links is None:  # R-10c: a PRD without links.md has no snapshot
+        return
     cited: dict[str, set[tuple[str, str]]] = {}
     all_cites = cites(prd)
     for c in all_cites:
@@ -170,6 +172,8 @@ def _rank(state: str) -> int:
 
 @rule("change-sets")
 def change_sets(prd: Prd):
+    if prd.links is None:  # R-10c: changes/ is an ordinary folder in a PRD without links.md
+        return
     heading_lines: dict[str, list[tuple[str, int]]] = {}
     texts: dict[str, str] = {}
     for cs in prd.change_sets.values():

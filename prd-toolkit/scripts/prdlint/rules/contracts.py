@@ -402,7 +402,7 @@ def custom_types(prd: Prd) -> Iterator[tuple[str, str, list[str], int]]:
             if not validator or validator == "built-in":
                 continue
             globs = [g for g in re.split(r"[,\s]+", r.cells[1].replace("`", "")) if g]
-            files = sorted({f for g in globs for f in glob.glob(g, root_dir=prd.root, recursive=True) if (prd.root / f).is_file() and not f.startswith(UPSTREAM_DIR + "/")})
+            files = sorted({f for g in globs for f in glob.glob(g, root_dir=prd.root, recursive=True) if (prd.root / f).is_file() and not (prd.links is not None and f.startswith(UPSTREAM_DIR + "/"))})
             yield r.cells[0].strip("`").strip(), validator, files, r.line
 
 

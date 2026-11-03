@@ -5,10 +5,11 @@
 # ///
 """Links between PRDs in different repositories: add, sync, check, impact, and changeset (the change-set record's only writer).
 
-Exit 0 done or clean, 1 refused (`refused: <why>` on stderr) or drift, 2 usage or tool error, 3 (check and impact)
-nothing drifted but a side was unreachable; `check --ci` exits 0 there, after printing the unreachable line, and prints
-each drift line between two members of an open change set as `drift allowed by <start-prd>/CS-nnn: <line>`, which
-does not count toward exit 1.
+Exit 0 done or clean; 1 refused (`refused: <why>` on stderr) or drift, and for impact only a consumer citing a changed
+item; 2 usage or tool error (`prd_links: <why>`): git that cannot run, in every command, and impact's own refusal or
+failure; 3 (check and impact) nothing drifted but a side was unreachable. `check --ci` exits 0 there, after printing the
+unreachable line, and prints each drift line between two members of an open change set as
+`drift allowed by <start-prd>/CS-nnn: <line>`, which does not count toward exit 1.
 """
 import argparse
 import sys
@@ -129,17 +130,24 @@ def _command(args, prd: model.Prd) -> tuple[list[str], int]:
         marked = links.let_through(prd, links.toplevel(prd.root), lines)  # R-F2: an open change set's drift
         code = links.check_exit([x for x, by in marked if by is None])
         return [links.allowed(by, x) if by else str(x) for x, by in marked], 0 if code == 3 else code
-    changed, cited, unreachable = links.impact(prd, args.base)
+    try:
+        changed, cited, unreachable = links.impact(prd, args.base)
+    except (links.Refused, links.Unreachable) as e:  # exit 1 means a consumer cites a changed item: never a refusal
+        raise _ToolError(str(e)) from None
     report = ([f"changed: {x}" for x in changed] + [f"consumer {c}: {x}" for c in sorted(cited) for x in cited[c]]
               + [f"consumer {c}: unreachable" for c in unreachable])
     return report, 1 if cited else 3 if unreachable else 0
+
+
+class _ToolError(Exception):
+    """A failure that is not a refusal: exit 2, `prd_links: <why>` on stderr."""
 
 
 def _run(command) -> int:
     """Run `command` (returning its report lines and exit code), print the report, and map the errors to exit codes."""
     try:
         report, code = command()
-    except links.BadArgument as e:
+    except (links.BadArgument, links.GitMissing, _ToolError) as e:
         print(f"prd_links: {e}", file=sys.stderr)
         return 2
     except (links.Refused, links.Unreachable) as e:

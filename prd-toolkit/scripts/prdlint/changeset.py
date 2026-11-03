@@ -250,6 +250,12 @@ def load(record: str | Path) -> tuple[Path, model.ChangeSet]:
     for label, value in (("Started", cs.started), ("Status", cs.status)):
         if not value:
             problems.append((1, f"no {label}: line"))
+    if cs.status and not model._CS_STATUS.match(cs.status):  # the parser leaves these to the change-sets rule
+        problems.append((1, f"status '{cs.status}' is outside the grammar"))
+    for r in cs.rows:
+        for label, value in (("target", r.target), ("state", r.state)):
+            if not model._CS_STATE.match(value):
+                problems.append((r.line, f"row {r.prd}: {label} '{value}' is outside the grammar"))
     if not cs.rows:
         problems.append((1, "no rows"))
     if problems:

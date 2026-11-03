@@ -143,8 +143,9 @@ custom type; the snapshot header names it. A prefixed `component:` or `page:` ta
 its own repository. A downstream test of an upstream item runs against the upstream's deployed
 environment or a fixture, never the upstream's source.
 
-**The snapshot.** `contracts/upstream/<prd>/` holds the cited items only, copied verbatim, in files
-named as in the upstream's `contracts/`:
+**The snapshot.** `contracts/upstream/<prd>/` holds the cited items only, in files named as in the
+upstream's `contracts/`: SQL statements and events.md sections copied verbatim; OpenAPI operations
+and custom YAML keys re-emitted from the parsed YAML (comments and flow style are not kept):
 
 | Kind | What is copied |
 |---|---|
