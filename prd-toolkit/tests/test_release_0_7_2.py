@@ -19,6 +19,7 @@ def test_versions():
     assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == [plugin["version"]]
     js = (REPO / "web/src/data/plugins.js").read_text()
     assert f"version: '{plugin['version']}'" in js[js.index("id: 'prd-toolkit'"):]
+    assert re.search(r"Version \d+\.\d+\.\d+\.", README)
 
 
 def test_changelog_entry():

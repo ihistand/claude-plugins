@@ -32,6 +32,13 @@ class _Loader(yaml.SafeLoader):
             key = self.construct_object(key_node, deep=True)
             value = self.construct_object(value_node, deep=False)
             line = key_node.start_mark.line + 1
+            try:
+                hash(key)
+            except TypeError:
+                # a list or mapping key: a parse error at the key, as PyYAML's own constructor reports it
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping", node.start_mark, "found unhashable key", key_node.start_mark
+                ) from None
             if key in data:
                 self.dups.append((key, data.key_lines[key], line))
                 continue  # the first value wins

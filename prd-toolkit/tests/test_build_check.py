@@ -79,7 +79,7 @@ def test_unit_test_and_code_pass(repo):
 
 
 def test_uncovered_tid_is_treated_as_non_unit(repo):
-    (repo / "tests/test_x.py").write_text("# @prd T-099.1\n")
+    (repo / "tests/test_x.py").write_text("# @" "prd T-099.1\n")
     commit(repo, "new")
     assert any("tests/test_x.py cites T-099.1" in f for f in diff(repo))
 

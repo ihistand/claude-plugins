@@ -714,7 +714,7 @@ def _change_sets(prd_dir: Path) -> dict[str, ChangeSet]:
     d = prd_dir / CHANGES_DIR
     out: dict[str, ChangeSet] = {}
     for p in sorted(d.glob("*.md")) if d.is_dir() else []:
-        if _CS_FILE.fullmatch(p.name):
+        if _CS_FILE.fullmatch(p.name) and p.is_file():  # a non-file entry is a sufficiency finding of load (AC-006.3)
             rel = p.relative_to(prd_dir).as_posix()
             out[p.stem] = _change_set(rel, p.read_text(encoding="utf-8"))
     return out
@@ -826,16 +826,36 @@ def _targets(docs: dict[str, str], problems: list) -> dict[str, Target]:
     return {a: t for a, t in out.items() if t is not None}
 
 
+FIXTURES_DIR = "contracts/fixtures"
+
+
+def _fixture(rel: str) -> bool:
+    """A path under contracts/fixtures/: fixture data, read neither as a document nor as contract YAML."""
+    return rel.startswith(FIXTURES_DIR + "/")
+
+
 def load(prd_dir: Path) -> Prd:
     prd_dir = Path(prd_dir).resolve()
     # the exact name: on a case-insensitive filesystem `prd.md` also "exists" as PRD.md
     names = {p.name: p for p in prd_dir.iterdir()} if prd_dir.is_dir() else {}
+    if "prd.md" in names and names["prd.md"].is_dir():
+        raise NotAPrd(f"{prd_dir}: prd.md must be a file")
     if "prd.md" not in names or not names["prd.md"].is_file():
-        other = next((n for n in names if n.lower() == "prd.md"), None)
+        # the hint names a different entry only: an entry named exactly prd.md that is not a file gets none
+        other = next((n for n in names if n.lower() == "prd.md"), None) if "prd.md" not in names else None
         hint = f"; found {other}; the file name is lowercase prd.md" if other else ""
         raise NotAPrd(f"{prd_dir}: no prd.md{hint}")
     findings: list[Finding] = []
-    docs = {p.relative_to(prd_dir).as_posix(): p.read_text(encoding="utf-8") for p in sorted(prd_dir.rglob("*.md")) if not _linked_dir(prd_dir, p)}
+    docs: dict[str, str] = {}
+    for p in sorted(prd_dir.rglob("*.md")):
+        rel = p.relative_to(prd_dir).as_posix()
+        if _fixture(rel):
+            continue
+        if not p.is_file():
+            findings.append(Finding(rel, 0, "sufficiency", "a .md entry that is not a file"))
+            continue
+        if not _linked_dir(prd_dir, p):
+            docs[rel] = p.read_text(encoding="utf-8")
     fm, fm_line = frontmatter(docs["prd.md"])
     secs = sections(docs["prd.md"])
 
@@ -877,9 +897,9 @@ def load(prd_dir: Path) -> Prd:
 
     yml: dict[str, Any] = {}
     for p in sorted((prd_dir / "contracts").rglob("*.yaml")):
-        if _linked_dir(prd_dir, p):
-            continue
         rel = p.relative_to(prd_dir).as_posix()
+        if _linked_dir(prd_dir, p) or _fixture(rel):
+            continue
         data, fs = load_yaml(p, rel)
         findings += fs
         if data is not None:
