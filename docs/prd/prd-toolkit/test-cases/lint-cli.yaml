@@ -650,20 +650,15 @@ T-011.4:
       - S0
       - "write <tmp>/docs/prd/orders/test-cases/scalar.yaml with the full text `T-009.1: plain text` and a newline"
     cwd: <tmp>
-    runs:
-      - python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
-      - python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
-    note: run 1 also prints other rules' findings on the empty case T-009.1 (sufficiency, test-cases-consistent; other areas), which are not asserted; run 2 shows the case was loaded
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the test-cases-consistent line (a lint-testcases rule) names T-009.1, which only a loaded case gets, so it shows the case was loaded; other lines are not asserted. --sample-tids is no proof, since a case with no level is not sampled (AC-007.4)
   expect:
     output:
-      run_1:
-        exit: 1
-        stdout_contains_line: "docs/prd/orders/test-cases/scalar.yaml:1: sufficiency: T-009.1: a test case must be a mapping"
-        stderr: ""
-      run_2:
-        exit: 0
-        stdout_contains_line: "T-009.1 test-cases/scalar.yaml"
-        stderr: ""
+      exit: 1
+      stdout_contains_lines:
+        - "docs/prd/orders/test-cases/scalar.yaml:1: sufficiency: T-009.1: a test case must be a mapping"
+        - "docs/prd/orders/test-cases/scalar.yaml:1: test-cases-consistent: T-009.1 is cited by no Tests line naming test-cases/scalar.yaml"
+      stderr: ""
     effects: []
     errors: []
     leaks: none
