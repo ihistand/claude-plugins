@@ -2,7 +2,7 @@
 
 > **Date:** 2026-11-03
 > **Author:** Ivan Histand & Claude Code
-> **Status:** Draft, awaiting review
+> **Status:** Approved by the owner 2026-11-03
 > **Extends:** the base spec and the 0.2 to 0.8.0 addenda (`2026-11-03-prd-toolkit-0.8.0-design.md`
 > last). Governed by `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this spec and any of them
 > disagree, this spec wins for 0.8.1.
