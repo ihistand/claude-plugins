@@ -149,13 +149,13 @@ def test_marker_named_only_by_own_area_test_cases(tmp_path):
 
 def test_dotted_traces_names_the_key(tmp_path):
     _, prd = make_confirm_repo(tmp_path)
-    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: settings.NOTES_LIMIT")
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: `settings.NOTES_LIMIT`")
     assert "config.yaml:NOTES_LIMIT.owner" in ids(prd)
 
 
 def test_same_named_keys_get_distinct_ids(tmp_path):
     _, prd = make_confirm_repo(tmp_path)
-    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: owner")
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: `owner`")
     (prd / "contracts/config.yaml").write_text(
         'settings:\n  A:\n    owner: "[NEEDS CLARIFICATION: a]"\n  B:\n    owner: "[NEEDS CLARIFICATION: b]"\n')
     got = [i for i in ids(prd) if i.endswith("owner")]
@@ -214,3 +214,50 @@ def test_summaries_stricter(tmp_path):
     assert len(ok) == 400 and load(json.dumps({"FR-001": ok}))
     with pytest.raises(confirm.Refused):
         load(json.dumps({"FR-001": ok + "x"}))
+
+
+# ---- final-review fix ----
+
+def test_duplicate_item_id_is_refused(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "prd.md", "- Q-01 Should FR-001 keep empty notes?\n- Q-02 Is the retention period settled for FR-099?\n  It was never decided.",
+            "- Q-01 Should FR-001 keep empty notes?\n- Should FR-002 trim terms?\n- Q-02 Does FR-002 page?")
+    with pytest.raises(confirm.Refused) as e:
+        confirm.build_items(model.load(prd), "notes")
+    assert str(e.value) == "item ID Q-02 appears twice in prd.md §13"
+
+
+def test_requirement_lists_the_open_entries_that_touch_it(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "errors.md", "### E-002 Empty id", "### E-003 Ids skip\nDetected: 2026-10-30, review\nTouches: FR-002, FR-001\n"
+            "Diagnosis: x\nResolution: open\n\n### E-002 Empty id")
+    got = by_id(confirm.build_items(model.load(prd), "notes"))
+    assert got["FR-001"].related == ["E-003"]  # E-002 touches FR-001 but is resolved
+    assert got["FR-002"].related == ["E-001", "E-003"]
+    assert all(got[i].related == [] for i in got if got[i].kind != "requirement")
+
+
+def test_a_prose_word_on_traces_names_nothing(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    (prd / "contracts/config.yaml").write_text(
+        (prd / "contracts/config.yaml").read_text() + '  store:\n    owner: "[NEEDS CLARIFICATION: prose]"\n')
+    got = ids(prd)
+    assert "config.yaml:NOTES_LIMIT.owner" in got  # the backticked span still names its key
+    assert not [i for i in got if "store" in i]
+
+
+def test_bare_dotted_traces_names_nothing(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: settings.NOTES_LIMIT")
+    assert "config.yaml:NOTES_LIMIT.owner" not in ids(prd)
+
+
+def test_extensionless_detected_file_is_cited(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    (repo / "Makefile").write_text("".join(f"rule{n}:\n" for n in range(1, 20)))
+    commit(repo, "Add a Makefile", "Makefile")
+    rewrite(prd, "errors.md", "wrong result at src/notes/app.py:17", "wrong result at Makefile:10")
+    ex = by_id(confirm.build_items(model.load(prd), "notes"))["E-001"].excerpts
+    assert len(ex) == 1 and "  10 | rule10:" in ex[0]
+    rewrite(prd, "errors.md", "wrong result at Makefile:10", "wrong result at Nofile:10")
+    assert by_id(confirm.build_items(model.load(prd), "notes"))["E-001"].excerpts == []

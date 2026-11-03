@@ -45,6 +45,7 @@ class Item:
     excerpts: list[str] = field(default_factory=list)
     fingerprint: str = ""
     where: str = ""
+    related: list[str] = field(default_factory=list)  # a requirement's open E-nnn entries that touch it
 
 
 def _fp(text: str) -> str:
@@ -72,10 +73,23 @@ def _excerpt(root: Path, path: str, line: int, commit: str | None, cache: dict) 
     return "\n".join(f"{n:>4} | {lines[n - 1]}" for n in range(lo, hi + 1))
 
 
+def _in_repo(root: Path, path: str, commit: str | None, cache: dict) -> bool:
+    """An extensionless name (`Makefile`) is a file only when git has it at that commit."""
+    key = ("exists", commit or "HEAD", path)
+    if key not in cache:
+        try:
+            cache[key] = subprocess.run(["git", "cat-file", "-e", f"{commit or 'HEAD'}:{path}"], cwd=root,
+                                        capture_output=True, timeout=30).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            cache[key] = False
+    return cache[key]
+
+
 def _excerpts(root: Path, text: str, cache: dict) -> list[tuple[str, int, str | None, str]]:
     out = []
     for p, n, sha in _CITE.findall(text):
-        if "/" in p or re.search(r"\.\w+$", p):  # a path, not a time or a host:port
+        # a path, not a time or a host:port
+        if "/" in p or re.search(r"\.\w+$", p) or _in_repo(root, p, sha or None, cache):
             out.append((p, int(n), sha or None, _excerpt(root, p, int(n), sha or None, cache)))
     return out
 
@@ -144,11 +158,13 @@ def _walk(node: Any, path: list[str], start: int | None, named: set[str], hits: 
 
 
 def _named(prd: Prd, area: str, blocks: list[ReqBlock]) -> set[str]:
+    """Contract keys the area names: backticked spans on its Traces lines, and its test cases' targets."""
     words: set[str] = set()
     for b in blocks:
         for _, text in _field_lines(b.lines, "Traces"):
-            for tok in re.findall(r"[A-Za-z_][\w.-]*", text):
-                words.add(tok.strip(".").rsplit(".", 1)[-1])  # `settings.KEY` names KEY
+            for span in re.findall(r"`([^`]+)`", text):  # a prose word names nothing
+                for tok in re.findall(r"[A-Za-z_][\w.-]*", span):
+                    words.add(tok.strip(".").rsplit(".", 1)[-1])  # `settings.KEY` names KEY
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
         if tc.file == f"test-cases/{area}.yaml" and isinstance(target, str):
@@ -206,11 +222,18 @@ def build_items(prd: Prd, area: str) -> list[Item]:
     ids = {b.id for b in blocks}
     cache: dict = {}
     items = [_requirement(root, b, cache) for b in blocks if b.status == "as-built"]
+    for i in items:
+        i.related = [e.id for e in prd.errors_ledger.values() if e.open and any(t == i.id for t, _ in e.touches)]
     items += _bugs(prd, root, area, ids, cache)
     items += _questions(prd, ids)
     items += _markers(prd, area, blocks)
     if not items:
         raise Refused(f"area {area} has no item to confirm")
+    seen: set[str] = set()
+    for i in items:  # answers apply by ID, so two items under one ID could never both be answered
+        if i.id in seen:
+            raise Refused(f"item ID {i.id} appears twice in {i.where}")
+        seen.add(i.id)
     return items
 
 
