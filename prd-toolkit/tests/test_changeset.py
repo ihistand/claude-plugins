@@ -89,6 +89,19 @@ def test_new_orders_members(tmp_path):
     clean(transform)
 
 
+def test_new_reads_each_version_where_the_branch_is_cut(tmp_path):
+    """The 0.7 acceptance (F-2): step 1 leaves the change's edits in the starting tree, bump included, before `new`;
+    the row's Version is the member's version on its default branch, so `set version=` writes `old → new`."""
+    transform, _, _ = make_three_repos(tmp_path)
+    edit(prd_of(transform), "prd.md", "\nversion: 1.0.0\n", "\nversion: 1.1.0\n")
+    r = new(transform, "../dashboards", "../reports")
+    assert r.code == 0, r.err
+    cs = changes(transform) / "CS-001.md"
+    assert rows(cs)["transform"].version == "1.0.0"
+    ok("set", cs, "transform", "version=1.1.0")
+    assert rows(cs)["transform"].version == "1.0.0 → 1.1.0"
+
+
 def test_new_prints_only_its_path(tmp_path):
     transform, _, _ = make_three_repos(tmp_path)
     r = new(transform, "../reports", ".", "../dashboards", "../reports/")

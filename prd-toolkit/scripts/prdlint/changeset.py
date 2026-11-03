@@ -1,7 +1,8 @@
 """The change-set record, `changes/CS-nnn.md`, and its only writer, behind prd_links.py changeset (prd-toolkit 0.7).
 
 `new` reads every member's links.md from its working tree (members are path locations, so a clone on this machine)
-and orders them upstream first; each later command reads the record alone, changes it, and writes it back whole in
+and orders them upstream first, each row's Version read from the member's default branch, where its change-set
+branch is cut; each later command reads the record alone, changes it, and writes it back whole in
 the grammar `change-sets` checks. Free text (a title, a reply, a reason, a Log line) is kept to one line: its line
 breaks collapse to single spaces. Today's date is `PRD_LINKS_TODAY` when set, so a test can fix it.
 """
@@ -13,7 +14,8 @@ import tempfile
 from pathlib import Path
 
 from . import model
-from .links import BadArgument, Refused, open_side, parse_location, toplevel
+from .links import BadArgument, Refused, Side, open_side, parse_location, toplevel
+from .markdown import frontmatter
 from .rules.links import _VERSION
 
 HEADER = "| " + " | ".join(model._CS_HEADER) + " |"
@@ -87,11 +89,20 @@ def _later(up: model.Prd, slug_: str, a: str, b: str) -> str:
 
 # ---------------------------------------------------------------- new
 
-def _members(prd: model.Prd, given: list[str]) -> dict[str, tuple[model.Prd, str]]:
-    """slug -> (the member's PRD, its backticked Location relative to the starting repository's root); the start first."""
+def _base_version(side: Side, working: str) -> str:
+    """The member's `version:` on its default branch, where the change-set branch is cut: step 1 leaves the change's
+    edits (a bump among them) in the starting tree before `new`. The working tree's when that branch has no PRD."""
+    text = side.show(side.default_branch(), f"{side.folder}/prd.md")
+    return frontmatter(text)[0].get("version", "") if text is not None else working
+
+
+def _members(prd: model.Prd, given: list[str]) -> dict[str, tuple[model.Prd, str, str]]:
+    """slug -> (the member's PRD, its backticked Location relative to the starting repository's root, its version on
+    its default branch); the start first."""
     here = toplevel(prd.root).resolve()
     start = prd.frontmatter.get("prd", "")
-    out = {start: (prd, "`.`")}
+    me = Side(parse_location("`.`"), here, prd.root.resolve(), start)
+    out = {start: (prd, "`.`", _base_version(me, prd.frontmatter.get("version", "")))}
     for raw in given:
         cell = raw.strip()
         loc = parse_location(cell if cell.startswith("`") else f"`{cell}`")
@@ -103,13 +114,14 @@ def _members(prd: model.Prd, given: list[str]) -> dict[str, tuple[model.Prd, str
             other = side.load(None)
             name = side.slug
             rel = f"`{Path(os.path.relpath(side.repo, here)).as_posix()}`"
+            base = _base_version(side, other.frontmatter.get("version", ""))
         if _UNSAFE.search(rel[1:-1]):
             raise Refused(f"{rel} cannot be written into the record table")
         if name in out:
             if out[name][0].root != other.root:
                 raise Refused(f"two members hold PRD {name}: {out[name][1]} and {rel}")
             continue
-        out[name] = (other, rel)
+        out[name] = (other, rel, base)
     return out
 
 
@@ -180,8 +192,7 @@ def new(prd: model.Prd, title: str, members: list[str]) -> Path:
     cid = f"CS-{number:03d}"
     rows = []
     for i, n in enumerate(order, 1):
-        member, cell = found[n]
-        version = member.frontmatter.get("version", "")
+        member, cell, version = found[n]
         if not _VERSION.fullmatch(version):
             raise Refused(f"{n} has no X.Y.Z version (found {version!r})")
         ups = [u for u in order if (u, n) in need]
