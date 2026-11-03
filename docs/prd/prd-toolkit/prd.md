@@ -1,0 +1,137 @@
+---
+prd: prd-toolkit
+version: 0.1.0
+status: Draft
+owner: Ivan Histand
+updated: 2026-11-03
+---
+
+<!-- Format: references/prd-format.md, "prd.md sections". -->
+<!-- The first approval goes through the prd-toolkit:authoring-prds skill (phase 7 gates); every later change and approval goes through prd-toolkit:changing-prds (step 5). -->
+
+# prd-toolkit
+
+## 1. Metadata & stack
+
+- Language: Python 3.11 or later. Each CLI script (`prd-toolkit/scripts/prd_*.py`) is a uv script with an inline dependency header, run as `uv run --script <script>`.
+- Framework: a Claude Code plugin (skills, agents, slash commands, a plugin hook) in the `ihistand` marketplace; script libraries pyyaml, sqlglot, openapi-spec-validator and markdown-it-py; pytest for the tests.
+- Database: none.
+- Hosting: the plugin is installed from the `ihistand` marketplace into each user's Claude Code; a target repository runs a vendored copy of the scripts under `.prd-toolkit/` from its git hooks and CI.
+- Repository: https://github.com/ihistand/claude-plugins, folder `prd-toolkit/`. This PRD covers `prd-toolkit/` only. The repository's other plugins (`sqlanvil-toolkit`, `stl-generator-toolkit`) and the `web/` docs site are outside it, which is why the slug is `prd-toolkit` and not the repository's name.
+- Not used: a network service, a database, a published Python package (target repositories run the vendored copy).
+- Not applicable: `contracts/openapi.yaml` — no HTTP API
+- Not applicable: `contracts/schema.sql` — no database
+- Not applicable: `contracts/events.md` — no events, jobs or queues
+- Not applicable: `contracts/permissions.yaml` — no identities or roles
+- Not applicable: `contracts/data-classification.yaml` — no stored personal data
+- Not applicable: `contracts/dependencies/` — no third-party service is called; git, uv and the claude CLI are tools on the runner (testing.md Harness)
+
+## 2. Summary & goals
+
+prd-toolkit keeps a living PRD folder in a repository and makes agents build, test and deploy
+from it: a linter and trace checks for the folder, a black-box test agent, and skills that
+author, adopt, change, build, deploy, handle errors in, publish and link PRDs.
+
+Goals:
+
+- [NEEDS CLARIFICATION: first measurable goal for the toolkit]
+
+Personas: an engineer working in a repository with Claude Code; the agents the toolkit
+dispatches (`prd-builder`, `prd-tester`); a reviewer reading a published PRD page.
+
+Out of scope: the repository's other plugins and the `web/` docs site; the target projects'
+own code.
+
+## 3. Glossary
+
+| Term | Meaning | Banned synonyms |
+|---|---|---|
+| PRD folder | `docs/prd/<slug>/` in a target repository: `prd.md` and the files the format reference names | spec folder |
+| area | one feature file and its test-case file, bounded by the globs in its `adoption.md` row | module |
+| requirement block | a `### UJ-nn`, `### FR-nnn` or `### NFR-nnn` heading and its field lines | story |
+| finding | one line a check prints: `<file>:<line>: <rule>: <message>` | warning |
+| rule | a named lint or trace check that produces findings | none |
+| Boundary | the paths where the commit rule applies: the globs of the `adopted` rows | none |
+| vendored copy | the scripts copied into a target repository's `.prd-toolkit/` by `prd_hooks.py install` | none |
+
+## 4. Architecture
+
+[NEEDS CLARIFICATION: confirm this picture of the components and how they connect]
+
+```mermaid
+flowchart LR
+  user[engineer in Claude Code] --> cmds[slash commands]
+  cmds --> skills[skills]
+  skills --> agents[prd-builder / prd-tester]
+  skills --> cli[CLI scripts prd_*.py]
+  cli --> lib[prdlint package]
+  lib --> prd[(PRD folder)]
+  hooks[git hooks and CI in a target repo] --> vend[.prd-toolkit vendored copy]
+  vend --> lib
+  guard[plugin hook prd_tester_guard.py] --> agents
+```
+
+## 5. Standards registry
+
+| Object (glob) | Linter command | Rules live in | Applies to | Decision |
+|---|---|---|---|---|
+| `prd-toolkit/**` | `claude plugin validate ./prd-toolkit` | Claude Code's plugin manifest schema | code | proposed |
+
+## 6. Skills registry
+
+| Object or activity | Skill | Decision |
+|---|---|---|
+| a change to `prd-toolkit/skills/**` | superpowers:writing-skills | proposed |
+| a change to the plugin's layout or manifests | superpowers-developing-for-claude-code:developing-claude-code-plugins | proposed |
+| any code change | superpowers:test-driven-development | proposed |
+| a bug or a failing test | superpowers:systematic-debugging | proposed |
+| a claim that work is done | superpowers:verification-before-completion | proposed |
+| a review of a change | code-review | proposed |
+
+## 7. Contract types
+
+| Type | Files (glob) | Validator |
+|---|---|---|
+| errors | `contracts/errors.yaml` | built-in |
+| config | `contracts/config.yaml` | built-in |
+| fixtures | `contracts/fixtures/**` | built-in |
+| cli | `contracts/cli.yaml` | `uv run --with pyyaml python3 -c "import sys,yaml; sys.exit(0 if isinstance(yaml.safe_load(open('contracts/cli.yaml')), dict) else 1)"` |
+
+`cli` holds one top-level key per CLI script (`prd_lint`, `prd_trace`, …): its arguments, its
+output lines and its exit codes. A test case targets a script as `cli:<key>`.
+
+## 8. Adoption map
+
+See adoption.md.
+
+## 9. Versioning
+
+- Breaking for the API: [NEEDS CLARIFICATION: what counts as breaking for a script's arguments, output lines and exit codes]
+- Breaking for the schema: [NEEDS CLARIFICATION: what counts as breaking for the PRD folder format, for example a change that makes a valid PRD fail lint]
+- Breaking for events: Not applicable: no events.
+- Compatibility window: [NEEDS CLARIFICATION: how long an old format or option keeps working]
+- Migration rule: [NEEDS CLARIFICATION: how a format change reaches existing PRDs (an upgrade note, a patch bump with a format row in §14)]
+
+## 10. Design & UI
+
+Not applicable: command-line scripts and Claude Code skills; the published PRD page is a generated file, not a product interface.
+
+## 11. Requirement index
+
+| ID | Title | Status | File | Since |
+|---|---|---|---|---|
+
+## 12. Assumptions index
+
+| ID | Assumption | Status |
+|---|---|---|
+
+## 13. Open questions
+
+None.
+
+## 14. Changelog
+
+| Version | Date | Change | IDs |
+|---|---|---|---|
+| 0.1.0 | 2026-11-03 | Draft started (adoption bootstrap) | none |

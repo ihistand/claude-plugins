@@ -1,0 +1,3 @@
+# The custom contract type `cli` (prd.md §7): one top-level key per CLI script, each with its
+# arguments, its output lines and its exit codes. Test cases target a script as `cli:<key>`.
+{}
