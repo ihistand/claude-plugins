@@ -10,10 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VENDOR_DIR = ".prd-toolkit"
-VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py")
+VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
+CONFIRM_PAGE = "confirm/form.html"  # templates/confirm/form.html in the plugin, .prd-toolkit/confirm/form.html vendored
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
@@ -64,6 +65,7 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
     for hook in HOOKS:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
+    files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
     return files
 
 
@@ -86,7 +88,7 @@ def _vendor(repo_root: Path) -> None:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
-    for sub in ("prdlint", VENDORED_TEMPLATES):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm"):
         base = dest / sub
         if base.is_dir():
             for f in sorted(base.rglob("*"), reverse=True):
@@ -176,7 +178,7 @@ def check(repo_root: Path, plugin_root: Path, prd=None, prd_rel: str = "") -> li
             problems.append(f"{VENDOR_DIR}/{rel} is missing")
         elif target.read_bytes() != src.read_bytes():
             problems.append(f"{VENDOR_DIR}/{rel} differs from the plugin copy")
-    for sub in ("prdlint", VENDORED_TEMPLATES):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm"):
         for f in sorted((dest / sub).rglob("*")) if (dest / sub).is_dir() else []:
             rel = f.relative_to(dest).as_posix()
             if f.is_file() and "__pycache__" not in f.parts and rel not in sources:

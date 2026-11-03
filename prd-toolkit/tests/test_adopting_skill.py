@@ -253,3 +253,170 @@ def test_confirmation_falls_back_to_a_checklist_file_outside_the_prd_folder():
     assert "a `Decision:` line the user fills in" in confirm
     assert "A blank or unrecognised `Decision:` line is no answer" in confirm
     assert "Delete the checklist file once every item is answered" in confirm
+
+
+# --- 0.7.1: step 3 confirms through the form ---
+
+def confirm_step() -> str:
+    return step(SKILL.read_text(encoding="utf-8"), 3)
+
+
+def form_part() -> str:
+    """The text of step 3 about the form, up to the fallbacks."""
+    c = confirm_step()
+    assert "**The form.**" in c
+    return c.split("**The form.**", 1)[1].split("**How to ask.**", 1)[0]
+
+
+def test_the_form_is_the_first_route_and_its_summaries_sit_outside_the_prd_and_test_roots():
+    c = confirm_step()
+    assert c.index("**The form.**") < c.index("**How to ask.**") < c.index("**The checklist file.**")
+    f = form_part()
+    assert "`.prd-confirm-<area>-summaries.json`" in f
+    assert "at the repository root, never inside the PRD folder or a test root" in f
+    assert "one or two plain sentences" in f and "contains its ID" in f and "at most 400 characters" in f
+
+
+def test_the_form_is_served_in_the_background_one_command_per_call_never_with_the_plugin_root_variable():
+    f = form_part()
+    assert ("uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> "
+            "--summaries .prd-confirm-<area>-summaries.json") in f
+    assert "`run_in_background`" in f and "one command per Bash call" in f
+    assert "first line of its output" in f and "`url=`" in f
+    assert "clickable link" in f
+    assert "never poll for the exit and never sleep" in f
+    assert "never `${CLAUDE_PLUGIN_ROOT}`" in f
+
+
+def test_the_form_exit_codes_are_handled_and_exit_three_leaves_the_area_extracted():
+    f = form_part()
+    assert "exit `0`" in f and "exit `3`" in f and "exit `2`" in f
+    assert "Run `prd_confirm.py status docs/prd/<slug> --area <area>`" in f
+    assert "leave the area `extracted`" in f.split("exit `3`", 1)[1]
+    assert "prd_confirm:" in f.split("exit `2`", 1)[1]
+
+
+def test_exit_zero_rechecks_with_status_and_a_changed_item_is_no_answer():
+    f = form_part()
+    after = f.split("exit `0`", 1)[1]
+    assert "Read `.prd-confirm-<area>.json`" in after
+    assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
+    assert "Any `open <ID>` line" in after and "changed since it was answered" in after
+    assert "is no answer" in after and "serve again" in after
+
+
+def test_each_decision_maps_to_its_prd_change():
+    f = form_part()
+    for needle in (
+        "`confirm`: status `live (since <version>)`",
+        "`correct`: status `approved`, with the ACs and test cases rewritten from `text`, or from `acs`",
+        "`bug`: the `E-nnn` stays open, and the requirement is corrected to the intended behaviour",
+        "`ask`: status `approved`, an `[ASSUMPTION A-nn]` and a §12 `awaiting <who>` row",
+        "`intended`: the behaviour becomes requirement text, and the entry's Resolution names who confirmed it and when",
+        "`answer` on a question: the answer goes into the PRD",
+        "`fix` on a question: the requirement it blocks becomes a correction",
+        "`answer` on a marker: the value replaces the marker",
+    ):
+        assert needle in f, needle
+    assert "write each into the PRD as soon as you apply it" in f
+
+
+def test_both_files_are_deleted_once_every_answer_is_applied_and_neither_is_committed():
+    f = form_part()
+    assert "delete `.prd-confirm-<area>.json` and `.prd-confirm-<area>-summaries.json`" in f
+    assert "never committed" in f
+
+
+def test_a_form_that_cannot_be_served_takes_the_fallbacks_and_a_headless_run_stops_extracted():
+    c = confirm_step()
+    f = form_part()
+    assert "cannot be served" in f and "nobody can open the URL" in f
+    assert "AskUserQuestion when the tool is available, otherwise the checklist file" in f
+    assert "A headless run stops with the area `extracted`" in f
+    # the earlier fallbacks stay
+    assert "ask with the AskUserQuestion tool, at most four requirements per call" in c
+    assert "`.prd-confirm-<area>.md` at the repository top" in c
+    assert "Confirmation is the user's word, requirement by requirement" in c
+    assert "A reply that names no ID" in c
+
+
+def test_intended_on_a_question_and_ask_on_an_entry_have_their_own_instruction():
+    f = form_part()
+    assert ("`intended` on a question: the behaviour it asks about is intended; write it as requirement text "
+            "of the requirement the bullet names, with the owner's note as the answer, and remove the §13 bullet; "
+            "it is not a correction") in f
+    assert ("`ask` on an `E-nnn`: the entry stays `Resolution: open`; §12 gets "
+            "`| A-nn | E-nnn: <the behaviour> is intended | awaiting <who> |`; every requirement the entry touches "
+            "is `approved`, never `live`, and carries `[ASSUMPTION A-nn: <the behaviour>; <who> would confirm it]` "
+            "on the AC the entry concerns") in f
+
+
+def test_each_field_of_an_answer_is_named():
+    f = form_part()
+    assert ("`text` is the intended behaviour for `correct` and `bug`, the person for `ask`, the answer for a "
+            "question's `answer`, the value for a marker's `answer`, and an optional note for `intended` and `fix`") in f
+    assert "`acs` (`correct` only) maps an AC ID to its full new text, which replaces that AC verbatim" in f
+    after = f.split("exit `0`", 1)[1].split("exit `3`", 1)[0]
+    assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
+
+
+# ---- final-review fix ----
+
+def test_a_bug_answer_with_no_entry_or_no_touches_and_an_entry_overriding_a_confirm():
+    f = form_part()
+    assert ("`bug` on a requirement that no open `E-nnn` touches: write a new `E-nnn` with "
+            "`Detected: <today>, confirmation of <FR-nnn>`, `Touches:` that FR, a Diagnosis taken from the item and "
+            "`Resolution: open, intended: <text>`; then correct the requirement to that behaviour") in f
+    assert ("A `bug` or `ask` on an `E-nnn` overrides a `confirm` on any requirement the entry touches: that "
+            "requirement is `approved`, never `live`; on `bug` it is corrected to the entry's intended behaviour, on "
+            "`ask` it carries the assumption") in f
+    assert ("`bug` on an `E-nnn` whose `Touches:` is `-`: the entry stays open as `Resolution: open, intended: <text>` "
+            "(an entry is open while its Resolution starts with `open`), and no requirement changes") in f
+
+
+ENTRIES = ("\n### E-002 Blank rows are imported\nDetected: 2026-11-03, confirmation of FR-001\nTouches: FR-001\n"
+           "Diagnosis: the importer keeps a blank row\nResolution: open, intended: the importer skips blank rows\n"
+           "\n### E-003 Slow import\nDetected: 2026-11-03, review\nTouches: -\nDiagnosis: no index\n"
+           "Resolution: open, intended: an import of 10k rows takes under a second\n")
+
+
+def test_the_intended_behaviour_field_lints_clean_and_keeps_the_entry_open(prd):
+    from conftest import lint
+    from prdlint import model
+
+    (prd / "errors.md").write_text((prd / "errors.md").read_text() + ENTRIES)
+    assert lint(prd) == []
+    led = model.load(prd).errors_ledger
+    assert led["E-002"].open and led["E-003"].open
+
+
+def test_how_to_find_an_item_again_and_learn_its_id():
+    f = form_part()
+    assert ("Run `prd_confirm.py status docs/prd/<slug> --area <area>` before you write the summaries: its "
+            "`open <ID>` lines are the exact item IDs") in f
+    assert ("`<file under contracts/>:<key path from the named key>`, where `#n` is the n-th marker in one value and "
+            "`~n` a last-resort collision suffix") in f
+    assert ("Each answer also records the item's `where` and `served` text: find a marker by its `served` line in "
+            "the contract file that `where` names") in f
+    assert f.index("before you write the summaries") < f.index("run_in_background")
+
+
+def test_the_summaries_file_is_deleted_on_exit_two_and_on_a_fallback():
+    f = form_part()
+    two = f.split("exit `2`", 1)[1]
+    assert "Delete `.prd-confirm-<area>-summaries.json`, then fix what it names" in two
+    assert "delete `.prd-confirm-<area>-summaries.json` and take the fallbacks" in two
+
+
+def test_fix_with_no_note_asks_and_every_question_answer_removes_its_bullet():
+    f = form_part()
+    assert ("when `fix` carries no note and the intended behaviour is not evident from the question, ask the owner "
+            "for it in the chat, for that one item") in f
+    assert "`answer`, `fix` and `intended` on a question each remove the §13 bullet" in f
+
+
+def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
+    f = form_part()
+    assert "re-read the output until the `url=` line appears" in f
+    assert "never poll for the exit and never sleep" in f
+    assert "never poll it and never sleep" not in f
