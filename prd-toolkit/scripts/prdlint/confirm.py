@@ -157,23 +157,30 @@ def _walk(node: Any, path: list[str], start: int | None, named: set[str], hits: 
             hits.append((path, start, m.group(0), line, n))
 
 
-def _identifier(word: str) -> bool:
-    """A word outside backticks names a key only when it is shaped like one: NOTES_LIMIT, v2, maxSize, API."""
-    return bool(re.search(r"[_\d]|[a-z][A-Z]", word)) or (len(word) > 1 and word.isupper())
+def _bare_name(chunk: str) -> str | None:
+    """The key a word outside backticks names, or None. Only an identifier with an underscore (NOTES_LIMIT)
+    or in camelCase (maxSize) names one: a dotted or kind:name word names its last part, and a path part,
+    an ID prefix (FR-001), an all-caps word (UNIQUE, POST) or a version (v2) names nothing."""
+    if "/" in chunk:
+        return None
+    name = re.split(r"[:.]", chunk.strip("."))[-1]
+    if re.fullmatch(r"[A-Za-z_]\w*", name) and re.search(r"[A-Za-z]", name) and re.search(r"_|[a-z][A-Z]", name):
+        return name
+    return None
 
 
 def _named(prd: Prd, area: str, blocks: list[ReqBlock]) -> set[str]:
-    """Contract keys the area names: backticked spans and identifier-shaped words on its Traces lines,
-    and its test cases' targets. A plain prose word (store, Setting) names nothing."""
+    """Contract keys the area names: backticked spans and, outside backticks, underscore or camelCase
+    identifiers on its Traces lines (see _bare_name), and its test cases' targets. Prose names nothing."""
     words: set[str] = set()
     for b in blocks:
         for _, text in _field_lines(b.lines, "Traces"):
             for span in re.findall(r"`([^`]+)`", text):
                 for tok in re.findall(r"[A-Za-z_][\w.-]*", span):
                     words.add(tok.strip(".").rsplit(".", 1)[-1])  # `settings.KEY` names KEY
-            for tok in re.findall(r"[A-Za-z_]\w*", re.sub(r"`[^`]*`", " ", text)):
-                if _identifier(tok):
-                    words.add(tok)
+            for chunk in re.split(r"[\s;,()]+", re.sub(r"`[^`]*`", " ", text)):
+                if name := _bare_name(chunk):
+                    words.add(name)
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
         if tc.file == f"test-cases/{area}.yaml" and isinstance(target, str):

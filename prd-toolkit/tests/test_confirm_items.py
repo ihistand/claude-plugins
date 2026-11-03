@@ -257,9 +257,32 @@ def test_unbackticked_identifier_on_traces_names_the_key(tmp_path):
     _, prd = make_confirm_repo(tmp_path)
     rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
             "Traces: cli:notes; setting NOTES_LIMIT (contracts/config.yaml)")
+    (prd / "contracts/config.yaml").write_text(
+        (prd / "contracts/config.yaml").read_text() + '  OTHER_LIMIT:\n    owner: "[NEEDS CLARIFICATION: unnamed]"\n')
     got = ids(prd)
     assert "config.yaml:NOTES_LIMIT.owner" in got
-    assert not [i for i in got if "OTHER" in i]
+    assert not [i for i in got if "OTHER" in i]  # an identifier-shaped key the line does not name is not served
+
+
+def test_unbackticked_camel_case_and_kind_name_name_their_keys(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: maxSize; cli:notes_cli")
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  maxSize:\n    owner: "[NEEDS CLARIFICATION: a]"\n'
+        '  notes_cli:\n    owner: "[NEEDS CLARIFICATION: b]"\n')
+    got = ids(prd)
+    assert "config.yaml:maxSize.owner" in got and "config.yaml:notes_cli.owner" in got
+
+
+def test_ids_caps_words_digits_and_paths_on_traces_name_nothing(tmp_path):
+    # review of 0.7.2: requirement IDs, all-caps prose, versions and path parts are not key names
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: FR-001; AC-008.2; UJ-02 UNIQUE; POST /orders; src/utils_2/x.py; api v2; fixture orders/one_existing")
+    keys = ["FR", "AC", "UJ", "UNIQUE", "POST", "utils_2", "v2", "one_existing", "orders"]
+    (prd / "contracts/config.yaml").write_text(
+        "settings:\n" + "".join(f'  {k}:\n    owner: "[NEEDS CLARIFICATION: {k}]"\n' for k in keys))
+    assert [i for i in ids(prd) if i.startswith("config.yaml:")] == []
 
 
 def test_plain_prose_words_on_traces_name_nothing(tmp_path):
