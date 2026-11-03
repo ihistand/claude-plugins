@@ -13,6 +13,8 @@
 >   which the builder neither writes nor waits for (0.4), so the builder instead runs the §5
 >   standards linters the area's pack proposes, and the `checks` level runs at reconcile like every
 >   non-unit level. Ratified by the owner 2026-11-03.
+> - §1, §9, §16 (owner, 2026-11-03): the 0.8 line is renumbered (umbrella Revisions): the machine
+>   interface is 0.8.1, best practices 0.8.2, conversion 0.8.3. The changing-prds refusal names 0.8.3.
 
 ## 1. Scope
 
@@ -40,7 +42,7 @@ external pack, and an unchanged 0.7 PRD (section 13).
 
 | Decision | Choice |
 |---|---|
-| Release split | An umbrella note and three sub-releases: 0.8.0 targets and languages and the extension surface, 0.8.1 best practices and finding or writing skills, 0.8.2 conversion |
+| Release split | An umbrella note and sub-releases: 0.8.0 targets and languages and the extension surface, 0.8.1 the machine interface, 0.8.2 best practices and finding or writing skills, 0.8.3 conversion |
 | What a test is for a non-code target | **Two kinds of check.** Script checks where the output allows them; a **judged** case for the rest, scored by a model grader against a rubric, passing at or above its threshold |
 | Human languages | **The grammar stays English; prose follows `language:`.** Labels, IDs and kinds stay English; EARS openers and vague words come from a per-language table (`en`, `es` in 0.8.0) |
 | Output language | **A separate setting** in the target profile, defaulting to `language:`; any BCP 47 code |
@@ -390,7 +392,7 @@ returns both, and only `prd_lint.py` asks for it. The skills read the exit code
   tester's test. The skill states the exception and a Red Flag for using it on an area whose pack
   says `unit`.
 - **changing-prds.** Refuses to change the pack of an area that holds a `built`, `verified` or
-  `live` requirement: `retargeting an area is a conversion (prd-toolkit 0.8.2)`. An output-language
+  `live` requirement: `retargeting an area is a conversion (prd-toolkit 0.8.3)`. An output-language
   change, or a pack change on an area with no built requirement, is a change with a version bump.
 - **handling-errors.** A `prd_judge.py` exit 2 is proposed as `environment`.
 
@@ -477,8 +479,9 @@ a patch bump with the §14 row `format: target profiles (prd-toolkit 0.8)`.
 
 ## 16. Out of scope for 0.8.0
 
-- Best-practice sources, and finding, installing or writing skills and packs (0.8.1).
-- Conversion (0.8.2).
+- The machine interface (0.8.1).
+- Best-practice sources, and finding, installing or writing skills and packs (0.8.2).
+- Conversion (0.8.3).
 - Judged scores in `/prd-status`.
 - A pack for Claude skills as a subject (the toolkit's own PRD builds on judged cases).
 - Non-Markdown document formats, and PRD languages beyond `en` and `es` in the toolkit itself.
