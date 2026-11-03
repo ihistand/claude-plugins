@@ -246,10 +246,52 @@ def test_a_prose_word_on_traces_names_nothing(tmp_path):
     assert not [i for i in got if "store" in i]
 
 
-def test_bare_dotted_traces_names_nothing(tmp_path):
+def test_bare_dotted_traces_names_its_identifier(tmp_path):
     _, prd = make_confirm_repo(tmp_path)
     rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: settings.NOTES_LIMIT")
-    assert "config.yaml:NOTES_LIMIT.owner" not in ids(prd)
+    assert "config.yaml:NOTES_LIMIT.owner" in ids(prd)
+
+
+def test_unbackticked_identifier_on_traces_names_the_key(tmp_path):
+    # 0.7.1 proof F-1: FR-008's Traces named its setting without backticks, and the marker was never served
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: cli:notes; setting NOTES_LIMIT (contracts/config.yaml)")
+    (prd / "contracts/config.yaml").write_text(
+        (prd / "contracts/config.yaml").read_text() + '  OTHER_LIMIT:\n    owner: "[NEEDS CLARIFICATION: unnamed]"\n')
+    got = ids(prd)
+    assert "config.yaml:NOTES_LIMIT.owner" in got
+    assert not [i for i in got if "OTHER" in i]  # an identifier-shaped key the line does not name is not served
+
+
+def test_unbackticked_camel_case_and_kind_name_name_their_keys(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: maxSize; cli:notes_cli")
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  maxSize:\n    owner: "[NEEDS CLARIFICATION: a]"\n'
+        '  notes_cli:\n    owner: "[NEEDS CLARIFICATION: b]"\n')
+    got = ids(prd)
+    assert "config.yaml:maxSize.owner" in got and "config.yaml:notes_cli.owner" in got
+
+
+def test_ids_caps_words_digits_and_paths_on_traces_name_nothing(tmp_path):
+    # review of 0.7.2: requirement IDs, all-caps prose, versions and path parts are not key names
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: FR-001; AC-008.2; UJ-02 UNIQUE; POST /orders; src/notes/app.my_key; api v2; fixture orders/one_existing")
+    keys = ["FR", "AC", "UJ", "UNIQUE", "POST", "my_key", "v2", "one_existing", "orders"]
+    (prd / "contracts/config.yaml").write_text(
+        "settings:\n" + "".join(f'  {k}:\n    owner: "[NEEDS CLARIFICATION: {k}]"\n' for k in keys))
+    assert [i for i in ids(prd) if i.startswith("config.yaml:")] == []
+
+
+def test_plain_prose_words_on_traces_name_nothing(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: Store setting, see Contracts")
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  Store:\n    owner: "[NEEDS CLARIFICATION: a]"\n  setting:\n    owner: "[NEEDS CLARIFICATION: b]"\n'
+        '  Contracts:\n    owner: "[NEEDS CLARIFICATION: c]"\n')
+    assert [i for i in ids(prd) if i.startswith("config.yaml:")] == []
 
 
 def test_extensionless_detected_file_is_cited(tmp_path):
@@ -261,3 +303,16 @@ def test_extensionless_detected_file_is_cited(tmp_path):
     assert len(ex) == 1 and "  10 | rule10:" in ex[0]
     rewrite(prd, "errors.md", "wrong result at Makefile:10", "wrong result at Nofile:10")
     assert by_id(confirm.build_items(model.load(prd), "notes"))["E-001"].excerpts == []
+
+
+def test_punctuated_and_prefixed_identifiers_name_their_keys(tmp_path):
+    # re-review of 0.7.2: a trailing colon or quotes, and the <kind>:<prd>/<name> form, still name the key
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: setting NOTES_LIMIT: caps it; 'MAX_ROWS'; table:transform/orders_daily")
+    (prd / "contracts/config.yaml").write_text(
+        "settings:\n" + "".join(f'  {k}:\n    owner: "[NEEDS CLARIFICATION: {k}]"\n'
+                                  for k in ("NOTES_LIMIT", "MAX_ROWS", "orders_daily")))
+    got = ids(prd)
+    for k in ("NOTES_LIMIT", "MAX_ROWS", "orders_daily"):
+        assert f"config.yaml:{k}.owner" in got, k

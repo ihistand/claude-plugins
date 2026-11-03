@@ -157,14 +157,34 @@ def _walk(node: Any, path: list[str], start: int | None, named: set[str], hits: 
             hits.append((path, start, m.group(0), line, n))
 
 
+def _bare_name(chunk: str) -> str | None:
+    """The key a word outside backticks names, or None. Only an identifier with an underscore (NOTES_LIMIT)
+    or in camelCase (maxSize) names one: a dotted or kind:name word names its last part, and a path part,
+    an ID prefix (FR-001), an all-caps word (UNIQUE, POST) or a version (v2) names nothing. Quotes and a
+    trailing colon or full stop are dropped, and the <kind>:<prd>/<name> form names <name>."""
+    chunk = chunk.strip("'\"").rstrip(":.")
+    if re.fullmatch(r"[a-z]+:[a-z][a-z0-9-]*/[^/\s]+", chunk):
+        chunk = chunk.rsplit("/", 1)[1]
+    elif "/" in chunk:
+        return None
+    name = re.split(r"[:.]", chunk.strip("."))[-1]
+    if re.fullmatch(r"[A-Za-z_]\w*", name) and re.search(r"[A-Za-z]", name) and re.search(r"_|[a-z][A-Z]", name):
+        return name
+    return None
+
+
 def _named(prd: Prd, area: str, blocks: list[ReqBlock]) -> set[str]:
-    """Contract keys the area names: backticked spans on its Traces lines, and its test cases' targets."""
+    """Contract keys the area names: backticked spans and, outside backticks, underscore or camelCase
+    identifiers on its Traces lines (see _bare_name), and its test cases' targets. Prose names nothing."""
     words: set[str] = set()
     for b in blocks:
         for _, text in _field_lines(b.lines, "Traces"):
-            for span in re.findall(r"`([^`]+)`", text):  # a prose word names nothing
+            for span in re.findall(r"`([^`]+)`", text):
                 for tok in re.findall(r"[A-Za-z_][\w.-]*", span):
                     words.add(tok.strip(".").rsplit(".", 1)[-1])  # `settings.KEY` names KEY
+            for chunk in re.split(r"[\s;,()]+", re.sub(r"`[^`]*`", " ", text)):
+                if name := _bare_name(chunk):
+                    words.add(name)
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
         if tc.file == f"test-cases/{area}.yaml" and isinstance(target, str):
@@ -379,7 +399,7 @@ class _State:
                     dirfd = None
             try:
                 answers = load_answers(self.path).get("answers")
-                data = {"prd": self.prd.frontmatter.get("project", ""), "area": self.area,
+                data = {"prd": self.prd.frontmatter.get("prd", ""), "area": self.area,
                         "commit": self.head, "answers": answers if isinstance(answers, dict) else {}}
                 apply(data["answers"])
                 save_answers(self.path, data)

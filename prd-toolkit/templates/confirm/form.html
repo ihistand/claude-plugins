@@ -135,6 +135,7 @@ const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const GROUPS = [['requirement', 'Requirements'], ['bug', 'Bugs'], ['question', 'Questions'], ['marker', 'Settings']];
 const KIND_NAME = { requirement: 'Requirement', bug: 'Apparent bug', question: 'Open question', marker: 'Missing setting' };
 const WHO = 'A role or a name, and anything they should know.';
+const BUG_HINT = 'The behaviour you want, in plain words, not the code fix. The bug stays open until a later change fixes it.';
 // Every decision each kind allows, as the server checks them. `prompt` opens a text box; `note` uses the card's own box.
 const ACTIONS = {
   requirement: [
@@ -142,13 +143,13 @@ const ACTIONS = {
     { decision: 'correct', label: 'Correct…', key: 'r', icon: '✎', saved: 'Corrected', criteria: true,
       prompt: 'What should it do instead?', hint: 'Plain words are enough: the criteria and tests are rewritten from them.' },
     { decision: 'bug', label: "It's a bug…", key: 'b', icon: '🐞', saved: 'A bug', needs: true,
-      prompt: 'What should it do? Describe the intended behaviour.' },
+      prompt: 'What should it do? Describe the intended behaviour.', hint: BUG_HINT },
     { decision: 'ask', label: 'Someone else decides…', key: 's', icon: '?', saved: 'Someone else decides', needs: true,
       prompt: 'Who decides?', hint: WHO },
   ],
   bug: [
     { decision: 'bug', label: 'Real bug — it should…', key: 'b', icon: '🐞', saved: 'Real bug', needs: true,
-      prompt: 'What should it do instead?' },
+      prompt: 'What should it do instead?', hint: BUG_HINT },
     { decision: 'intended', label: 'Intended — keep it', key: 'c', icon: '✓', saved: 'Intended — keep it' },
     { decision: 'ask', label: 'Someone else decides…', key: 's', icon: '?', saved: 'Someone else decides', needs: true,
       prompt: 'Who decides?', hint: WHO },
@@ -165,6 +166,10 @@ const ACTIONS = {
 const NOTE_PROMPT = {
   question: 'Your answer in your own words, or a note to go with Yes or No (optional for those two)',
   marker: 'What should the value be?',
+};
+const NOTE_HINT = {
+  question: 'Yes or No needs no note. With No, say what it should do instead, or you are asked in the chat. If the question asks two things, answer both.',
+  marker: 'The value as it should be written in the contract.',
 };
 const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, ended: null, notice: '' };
 
@@ -561,6 +566,7 @@ function decideView(it, d) {
   if (acts.some((a) => a.note)) {
     out.append(h('label', { class: 'prompt', for: 'note', text: NOTE_PROMPT[it.kind] }),
       textarea('note', d.text, (v) => { d.text = v; }, it.kind === 'marker' ? 2 : 3));
+    if (NOTE_HINT[it.kind]) out.append(h('p', { class: 'hint', text: NOTE_HINT[it.kind] }));
   }
   const row = h('div', { class: 'actions' });
   for (const a of acts) {
