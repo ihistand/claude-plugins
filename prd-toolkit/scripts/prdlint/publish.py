@@ -70,6 +70,13 @@ def _doc_section_md(prd: Prd, doc: str, title: str) -> str:
     return _md(text) if text else _none()
 
 
+def _doc_md(prd: Prd, doc: str) -> str:
+    """The body of a whole document (its tables), under the page's own heading rather than the document's title."""
+    lines = prd.docs.get(doc, "").split("\n")
+    body = "\n".join(lines[1:] if lines and lines[0].startswith("# ") else lines).strip()
+    return _md(body) if body else _none()
+
+
 # ---- summaries -------------------------------------------------------------------------------
 
 def _areas(prd: Prd) -> dict[str, list[ReqBlock]]:
@@ -312,6 +319,7 @@ def technical(prd: Prd, repo_root: Path, summaries: dict | None) -> str:
         "<h2>Test levels</h2>", _doc_section_md(prd, "testing.md", "Levels"),
         "<h2>Requirement to test matrix</h2>", _matrix(prd, repo_root),
         "<h2>Environments</h2>", _doc_section_md(prd, "operations.md", "Environments"),
+        *(["<h2>Links</h2>", _doc_md(prd, "links.md")] if "links.md" in prd.docs else []),
         "<h2>Runbook</h2>", _runbook(prd),
         "<h2>Standards registry</h2>", _section_md(prd, 5),
         "<h2>Skills registry</h2>", _section_md(prd, 6),

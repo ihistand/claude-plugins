@@ -13,7 +13,7 @@ from .rules.contracts import _custom_types
 
 yaml = require("yaml", "pyyaml")
 
-PARTS = ("Header", "Stack", "Glossary", "Requirements", "Code", "Levels", "Cited", "Known defects", "Open questions", "History")
+PARTS = ("Header", "Stack", "Glossary", "Requirements", "Code", "Levels", "Cited", "Upstream contracts", "Known defects", "Open questions", "History")
 PARTS_REPO = ("Header", "Stack", "Areas")
 MODES = ("decide", "implement")
 
@@ -202,6 +202,25 @@ def _cited(prd: Prd, area: str, blocks: list[ReqBlock], text: str) -> list[Item]
     return items or [_none("Cited", "prd.md")]
 
 
+def _upstream_contracts(prd: Prd, blocks: list[ReqBlock], text: str) -> list[Item]:
+    """One item per prefixed upstream reference the selected requirements touch (by ID, AC, T-id or prose), with its snapshot text."""
+    from . import citations, snapshot
+
+    mine = {b.id for b in blocks} | {ac.id for b in blocks for ac in b.acs} | {t for b in blocks for t, _, _ in b.tests}
+    items: list[Item] = []
+    seen: set[str] = set()
+    for c in citations.cites(prd):
+        label = f"{c.kind}:{c.upstream}/{c.name}"
+        if label in seen or not (c.label in mine or c.ref in text):
+            continue
+        seen.add(label)
+        snaps = prd.snapshots.get(c.upstream)
+        body = snapshot.item_text(snapshot.contracts_of_snapshot(snaps), c.kind, c.name) if snaps else None
+        items.append(Item("Upstream contracts", label, f"contracts/upstream/{c.upstream}", None,
+                          body if body is not None else f"{label}: not in the snapshot"))
+    return items or ([_none("Upstream contracts", "links.md")] if prd.links is not None else [])
+
+
 def _defects(prd: Prd, ids: set[str], entries: set[str]) -> list[Item]:
     """Each entry --req named, whole, and each open entry whose `Touches:` names a selected ID."""
     items, loose = [], 0
@@ -372,7 +391,7 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
     patterns = [_word(i) for i in sorted(ids | {ac.id for b in blocks for ac in b.acs})] + [_word(area)]
     implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd)) if mode == "implement" else []
     body = (_stack(prd) + _glossary(prd, text) + (requirements or [_none("Requirements", f"features/{area}.md")])
-            + implement + _cited(prd, area, blocks, text) + _defects(prd, ids, entries) + _questions(prd, patterns) + _history(prd, area))
+            + implement + _cited(prd, area, blocks, text) + _upstream_contracts(prd, blocks, text) + _defects(prd, ids, entries) + _questions(prd, patterns) + _history(prd, area))
     return [_header(prd, area, mode, display, body)] + body
 
 

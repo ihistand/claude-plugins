@@ -703,3 +703,46 @@ and close (`[…]` marks a trim):
 
 **Result:** pass. The skill triggered, every open gate was named (markers in every contract
 file included, now that lint reads them), and there was no offer to approve.
+
+## A5: the interview asks about packaging (0.7, F-a)
+
+Eval case `authoring-asks-packaging` (the hello ticket, which says nothing about packaging; "Do not
+ask me questions"). Four graders, one per element the `packaging` category names (`names-build-backend`,
+`names-package-layout`, `names-entry-points`, `names-install-command`); each passes when section 1
+(anchored on `## 1. Metadata & stack`) states the element, or a `NEEDS CLARIFICATION` marker names it. A
+fifth, `skill-fired`, checks the authoring skill ran. Run 2026-11-02 with Claude Code 2.1.316, one run
+per arm, `claude plugin eval <plugin> --case 'authoring-asks-packaging' --runs 1 --model sonnet --no-publish --scaffold --trust-plugin --ablation none --threshold 0`.
+Both arms are with-plugin: the reverted copy is the commit before F-a (no category 13, no checklist
+line, "twelve" wording); the branch has the text.
+
+| Grader | Reverted copy | Branch |
+|---|---|---|
+| names-build-backend | fail | fail |
+| names-package-layout | fail | fail |
+| names-entry-points | fail | fail |
+| names-install-command | fail | pass |
+| skill-fired | pass | pass |
+| Score (5 equal weights) | 0.20 | 0.40 |
+
+The branch scores higher, but on one run and one grader: the run did not state or mark the backend,
+the layout or the entry points. The category lifts the install command only; a non-interactive run
+still leaves three of four elements silent. An earlier loose grader (any backend word and any install
+word in section 1) passed both arms' kind of PRD and is replaced. The case is a weak guard, and the
+text may need to say that a marker is the answer when the user cannot be asked.
+
+### A5, after the explicit "stated or marked, never left out" sentence (fix round 2)
+
+Same case and command with `--runs 2`, on the branch with the sentence added to category 13 and to
+the authoring skill's rule 1. Graders unchanged.
+
+| Grader | Reverted copy (1 run) | Branch, first text (1 run) | Branch, with the sentence (run 1) | Branch, with the sentence (run 2) |
+|---|---|---|---|---|
+| names-build-backend | fail | fail | pass | pass |
+| names-package-layout | fail | fail | pass | pass |
+| names-entry-points | fail | fail | pass | pass |
+| names-install-command | fail | pass | pass | pass |
+| skill-fired | pass | pass | pass | pass |
+| Score | 0.20 | 0.40 | 1.00 | 1.00 |
+
+The sentence is the change that lifted the three silent elements. Whether each pass is a stated value
+or a marker is not split out by the graders; both satisfy them.

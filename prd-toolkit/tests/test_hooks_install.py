@@ -298,7 +298,7 @@ def test_every_vendored_script_runs_from_the_vendored_copy(repo):
         "prd_lint.py": [PRD], "prd_trace.py": [PRD], "prd_status.py": [PRD], "prd_context.py": [PRD],
         "prd_block.py": [PRD, "--claude-md", "CLAUDE.md"], "prd_build_check.py": [PRD, "--diff", "HEAD..HEAD"],
         "prd_deploy.py": ["plan", PRD], "prd_drift.py": [PRD], "prd_hooks.py": ["check", PRD],
-        "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"], "prd_error.py": ["list", PRD],
+        "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"], "prd_error.py": ["list", PRD], "prd_links.py": ["check", PRD],
     }
     assert set(calls) == set(hooks.VENDORED), set(hooks.VENDORED) ^ set(calls)
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
@@ -308,3 +308,22 @@ def test_every_vendored_script_runs_from_the_vendored_copy(repo):
         for bad in ("Traceback", "No such file", "ModuleNotFoundError", "ImportError", "FileNotFoundError"):
             assert bad not in err, (name, err[-600:])
     assert "prd-toolkit:start" in (repo / "CLAUDE.md").read_text()
+
+
+def test_vendors_prd_links_and_check_reports_it_missing(repo):
+    assert "prd_links.py" in hooks.VENDORED
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/prd_links.py").is_file() and (repo / ".prd-toolkit/prdlint/links.py").is_file()
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+    (repo / ".prd-toolkit/prd_links.py").unlink()
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/prd_links.py is missing"]
+
+
+def test_vendored_prd_links_checks_a_linked_prd(repo):
+    hooks.install(repo, PRD)
+    (repo / PRD / "links.md").write_text(
+        "# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n\n"
+        "## Consumers\n\n| Consumer | Location |\n|---|---|\n", encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run([sys.executable, ".prd-toolkit/prd_links.py", "check", "--ci", PRD], cwd=repo, capture_output=True, text=True, env=env)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")

@@ -117,6 +117,37 @@ step 3, and steps 5 to 8 are skipped: nothing runs, the block stays `verified`, 
 `/prd-deploy` runs them. A block at `approved` or `built` takes the full build instead, whose step
 3 writes its deploy-gate tests.
 
+**On a change-set branch.** A build on a branch `cs-<nnn>-<slug>` is one row of a change set
+(`prd-toolkit:coordinating-prds`), whose record `changes/CS-<nnn>.md` lives in the starting
+repository (`running-a-change-set.md` **Where to enter** finds it); its PRD slug is
+`<start-prd>`. Read the record. Before step 1, with the tree clean
+(`git status --porcelain --untracked-files=all` prints nothing), sync each upstream member: for
+each row before this one whose PRD is an Upstreams row of this PRD's `links.md`, run, as its own
+call, with the record's Branch as `<branch>` and `<upstream>` that row's PRD slug (the Upstreams
+row's name, never its Location):
+
+```bash
+uv run --script <scripts>/prd_links.py sync docs/prd/<slug> <upstream> --ref <branch>; echo "prd-links-exit=$?"
+```
+
+`prd-links-exit=1` refuses a cited item the upstream's branch lacks: stop, and report it for
+`/prd-change-set`. When the sync changed files, commit them, each its own call:
+
+```bash
+git add docs/prd/<slug>/links.md docs/prd/<slug>/contracts/upstream
+git commit -m "docs(prd): sync <upstream> at <branch>" -m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"
+```
+
+All of this comes before the dispatch, and it is the change set's only sync before a build
+(`running-a-change-set.md` step 4 leaves it here). Every commit the caller makes in the build (the
+tester's tests, the `known-failing` removals, a stop's entry, the close) adds
+`-m "Change-set: <start-prd>/CS-<nnn>"` after its `Refs:` message, and the builder prompt carries
+the line `Change-set: <start-prd>/CS-<nnn>` (**Prompts**), so the builder's commits carry it too.
+The build runs on the record's branch and never cuts a `prd-build/…` branch from it. The build
+never writes the record: its close reports the state reached for the row (`verified` when every
+block of its IDs closed `verified`, `built` when one stayed `built`, none on a stop before the
+merge), and the caller writes it with `changeset set`.
+
 **One turn.** A build runs to its close, or to a stop under **Stops**, in the same turn. Never end
 the turn with a next round announced: dispatch it. You end the turn only after the close's report,
 or after a stop's. The one carve-out: before step 2, the caller may stop to ask the user (a dirty
@@ -402,7 +433,8 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    Then remove each worktree a passed round left, `git worktree remove <worktree path>` and
    `git branch -d <builder branch>`, each its own call; a failed round's branch stays. Report to
    the user: the build branch, each block's status, each T-id's result, every reconcile record
-   and every kept branch.
+   and every kept branch. On a change-set branch the report also names the row's state reached,
+   for the caller's `changeset set` (**On a change-set branch**).
 
 ## Prompts
 
@@ -421,6 +453,13 @@ A `--fixes` build adds one line after those, on every builder round:
 
 ```
 Fixes: E-nnn (regression T-ids: <T-ids>)
+```
+
+On a change-set branch the builder prompt adds one line after those and after any `Fixes:` line,
+on every builder round (before a code-bug round's three lines):
+
+```
+Change-set: <start-prd>/CS-<nnn>
 ```
 
 A code-bug round adds three lines after those:

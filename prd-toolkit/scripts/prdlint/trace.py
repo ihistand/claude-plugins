@@ -12,6 +12,8 @@ TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-curren
 CITE = re.compile(r"@prd\s+(T-\d{3}\.\d+)\b")
 TAG = re.compile(r"@prd\s+(T-\d{3}\.\d+)\s+known-failing:?\s+(E-\d+)\b")
 _REFS = re.compile(r"^Refs:[ \t]*(.*)$", re.MULTILINE)
+_CS_LINE = re.compile(r"^Change-set:(.*)$", re.MULTILINE)
+_CS_VALUE = re.compile(r"^Change-set:[ \t]*([a-z][a-z0-9-]*/CS-\d{3})[ \t]*$", re.MULTILINE)
 _REQ_ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
 _ERR_ID = re.compile(r"E-\d+")
 UNCONFIRMED = "{} is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"
@@ -180,6 +182,23 @@ def unconfirmed_refs(prd: Prd, message: str) -> list[str]:
     return out
 
 
+def changeset_problems(prd: Prd, message: str) -> list[str]:
+    """What is wrong with the `Change-set:` trailer(s) of a commit message; [] when it passes.
+
+    A value must be `<prd>/CS-nnn`; one naming this PRD must have a record under changes/ (another PRD's is not checked here)."""
+    own = prd.frontmatter.get("prd")
+    problems: list[str] = []
+    for m in _CS_LINE.finditer(message):
+        v = _CS_VALUE.fullmatch(m.group(0).rstrip("\r"))
+        if v is None:
+            problems.append(f"`Change-set: {m.group(1).strip()}` must be {own}/CS-nnn")
+            continue
+        slug, _, cs = v.group(1).partition("/")
+        if slug == own and cs not in prd.change_sets:
+            problems.append(f"Change-set: {v.group(1)} has no record in changes/")
+    return problems
+
+
 def _commits(repo_root: Path, rng: str) -> list[tuple[str, str, list[str]]]:
     proc = subprocess.run(
         ["git", "-c", "core.quotePath=false", "-c", "log.showSignature=false", "log", "--format=%H%x00%B%x00", "--name-only", "--end-of-options", rng],
@@ -257,6 +276,8 @@ def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]
     if rev_range:
         inside_boundary = in_boundary(prd, repo_root)
         for sha, body, files in _commits(repo_root, rev_range):
+            for problem in changeset_problems(prd, body):
+                findings.append(Finding("prd.md", 1, "commit-refs", f"commit {sha[:8]}: {problem}"))
             inside = [f for f in files if inside_boundary(f)]
             if inside:
                 for problem in refs_problems(prd, body):

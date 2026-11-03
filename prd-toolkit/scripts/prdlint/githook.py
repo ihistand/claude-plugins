@@ -15,11 +15,12 @@ def commit_msg(prd: Prd, repo_root: Path, message: str, staged: list[str], mergi
     text = "\n".join(line for line in message.splitlines() if not line.startswith("#"))
     code = any(map(trace.outside_prd(prd, repo_root), staged))
     inside = trace.in_boundary(prd, repo_root)
+    trailer = trace.changeset_problems(prd, text)  # every commit, inside the Boundary or not
     if not any(inside(f) for f in staged):
         # outside the Boundary no `Refs:` is required, but a code commit still may not cite an
         # unconfirmed entry (as `prd_error.py check` judges every path outside the PRD folder)
-        return trace.unconfirmed_refs(prd, text) if code else []
-    return trace.refs_problems(prd, text, code_commit=code)
+        return (trace.unconfirmed_refs(prd, text) if code else []) + trailer
+    return trace.refs_problems(prd, text, code_commit=code) + trailer
 
 
 def pre_commit(prd: Prd, repo_root: Path, staged: list[str]) -> list[str]:

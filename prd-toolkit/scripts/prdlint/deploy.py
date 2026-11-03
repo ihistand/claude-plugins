@@ -67,8 +67,9 @@ def plan_steps(prd: Prd, until: str | None) -> list[Step]:
     return cut
 
 
-def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
-    """Reasons a run must not start; empty when clear."""
+def preflight(prd: Prd, repo_root: Path, until: str | None = None, notes: list[str] | None = None) -> list[str]:
+    """Reasons a run must not start; empty when clear. Drift between members of an open change set (R-13a) is no
+    reason: each such check line goes to `notes` as `drift allowed by <start-prd>/CS-nnn: <line>`."""
     reasons: list[str] = []
     if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
         reasons.append("the tracked tree has changes")
@@ -79,6 +80,20 @@ def preflight(prd: Prd, repo_root: Path, until: str | None = None) -> list[str]:
     for b in prd.blocks:
         if b.status == "built":
             reasons.append(f"{b.id} is built; its tests have not passed (run /prd-build)")
+    if prd.links is not None:
+        from . import links  # lazy: links imports git machinery a plain deploy does not need
+        lines = links.check(prd)
+        if links.check_exit(lines) == 1:  # exit 3 (unreachable only) adds nothing; the run's report prints that line
+            kept = []
+            for x, by in links.let_through(prd, repo_root, lines):
+                if by is not None:
+                    if notes is not None:
+                        notes.append(links.allowed(by, x))
+                elif links.is_drift(x):
+                    kept.append(x)
+            drift = [f"{x.name} {x.item}" if x.item else f"{x.side} {x.name}" for x in kept]
+            if drift:
+                reasons.append("prd_links check found drift: " + ", ".join(dict.fromkeys(drift)))
     if any(s.env in production_envs(prd) for s in plan_steps(prd, until)):
         # trace lets a verified block lack deploy-gate citations, but `live` needs every one: such a run cannot close
         cited = trace.citations(prd, repo_root)
