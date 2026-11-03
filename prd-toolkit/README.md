@@ -95,17 +95,20 @@ uv run --script .prd-toolkit/prd_confirm.py status docs/prd/<slug> --area <area>
   area, the area's section 13 questions, and the contract `[NEEDS CLARIFICATION]` markers the area
   names. It serves them on `127.0.0.1` behind a random token and prints
   `url=http://127.0.0.1:<port>/?token=...` as its first line. `--summaries` takes a JSON object of
-  item ID to a short text that cites its own ID; `--port` fixes the port (in use: exit 2); `--no-open`
-  does not open the browser; `--idle-minutes` (default 120) ends an idle server.
+  item ID to a short text that cites its own ID; `--port` fixes the port (in use, or any other bind
+  error: exit 2); `--no-open` does not open the browser; `--idle-minutes` (default 120) ends an idle
+  server. Two items under one ID are refused (exit 2).
 - The page, `templates/confirm/form.html`, is one self-contained file that loads nothing. It shows one
   item at a time with the list on the left. Keys: C confirms, R corrects, B marks a bug, S asks, and
   the arrows move between items.
-- Each answer is saved as it is given to `.prd-confirm-<area>.json` at the repo root, which `serve`
-  adds to `.git/info/exclude`. An item whose text changed since it was answered counts as open again.
+- Each answer is saved as it is given to `.prd-confirm-<area>.json` at the repo root, with the item's
+  `where` and `served` text. Before anything else, `serve` adds the line `/.prd-confirm-*.json` to
+  `.git/info/exclude`, once. An item whose text changed since it was answered counts as open again.
 - `serve` ends with exit 0 when Done: every item answered and none changed since. It ends with exit 2 for
   a usage error or a refusal, with `prd_confirm: <why>` on stderr, and with exit 3 when stopped without
-  Done (Ctrl-C, or the idle time).
-- `status` prints `<answered>/<total>` and one `open <ID>` line per open item.
+  Done (Ctrl-C, SIGTERM or the idle time).
+- `status` prints `<answered>/<total>` and one `open <ID>` line per open item, and exits 0 when it
+  prints and 2 on error.
 - Without a browser, the fallbacks are `AskUserQuestion` and then the checklist file. A headless run
   leaves the area `extracted`, as before.
 

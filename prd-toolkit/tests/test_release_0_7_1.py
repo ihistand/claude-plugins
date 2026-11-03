@@ -34,9 +34,20 @@ def test_form_part_under_adopting():
     s = flat(section(README, "Adopting an existing repo"))
     for needle in ("Confirming through the form", "prd_confirm.py serve", "--area", "--summaries", "--port",
                    "--no-open", "--idle-minutes", "prd_confirm.py status", "url=http://127.0.0.1:",
-                   ".prd-confirm-<area>.json", ".git/info/exclude", "exit 0", "exit 2", "exit 3",
-                   "AskUserQuestion", "checklist", "headless", "extracted"):
+                   ".prd-confirm-<area>.json", ".git/info/exclude", "AskUserQuestion", "checklist", "headless",
+                   "extracted"):
         assert needle in s, needle
+
+
+def test_form_exit_codes_are_pinned_as_meanings():
+    s = flat(section(README, "Adopting an existing repo"))
+    for phrase in ("`serve` ends with exit 0 when Done: every item answered and none changed since",
+                   "exit 2 for a usage error or a refusal, with `prd_confirm: <why>` on stderr",
+                   "exit 3 when stopped without Done (Ctrl-C, SIGTERM or the idle time)",
+                   "`status` prints `<answered>/<total>` and one `open <ID>` line per open item, and exits 0 when "
+                   "it prints and 2 on error",
+                   "adds the line `/.prd-confirm-*.json` to `.git/info/exclude`"):
+        assert phrase in s, phrase
 
 
 def test_known_limits_and_changelog():
