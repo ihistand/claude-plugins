@@ -2,7 +2,7 @@
 
 > **Date:** 2026-11-03
 > **Author:** Ivan Histand & Claude Code
-> **Status:** Draft, awaiting review
+> **Status:** Approved by the owner 2026-11-03
 > **Extends:** `2026-10-29-prd-toolkit-design.md` (the base spec) and the 0.2 to 0.7 addenda
 > (`2026-11-02-prd-toolkit-0.7-design.md` last).
 > **Governs:** the 0.8.0, 0.8.1 and 0.8.2 specs. Each sub-release has its own spec, plan, build and

@@ -2,7 +2,7 @@
 
 > **Date:** 2026-11-03
 > **Author:** Ivan Histand & Claude Code
-> **Status:** Draft, awaiting review
+> **Status:** Approved by the owner 2026-11-03
 > **Extends:** `2026-10-29-prd-toolkit-design.md` (the base spec) and the 0.2 to 0.7 addenda
 > (`2026-11-02-prd-toolkit-0.7-design.md` last). Governed by `2026-11-03-prd-toolkit-0.8-umbrella.md`.
 > Where this spec and any of them disagree, this spec wins for 0.8.0.
@@ -12,7 +12,7 @@
 >   `checks` level after writing, in place of tests first. Those checks are the tester's tests,
 >   which the builder neither writes nor waits for (0.4), so the builder instead runs the §5
 >   standards linters the area's pack proposes, and the `checks` level runs at reconcile like every
->   non-unit level. Awaiting the owner's word.
+>   non-unit level. Ratified by the owner 2026-11-03.
 
 ## 1. Scope
 
