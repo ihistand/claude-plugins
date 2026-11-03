@@ -194,10 +194,49 @@ def test_no_stale_aria_expanded():
     assert "aria-expanded" not in page()
 
 
-def test_done_survives_a_dropped_response():
-    fin = function("finish")
-    assert fin.index("S.closing = true") < fin.index("call('POST', '/done'")
-    assert "S.closing" in function("call")
+DONE_RUN = r"""
+const vm = require('node:vm');
+const js = require('node:fs').readFileSync(process.argv[2], 'utf8');
+class El {
+  constructor() { this.style = {}; this.classList = { toggle() {} }; this.children = []; this.hidden = false; }
+  setAttribute() {} addEventListener() {} append(...k) { this.children.push(...k); }
+  replaceChildren(...k) { this.children = k; } focus() {} scrollIntoView() {} remove() {}
+  querySelector() { return null; } set textContent(v) { this.text = v; }
+}
+const fixed = { shell: new El(), list: new El(), card: new El(), end: new El() };
+const item = { id: 'FR-001', kind: 'requirement', title: 't', text: 't', acs: [], excerpts: [], where: 'w', summary: null };
+const listing = { area: 'notes', items: [item], answers: { 'FR-001': { decision: 'confirm' } }, open: [], changed: [] };
+const ctx = {
+  console, URLSearchParams, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
+  document: { title: '', createElement: () => new El(), createTextNode: (t) => ({ t }),
+              getElementById: (id) => fixed[id] || null, addEventListener() {} },
+  fetch: async (path) => {
+    if (path === '/items') return { status: 200, json: async () => listing };
+    throw new TypeError('Failed to fetch');
+  },
+};
+vm.createContext(ctx);
+vm.runInContext(js + '\n;globalThis.__S = S; globalThis.__finish = finish;', ctx);
+setTimeout(async () => {
+  const before = ctx.__S.ended;
+  await ctx.__finish();
+  console.log(JSON.stringify({ before, after: ctx.__S.ended }));
+}, 50);
+"""
+
+
+def test_no_closing_flag():
+    assert "closing" not in scripts()
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_done_without_a_reply_shows_stopped(tmp_path):
+    src, js = tmp_path / "run.js", tmp_path / "form.js"
+    src.write_text(DONE_RUN, encoding="utf-8")
+    js.write_text(scripts(), encoding="utf-8")
+    run = subprocess.run(["node", str(src), str(js)], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {"before": None, "after": "stopped"}
 
 
 def test_escape_leaves_the_note_box():

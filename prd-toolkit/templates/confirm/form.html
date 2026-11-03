@@ -165,7 +165,7 @@ const NOTE_PROMPT = {
   question: 'Your answer in your own words, or a note to go with Yes or No (optional for those two)',
   marker: 'What should the value be?',
 };
-const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, closing: false, ended: null, notice: '' };
+const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, ended: null, notice: '' };
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -216,7 +216,7 @@ async function call(method, path, body) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (err) {
-    if (S.ended !== 'done') end(S.closing ? 'done' : 'stopped');
+    if (S.ended !== 'done') end('stopped');
     return null;
   }
   let data = null;
@@ -379,12 +379,11 @@ function submitBox(it) {
 
 async function finish() {
   if (S.busy) return;
-  S.busy = true; S.closing = true; render();
+  S.busy = true; render();
   const r = await call('POST', '/done', {});
   S.busy = false;
   if (!r) return;
   if (r.status === 200) { end('done'); return; }
-  S.closing = false;
   if (r.status === 409) {
     await load();
     const n = r.data && Array.isArray(r.data.open) ? r.data.open.length : 0;
