@@ -542,7 +542,7 @@ def make_server(prd: Prd, area: str, items: list[Item], summaries: dict, page: s
                 idle_minutes: float = 120, request_timeout: float = 30) -> tuple[ThreadingHTTPServer, str]:
     """A server bound to 127.0.0.1 only, and its token. Raises OSError when `port` is in use, and Refused
     when the answers file exists but is not valid."""
-    token = secrets.token_urlsafe(24)
+    token = secrets.token_hex(32)
     state = _State(prd, area, items, summaries, page, token, idle_minutes, request_timeout)
     return _Server(("127.0.0.1", port), state), token
 
@@ -572,3 +572,9 @@ def run(server: ThreadingHTTPServer) -> int:
         stop.set()
         watcher.join(5)
     return 0 if state.end == "done" else 3
+
+
+def page_path() -> Path:
+    """The form page: the plugin's template, or the copy vendored beside the scripts."""
+    from . import hooks
+    return hooks.PLUGIN_ROOT / "templates" / hooks.CONFIRM_PAGE if hooks.is_plugin() else hooks.SCRIPTS / hooks.CONFIRM_PAGE
