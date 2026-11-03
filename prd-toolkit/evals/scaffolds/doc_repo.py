@@ -8,8 +8,9 @@ empty      the CLI (`src/greet/cli.py`), its unit tests and a README; no `docs/p
 approved   `empty` plus an Approved PRD `greet` (service default pack) with a `guide` area
            (`Target: pack document 1.0.0 (prd-toolkit), output language en`): FR-010 "Install guide" with one
            `checks` and one `judged` case, `contracts/outline.yaml` key `install-guide` at
-           `docs/guide/install.md`, every requirement `approved`, the vendored `.prd-toolkit/` (both packs)
-           and the CLAUDE.md block; the guide is not written
+           `docs/guide/install.md`, the vendored `.prd-toolkit/` (both packs) and the CLAUDE.md block. FR-001
+           (the CLI the repository ships) is `verified`; FR-002 (`greet --version`, not in the code) and FR-010
+           are `approved`, so each area has a build to run; the guide is not written
 built      `approved` plus `docs/guide/install.md` and FR-010 `verified`
 
 The tracked tree is clean in every state; `approved` and `built` lint with exit 0. The vendored
@@ -185,7 +186,8 @@ Not applicable: no user interface.
 
 | ID | Title | Status | File | Since |
 |---|---|---|---|---|
-| FR-001 | Print a greeting | approved | features/greet.md |  |
+| FR-001 | Print a greeting | verified | features/greet.md |  |
+| FR-002 | Print the version | approved | features/greet.md |  |
 | FR-010 | Install guide | {fr10} | features/guide.md |  |
 
 ## 12. Assumptions index
@@ -201,19 +203,26 @@ None.
 
 | Version | Date | Change | IDs |
 |---|---|---|---|
-| 1.0.0 | 2026-11-03 | Approved | FR-001, FR-010, T-001.1, T-001.2, T-001.3, T-010.1, T-010.2 |
+| 1.0.0 | 2026-11-03 | Approved | FR-001, FR-002, FR-010, T-001.1, T-001.2, T-001.3, T-002.1, T-010.1, T-010.2 |
 """
 
 GREET_FEATURE = """# Greeting
 
 ### FR-001 Print a greeting
-Status: approved
+Status: verified (since 1.0.0)
 Acceptance (EARS):
 - AC-001.1 When `greet.cli.format_greeting(name)` is called, it shall return `Hello, <name>!`.
 - AC-001.2 When `greet <name>` runs, it shall print `Hello, <name>!`.
 - AC-001.3 If `greet` runs with no name, more than one argument or a blank name, it shall print `usage: greet <name>` and exit with code 2.
 Errors: -
 Tests: T-001.1 [unit], T-001.2 [unit], T-001.3 [unit]  (test-cases/greet.yaml)
+
+### FR-002 Print the version
+Status: approved
+Acceptance (EARS):
+- AC-002.1 When `greet --version` runs, it shall print `greet 1.0.0` and exit with code 0.
+Errors: -
+Tests: T-002.1 [unit]  (test-cases/greet.yaml)
 """
 
 GUIDE_FEATURE = """# Install guide
@@ -277,6 +286,22 @@ T-001.3:
     argv: [" "]
   expect:
     output: {stdout: "usage: greet <name>", exit_code: 2}
+    effects: []
+    errors: []
+    leaks: none
+
+T-002.1:
+  ac: AC-002.1
+  level: unit
+  refs: ["testing.md#Harness"]
+  target: code:greet.cli.main
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    argv: ["--version"]
+  expect:
+    output: {stdout: "greet 1.0.0", exit_code: 0}
     effects: []
     errors: []
     leaks: none
@@ -500,7 +525,7 @@ def main(dst: str, state: str) -> None:
             base + "contracts/errors.yaml": "# Format: references/prd-format.md, \"Contract YAML shapes\".\n{}\n",
             "tests/unit/test_greet.py": UNIT_TESTS_CITED,
         })
-        commit(repo, "PRD: greet 1.0.0 Approved, FR-001 and FR-010 approved\n\nRefs: FR-001, FR-010", "docs", "tests", date="2026-01-04T12:00:00+0000")
+        commit(repo, "PRD: greet 1.0.0 Approved, FR-001 verified, FR-002 and FR-010 approved\n\nRefs: FR-001, FR-002, FR-010", "docs", "tests", date="2026-01-04T12:00:00+0000")
         hooks = _tool(repo, str(PLUGIN / "scripts/prd_hooks.py"), "install", PRD)
         if hooks.returncode != 0:
             sys.exit(f"doc_repo: prd_hooks install failed:\n{hooks.stdout}{hooks.stderr}")

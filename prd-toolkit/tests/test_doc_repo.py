@@ -64,11 +64,19 @@ def test_approved_and_built_lint_clean_with_the_guide_area(tmp_path, state):
     assert ".prd-judge/" in (r / ".gitignore").read_text(encoding="utf-8")
 
 
-def test_approved_has_every_requirement_approved_and_no_guide(tmp_path):
+def test_approved_has_the_shipped_cli_verified_and_two_changes_to_build(tmp_path):
+    """FR-001 is the CLI the repository ships, so it is verified; FR-002 and FR-010 are approved and unbuilt,
+    so each area has a build to run (0.8.0 proof, P2: an approved requirement whose code predates it has no build)."""
     r = build(tmp_path, "approved")
     assert not (r / "docs/guide").exists()
-    statuses = [l for l in (read(r, "features/guide.md") + read(r, "features/greet.md")).splitlines() if l.startswith("Status:")]
-    assert statuses and all(s == "Status: approved" for s in statuses)
+    greet = read(r, "features/greet.md")
+    assert "### FR-001 Print a greeting\nStatus: verified (since 1.0.0)" in greet
+    assert "### FR-002 Print the version\nStatus: approved" in greet
+    assert "Status: approved" in read(r, "features/guide.md")
+    index = read(r, "prd.md")
+    assert "| FR-001 | Print a greeting | verified |" in index and "| FR-002 | Print the version | approved |" in index
+    run = subprocess.run(["uv", "run", "--directory", "src", "python", "-m", "greet", "--version"], cwd=r, capture_output=True, text=True)
+    assert run.stdout != "greet 1.0.0\n", "FR-002 must not be built yet"
 
 
 @pytest.mark.parametrize("state", ["approved", "built"])
