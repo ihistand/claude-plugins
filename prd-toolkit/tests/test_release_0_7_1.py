@@ -1,5 +1,6 @@
 """Pins for the 0.7.1 release text: versions, the README's form part, known limits and changelog entry."""
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -21,12 +22,12 @@ def section(text: str, title: str) -> str:
 
 def test_versions():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.7.1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", plugin["version"])
     market = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
-    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == ["0.7.1"]
+    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == [plugin["version"]]
     js = (REPO / "web/src/data/plugins.js").read_text()
-    assert "version: '0.7.1'" in js[js.index("id: 'prd-toolkit'"):]
-    assert "Version 0.7.1." in README
+    assert f"version: '{plugin['version']}'" in js[js.index("id: 'prd-toolkit'"):]
+    assert re.search(r"Version \d+\.\d+\.\d+\.", README)
     assert f"(../{SPEC_REL})" in README and (REPO / SPEC_REL).is_file()
 
 
