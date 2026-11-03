@@ -45,7 +45,7 @@ Classification: code bug
 Confirmed: 2026-11-03, "Real bug (Recommended)"
 Touches: FR-006
 Diagnosis: `load` reads every path that `prd_dir.rglob("*.md")` yields with `read_text` (model.py:717) and does not check that it is a file, so a directory named `notes.md` raises `IsADirectoryError`. prd_lint reports it as `prd_lint: internal error: IsADirectoryError: [Errno 21] Is a directory: '…/notes.md'` and exits 2, where AC-006.3 (the owner's answer to Q-03) wants a `sufficiency` finding and the rules run.
-Resolution: open, intended: Report it as a finding (a .md entry that is not a file) and keep going.
+Resolution: T-006.3 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
 
 ### E-006 --sample-tids samples a case with no level or a non-lowercase level
