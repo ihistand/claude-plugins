@@ -15,7 +15,7 @@ APP = "\n".join(
 ADOPTION = "# Adoption map\n\n| Area | State | Boundary |\n|---|---|---|\n| notes | extracted | `src/notes/**` |\n"
 
 PRD = """---
-project: notes
+prd: notes
 version: 0.1.0
 status: draft
 ---

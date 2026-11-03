@@ -312,3 +312,18 @@ def test_the_stopped_view_asks_for_a_new_form():
     stopped = end[end.rindex("The form has stopped"):]
     assert "Ask the session to start a new form" in stopped and "new link" in stopped
     assert "Run serve again" not in end
+
+
+def test_every_text_box_has_a_hint():
+    # 0.7.1 proof F-3: the owner had to ask what to type for a bug and for a question
+    js = scripts()
+    actions = js[js.index("const ACTIONS = {"):js.index("const NOTE_PROMPT")]
+    for obj in re.findall(r"\{ decision: [^{}]*\}", actions):
+        if "prompt:" in obj:
+            assert "hint:" in obj, obj
+    assert "BUG_HINT = 'The behaviour you want, in plain words, not the code fix. The bug stays open until a later change fixes it.'" in js
+    assert actions.count("hint: BUG_HINT") == 2
+    for kind in ("question", "marker"):
+        assert re.search(r"const NOTE_HINT = \{[^}]*" + kind + ":", js), kind
+    assert "With No, say what it should do instead" in js and "answer both" in js
+    assert "NOTE_HINT[it.kind]" in js[js.index("function decideView"):js.index("function boxView")]

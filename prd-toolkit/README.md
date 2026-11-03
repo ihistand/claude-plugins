@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Version 0.7.1.
+repositories. Version 0.7.2.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -537,6 +537,7 @@ the user cannot state.
 
 ## Changelog
 
+- **0.7.2:** Three fixes from the 0.7.1 acceptance run. The form now serves a clarification marker whose key a requirement's `Traces:` line names without backticks, when the word is an identifier with an underscore or in camelCase (`PRD_LINT_CI`, `maxSize`; a dotted or `kind:name` word names its last part). A prose word, an all-caps word, an ID such as `FR-001`, a version and a path part still name nothing, and backticks remain the sure way to name a key. A bare `settings.KEY` now names `KEY`, which 0.7.1 did not. The answers file's `prd` field holds the PRD's slug (it read the wrong frontmatter key and was empty). Every text box in the form now has a one-line hint: a bug's box asks for the behaviour you want, not the code fix, and a question's or a setting's box says what its answer needs. Upgrading from 0.7.1: re-run `prd_hooks.py install`, which vendors the fixed scripts and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.
 - **0.7.1:** `prd_confirm.py` and `templates/confirm/form.html`: adoption step 3 confirms an area's as-built requirements, open errors, questions and clarification markers through a local form, with answers saved as they are given (see Adopting an existing repo). `AskUserQuestion` and the checklist file remain the fallbacks. Upgrading from 0.7.0: re-run `prd_hooks.py install`, which vendors `prd_confirm.py` and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.
 - **0.7.0:**
   - `/prd-change-set` and the `coordinating-prds` skill: `links.md`, the pinned snapshot `contracts/upstream/<prd>/` and `prd_links.py` (`add`, `sync`, `check`, `impact`, `changeset`) link PRDs across repositories; one record, `changes/CS-nnn.md`, drives a change with one approval and a build per repository in dependency order (see Links and Change sets).
