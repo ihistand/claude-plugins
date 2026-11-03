@@ -18,7 +18,7 @@ Classification: code bug
 Confirmed: 2026-11-03, "Real bug — it should: The missing-package message names the script that failed and only the packages that script needs."
 Touches: FR-010
 Diagnosis: `deps.require` is documented as a general "Optional-import helper" (deps.py:1). Thirteen CLI scripts call it (prd_trace.py:17, prd_publish.py:19, prd_links.py:23 and others), and so do library modules (publish.py:16, context.py:14, snapshot.py:14). Its message always starts `prd_lint:` and always suggests `pip install pyyaml sqlglot openapi-spec-validator`. Under prd_publish.py, a missing `markdown-it-py` therefore prints `prd_lint: missing Python package 'markdown-it-py'. …, or: pip install pyyaml sqlglot openapi-spec-validator`. That names the wrong script and gives a pip command that does not install the missing package. The sibling scripts prefix their own messages with their own names (`prd_links: <why>`, commit 9b231d3; `prd_hooks: …`, commit 53041c6). The text is right for prd_lint itself, so FR-010's case cannot show the bug.
-Resolution: open, intended: The missing-package message names the script that failed and only the packages that script needs.
+Resolution: T-010.2 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
 
 ### E-003 An unhashable YAML mapping key crashes the load instead of being reported
