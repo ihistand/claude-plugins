@@ -147,6 +147,18 @@ def test_the_builder_graders_see_the_callers_close_but_not_a_prd_edit():
     assert not _tool_input_counts("builder-stays-out-of-prd", w, {"file_path": "/w/tests/test_notes_unit.py", "content": "x"})
 
 
+def test_the_close_graders_pass_a_source_line_anchored_after_another_line():
+    """A close that adds `Source:` under `Traces: -` is the close, not a PRD edit (0.8.0 proof, F-2)."""
+    n = "no-prd-edit-beyond-status"
+    base = "/w/docs/prd/greet/features/guide.md"
+    anchored = {"replace_all": False, "file_path": base, "old_string": "Traces: -\n",
+                "new_string": "Traces: -\nSource: docs/guide/install.md:1 @f6f962d\n"}
+    reworded = {"file_path": base, "old_string": "Traces: -\n", "new_string": "Traces: -\nSourced from the README.\n"}
+    for case in ("builder-stays-out-of-prd", "builder-document-no-unit"):
+        assert not _tool_input_counts(case, n, anchored), case
+        assert _tool_input_counts(case, n, reworded), case
+
+
 def test_the_tester_file_graders_catch_a_unit_case_in_it_and_pass_the_testers_own_edits():
     t = "/w/tests/test_notes.py"
     for name in ("no-tester-file-edit", "no-tester-file-write"):
