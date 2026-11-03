@@ -1,0 +1,28 @@
+pack: document
+version: 1.0.0
+toolkit: ">=0.7.2,<0.9"
+description: "Markdown documents written for people: a user guide, a runbook for humans, a policy."
+contract-types:
+  - {type: outline, files: contracts/outline.yaml, validator: "uv run --script ${PACK}/validate_outline.py"}
+target-kinds: {doc: outline}
+levels:
+  - {level: checks, command: "uv run pytest tests/checks", environment: local, gate: build}
+  - {level: judged, command: "uv run pytest tests/judged", environment: local, gate: build}
+harness:
+  HTTP requests: "Not applicable: no HTTP interface"
+  Database access: "Not applicable: no database"
+  Browser identity: "Not applicable: no user interface to log in to"
+  Persistent environments: "Not applicable: documents have no persistent environment"
+  Leaks: "Not applicable: the documents hold no classified data"
+  Tools on the runner: "`uv` runs the tests and the outline validator; `claude` (Claude Code, signed in) runs the default grader of judged cases."
+  Layout: "Test roots: `tests/`"
+  Assertions: "A judged test asserts `prd_judge.py`'s exit code and nothing else."
+standards:
+  - object: "docs/**/*.md"
+    linter: 'npx markdownlint-cli2 "docs/**/*.md"'
+    rules: "the markdownlint configuration of the repository"
+    applies: "every Markdown document the PRD builds"
+vocabulary: []
+builder-tests: none
+rubrics: rubrics.md
+clarify: clarify.md

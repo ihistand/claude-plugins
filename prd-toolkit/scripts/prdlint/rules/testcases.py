@@ -13,7 +13,7 @@ from ..markdown import strip_code, tables
 from ..model import Prd, TestCase
 from ..registry import rule
 from ..yamlload import yaml
-from .contracts import custom_items, event_names, operation_ids, schema_tables
+from .contracts import custom_items, event_names, operation_ids, pack_kinds, schema_tables
 
 TARGET_KINDS = {"op", "table", "event", "job", "component", "page", "code"}
 
@@ -75,8 +75,9 @@ def is_synthetic(value: str) -> bool:
 
 
 def target_kinds(prd: Prd) -> set[str]:
-    """Built-in target kinds plus the custom type names of prd.md section 7 (validator not `built-in`)."""
-    kinds = set(TARGET_KINDS)
+    """Built-in target kinds, the custom type names of prd.md section 7 (validator not `built-in`) and the target kinds
+    of the packs the PRD names."""
+    kinds = set(TARGET_KINDS) | set(pack_kinds(prd))
     sec = next((s for s in prd.sections if s.number == 7), None)
     for t in tables(sec.body) if sec else []:
         for r in t.rows:
@@ -332,6 +333,7 @@ def test_refs(prd: Prd):
         identities |= {r["identity"] for r in perms["roles"].values() if isinstance(r, dict) and isinstance(r.get("identity"), str)}
     ops, tables_, events = operation_ids(prd), {t.lower() for t in schema_tables(prd)}, event_names(prd)
     customs = custom_items(prd)
+    packed = pack_kinds(prd)
 
     for tc in _cases(prd):
         d = tc.data
@@ -403,6 +405,8 @@ def test_refs(prd: Prd):
                 yield bad("target", f"target {target}: no table '{name}' in contracts/schema.sql")
             elif kind in ("event", "job") and name not in events:
                 yield bad("target", f"target {target}: no '### {name}' heading in contracts/events.md and no such asyncapi channel or operation")
+            elif kind in packed and kind in customs and name not in customs[kind]:
+                yield bad("target", f"target {target}: no {packed[kind]} entry '{name}'")
             elif kind in customs and name not in customs[kind]:
                 yield bad("target", f"target {target}: '{name}' is not an item of the {kind} files (items: {', '.join(sorted(customs[kind]))})")
 
