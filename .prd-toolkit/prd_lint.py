@@ -28,8 +28,19 @@ def _display_root(root: Path) -> str:
         return root.as_posix()
 
 
+class _OneLineUsage(argparse.HelpFormatter):
+    """The usage line never wraps, whatever the terminal width (AC-004.1); the help text below it still does."""
+
+    def _format_usage(self, *args, **kwargs):
+        width, self._width = self._width, sys.maxsize
+        try:
+            return super()._format_usage(*args, **kwargs)
+        finally:
+            self._width = width
+
+
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.")
+    parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.", formatter_class=_OneLineUsage)
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--list-rules", action="store_true")
     parser.add_argument("--list-packs", action="store_true", help="print every pack on this machine, built-ins first")
