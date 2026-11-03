@@ -1,6 +1,7 @@
 
 # Python bytecode
 __pycache__/
+.pytest_cache/
 
 # Python tooling
 .venv/
