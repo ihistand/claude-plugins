@@ -167,3 +167,10 @@ def test_every_label_key_is_in_both_tables():
     src = (Path(publish.__file__).read_text() + (publish.TEMPLATE.read_text()))
     used = set(re.findall(r"""L\(["'](\w+)["']""", src))
     assert used <= set(en), used - set(en)
+
+
+def test_no_commit_cell_follows_the_page_language(tmp_path):
+    from doc_fixture import document_prd
+    root = document_prd(tmp_path, language="es")  # tmp_path is not a git repository
+    page = publish.render_page(model.load(root), tmp_path, None, TODAY)
+    assert "<dd>sin commit</dd>" in page and "no commit" not in page

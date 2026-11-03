@@ -211,7 +211,7 @@ def _header(prd: Prd, repo_root: Path, today: date) -> str:
     h1 = _e(_title(prd))
     return (f"<h1>{h1}</h1>\n<dl class=\"facts\">"
             f"<dt>{_e(L('project'))}</dt><dd>{_e(fm.get('prd', '-'))}</dd><dt>{_e(L('prd_version'))}</dt><dd>{_e(fm.get('version', '-'))}</dd>"
-            f"<dt>{_e(L('status'))}</dt><dd>{st_html}</dd><dt>{_e(L('commit'))}</dt><dd>{_e(commit_of(repo_root))}</dd>"
+            f"<dt>{_e(L('status'))}</dt><dd>{st_html}</dd><dt>{_e(L('commit'))}</dt><dd>{_e(L('no_commit') if commit_of(repo_root) == NO_COMMIT else commit_of(repo_root))}</dd>"
             f"<dt>{_e(L('generated'))}</dt><dd>{_e(today.isoformat())}</dd></dl>")
 
 

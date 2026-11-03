@@ -76,3 +76,4 @@ labels:
   classification: "Classification"
   confirmed: "Confirmed"
   touches: "Touches"
+  no_commit: "no commit"
