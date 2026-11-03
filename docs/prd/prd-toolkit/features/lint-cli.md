@@ -11,8 +11,8 @@ Flow: 1. run `prd_lint.py` on `docs/prd/<slug>`
 Traces: FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
 
 ### FR-001 Lint a PRD folder and print its findings
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:89 @446e262
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:100 @6e9f685
 Flow: 1. load the folder (prdlint.model.load) → 2. run every registered rule (prdlint.registry.run)
       → 3. print the loader's and the rules' findings, sorted → 4. exit 1 when any is an error, else 0
 Acceptance (EARS):
@@ -49,8 +49,8 @@ Tests: T-002.1 [integration], T-002.2 [integration], T-002.3 [integration]  (tes
 Traces: cli:prd_lint
 
 ### FR-003 List the rules
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:43 @446e262
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:54 @6e9f685
 Acceptance (EARS):
 - AC-003.1 When run with `--list-rules`, the lint command shall print every registered rule as
   `<name> <severity>`, the severity `error` or `warn`, one per line sorted by name, and exit 0,
@@ -61,8 +61,8 @@ Tests: T-003.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RULES
 
 ### FR-004 Reject a bad command line
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:38 @446e262
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:31 @6e9f685
 Acceptance (EARS):
 - AC-004.1 If none of a folder argument, `--list-rules` and `--list-packs` is given, the lint command
   shall print its usage on one line to stderr,
@@ -216,7 +216,8 @@ Tests: T-012.1 [integration], T-012.2 [integration], T-012.3 [integration]  (tes
 Traces: cli:prd_lint
 
 ### FR-013 List the packs
-Status: approved
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:60 @6e9f685
 Acceptance (EARS):
 - AC-013.1 When run with `--list-packs`, the lint command shall print every pack on the machine, one
   per line as `<name> <version> (<source>)`, followed by ` — <description>` when the pack has a
