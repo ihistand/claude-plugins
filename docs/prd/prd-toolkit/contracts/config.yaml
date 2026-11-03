@@ -1,0 +1,9 @@
+# Format: references/prd-format.md, "Contract YAML shapes".
+# Required content per setting: NAME, `type`, `default`, `environments` (a value per environment),
+# and `owner` (who may change it).
+settings:
+  PRD_LINT_CI:
+    type: string
+    default: unset
+    environments: {local: unset, production: unset}
+    owner: "Ivan Histand (Q-01, 2026-11-03); prd_lint.py --ci sets it to 1, and so does prd_error.py by default"

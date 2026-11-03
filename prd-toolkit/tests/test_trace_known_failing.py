@@ -42,56 +42,56 @@ def test_rule_is_registered():
 
 
 def test_case_without_tagged_citation_is_reported_at_the_case(tmp_path):
-    prd = make(tmp_path, "E-002", "@prd T-001.1")
+    prd = make(tmp_path, "E-002", "@" "prd T-001.1")
     f = run(prd)
     assert [x.message for x in f] == ["T-001.1 is known-failing on E-002 but no citation is tagged `known-failing E-002`"]
     assert f[0].file == "test-cases/x.yaml" and f[0].line == 1
 
 
 def test_tag_on_a_case_that_is_not_known_failing_is_reported_at_the_tag(tmp_path):
-    prd = make(tmp_path, None, "@prd T-001.1 known-failing E-002")
+    prd = make(tmp_path, None, "@" "prd T-001.1 known-failing E-002")
     f = run(prd)
     assert [x.message for x in f] == ["tags T-001.1 known-failing E-002, but its test case is not known-failing on E-002"]
     assert f[0].file.endswith("tests/test_notes.py") and f[0].line == 2
 
 
 def test_tag_naming_another_entry_than_the_case_is_reported(tmp_path):
-    prd = make(tmp_path, "E-002", "@prd T-001.1 known-failing E-001")
+    prd = make(tmp_path, "E-002", "@" "prd T-001.1 known-failing E-001")
     msgs = [x.message for x in run(prd)]
     assert "tags T-001.1 known-failing E-001, but its test case is not known-failing on E-001" in msgs
     assert "T-001.1 is known-failing on E-002 but no citation is tagged `known-failing E-002`" in msgs
 
 
 def test_tag_naming_a_resolved_entry_is_reported(tmp_path):
-    prd = make(tmp_path, "E-001", "@prd T-001.1 known-failing E-001")
+    prd = make(tmp_path, "E-001", "@" "prd T-001.1 known-failing E-001")
     assert [x.message for x in run(prd)] == ["tags T-001.1 known-failing E-001, which is resolved"]
 
 
 def test_matching_tag_on_an_open_entry_is_clean(tmp_path):
-    assert run(make(tmp_path, "E-002", "@prd T-001.1 known-failing E-002")) == []
+    assert run(make(tmp_path, "E-002", "@" "prd T-001.1 known-failing E-002")) == []
 
 
 def test_no_known_failing_anywhere_is_clean(tmp_path):
-    assert run(make(tmp_path, None, "@prd T-001.1")) == []
+    assert run(make(tmp_path, None, "@" "prd T-001.1")) == []
 
 
 def test_loosely_written_tag_counts(tmp_path):  # Review Focus 4
-    assert run(make(tmp_path, "E-002", "@prd T-001.1  known-failing: E-002")) == []
+    assert run(make(tmp_path, "E-002", "@" "prd T-001.1  known-failing: E-002")) == []
 
 
 def test_longer_tid_never_satisfies_a_shorter_one(tmp_path):  # Review Focus 4
-    prd = make(tmp_path, "E-002", "@prd T-001.10 known-failing E-002")
+    prd = make(tmp_path, "E-002", "@" "prd T-001.10 known-failing E-002")
     assert [x.message for x in run(prd)] == ["T-001.1 is known-failing on E-002 but no citation is tagged `known-failing E-002`"]
 
 
 def test_tagged_citations_map_pair_to_places_and_citations_is_unchanged(tmp_path):
-    prd = make(tmp_path, "E-002", "@prd T-001.1 known-failing E-002")
+    prd = make(tmp_path, "E-002", "@" "prd T-001.1 known-failing E-002")
     loaded, root = model.load(prd), model.repo_root(prd)
     assert trace.tagged_citations(loaded, root) == {("T-001.1", "E-002"): [("tests/test_notes.py", 2)]}
     assert trace.citations(loaded, root) == {"T-001.1": [("tests/test_notes.py", 2)]}
 
 
 def test_rule_is_part_of_run_trace_output(tmp_path):
-    prd = make(tmp_path, "E-002", "@prd T-001.1")
+    prd = make(tmp_path, "E-002", "@" "prd T-001.1")
     loaded = model.load(prd)
     assert "known-failing-tags" in rules(trace.run_trace(loaded, model.repo_root(prd), None))
