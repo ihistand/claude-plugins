@@ -103,6 +103,15 @@ calling the API's SDK.
    and the run's own dry-run directory, HARNESS CHOICES that change no assertion. A suite also
    needs one RESULTS line per dispatched T-id; each `fail` becomes a change request
    (`prd-toolkit:changing-prds`) or an `E-nnn` candidate for `errors.md`.
+
+   **A judged T-id** (its test case's `expect` has `rubric:`) is dispatched like any non-unit
+   T-id, and a dry run may sample one. Its test calls
+   `uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>`, all three
+   positionals, and asserts exit 0 and nothing else. A dry run judges whether the test could be
+   written from the PRD alone, never a score: no dry run runs `prd_judge.py`. A judged test that
+   grades the output itself (reads it and asserts rubric words, or asks a model of its own), or
+   that calls `prd_judge.py` without the output file, fails the round like an assertion no PRD line
+   gives. Never grade the output yourself to check the tester: the score is the judge's.
 6. **Delete the run's directory** (dry run only) once the report is judged, pass or fail, and
    also when the integrity check failed: `rm -rf <first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`,
    alone in its call, the path typed out. It is the tester's own output, not a restore, so step

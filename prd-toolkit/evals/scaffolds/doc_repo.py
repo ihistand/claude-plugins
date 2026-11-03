@@ -73,7 +73,7 @@ README = """# greet
 
 A small command line tool: `greet <name>` prints `Hello, <name>!`.
 
-Run it from a checkout with `uv run python -m greet World`; the tests run with `uv run pytest`.
+Run it from a checkout with `uv run --directory src python -m greet World`; the tests run with `uv run pytest`.
 """
 
 UNIT_TESTS = '''from greet.cli import format_greeting, main
@@ -326,7 +326,7 @@ TESTING = """# Testing
 - **HTTP requests.** Not applicable: no HTTP API.
 - **Fixtures.** Not applicable: no fixture files.
 - **Browser identity.** Not applicable: no UI.
-- **Assertions.** Unit outputs compare with `==`; a judged test asserts `prd_judge.py`'s exit code and nothing else.
+- **Assertions.** Unit outputs compare with `==`; a judged test asserts `prd_judge.py`'s exit code and nothing else. A section of a document is a Markdown heading of any level whose text is an outline `sections` entry; other headings may sit between them.
 - **Waits.** Not applicable: calls are synchronous.
 - **Effects.** Not applicable: no side effects.
 - **Leaks.** Not applicable: no logs.
@@ -413,7 +413,7 @@ Each step changes one thing, so if a step fails you know which one to look at.
 
 ## First run
 
-Run `uv run python -m greet World`. The terminal prints the greeting:
+Run `uv run --directory src python -m greet World`. The terminal prints the greeting:
 
 ```
 Hello, World!

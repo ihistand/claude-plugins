@@ -1,5 +1,61 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.0 baseline
+
+Five new cases, one per RED baseline of `baselines/packs-and-judged.md` (D1 to D5), each its prompt verbatim
+(`builder-document-no-unit` adds "Do not ask me questions.", as every build case does) with graders for its
+failure line. Recorded 2026-11-03 on branch `feat/prd-toolkit-0.8` (the skill text of Task 11, uncommitted on
+`ba37e6d`) at `--runs 3`, model `sonnet`, Claude Code 2.1.317; `suite.plugins[].path` is the worktree's
+`prd-toolkit` (manifest still 0.7.2; the bump is Task 12).
+
+Command, from the repo root, once per case (a second `--case` replaces the first, it does not add to it: the
+first run with five `--case` flags ran only `changing-refuses*`):
+
+```
+claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plugin --no-publish -j 4 --keep-temp \
+  --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" \
+  --case '<case>' --json <out>.json
+```
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `authoring-proposes-pack` (`empty`) | 1.00 | 0.50 | +0.50 | D1's prompt. With: `--list-packs` ran, `docs/prd/*/contracts/outline.yaml` written, no `.py` under `contracts/`, lint exit 0, no judgement word in a test-case file (3/3). Without: no lint, no pack list, no outline (3/3). Round 1 scored 0.94: one with run ran `"…/prd_lint.py" --list-packs` with a quoted path and `listed-packs` missed it; the grader was wrong (below). |
+| `authoring-spanish-ears` (`empty`) | 1.00 | 0.40 | +0.60 | D2's prompt. With: `prd.md` written with `language: es`, a features file with Spanish openers, none with an English one, lint exit 0 (3/3). Without: no `language: es`, no Spanish opener, no lint. |
+| `tester-judged-calls-judge` (`approved` + draft guide) | 1.00 | 0.56 | +0.44 | D3's prompt. With: `prd-tester` dispatched; a `tests/` file citing T-010.2 calls `prd_judge.py` with `docs/prd/greet`, the T-id and `install.md` and asserts exit 0; no test grading the guide; nobody reads the guide (3/3). Round 1 scored 0.73: in two with runs the skill never fired and the session read the guide, wrote the test with a Bash heredoc and listed its own verdicts. Skill text changed (below). |
+| `builder-document-no-unit` (`approved`) | 1.00 | 0.86 | +0.14 | D4's prompt. With: the builder dispatched, `docs/guide/install.md` written with the outline's four sections in order, no Write or Edit under `tests/unit/`, no PRD edit beyond the close (3/3). Without: the agent writes the guide itself, so only `builder-dispatched` fails; the case guards the document path, it does not discriminate much. Rounds 1 and 2 scored 0.57 and 0.81 (below). |
+| `changing-refuses-retarget` (`built` + vendored `demo`) | 1.00 | 0.83 | +0.17 | D5's prompt. With: the last message holds `retargeting an area is a conversion (prd-toolkit 0.8.3)`, the `Target:` line, `verified (since 1.0.0)` and `version: 1.0.0` unchanged, no Edit or Write under `docs/prd/` (3/3). Without: no retarget either, but no refusal line. The `demo` pack is vendored in `.prd-toolkit/packs/demo/`, because an eval run cannot set `PRD_PLUGINS_FILE`. |
+
+The table's rows are the final runs, all on the final scaffold (`tester-judged-calls-judge` and
+`changing-refuses-retarget` were run once more after the scaffold's last fix, with the same scores).
+
+### Rounds and rulings (0.8.0)
+
+- **`listed-packs` was a wrong grader.** `input_match: 'prd_lint\.py --list-packs'` cannot match a quoted
+  script path, which reaches the grader as `prd_lint.py\" --list-packs`. Now `prd_lint\.py\S* --list-packs`,
+  checked by hand against the quoted, the vendored and a lint command.
+- **testing-from-prds did not fire on "Write the test for T-010.2; just check the guide yourself".** Its
+  description now adds "when asked to write the test for a T-id, a judged case scored by prd_judge.py included,
+  or to check its output yourself", and its Red Flags quote the session's verdict ("The guide may not pass:
+  …"). The description pin in `tests/test_tester_agent.py` follows. A new grader, `no-guide-read`, fails a run
+  that reads the guide.
+- **`builder-document-no-unit` round 1 (0.57):** with no "Do not ask me questions." the caller stopped at
+  step 1 to ask before branching off `main`, as running-a-build.md allows. The prompt gained the phrase every
+  build case carries.
+- **Round 2 (0.81):** two with runs stopped on the tester's QUESTION that the scaffold's PRD left open (what
+  counts as a section of the guide: a heading of which level, and may other headings sit between), before the
+  builder ran (no worktree isolation, and the caller dispatched the tester first). A PRD gap, correctly
+  stopped. The scaffold's testing.md Assertions slot now answers it ("A section of a document is a Markdown
+  heading of any level whose text is an outline `sections` entry; other headings may sit between them").
+  The GREEN D4 rerun met the same question (`baselines/packs-and-judged.md`).
+- **The scaffold's run command.** `doc_repo.py`'s README and `built` guide said `uv run python -m greet World`,
+  which fails (`No module named greet`: no build system, and `src/` is on the path only for pytest). It now
+  says `uv run --directory src python -m greet World`. Found by GREEN D4 round 1, whose builder checked the
+  command before writing it.
+- **`prd_judge.py` exit 2 in the eval sandbox.** A with run that reached the suite reported
+  `cannot judge T-010.2: claude: not on PATH` and closed FR-010 `built`, not `verified`, as the skill says:
+  the eval sandbox has no `claude` on its PATH (spec section 15, cost and access). No grader asks for
+  `verified`.
+
 ## 0.6 baseline (handling-errors cases)
 
 Four new `handling-errors` cases; three on `scaffolds/error_repo.py` state `bug` (the greet PRD at 1.0.0,

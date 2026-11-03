@@ -51,6 +51,10 @@ Quote: "<the test case's ac: line>" / "<the expect entry>"
 Failing test: <path>
 ```
 
+On an area whose pack says `builder-tests: none`, a round after a document question the caller
+dismissed adds `Answered: "<the quote>"`: the outline entry's or the rubric item's line that answers
+it. Write from it.
+
 **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
 directory: that is the copy its hooks and CI run. Otherwise `<scripts>` is the plugin's `scripts`
@@ -80,7 +84,8 @@ allowed. Never pipe, filter or truncate a gated command's output.
    test-case file the prompt names, prd.md's `## 5. Standards registry` and `## 6. Skills registry`
    (the pack does not carry them), and testing.md's `## Harness` for where a unit test goes. You
    read those; you never edit them.
-2. **Write the unit tests first.** Before you change anything, run the `unit` Levels harness
+2. **Write the unit tests first**, except on an area whose pack says `builder-tests: none` (its
+   section below). Before you change anything, run the `unit` Levels harness
    command from the pack, exactly as written, and keep the list of tests that already fail. Then,
    for each unit T-id, write its test from its test case, citing `@prd <T-id>` in the form
    testing.md's Layout gives, in a file that cites only unit T-ids. Run the harness and see each
@@ -130,6 +135,40 @@ allowed. Never pipe, filter or truncate a gated command's output.
     `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`. You never
     edit the test, and you never decide it: the caller reconciles the dispute by quote.
 
+## An area whose pack says `builder-tests: none`
+
+An area's output is not always code. The pack's Header line `Target: pack <name> <X.Y.Z> (<source>)`
+names the area's pack (no `Target:` line: §1's `Pack:` line, or `service`). Read its
+`builder-tests:` in `.prd-toolkit/packs/<name>/pack.yaml` (the vendored copy; without one, the
+pack's folder that `--list-packs` resolves). `unit`, the default, is every rule above. The built-in
+`document` pack says `none`: a document has no unit level, the caller's prompt says
+`Unit T-ids: none`, and "write the unit tests first" names nothing to write.
+
+On such an area, in place of writing unit tests first (R-1):
+
+1. **The outputs.** You write each output its contracts name: for `document`, each `outline` entry's `path` (the
+   pack's Cited part prints the entries), under the Boundary. Use the entry's `audience`,
+   `purpose`, `sections`, `terms` and `length`, the ACs of your IDs, and the area's judged rubric
+   items as the content brief: read the `rubric:` entries of your IDs' judged cases in the
+   test-case file, as you read a unit T-id's entry. The `sections` are the headings, in order;
+   every `terms` entry is used; the word count is inside `length`; every rubric item is something
+   a reader can quote from the text.
+2. **Facts come from the repository, never from you.** A document describes a system that exists:
+   take each command, requirement and output it states from the repository as it is (its README,
+   its packaging files, the command's own help or a run of it). Prose you can write from the outline
+   is not a PRD gap: the wording, the order of steps inside a section and the examples are yours to
+   write. A real gap is one the outline and the rubric do not answer: an entry with no `audience`
+   or `sections`, sections that contradict an AC, or a fact neither the outline nor the repository
+   holds. That one goes under QUESTIONS and stops the build.
+3. **The linters.** You run the §5 standards linters that apply: each `enforced` row whose glob matches a file you
+   wrote, as rule 5 says, and never the pack's `checks` level: those tests are the tester's, and they
+   run at the caller's reconcile like every non-unit level.
+4. **Report and commit as always**: `UNIT none`, a SOURCES line per block (`FR-010:
+   docs/guide/install.md:1`), and the commit with `Refs: <IDs>`.
+
+Every other rule stands: never the PRD folder, never a tester's test, nothing outside your IDs,
+no status.
+
 ## The report
 
 In this order, each field on its own line:
@@ -176,6 +215,14 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
 - A commit with no `Refs:` trailer, or `--no-verify` on a rejected commit.
 - An edit under `docs/prd/`, or to a file that cites a non-unit T-id; a read of such a file
   outside a code-bug round.
+- The exception on an area whose pack says `unit` (or names no pack): code with no unit test
+  first, "because a document area needs none". Only `builder-tests: none` lifts rule 2.
+- "PRD gap: the PRD sets the guide's structure but not what goes in it", or "the outline needs
+  at least 150 words, which cannot be reached without the content above". (Observed, before the
+  exception was written: no document, no commit.) The outline and the rubric are the brief; write
+  the document.
+- A unit test, or a `checks` test, written for a document area because the request said "write
+  the unit tests first as usual".
 
 **The caller:**
 
@@ -242,6 +289,8 @@ step whose gate is open.**
 
 | Excuse | Reality |
 |---|---|
+| "The PRD doesn't say what each Install step says, so it's a gap." | The outline gives the audience, purpose, sections, terms and length, and the rubric says what a reader must find. The words are the builder's, as the code's lines are; the facts come from the repository. Write it. |
+| "Write the unit tests first, as usual." | Not on a `builder-tests: none` area: it has no unit T-id to cite, and a test of yours for a `checks` or `judged` T-id is the tester's. Write the document and run the standards linters. |
 | "I'll write the integration test too, it's quicker." | A test the builder writes checks the builder's reading of the AC. The tester writes it from the PRD alone; that separation is the whole value of the run. |
 | "It's tiny; the PRD can follow." | The PRD never follows. Behaviour no approved AC states is a change request through `prd-toolkit:changing-prds`; build none of it now. |
 | "The PRD doesn't say, so I'll pick a sensible default." | A default is a requirement nobody approved, and the tester tests the PRD, not your choice. Write a QUESTION; the build stops at the PRD-gap row. |

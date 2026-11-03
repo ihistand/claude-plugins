@@ -9,8 +9,9 @@ SKILL = ROOT / "skills/testing-from-prds/SKILL.md"
 DISPATCHERS = [ROOT / f"skills/{n}/SKILL.md" for n in ("authoring-prds", "changing-prds")]
 SKILL_DESCRIPTION = (
     "Use when writing or running tests from a PRD folder (docs/prd/) without reading the code - a dry run of "
-    "sampled T-ids, a characterization suite for an adopted area, or the tests for new or changed T-ids; or "
-    "when dispatched as prd-tester"
+    "sampled T-ids, a characterization suite for an adopted area, or the tests for new or changed T-ids; when "
+    "asked to write the test for a T-id, a judged case scored by prd_judge.py included, or to check its output "
+    "yourself; or when dispatched as prd-tester"
 )
 
 

@@ -233,3 +233,117 @@ pack in this repo" and that the change "has to go through `/prd-change`", and of
 (where the pack is, whether `service` was meant, write a new pack). It could not have retargeted
 whatever its skill said, so it tests nothing about the retarget refusal. Transcript:
 `red-0.8/D5a/transcript.jsonl`.
+
+## GREEN (Task 11)
+
+The same five runs, rerun 2026-11-03 with the branch plugin **after** the 0.8.0 skill text (authoring
+phases 1 to 3 and 6 with **Applying the pack**, adopting's area pack, the tester's **A judged case**,
+the builder's `builder-tests: none` section, running-a-build's document-area dispatch, changing-prds'
+**Packs and retargeting**, handling-errors' `prd_judge.py` exit 2). Same command, same prompts verbatim,
+same scaffold states, `<scratch>/green-0.8/<ID>/repo`; D5 with the stub `demo` plugin as a second
+`--plugin-dir` and `PRD_PLUGINS_FILE`, as in its RED rerun. Claude Code 2.1.317, model `claude-opus-5-5`;
+the init event lists `prd-toolkit@inline` (and `demo` for D5). Runs one at a time, none answered.
+
+| ID | Rounds | Result | Evidence |
+|---|---|---|---|
+| D1 | 1 | **GREEN** | ran `--list-packs`; the guide is a `document` area (`Target: pack document 1.0.0 (prd-toolkit), output language en`) with `contracts/outline.yaml` and §7 `\| outline \| `contracts/outline.yaml` \| pack \|`; no custom type, no `.py` in `contracts/`; 5 judged cases, every rubric item an observable claim; `- Profile: [ASSUMPTION A-01: …]` indexed `open`; lint exit 0 |
+| D2 | 1 | GREEN (stays) | `language: es`, `- Pack: document 1.0.0 (prd-toolkit)`, every AC opens `Cuando`, `Si` or `La … deberá`; lint exit 0 |
+| D3 | 1 | GREEN (stays), defect closed | dispatched `prd-tester`; `tests/judged/test_guide_judged.py` calls `prd_judge.py docs/prd/greet T-010.2 docs/guide/install.md` and asserts `returncode == 0`; the guide was never read; no stop for a `/prd-change` |
+| D4 | 2 | **GREEN** in round 2 | round 1 still RED, for a scaffold defect (below); round 2: the builder wrote `docs/guide/install.md` from the outline (four sections in order, terms, word count checked) and committed it with `Refs: FR-010`; no unit test; no PRD or tester edit |
+| D5 | 2 | GREEN (stays), defects closed in round 2 | round 1: the skill did not fire; round 2: `changing-prds` fired, ran `--list-packs`, found `demo 1.0.0 (demo@market)`, and refused with the exact line; no edit, no bump, no plan to drop a status |
+
+### D1: GREEN
+
+Phase 1 ran `uv run --script <worktree>/prd-toolkit/scripts/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`,
+then read the `document` pack's `pack.yaml`, `rubrics.md` and `clarify.md`, and wrote `docs/prd/greet/` with
+the default `service` pack and the guide as its own area under `document`. Its §1:
+
+> - Profile: [ASSUMPTION A-01: the PRD uses the default `service` pack and the area `guide` uses pack
+>   document 1.0.0 (prd-toolkit); language en, output language en; basis: the request is an install guide
+>   for a CLI, the request is written in English]
+
+A rubric item, from `test-cases/guide.yaml`: "Each numbered step in the Install section names one action
+the reader performs". No item holds "is clear", "reads well" or another judgement word. Transcript:
+`green-0.8/D1/transcript.jsonl`.
+
+### D2: stays GREEN
+
+`docs/prd/greet/` with `language: es`, `- Pack: document 1.0.0 (prd-toolkit)` and a `- Profile:` assumption;
+ten ACs, none with an English opener; lint exit 0. One note from its close: "El lint solo acepta unidades en
+inglés ("palabras" no le vale)": `nfr-bound`'s units are English only, so its word-count bounds became FRs.
+Transcript: `green-0.8/D2/transcript.jsonl`.
+
+### D3: stays GREEN, the `output` argument now given
+
+The session read the test case, loaded `testing-from-prds`, followed `dispatching.md` and dispatched
+`prd-tester` in write mode. The tester wrote:
+
+```python
+def test_install_guide_judged():
+    """@prd T-010.2"""
+    r = subprocess.run(
+        ["uv", "run", "--script", ".prd-toolkit/prd_judge.py",
+         "docs/prd/greet", "T-010.2", "docs/guide/install.md"],
+        cwd=REPO_ROOT,
+    )
+    assert r.returncode == 0
+```
+
+and its close: "I wrote the T-010.2 test, but I didn't check the guide myself. … My own reading would be the
+verdict of whoever wrote the test, which doesn't count." Transcript: `green-0.8/D3/transcript.jsonl`.
+
+### D4: GREEN in round 2
+
+**Round 1** (scaffold as Task 10 built it): the builder followed the new section: it read the pack's
+manifest, the README and `pyproject.toml`, and ran the README's command to check it, which failed. Its
+caller's close:
+
+> The README says to run `uv run python -m greet World`, but in this checkout that fails with `No module
+> named greet`. … Putting a workaround such as `PYTHONPATH` in the guide would make up a fact the PRD
+> doesn't give.
+
+That is the skill's rule 2 ("a fact neither the outline nor the repository holds" is a gap) applied to a
+scaffold defect: the scaffold's README (and the `built` guide) gave a run command that does not run,
+because the project has no build system and `src/` is on the path only for pytest. **Round 2 change:**
+`evals/scaffolds/doc_repo.py` now writes `uv run --directory src python -m greet World` in the README and the
+`built` guide, a command that runs; nothing else in the scaffold changed (`tests/test_doc_repo.py` passes).
+No skill text changed for round 2. Transcript: `green-0.8/D4-r1/transcript.jsonl`.
+
+**Round 2:** the caller dispatched the builder with `Unit T-ids: none` beside the tester's write. The builder
+ran the First run command from the repository, wrote `docs/guide/install.md` (sections Requirements, Install,
+First run, Common problems; the terms CLI and greeting; `wc -w` within the outline's length) and committed it
+on its branch with `Refs: FR-010`, QUESTIONS none. The caller's words: "**Unit tests first:** FR-010 belongs
+to the `guide` area, not `greet`, and that area uses the `document` pack (`builder-tests: none`). Neither of
+its tests is a unit test". The build then stopped before the merge on two **tester** QUESTIONS the scaffold's
+PRD does not answer ("what counts as a 'section' in the guide: a Markdown heading, at what level", and
+whether other headings may sit between the four), as **Stops** says. So no status moved and the guide is on
+the builder's branch, not merged. The failure line (unit tests written, or no document written) did not
+occur. Transcript: `green-0.8/D4/transcript.jsonl`.
+
+### D5: stays GREEN, the refusal now said
+
+**Round 1:** no skill fired (no Skill call); the session searched `.prd-toolkit/`, `~/.claude/plugins` and
+`packs.py` itself, said "There's no "demo" pack for the guide area to switch to", and offered a
+`/prd-change`. No `Target:` edit, but both noted defects stayed. **Round 2 change:** the changing-prds
+description gains "switching an area or the PRD to another pack or output language (its Target: or Pack:
+line)" (pinned in `tests/test_packs_skills.py`). **Round 2:** "Switching an area's pack is a PRD change, so
+I'll go through the change skill."; `changing-prds` fired; the context pack, then
+`.prd-toolkit/prd_lint.py --list-packs` (which lists `demo 1.0.0 (demo@market)`); its close:
+
+> I didn't make this change. The guide area is built, and the toolkit doesn't allow changing the pack of a
+> built area:
+>
+> **retargeting an area is a conversion (prd-toolkit 0.8.3)**
+>
+> … So I've made no edits, version bump or plan to move FR-010 back to `approved`.
+
+`git status` clean. Transcripts: `green-0.8/D5-r1/transcript.jsonl`, `green-0.8/D5/transcript.jsonl`.
+
+### The scaffold after GREEN
+
+Two changes to `evals/scaffolds/doc_repo.py`, both fixture defects found by these runs and the eval cases,
+neither a change to what a state holds for the failure lines: the README's and the `built` guide's run command
+(`uv run --directory src python -m greet World`, before D4's round 2), and, after the GREEN runs, a sentence in
+the scaffold PRD's testing.md Assertions slot saying what a section of a document is (the tester's QUESTION
+that stopped D4's round 2 before the merge, and two runs of `builder-document-no-unit`; `BASELINE.md`, 0.8.0).
+D1 to D5 above ran before the second change. Every state still lints with exit 0 (`tests/test_doc_repo.py`).

@@ -67,12 +67,12 @@ The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `
 
 | # | Phase | Gate |
 |---|---|---|
-| 1 | **Context.** Read the repo, its README, CLAUDE.md, AGENTS.md and docs. Look up facts the user does not uniquely hold (subagents may). Propose registry rows, Decision `proposed`: standards rows from detected linter configs (`.sqlfluff`, `.pre-commit-config.yaml`, `[tool.*]` sections in `pyproject.toml`, lint scripts in `package.json`); skills rows from this session's skills listing that match the project's objects and activities, always including `superpowers:writing-plans` for planning. A skills row may become `required` only for a plugin skill (`plugin:skill`) or one found under `.claude/skills/`, because lint checks it is installed; a skill built into Claude Code (`code-review`, `security-review`, `simplify`, `init`) may only be `recommended`. | A short note to the user of what was found |
-| 2 | **Draft.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/prd` to `docs/prd/<slug>/` with Read and Write and fill it (below). Gaps become `[NEEDS CLARIFICATION: q]`, inferences `[ASSUMPTION A-nn: …]`. Write features, contracts and test cases, not only prose. | Draft on disk; the `prd-lint-exit=` value is `0` |
-| 3 | **Clarify rounds** per `clarify-categories.md`: score all thirteen categories (ask category 13, packaging, whenever the project ships code; for a PRD with no code, mark it Not applicable with the reason); at most five multiple-choice questions per round, each with a recommended answer, ranked by impact × uncertainty; write each answer in immediately. Rounds are uncapped. | Zero `NEEDS CLARIFICATION` markers in any file, YAML and SQL comments included (delete each template hint once its slot is answered); §13 reads `None.`; every category Clear |
+| 1 | **Context.** Read the repo, its README, CLAUDE.md, AGENTS.md and docs. Look up facts the user does not uniquely hold (subagents may). Propose registry rows, Decision `proposed`: standards rows from detected linter configs (`.sqlfluff`, `.pre-commit-config.yaml`, `[tool.*]` sections in `pyproject.toml`, lint scripts in `package.json`); skills rows from this session's skills listing that match the project's objects and activities, always including `superpowers:writing-plans` for planning. A skills row may become `required` only for a plugin skill (`plugin:skill`) or one found under `.claude/skills/`, because lint checks it is installed; a skill built into Claude Code (`code-review`, `security-review`, `simplify`, `init`) may only be `recommended`. **Packs and languages:** list the packs on this machine with `uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`, its own Bash call (in a repository that has `.prd-toolkit/`, `uv run --script .prd-toolkit/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`); it prints one line per pack, `<name> <version> (<source>) — <description>`, built-ins first, then the installed plugins' packs. Choose the pack whose description fits what the PRD's outputs are: a service with an API, a database or events is `service`; Markdown documents written for people (a guide, a runbook, a policy) are `document`. Propose the default pack, `language:` (the language the user writes to you in) and the output language (the language of the outputs, `language:` unless the user says otherwise) as `proposed` rows beside the pack's §5 and §6 rows: §1 lines `- Pack: <name> <X.Y.Z> (<source>)` and `- Output language: <code>`, frontmatter `language: <code>`; phase 4 decides them like any row. A part of the project with another pack (a CLI's install guide in the CLI's PRD) is its own area with a `Target:` line. | A short note to the user of what was found |
+| 2 | **Draft.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/prd` to `docs/prd/<slug>/` with Read and Write and fill it (below). Gaps become `[NEEDS CLARIFICATION: q]`, inferences `[ASSUMPTION A-nn: …]`. Write features, contracts and test cases, not only prose. Then apply the pack (**Applying the pack**, below). | Draft on disk; the `prd-lint-exit=` value is `0` |
+| 3 | **Clarify rounds** per `clarify-categories.md`: score all thirteen categories (ask category 13, packaging, whenever the project ships code; for a PRD with no code, mark it Not applicable with the reason); at most five multiple-choice questions per round, each with a recommended answer, ranked by impact × uncertainty; write each answer in immediately. Rounds are uncapped. Add the pack's `clarify.md` questions (beside its `pack.yaml`) to the rounds, and category 1 asks the target profile: the pack, `language:` and the output language, per area when one differs. | Zero `NEEDS CLARIFICATION` markers in any file, YAML and SQL comments included (delete each template hint once its slot is answered); §13 reads `None.`; every category Clear |
 | 4 | **Sign-off.** Show every assumption (ID and text) and every registry row in your message; a confirmation covers only what the user was shown. The user confirms or corrects each assumption (§12 status `confirmed` or `corrected`), or names who will confirm intent only that person knows (`awaiting <who>`, which may stay through approval), and decides each row. Copy into `operations.md` every hard rule from a registered skill that bears on operations (for example "Claude never deploys Looker") as `(actor: human)` runbook steps, so the PRD stands alone. | No `open` assumption; no `proposed` row |
 | 5 | **Mechanical gate.** Set status `In review`, run lint, then answer every question in `quality-checklist.md`, plus: every contract listed in §7 is populated, or deleted, dropped from §7 and declared `Not applicable` in §1. Lint cannot tell an empty skeleton (`paths: {}`, `roles: {}`) from a deliberate "none". | The `prd-lint-exit=` value is `0`; every checklist answer yes |
-| 6 | **Test-agent dry run.** `uv run --script <scripts>/prd_lint.py --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Unit T-ids are never sampled: unit cases read code and stay with the builder. Exit 1 from `--sample-tids` (no non-unit T-id) fails this gate; an empty dry run never passes. Dispatch the `prd-toolkit:prd-tester` agent as `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says (dry-run directory, state check, dispatch, judgment, cleanup): it writes the tests for those T-ids to the dry-run directory, `<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`, and lists every question it had to ask. Its guard allows reads in the PRD folder, the dry-run directory and the test roots, and writes only to the test roots and the scratch directory; the tester's own rule keeps a dry run to the PRD folder and its dry-run directory. Only when `prd-tester` is not in the Agent tool's list, dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md) instead. Either way, delete the dry-run directory after judging (dispatching.md's cleanup step), pass or fail. | One test per sampled T-id listed under TESTS; every question dismissed by an exact quote, per the triage in [dry-run-prompt.md](dry-run-prompt.md); FILES READ holds only paths under the PRD folder and the run's dry-run directory; the state check finds no change outside the dry-run directory |
+| 6 | **Test-agent dry run.** `uv run --script <scripts>/prd_lint.py --sample-tids 5 docs/prd/<slug>` picks the T-ids (at most five; fewer when the PRD has fewer). Unit T-ids are never sampled: unit cases read code and stay with the builder. A judged T-id is not unit and may be sampled: the dry run judges whether its test could be written from the PRD alone (a test that calls `prd_judge.py` on the output and asserts its exit code), never a score, and nothing is graded. Exit 1 from `--sample-tids` (no non-unit T-id) fails this gate; an empty dry run never passes. Dispatch the `prd-toolkit:prd-tester` agent as `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says (dry-run directory, state check, dispatch, judgment, cleanup): it writes the tests for those T-ids to the dry-run directory, `<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`, and lists every question it had to ask. Its guard allows reads in the PRD folder, the dry-run directory and the test roots, and writes only to the test roots and the scratch directory; the tester's own rule keeps a dry run to the PRD folder and its dry-run directory. Only when `prd-tester` is not in the Agent tool's list, dispatch a fresh general-purpose subagent with [dry-run-prompt.md](dry-run-prompt.md) instead. Either way, delete the dry-run directory after judging (dispatching.md's cleanup step), pass or fail. | One test per sampled T-id listed under TESTS; every question dismissed by an exact quote, per the triage in [dry-run-prompt.md](dry-run-prompt.md); FILES READ holds only paths under the PRD folder and the run's dry-run directory; the state check finds no change outside the dry-run directory |
 | 7 | **Approval.** On the user's explicit approval: status `Approved`, version `1.0.0` (only on a first approval, when §14 holds no row at 1.0.0 or above; otherwise this is an approval of a change, and it goes through `prd-toolkit:changing-prds` step 5 instead), `updated` today, a §14 changelog row that records the dry run (`Approved; dry run T-003.1, T-007.2, … 0 open questions, 4 dismissed by quote`); the `prd-lint-exit=` value is `0`; then `uv run --script <scripts>/prd_block.py docs/prd/<slug>` writes the CLAUDE.md block; commit the folder and CLAUDE.md with `Refs: none (no behaviour change)`; offer to install the hooks and generate CI (`uv run --script <scripts>/prd_hooks.py install docs/prd/<slug>`, then `uv run --script <scripts>/prd_hooks.py ci --github docs/prd/<slug>`, or `--gitlab`; each its own call, then commit `.prd-toolkit/` and the CI file), and run them only on the user's explicit yes; hand off to `superpowers:writing-plans`. | Explicit user approval |
 
 **Deploying.** Phases 3 and 4 also ask what a deploy needs: the environments and which environment
@@ -146,6 +146,51 @@ report each finding, and return to the phase it belongs to. Never commit an `App
 - **IDs:** FR and NFR share one number sequence; T-ids are per requirement (`T-004.1`).
 - Run lint. A Draft with open markers lints clean; a lint failure here is a grammar error. Fix it.
 
+### Applying the pack
+
+The pack is the one phase 1 proposed (for a service, `service` is the default and needs no
+`Pack:` line). Read its manifest with the Read tool: `.prd-toolkit/packs/<name>/pack.yaml` when the
+repository has `.prd-toolkit/`; for the source `prd-toolkit`, otherwise, `<plugin root>/packs/<name>/pack.yaml`;
+for an installed plugin's pack, `<installPath>/prd-packs/<name>/pack.yaml`, with the `installPath`
+that `~/.claude/plugins/installed_plugins.json` records. Then, after copying the template:
+
+1. **Contracts:** drop each contract the pack does not use (delete the file, drop its §7 row) and
+   add to §1 ``- Not applicable: `<file>` — <reason>`` for it, as for any unused contract.
+2. **Contract types:** add each of the pack's contract types to §7 with the Validator cell `pack`
+   (`| outline | `contracts/outline.yaml` | pack |`), and write its files: for `document`, one
+   `contracts/outline.yaml` key per document, with `path` (a `.md` path outside the PRD folder),
+   `audience`, `purpose`, `sections`, `terms` and `length`. A test case's `target:` names it through
+   the pack's target kind: `target: doc:install-guide`.
+3. **Levels and Harness:** fill the Levels rows and the Harness slots from the pack's `levels` and
+   `harness`; a slot the pack leaves out stays a `[NEEDS CLARIFICATION]` marker, and a template
+   Levels row the pack does not name is dropped (no `unit` row for a pack whose
+   `builder-tests:` is `none`, unless another area of the PRD needs it). Copy its
+   `standards` and `skills` into §5 and §6 as `proposed` rows. The Gate of each level is still
+   asked in a clarify round.
+4. **Language:** write every prose line in the PRD's `language:`: features, ACs, test-case
+   rubrics, glossary meanings. The EARS openers come from its language table: `en` opens with
+   `When`, `While`, `If`, `Where` or `The … shall`; `es` with `Cuando`, `Mientras`, `Si`, `Donde`
+   or a subject and `deberá` (`La guía deberá …`). Labels, IDs and kinds stay English.
+
+Never declare a custom contract type, or write a validator, for an output a listed pack covers:
+a Markdown guide is a `document` area, not a `doc` type with a `check_keys.py` of your own.
+
+**Profile lines.** A PRD whose outputs are all of one pack names it in §1:
+`- Pack: document 1.0.0 (prd-toolkit)`, and `- Output language: <code>` when the outputs' language
+differs from `language:`. An area of another pack carries a `Target:` line under its level-1
+heading, before its first `###` block:
+`Target: pack document 1.0.0 (prd-toolkit), output language en`. Until phase 4 decides the
+profile, mark it where it stands with a line `- Profile: [ASSUMPTION A-nn: <pack>, language <code>,
+output language <code>; <basis>]` under the §1 lines, indexed `open` in §12.
+
+**Judged cases.** What a script can check exactly (sections in order, terms used, word count,
+links resolving) is a case at the pack's `checks` level. Everything else about the output's quality
+is a judged case at its `judged` level: `expect` has `rubric:` and `threshold:` and no `output:`,
+written as the pack's `rubrics.md` says (Read it beside `pack.yaml`). Each rubric item is one claim
+a grader can prove with a quote copied from the output: it names the section, the term or the
+reader action it is about, never "is clear", "reads well" or "is good". Three to eight items; a
+threshold of 1.0 only when every item is a hard requirement.
+
 ### Resuming a draft
 
 A folder with no §14 row at 1.0.0 or above has never been approved, whatever its status line
@@ -189,6 +234,23 @@ Tests: T-004.1 [system]  (test-cases/nfr.yaml)
 
 And A-03 sits in §12 as `open` until the user confirms or corrects it in phase 4.
 
+A judged case's rubric:
+
+```
+WRONG  (test-cases/guide.yaml, T-010.2)
+    rubric:
+      - The guide is clear and easy to follow       ← no quote can prove it
+      - Install reads well                          ← a judgement, not a claim
+    threshold: 1.0
+
+CORRECT
+    rubric:
+      - Each step in Install names one action the reader performs
+      - No step relies on a tool that Requirements does not list
+      - First run shows the command and the output the reader will see
+    threshold: 0.67
+```
+
 ## Red Flags - STOP
 
 - A single `docs/PRD.md` instead of the template folder.
@@ -207,6 +269,10 @@ And A-03 sits in §12 as `open` until the user confirms or corrects it in phase 
   `prd-toolkit:changing-prds`.
 - A dry run with no T-ids, or one that samples a unit case.
 - A dry-run question dismissed without an exact quote of the PRD line that answers it.
+- A rubric item no quote can prove: "is clear", "reads well", "is easy to follow", "is good".
+- A custom contract type and a hand-written validator for a document (observed: a `doc` type in
+  `contracts/docs.yaml` checked by `contracts/check_keys.py`), or a PRD for a guide written with no
+  pack named, when `--list-packs` was never run.
 
 **All of these mean: stop, mark what is unknown, and return to the phase whose gate is open.**
 
@@ -227,6 +293,8 @@ And A-03 sits in §12 as `open` until the user confirms or corrects it in phase 
 | "The folder exists, so this is a change." | Only an approved PRD changes. A draft with no §14 row at 1.0.0 or above resumes here, at its first open gate. |
 | "`--sample-tids` found nothing, so there is nothing to dry-run." | A PRD with no black-box case cannot be tested without its code. Exit 1 fails phase 6; write the integration, system or acceptance cases. |
 | "The PRD clearly covers that question." | Then quote the line. No quote, no dismissal: a question you cannot answer with the PRD's own words is a gap. |
+| "A custom type is quicker than learning the pack." | The pack's type is validated, vendored and locked, and its levels, Harness and rubric conventions come with it. Run `--list-packs`; use the pack that fits. |
+| "The rubric item is obviously true of a good guide." | Then it can be quoted. An item the grader cannot prove with a copied quote fails every run, or passes on the grader's mood. |
 | "Lint passed, so it is complete." | A Draft lints clean with every marker open, and lint cannot tell an empty contract skeleton from "none". Lint is one gate of seven. |
 
 ## Related skills

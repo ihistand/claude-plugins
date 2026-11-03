@@ -1,6 +1,6 @@
 ---
 name: changing-prds
-description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement - or when /prd-change runs, or when asked to change code and let the PRD follow, or when an agent hits something the PRD does not say; the PRD changes first, with new IDs and a version bump, before any code
+description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement, switching an area or the PRD to another pack or output language (its Target: or Pack: line) - or when /prd-change runs, or when asked to change code and let the PRD follow, or when an agent hits something the PRD does not say; the PRD changes first, with new IDs and a version bump, before any code
 ---
 
 # Changing PRDs
@@ -41,6 +41,30 @@ Any agent (builder, tester, deployer, reviewer) that meets something the PRD doe
 missing error code, an unknown URL, an unspecified empty state) stops. It does not guess, and it
 does not read the code to fill the gap. The gap is a change request: start step 1 here, with
 the gap as the change.
+
+## Packs and retargeting
+
+An area's pack is its `Target:` line (`Target: pack <name> <X.Y.Z> (<source>)`), or §1's `Pack:`
+line for an area with none, or `service` when there is neither. Before you say a pack is missing,
+list the packs, its own Bash call:
+`uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`. It prints
+the built-ins and every installed plugin's packs, `<name> <version> (<source>) — <description>`; a
+pack on that list exists, whatever a search of the repository found.
+
+**A retarget of a built area is refused.** A change to the pack of an area that holds a block
+`built`, `verified` or `live` (a `live (since X.Y.Z)` included) is not a PRD change in 0.8.0: its
+outputs, contracts and tests were built and checked under the old pack. Say, exactly:
+
+`retargeting an area is a conversion (prd-toolkit 0.8.3)`
+
+and stop: no `/prd-change`, no version bump, no edit and no plan to move a status back to
+`approved`. The same holds for §1's `Pack:` line when an area without its own `Target:` line
+holds such a block. Name the block and its status that refuse it. The area stays as it is; a new
+area under the other pack, for new outputs, is a separate change the user may ask for.
+
+An output-language change, or a pack change on an area with no `built`, `verified` or `live` block
+(every block `approved` or `as-built`), is a change like any other: the steps below, the version
+by the table, and the area's contracts, Levels, Harness and test cases moved to the new pack.
 
 ## Non-negotiable rules
 
@@ -230,6 +254,10 @@ cite the entry: `Refs: FR-001, E-004`.
 - "/prd-build rewrites it", so a revised block's `Source:` line is dropped instead of refreshed.
 - An edit to a contract item of a PRD whose `links.md` has Consumers with no `impact` run, or a
   consumer "skipped" because it is not cloned here.
+- "I can't find a pack called "demo"" with `--list-packs` never run. A search of the repository
+  or of `~/.claude` is not the list.
+- "That would make this a major bump (1.0.0 → 2.0.0), and FR-010 would go back to `approved`."
+  (Observed, of a built area.) A retarget planned as a change. Refuse it with the conversion line.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
@@ -237,6 +265,8 @@ cite the entry: `Refs: FR-001, E-004`.
 
 | Excuse | Reality |
 |---|---|
+| "A retarget is just a major change." | Its built outputs, contracts and tests belong to the old pack; moving them is a conversion, which 0.8.3 brings. Refuse with `retargeting an area is a conversion (prd-toolkit 0.8.3)`. |
+| "The pack isn't in the repository, so it doesn't exist." | Packs live in installed plugins too. `--list-packs` is the list; run it before saying a pack is missing. |
 | "It's a tiny wording fix." | A changed status code is changed behaviour. The version table decides, not the word count. |
 | "§9 doesn't list it as breaking." | §9 is about API clients. The PRD version is about behaviour: changed or removed is major. |
 | "The user said the PRD can follow." | The PRD never follows. Write the PRD change; the code waits for approval. |

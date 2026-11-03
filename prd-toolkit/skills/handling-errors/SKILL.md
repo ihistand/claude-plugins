@@ -45,7 +45,10 @@ nothing below.
    Bash call, never in a loop. A failed deploy is never redeployed as its fix, the deploy script is
    never run by hand, and a killed step ends only through `prd_deploy.py recover`.
 7. **Exact classes.** `code bug`, `spec gap`, `invalid requirement`, `environment` or
-   `standard`, in quotes. `code-bug` is a usage error.
+   `standard`, in quotes. `code-bug` is a usage error. A `prd_judge.py` exit 2 (a judged case that
+   could not be judged: `claude` missing or signed out, two bad grader answers, or the reason its
+   hint names) is proposed as `environment`; its exit 1 is a judged case failing its threshold, a
+   failing test like any other.
 8. **Evidence is a file of at most 20 lines** passed as `--evidence-file`: never a secret or a
    value classified `confidential` or `pii`, and never a code fence (it breaks the ledger).
 9. **Commit every ledger write, and check the close.** `prd_error.py check <start>..HEAD` from

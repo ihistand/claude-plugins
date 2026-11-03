@@ -157,6 +157,16 @@ The user picks the area. An area named in the request (or in `/prd-adopt`'s argu
 Otherwise show the map, recommend one area and why, and stop for the user's pick.
 
 - Show the area's Boundary and the files it matches; correct it if the user does.
+- **The area's pack.** List the packs, its own Bash call:
+  `uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`. Then propose a pack from the area's Boundary files: Markdown documents written
+  for people (`docs/**/*.md`: a guide, a runbook, a policy) are `document`; code with an API, a
+  database or events is `service`; a pack of an installed plugin whose description fits its files
+  is that pack. Show the proposal with the files that led to it, and write the area's `Target:`
+  line on the user's confirmation, under the level-1 heading of `features/<area>.md` and before
+  its first `###` block: `Target: pack <name> <X.Y.Z> (<source>)[, output language <code>]`. An
+  area whose pack is the PRD's default (§1's `Pack:` line, or `service` when there is none) needs
+  no `Target:` line. Never write one the user has not confirmed: unconfirmed, the proposal is a
+  §13 question.
 - The first area renames the template's `features/core.md` and `test-cases/core.yaml` to
   `features/<area>.md` and `test-cases/<area>.yaml`. A later area Reads the template's two
   files (`${CLAUDE_PLUGIN_ROOT}/templates/prd/features/core.md`, `test-cases/core.yaml`) and
