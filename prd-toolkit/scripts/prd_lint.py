@@ -43,7 +43,7 @@ def main(argv: list[str]) -> int:
         from prdlint import rules  # noqa: F401
 
         for name in sorted(registry.RULES):
-            print(name)
+            print(f"{name} {registry.SEVERITY.get(name, 'error')}")
         return 0
     if not args.prd_dir:
         parser.print_usage(sys.stderr)
@@ -76,7 +76,7 @@ def main(argv: list[str]) -> int:
     if args.ci:
         os.environ["PRD_LINT_CI"] = "1"
     try:
-        findings = registry.run(prd)
+        findings = registry.run(prd, warnings=True)
     except registry.RuleCrash as e:
         print(f"prd_lint: {e}", file=sys.stderr)
         return 2
@@ -85,8 +85,8 @@ def main(argv: list[str]) -> int:
         return 2
     prefix = _display_root(prd.root)
     for f in findings:
-        print(f"{os.path.join(prefix, f.file)}:{f.line}: {f.rule}: {f.message}" if prefix != "." else str(f))
-    return 1 if findings else 0
+        print(f"{os.path.join(prefix, f.file)}:{f.line}: {'warn: ' if f.severity == 'warn' else ''}{f.rule}: {f.message}" if prefix != "." else str(f))
+    return 1 if any(f.severity != "warn" for f in findings) else 0
 
 
 if __name__ == "__main__":

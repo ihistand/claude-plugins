@@ -144,7 +144,7 @@ def test_readmes_rule_counts_match_registry():
     import subprocess
     out = subprocess.run(["uv", "run", "--script", str(ROOT / "scripts/prd_lint.py"), "--list-rules"],
                          capture_output=True, text=True, check=True).stdout
-    n = len(out.split())
+    n = len(out.splitlines())
     found = 0
     for text in (README, ROOT_README):
         for line in text.splitlines():
