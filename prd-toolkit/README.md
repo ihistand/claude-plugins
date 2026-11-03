@@ -5,14 +5,16 @@ repo with contracts and black-box test cases, a 36-rule linter and trace checks,
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
-publisher that renders the PRD as one page to share. Version 0.6.1.
+publisher that renders the PRD as one page to share, and change sets that link PRDs across
+repositories. Version 0.7.0.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
 for 0.3 [docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md](../docs/superpowers/specs/2026-10-30-prd-toolkit-0.3-design.md),
 for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md),
 for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md),
-and for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md).
+for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md),
+and for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md).
 
 ## Install
 
@@ -39,6 +41,7 @@ install hint and exits 2.
 | `/prd-deploy [--until <env>] [<run id>]` | `prd-toolkit:deploying-from-prds` | Deploy a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, then record the run (see Deploying) |
 | `/prd-error [<E-nnn> \| <run id> \| <text>]` | `prd-toolkit:handling-errors` | Record an error in `errors.md` with `prd_error.py`, diagnose it, propose its class and wait for the user's confirmation; the fix starts from a failing test and goes through `/prd-change` and `/prd-build --fixes E-nnn`, and the close is checked with `prd_error.py check` |
 | `/prd-publish [<out file>] [<request>]` | `prd-toolkit:publishing-prds` | Render the PRD with `prd_publish.py` as one self-contained HTML page (a Business and a Technical tab), with per-area summaries by Claude that cite their IDs; the page goes outside the PRD folder, is never committed, and is offered as a private Artifact when the session has the Artifact tool |
+| `/prd-change-set [<CS-nnn> \| <text>]` | `prd-toolkit:coordinating-prds` | Coordinate one change across linked PRDs in several repositories: one record, one approval for every member's PRD diff, then a build (and where a link needs it, a deploy) per repository in dependency order (see Change sets) |
 
 ## Lint CLI
 
@@ -389,6 +392,85 @@ another area, or whose text is over 600 characters; a summaries file that is not
 folder, an unmigrated `adoption.md`, an unreadable summaries file, or an output path that cannot be
 written.
 
+## Links
+
+A PRD may link to the PRDs of other repositories. `links.md` (optional, in the PRD folder) holds an
+Upstreams table (the PRDs this one uses, each with a Location, a lock of Version and Commit, and a
+`Needs` of `verified` or `live in <env>`) and a Consumers table (the PRDs that use this one). A PRD
+without `links.md` is unchanged.
+
+A downstream PRD cites an upstream item with a prefix, `<kind>:<prd>/<name>` in a test case target
+or a `Traces:` line (`cli:greet/greet`, `table:transform/orders_daily`) and `<prd>/<table>.<column>`
+in prose. The kinds that cross are `op`, `table`, `event`, `job` and a custom type whose files are
+YAML mappings; `code:` never does. `prd_links.py sync` copies the cited items, and only those, into
+`contracts/upstream/<prd>/` as a pinned snapshot, and lint, trace, the tester and context packs read
+that snapshot offline. Never edit it by hand.
+
+```
+uv run --script .prd-toolkit/prd_links.py add docs/prd/<slug> <location> [--needs <value>]
+uv run --script .prd-toolkit/prd_links.py sync docs/prd/<slug> <upstream> [--ref <ref>]
+uv run --script .prd-toolkit/prd_links.py check docs/prd/<slug> [--ref <ref>] [--ci]
+uv run --script .prd-toolkit/prd_links.py impact docs/prd/<slug> [--base <ref>]
+```
+
+`check` compares each snapshot item with its upstream (`same`, `changed`, `removed`), reads each
+consumer's snapshot of this PRD the same way, and checks that both sides list the link. `impact` lists
+the contract items the working tree changes and the consumers that cite them. A git URL location is
+read with your own git credentials, cached under `${XDG_CACHE_HOME:-~/.cache}/prd-toolkit/links/`, and
+bounded by a 60-second timeout (`PRD_LINKS_TIMEOUT`); the commands never prompt.
+
+**What `prd_links.py` refuses.** Exit 1 (`refused: <why>` on stderr, or drift on stdout): a location
+that holds another PRD than the row names, a PRD linking to itself, a cited item that is not in the
+upstream (nothing is written), an item of `contracts/asyncapi.yaml` (not citable across repositories),
+and drift in `check` or a consumer that cites a changed item in `impact`. Exit 2: a usage or tool error
+with nothing on stdout. Exit 3 (`check` and `impact` only): nothing drifted but a side was unreachable.
+`check --ci` exits 0 where `check` would exit 3, after printing the unreachable line; the generated
+`prd-lint` job runs it, so CI catches a break only where the other side is reachable. The deploy
+pre-flight refuses to start on exit 1 and reports exit 3. `/prd-status` shows the verdict counts for
+path locations and `check: not run` for a git URL.
+
+Four lint rules (36 in all) read `links.md`, the snapshot and the records without leaving the
+repository: `links-format`, `upstream-refs`, `snapshot-cited` and `change-sets`.
+
+## Change sets
+
+A change to a contract item that another PRD cites cannot stop at one repository. `/prd-change-set
+[<CS-nnn> | <text>]` (skill `prd-toolkit:coordinating-prds`) runs it as one change set:
+
+1. `impact` finds the consumers; you confirm the members; `prd_links.py changeset new` writes
+   `docs/prd/<slug>/changes/CS-nnn.md` in the starting repository, with each member's Order, Waits for
+   and Target. An unreachable consumer is never skipped.
+2. Each member's PRD is edited in Order on the branch `cs-<nnn>-<slug>` (the same in every member), and
+   each downstream member syncs from the edited upstream branch.
+3. One approval: every member's PRD diff is shown together, and one reply approves the set. The record
+   quotes it; an amendment is approved alone.
+4. Each member builds in Order once its Waits for holds, through `/prd-build`, with the
+   `Change-set: <prd>/CS-nnn` trailer on its commits; an upstream is deployed through `/prd-deploy
+   --until <env>` first when a downstream link needs it.
+5. A failed build, a human step without a reply or an error stops the chain. The stop is on the
+   record's Status and in its Log, and a new session resumes from the record alone.
+6. `changeset close` writes the Merge order, upstream first. Nothing is pushed, merged or opened as a
+   pull request; you land each member.
+
+The record is written only by `prd_links.py changeset`. A dry run and a build dispatch agents bound to
+the session's own repository, so they run in a session started in that member's root: expect one resume
+per member, each a `/prd-change-set CS-nnn` from that root. Record writes, `impact`, `sync`, `check` and
+deploys run for any member from any session.
+
+A headless run registers only `prd-toolkit:<command>` (a bare `/prd-status` is not listed, as probed in
+0.7 on Claude Code 2.1.316): invoke `prd-toolkit:prd-change-set` and the other commands in that form.
+
+## Known limits (0.7)
+
+- A git URL location is read with your own credentials; CI without them gets exit 3, so CI catches a
+  break only where the other side is reachable.
+- An upstream sees a consumer's citations only through that consumer's committed snapshot.
+- Only the kinds named under Links cross repositories. A non-YAML custom type and an item of
+  `contracts/asyncapi.yaml` cannot be cited across.
+- Every member must be cloned on the machine running the change set, and a dry run or build of a member
+  runs in a session started in that member's root.
+- An approval is trusted to be yours, as `prd_error.py confirm` is.
+
 ## Known limits (0.6)
 
 - The strict expected-failure marker is held by instruction; the trace reads the tag, not each
@@ -409,6 +491,10 @@ the user cannot state.
 
 ## Changelog
 
+- **0.7.0:**
+  - `/prd-change-set` and the `coordinating-prds` skill: `links.md`, the pinned snapshot `contracts/upstream/<prd>/` and `prd_links.py` (`add`, `sync`, `check`, `impact`, `changeset`) link PRDs across repositories; one record, `changes/CS-nnn.md`, drives a change with one approval and a build per repository in dependency order (see Links and Change sets).
+  - Four lint rules (`links-format`, `upstream-refs`, `snapshot-cited`, `change-sets`; 36 in all). `commit-refs` checks the `Change-set:` trailer. The generated `prd-lint` job runs `check --ci`, and the deploy pre-flight runs the link check. The interview asks about packaging.
+  - Upgrading from 0.6: re-run `prd_hooks.py install` (it vendors `prd_links.py`) and `prd_hooks.py ci` (the `prd-lint` job gains `check --ci` when `links.md` exists). The managed block's wording changed, so re-run `prd_block.py` after upgrading: the vendored block templates are stale until then, and `prd_block.py --check` reports each CLAUDE.md block stale. A PRD without `links.md` needs no edit.
 - **0.6.1:** `/prd-publish` writes again. 0.6.0 put the page and the summaries file under `.git/`, where Claude Code refuses writes, so nothing rendered. The page's default is `./<project>-prd-<version>.html` in the repository root again, untracked and never committed. The summaries file is written beside it and deleted after the render. Move the page out of the repository or delete it before the next `/prd-build`, whose clean-tree check stops on an untracked file.
 - **0.6.0:**
   - `/prd-error` and the `handling-errors` skill: `errors.md` entries gain a canonical line order (`Detected:`, `Classification:`, `Confirmed:`, `Touches:`, `Evidence:`, `Diagnosis:`, `Resolution:`, `Recurrence of:`) and `prd_error.py` (`new`, `list`, `propose`, `confirm`, `resolve`, `check`) is their only writer. The linter gains `error-entries` (its 32nd rule) and the trace gains `known-failing-tags` (its fifth rule). A code commit may cite only a confirmed entry (see Handling errors).

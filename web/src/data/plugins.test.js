@@ -36,16 +36,19 @@ describe('plugins data', () => {
     }
   })
 
-  it('prd-toolkit has 9 commands', () => {
+  it('prd-toolkit has 10 commands', () => {
     const prd = plugins.find(p => p.id === 'prd-toolkit')
-    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy', '/prd-error', '/prd-publish'])
-    expect(prd.version).toBe('0.6.1')
+    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy', '/prd-error', '/prd-publish', '/prd-change-set'])
+    expect(prd.version).toBe('0.7.0')
     expect(prd.description).toContain('/prd-context')
     expect(prd.description).toContain('/prd-build')
     expect(prd.description).toContain('/prd-status')
     expect(prd.description).toContain('/prd-deploy')
     expect(prd.description).toContain('/prd-error')
     expect(prd.description).toContain('/prd-publish')
+    expect(prd.description).toContain('/prd-change-set')
+    expect(prd.description).toContain('links PRDs across repositories')
+    expect(prd.skills.map(k => k.name)).toContain('coordinating-prds')
     expect(prd.skills.map(k => k.name)).toContain('deploying-from-prds')
     expect(prd.skills.map(k => k.name)).toContain('building-from-prds')
     expect(prd.skills.map(k => k.name)).toContain('handling-errors')

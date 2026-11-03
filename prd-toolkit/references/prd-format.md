@@ -13,6 +13,8 @@ features/<area>.md       UJ and FR blocks                      mandatory, at lea
 nfr.md                   NFR blocks and ## Observability       mandatory
 test-cases/<area>.yaml   one entry per T-id                    mandatory
 testing.md  operations.md  errors.md                           mandatory
+links.md                                                       optional: present when the PRD links to others
+changes/CS-nnn.md                                              optional: change-set records
 contracts/errors.yaml                                          mandatory
 contracts/openapi.yaml, schema.sql, events.md | asyncapi.yaml,
   permissions.yaml, config.yaml, data-classification.yaml,
@@ -213,7 +215,9 @@ T-012.2:
 ```
 
 - `target` resolves against the contracts: `op:` an `operationId`, `table:` a table in
-  `schema.sql`, `event:` and `job:` a `### name` heading in `events.md`.
+  `schema.sql`, `event:` and `job:` a `### name` heading in `events.md`. In a PRD with `links.md`, a
+  target of an upstream's item is `<kind>:<prd>/<name>` (`cli:greet/greet`, `table:transform/orders_daily`);
+  it resolves in `contracts/upstream/<prd>/`. See `links.md`.
 - A precondition is a fixture name (a path under `contracts/fixtures/` without the extension) or
   `mock:<service>` (a file in `contracts/dependencies/`).
 - An acceptance case adds `steps:` (plain-language actions) and `signoff:` (the business owner).
@@ -234,6 +238,77 @@ T-012.2:
   (`prd.md#Component: MyLinksPage`, `testing.md#Harness`). The dry-run tester reads every entry.
   An entry whose file or heading does not exist is a `test-refs` violation.
 - A mapping key repeated in a file is an `id-unique` violation; the first value is kept.
+
+## links.md
+
+Optional, beside `prd.md`. With no `links.md` a PRD has no links and nothing here applies to it.
+
+```
+# Links
+
+## Upstreams
+
+| Upstream | Location | Version | Commit | Needs |
+|---|---|---|---|---|
+| greet | `../greet` | 1.1.0 | 4f1c9a2 | live in staging |
+
+## Consumers
+
+| Consumer | Location |
+|---|---|
+| dashboards | `git@example.com:org/bi.git#docs/prd/dashboards` |
+```
+
+- **Upstream / Consumer:** the other PRD's `prd:` slug, unique within its table.
+- **Location:** a backticked path to the other repository's root, relative to this one, or a git URL
+  followed by `#<PRD folder>`. A path location's PRD is `docs/prd/<slug>`.
+- **Version / Commit:** the lock: the upstream's `version:` and the upstream commit (7 to 40 hex
+  digits) the snapshot came from. Only `prd_links.py sync` writes them; both are empty before the first sync.
+- **Needs:** `verified` or `live in <env>`, `<env>` an environment of the upstream's `operations.md`.
+  Empty means `live in` the Environment of the first `deploy`-gate level in `testing.md` Levels order;
+  with none, `verified`.
+
+Adding `links.md` is a patch bump, recorded as the §14 row `format: links.md (prd-toolkit 0.7)`.
+
+**The prefix.** A reference to an upstream item puts the upstream's slug and a `/` before the name:
+a test case `target:` and a `Traces:` token are `<kind>:<prd>/<name>`; prose (`schema-refs`) is
+`` `<prd>/<table>.<column>` ``. A target or token `<kind>:<a>/<b>` is prefixed when `<a>` matches
+`[a-z][a-z0-9-]*` and `<kind>` is not `code`; a prose span is prefixed only when `<a>` names an
+Upstreams row, so `src/importer.py` stays prose. The kinds that cross are `op`, `table`, `event`,
+`job` and a custom type whose files are YAML mappings; `code:` never crosses, and a prefixed
+`component:` or `page:` is refused (`kind '<kind>' does not cross repositories`). A PRD without
+`links.md` reads every target as before.
+
+**The snapshot.** `contracts/upstream/<prd>/` holds only the cited items, copied verbatim by
+`prd_links.py sync`, in files named as in the upstream's `contracts/`: a table's `CREATE TABLE` and
+`COMMENT ON` lines (`schema.sql`), an operation with every `components` entry it `$ref`s and the
+`info` block (`openapi.yaml`), an event or job's `### <name>` section (`events.md`), and the cited
+top-level keys of a custom YAML type. `--` comment lines directly above a cited `CREATE TABLE` travel
+with it; `/* */` comments directly above it are not copied. An item of `contracts/asyncapi.yaml` is not
+citable across repositories. Never edit a snapshot by hand.
+
+Each snapshot file starts with one comment line in its own syntax (`-- ` for `.sql`, `# ` for `.yaml`,
+`<!-- … -->` for `.md`):
+
+```
+Snapshot of <prd> <version> at <commit>, written by prd_links.py sync. Do not edit.
+```
+
+A custom type's file adds ` Type: <kind>.` after it, and `schema.sql` adds ` Dialect: <dialect>.`,
+because the downstream PRD declares neither.
+
+**The change-set record.** `changes/CS-nnn.md` (three digits, per PRD, never reused) is written only by
+`prd_links.py changeset`: `# CS-nnn <title>`; `Started: YYYY-MM-DD in <prd>`; `Status:` `proposed`,
+`approved`, `running`, `stopped: <prd>: <reason>`, `done` or `abandoned`; one `Approval: YYYY-MM-DD,
+"<reply>"` line per approval (an amendment adds ` (amendment)`); a table
+`| Order | PRD | Location | Branch | Version | IDs | Waits for | Target | State |`; `## Log` with
+`- YYYY-MM-DD <text>` lines; and, once closed, `## Merge order`. State and Target are `proposed`,
+`approved`, `built`, `verified` or `live in <env>`, in that order; a stop is on Status and in Log, never
+in State. The branch in every member is `cs-<nnn>-<slug>`.
+
+**The trailer.** A commit made for a change set carries `Change-set: <prd>/CS-nnn` beside `Refs:`,
+matched by `^Change-set:[ \t]*([a-z][a-z0-9-]*/CS-\d{3})[ \t]*$` (multiline). When `<prd>` is this
+repository's PRD, the record must exist; elsewhere only the form is checked.
 
 ## testing.md
 

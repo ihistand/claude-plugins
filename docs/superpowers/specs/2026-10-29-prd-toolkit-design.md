@@ -226,6 +226,9 @@ how** (conventions). A conflict stops the agent and becomes an `E-nnn` entry cla
 on operations are copied into `operations.md` so the PRD stands alone (Looker deploys become
 `actor: human` steps).
 
+> Revised in prd-toolkit 0.7: PRDs link across repositories (`links.md`, a pinned snapshot and change sets),
+> which relaxes the single-repository reading of this section; see `2026-11-02-prd-toolkit-0.7-design.md`.
+
 ## 4. Contracts and the sufficiency rule
 
 ### 4.1 The sufficiency rule

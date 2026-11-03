@@ -7,6 +7,24 @@
 > (`2026-11-01-prd-toolkit-0.6-design.md` last). Where this addendum and any of them disagree, this
 > addendum wins for 0.7.
 
+> **Revisions.**
+> - §6 (plan): a stop is recorded on Status (`stopped: <prd>: <reason>`) and in Log; the row keeps its State, so a resumed session knows where the chain stood. `changeset set` of any State moves Status back to `running`. State is never `stopped:`.
+> - §4 (plan): a custom type's snapshot file names its type, and `schema.sql` names its dialect, in the header (` Type: <kind>.`, ` Dialect: <dialect>.`), because the downstream PRD declares neither.
+> - §8 (plan): `check --ci` exits 0 where `check` would exit 3, after printing the unreachable line, so the generated job passes; the generated CI line runs `check --ci`.
+> - §4 (plan): a target or `Traces:` token `<kind>:<a>/<b>` is prefixed when `<a>` matches `[a-z][a-z0-9-]*` and `<kind>` is not `code`; a prose span `` `<a>/<t>.<c>` `` is prefixed only when `<a>` is an Upstreams name, so a path such as `src/importer.py` stays prose.
+> - §3 (plan): an empty Needs means `live in` the Environment of the first `deploy`-gate level in `testing.md` Levels order; with none, `verified`.
+> - §6 (plan): when two downstream members need different `live in` environments of one upstream, its Target is the one later in the upstream's `operations.md` Environments table.
+> - §5 (plan): `check`'s Consumers side reads each consumer at its default branch; `--ref` applies to the Upstreams side only.
+> - §4, §15 (execution, R-2a): asyncapi channels and operations are not citable across repositories in 0.7. §4's table covers `events.md` sections only, so `sync` refuses with `<kind>:<name>: asyncapi items cannot be cited across repositories`, and §15 lists it.
+> - §8 (execution, R-8a): `/prd-status` runs the link check for path locations only. A git URL location shows `check: not run (git URL; run prd_links.py check)`, which keeps status fast and offline. CI, the deploy pre-flight and `prd_links.py check` do the full check.
+> - §8 (execution, R-8b): `/prd-status` shows the verdict counts (`check: same 3`) in place of "the last `check` line", because counts carry more than one line.
+> - §4 (execution, R-10b): an upstream's custom contract type is citable without the downstream declaring it; a prefixed reference of any kind that is not a built-in target kind counts as a citation, and `upstream-refs` resolves it against the snapshot through the header's `Type:`. A prefixed `component:` or `page:` target gets `kind '<kind>' does not cross repositories`.
+> - §4, §14 (execution, R-10c): prefix handling (citations, `upstream-refs`, `snapshot-cited` and the prefixed skips in `test-refs`, `schema-refs` and sufficiency) applies only in a PRD that has `links.md`, so a PRD without it needs no edit (§14).
+> - §6 (execution, R-11b): each upstream member's PRD edit is committed on the change-set branch with status `In review` (`Refs: none`, the `Change-set:` trailer) before a downstream member syncs, because `sync` reads commits, never working trees. Step 3's approval commit flips it to `Approved`.
+> - §6, §15, §13 Q2 (execution, R-11c): one record drives a change set. Record writes, `impact`, `sync`, `check` and deploys run for any member from any session. A dry run and a build dispatch agents whose worktree and guard bind to the session's own repository, so they run in a session started in that member's root. This revises §6's "one session drives it all", §15's "One session drives a change set", and Q2's pass line, which now allows a resume per member.
+> - §9 (execution, R-11d): `prd-builder` carries the `Change-set:` trailer on its commits when the dispatch passes one.
+> - §6 (execution, R-11e): a session never begins a member's step 2 that it cannot finish. For a member that is not the session's repository it logs the stop and stops before editing, and that member's own session runs the whole of step 2 for its row.
+
 ## 1. Scope
 
 Until 0.6 a PRD stands alone: every reference resolves inside its own folder, and a change, a build
@@ -94,8 +112,8 @@ no links, and nothing in this addendum applies to it.
 - **Version / Commit:** the lock. The upstream PRD's `version:` and the upstream repository commit
   (7 to 40 hex digits) the snapshot was copied from. Only `prd_links.py sync` writes them.
 - **Needs:** `verified`, or `live in <env>` with `<env>` an environment of the upstream's
-  `operations.md`. Empty means `live in` the environment of this PRD's own deploy-gate levels
-  (`testing.md` Levels, Gate `deploy`); with no deploy-gate level, empty means `verified`.
+  `operations.md`. Empty means `live in` the Environment of the first `deploy`-gate level in `testing.md` Levels
+  order; with no deploy-gate level, empty means `verified`.
 
 Adding `links.md` to a PRD is a patch, recorded as the §14 row `format: links.md (prd-toolkit 0.7)`,
 as 0.4's Gate column was. Adding or removing a link is part of a PRD change and follows its bump.
@@ -110,8 +128,15 @@ as 0.4's Gate column was. Adding or removing a link is part of a PRD change and 
 | prose (`schema-refs`) | `` `<prd>/<table>.<column>` `` | `` `transform/orders_daily.amount` `` |
 | `Traces:` | the target form | `Traces: UJ-01; cli:greet/greet` |
 
+A target or `Traces:` token `<kind>:<a>/<b>` is prefixed when `<a>` matches `[a-z][a-z0-9-]*` and
+`<kind>` is not `code`. A prose span `` `<a>/<t>.<c>` `` is prefixed only when `<a>` is an Upstreams
+name, so a path such as `src/importer.py` stays prose. Prefix handling applies only in a PRD that
+has `links.md`.
+
 The kinds that cross are `op`, `table`, `event`, `job` and a custom type whose files are YAML
-mappings (as `test-refs` already resolves them). `code:` never crosses: a unit target belongs to
+mappings (as `test-refs` already resolves them). The downstream does not declare an upstream's
+custom type; the snapshot header names it. A prefixed `component:` or `page:` target is refused:
+`kind '<kind>' does not cross repositories`. `code:` never crosses: a unit target belongs to
 its own repository. A downstream test of an upstream item runs against the upstream's deployed
 environment or a fixture, never the upstream's source.
 
@@ -120,13 +145,16 @@ named as in the upstream's `contracts/`:
 
 | Kind | What is copied |
 |---|---|
-| `table` | the `CREATE TABLE` statement and its `COMMENT ON` lines, into `schema.sql` |
+| `table` | the `CREATE TABLE` statement and its `COMMENT ON` lines, into `schema.sql`; `--` comment lines directly above the statement travel with it, `/* */` ones do not |
 | `op` | the operation under its path, every `components` entry it `$ref`s, transitively, and the `info` block, into `openapi.yaml` |
-| `event`, `job` | the `### <name>` section, heading to the next heading of the same level, into `events.md` |
+| `event`, `job` | the `### <name>` section, heading to the next heading of the same level, into `events.md`; an item of `contracts/asyncapi.yaml` cannot be cited across repositories |
 | custom YAML type | the cited top-level keys, into the type's file |
 
-Each snapshot file starts with one comment line in its own syntax:
-`Snapshot of <prd> <version> at <commit>, written by prd_links.py sync. Do not edit.` An uncited
+Each snapshot file starts with one comment line in its own syntax (`-- ` for `.sql`, `# ` for
+`.yaml`, `<!-- … -->` for `.md`):
+`Snapshot of <prd> <version> at <commit>, written by prd_links.py sync. Do not edit.` A custom
+type's file adds ` Type: <kind>.` and `schema.sql` adds ` Dialect: <dialect>.`, because the downstream
+declares neither. An uncited
 item never reaches the snapshot, so a private upstream's other contracts stay out of a downstream
 repository that may be public.
 
@@ -146,6 +174,8 @@ Every command takes the PRD folder first. Exit 2 is a usage error throughout.
 | `impact <PRD> [--base <ref>]` | Lists the contract items this PRD's working tree changes against `<base>` (default `HEAD`), and for each Consumer the cited ones among them | 0 none cited; 1 a consumer cites a changed item; 3 a consumer was unreachable |
 | `changeset …` | The record's only writer (section 6) | |
 
+`check --ci` exits 0 where `check` would exit 3, after printing the unreachable line. The Consumers
+side reads each consumer at its default branch; `--ref` applies to the Upstreams side only.
 `newer than lock` alone is a note, not drift. The upstream's default branch is `origin/HEAD` when it
 is set, else `main`. A git URL location is fetched with the user's own git credentials into
 `${XDG_CACHE_HOME:-~/.cache}/prd-toolkit/links/<hash of the URL>` (a partial clone, read with
@@ -178,22 +208,24 @@ Approval: 2026-11-03, "<the user's reply, quoted>"
 - 2026-11-03 greet deployed to staging, run 20261103-1412
 ```
 
-- **Status:** `proposed`, `approved`, `running`, `stopped: <reason>`, `done` or `abandoned`.
+- **Status:** `proposed`, `approved`, `running`, `stopped: <prd>: <reason>`, `done` or `abandoned`.
 - **Order:** from the members' links, upstream first. A cycle, or a member linked to no other
   member, is refused.
 - **Location:** relative to the starting repository's root.
 - **Branch:** `cs-<nnn>-<slug>` in every member, cut from that member's default branch.
 - **Waits for:** for each upstream member, `<prd> <Needs of the link>`; `—` for none.
-- **Target:** the highest Needs any downstream member has of this row, else `verified`. Order of
+- **Target:** the highest Needs any downstream member has of this row, else `verified`. When two
+  downstream members need different `live in` environments, the one later in the upstream's
+  `operations.md` Environments table. Order of
   states: `proposed` < `approved` < `built` < `verified` < `live in <env>`.
-- **State:** the row's place in that order, or `stopped: <reason>`.
+- **State:** the row's place in that order. A stop is recorded on Status and in Log; the row keeps its State.
 
 | `changeset` subcommand | Does |
 |---|---|
 | `new <PRD> --title <text> --member <location>…` | Numbers the record, reads every member's `links.md`, computes Order, Waits for and Target, writes `Status: proposed` |
 | `set <record> <prd> <field>=<value>…` | Sets Branch, Version, IDs or State; refuses a State that goes backward or skips its Waits for |
 | `approve <record> --reply <text> [--amendment]` | Quotes the reply on the Approval line (an amendment adds a dated line); moves every `proposed` row to `approved` |
-| `stop <record> <prd> <reason>`, `log <record> <text>` | Records a stop or a line in Log |
+| `stop <record> <prd> <reason>`, `log <record> <text>` | Records a stop (Status `stopped: <prd>: <reason>`, and Log) or a line in Log; `set` of any State moves Status back to `running` |
 | `close <record>` | Refuses unless every row's State equals its Target; writes `Status: done` and a **Merge order** list, upstream first |
 | `abandon <record> <reason>` | `Status: abandoned`; the branches are left for the user |
 
@@ -208,7 +240,11 @@ The caller commits each record write on the starting repository's change-set bra
    or says in their own words that it stays out, and the Log quotes them.
 2. **Edit.** In each member, in Order, on the record's branch, run `changing-prds` up to its
    approval: restate, edit, bump, lint, dry run. Then `sync --ref <branch>` in every downstream
-   member, so lint checks the edits together, and `changeset set` the Version and IDs.
+   member, so lint checks the edits together, and `changeset set` the Version and IDs. Each upstream
+   member's edit is committed on the branch, status `In review`, before a downstream member syncs;
+   step 3's approval commit flips it to `Approved`. A session never begins a member's step 2 that it
+   cannot finish: for a member that is not its own repository it logs the stop and stops, and that
+   member's own session runs the whole step.
 3. **One approval.** Show every member's PRD diff together and stop. One explicit reply approves
    the set: `changeset approve`, then each member's approval commit as `changing-prds` makes it, with
    the `Change-set:` trailer.
@@ -224,6 +260,11 @@ The caller commits each record write on the starting repository's change-set bra
    toolkit pushes and merges nothing; the user lands each member, upstream first. After an upstream
    lands, `sync` re-locks each downstream against the upstream's default branch, committed in the
    downstream. Production deploys stay per repository, through `/prd-deploy`, in Merge order.
+
+**Sessions.** One record drives a change set. Record writes, `impact`, `sync`, `check` and deploys
+run for any member from any session. A dry run and a build dispatch agents whose worktree and guard
+bind to the session's own repository, so they run in a session started in that member's root, and
+the chain resumes from the record in each.
 
 ## 7. Lint and trace
 
@@ -248,12 +289,12 @@ checked. **The `commit-msg` hook** applies the same form check when a trailer is
 ## 8. Other tools
 
 - **CI.** When `links.md` exists, the generated `prd-lint` job runs `prd_links.py check`. Exit 1
-  fails the job; exit 3 prints the unreachable side and passes. `prd_hooks.py` vendors
+  fails the job; the job runs `check --ci`, which prints the unreachable side on exit 3 and passes. `prd_hooks.py` vendors
   `prd_links.py`, and the stale-CI check covers the new lines. In an upstream, the same job reads
   each reachable consumer's snapshot, so an upstream merge that breaks a cited item fails there too.
 - **Deploy pre-flight.** `prd_deploy.py run` refuses to start (exit 2, naming the drifted items)
   when `prd_links.py check` exits 1. Exit 3 is reported and does not refuse.
-- **`/prd-status`.** Upstreams (lock, Needs, the last `check` line when reachable), Consumers, and
+- **`/prd-status`.** Upstreams (lock, Needs, the verdict counts of `check`, for a path location only; a git URL location shows `check: not run`), Consumers, and
   each record under `changes/` that is not `done` or `abandoned`, with its rows' States.
 - **`prd_context.py`.** A task whose `Touches:` or test cases cite a `<prd>/` reference gets the
   cited snapshot items in its pack.
@@ -278,7 +319,7 @@ on the edited PRD. Exit 1 or 3 stops the change and hands it to `/prd-change-set
 route for an edit to a cited item.
 
 **`running-a-build.md`.** On a change-set branch, the build syncs each upstream member's snapshot
-before the dispatch and adds the `Change-set:` trailer to its commits; its close reports the state
+before the dispatch and adds the `Change-set:` trailer to its commits (the dispatch passes it to `prd-builder`, which carries it); its close reports the state
 reached, and the caller writes it with `changeset set`.
 
 **`deploying-from-prds`.** No procedure change; a change set calls it with `--until <env>`.
@@ -353,7 +394,7 @@ Headless, as in 0.5 and 0.6. The scaffold builds two sibling repositories:
 | # | Run | Pass line |
 |---|---|---|
 | Q1 | `/prd-change` in `greet-client`: cite `cli:greet/greet` | `add` writes both sides; `sync` copies only the `greet` key; both repositories' lint and `check` exit 0 |
-| Q2 | `/prd-change-set` from `greet`: `greet --json` prints `{"greeting": …, "name": …}`, and the client reads it | `impact` names the client; CS-001 written; both PRDs edited and approved by one reply; `greet` built, deployed to staging; the client synced and built; `close` writes the Merge order; every row at its Target |
+| Q2 | `/prd-change-set` from `greet`: `greet --json` prints `{"greeting": …, "name": …}`, and the client reads it | `impact` names the client; CS-001 written; both PRDs edited and approved by one reply; `greet` built, deployed to staging; the client synced and built; `close` writes the Merge order; every row at its Target, with a resume in `greet-client`'s own session for the steps that dispatch agents there |
 | Q3 | Q2's session ended once `greet` is `verified` | A new session resumes from the record alone and continues with `greet`'s staging deploy |
 | Q4 | An edit to `greet`'s `cli.yaml` outside a change set | `check` exits 1 in both repositories; with `greet` moved away, the client's `check` exits 3 and its CI job passes |
 | Q5 | `greet`'s change-set branch squash-merged into `main` | `check` flags the orphaned lock; `sync` clears it |
@@ -374,7 +415,12 @@ finding.
   catches a break only where the other side is reachable.
 - An upstream sees a consumer's citations only through that consumer's committed snapshot.
 - Only the kinds of section 4 cross repositories; a non-YAML custom type cannot be cited across.
-- One session drives a change set, so every member must be cloned on the machine running it.
+- Every member must be cloned on the machine running the change set, and a dry run or a build of
+  a member runs in a session started in that member's root, so a change set takes one resume per
+  member.
+- An item of `contracts/asyncapi.yaml` cannot be cited across repositories (`asyncapi items cannot be
+  cited across repositories`).
+- `/prd-status` runs the link check for path locations only.
 - An approval is trusted to be the user's, as 0.5's `confirm`.
 
 ## 16. Out of scope for 0.7
