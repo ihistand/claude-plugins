@@ -27,7 +27,7 @@ Classification: code bug
 Confirmed: 2026-11-03, "Real bug — it should: A YAML key that is a list or a mapping is reported as a finding at its line, like any other malformed YAML, and lint keeps going"
 Touches: FR-011, FR-012
 Diagnosis: `_Loader.construct_line_map` runs `if key in data` on whatever the key node builds. A sequence or mapping key (`? [a, b]` or `{a: 1}: x`) builds a list or a LineDict, and that line raises `TypeError: unhashable type`. A TypeError is not a `yaml.YAMLError`, so it escapes `load_yaml`'s `except yaml.YAMLError` (yamlload.py:57) and `model.load`. prd_lint then exits 2 with `prd_lint: internal error: TypeError: …` and reports no finding. The docstring (yamlload.py:46-50) says a parse error becomes a `sufficiency` or `contracts-valid` finding and that the loader "Returns (None, findings) on error". PyYAML's own SafeConstructor, which this loader replaces for mappings, raises `ConstructorError("found unhashable key")`, a YAMLError, for the same input. FR-011's and FR-012's cases use only scalar keys.
-Resolution: open, intended: A YAML key that is a list or a mapping is reported as a finding at its line, like any other malformed YAML, and lint keeps going
+Resolution: T-011.6 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
 
 ### E-004 The loader reads fixture data under contracts/fixtures/ as PRD documents and contract YAML
