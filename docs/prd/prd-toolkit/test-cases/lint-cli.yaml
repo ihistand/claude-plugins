@@ -443,7 +443,6 @@ T-007.5:
   target: cli:prd_lint
   environment: local
   identity: none
-  known-failing: E-006
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:
