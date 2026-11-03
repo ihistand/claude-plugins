@@ -236,7 +236,7 @@ Status: {status}
 Flow: 1. Reader opens the guide → 2. follows Install → 3. runs `greet` once.
 Acceptance (EARS):
 - AC-010.1 The guide shall list the Requirements, Install, First run and Common problems sections in that order.
-- AC-010.2 The guide shall explain each step of Install in one sentence.
+- AC-010.2 The guide shall give each step of Install as one action the reader performs, using only tools that Requirements lists.
 Errors: -
 Tests: T-010.1 [checks], T-010.2 [judged]  (test-cases/guide.yaml)
 Traces: -

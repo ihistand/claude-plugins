@@ -90,6 +90,17 @@ def test_the_prd_specifies_every_behaviour_the_cli_ships(tmp_path, state):
     assert '"usage: greet <name>\\n"' in tests
 
 
+@pytest.mark.parametrize("state", ["approved", "built"])
+def test_every_claim_of_ac_010_2_is_a_rubric_item_of_t_010_2(tmp_path, state):
+    """AC-010.2 asked for one sentence per step, which no case checked; a tester stopped on it (0.8.0 proof, P2)."""
+    r = build(tmp_path, state)
+    assert "- AC-010.2 The guide shall give each step of Install as one action the reader performs, using only tools that Requirements lists." in read(r, "features/guide.md")
+    assert "one sentence" not in read(r, "features/guide.md")
+    cases = read(r, "test-cases/guide.yaml")
+    assert "- Each step in Install names one action the reader performs" in cases
+    assert "- No step relies on a tool that Requirements does not list" in cases
+
+
 def test_built_has_the_guide_and_fr_010_verified(tmp_path):
     r = build(tmp_path, "built")
     guide = (r / "docs/guide/install.md").read_text(encoding="utf-8")
