@@ -25,8 +25,20 @@ def scripts() -> str:
     return js
 
 
-BANNED_JS = (r"outerHTML", r"insertAdjacentHTML", r"document\.write", r"\beval\s*\(", r"\bFunction\s*\(",
-             r"setTimeout\s*\(\s*['\"`]", r"\.setAttribute\s*\(\s*['\"]on", r"srcdoc")
+# Each HTML or code sink the page must not use, with a snippet that proves the pattern can fail.
+BANNED_JS = {
+    r"outerHTML": "el.outerHTML = t;",
+    r"insertAdjacentHTML": "el.insertAdjacentHTML('beforeend', t);",
+    r"createContextualFragment": "range.createContextualFragment(t);",
+    r"\bDOMParser\b": "new DOMParser().parseFromString(t, 'text/html');",
+    r"document\.write": "document.writeln(t);",
+    r"\beval\s*\(": "eval(t);",
+    r"\bFunction\s*\(": "new Function(t)",
+    r"setTimeout\s*\(\s*['\"`]": "setTimeout('go()', 1);",
+    r"\.setAttribute\s*\(\s*['\"](?:on|href|src|srcdoc|action)": "b.setAttribute('onclick', t)",
+    r"\.(?:href|src|action)\s*=(?!=)(?!\s*(?:''|\"\")\s*;)": "a.href = item.where;",
+    r"\.srcdoc\s*=": "frame.srcdoc = t;",
+}
 
 
 def unsafe_html(js: str) -> list[str]:
@@ -34,6 +46,13 @@ def unsafe_html(js: str) -> list[str]:
     bad = [js[m.start():m.end() + 40] for m in re.finditer(r"innerHTML", js)
            if not re.match(r"innerHTML\s*=\s*(''|\"\")\s*[;\n]", js[m.start():])]
     return bad + [b for b in BANNED_JS if re.search(b, js)]
+
+
+def function(name: str) -> str:
+    """The source of one top-level function of the page's script, up to the closing brace at column 0."""
+    m = re.search(rf"^(?:async )?function {name}\(.*?^}}$", scripts(), re.S | re.M)
+    assert m, name
+    return m.group(0)
 
 
 def test_loads_nothing():
@@ -50,11 +69,13 @@ def test_one_inline_script_and_style():
 
 
 def test_unsafe_html_check_can_fail():
-    assert unsafe_html("el.innerHTML = '';\nx.innerHTML = \"\";") == []
+    assert unsafe_html("el.innerHTML = '';\nx.innerHTML = \"\";\nif (a.href === b) x = 1;") == []
     for bad in ("el.innerHTML = item.title;", "el.innerHTML += '<b>';", "el.innerHTML = '' + t;",
-                "el.innerHTML = `${t}`;", "x = el.innerHTML;", "el.insertAdjacentHTML('beforeend', t);",
-                "eval(t);", "new Function(t)", "b.setAttribute('onclick', t)"):
+                "el.innerHTML = `${t}`;", "x = el.innerHTML;"):
         assert unsafe_html(bad), bad
+    for pattern, bad in BANNED_JS.items():
+        assert pattern in unsafe_html(bad), pattern
+    assert r"\.(?:href|src|action)\s*=(?!=)(?!\s*(?:''|\"\")\s*;)" in unsafe_html("img.src = data.url;")
 
 
 def test_inner_html_only_with_literals():
@@ -142,3 +163,69 @@ def test_served_page_is_the_file_and_items_are_json_text(tmp_path):
         server.shutdown()
         thread.join(10)
         server.server_close()
+
+
+def test_notice_cleared_on_every_move():
+    for name in ("go", "undo", "change"):
+        assert "S.notice = '';" in function(name), name
+    assert "S.notice" not in function("save").replace("S.notice = '';", "")
+
+
+def test_everything_answered_said_once():
+    assert page().count("Everything is answered") == 1
+
+
+def test_typing_clears_the_card_error():
+    assert "clearError()" in function("textarea")
+    body = function("clearError")
+    assert "error = ''" in body and "card-error" in body
+    assert "id: 'card-error'" in function("cardView")
+
+
+def test_long_ids_wrap():
+    css = re.search(r"<style>(.*?)</style>", page(), re.S).group(1)
+    for selector in (".acid", ".said", "label.prompt", ".criteria label"):
+        rule = re.search(rf"(?:^|\}})\s*{re.escape(selector)}\s*\{{([^}}]*)\}}", css)
+        assert rule, selector
+        assert "overflow-wrap: anywhere" in rule.group(1) and "nowrap" not in rule.group(1), selector
+
+
+def test_no_stale_aria_expanded():
+    assert "aria-expanded" not in page()
+
+
+def test_done_survives_a_dropped_response():
+    fin = function("finish")
+    assert fin.index("S.closing = true") < fin.index("call('POST', '/done'")
+    assert "S.closing" in function("call")
+
+
+def test_escape_leaves_the_note_box():
+    js = scripts()
+    esc = js[js.index("e.key === 'Escape'"):]
+    esc = esc[:esc.index("return;")]
+    assert "t.id !== 'note'" not in esc and "t.blur()" in esc
+
+
+def test_builder_refuses_url_and_code_props():
+    assert "/^(?:on|href|src|srcdoc|action|formaction)/i.test(k)" in function("h")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_builder_refusals_run(tmp_path):
+    src = tmp_path / "h.js"
+    src.write_text(
+        "const document = { createElement: (t) => ({ tagName: t, attrs: {}, kids: [], "
+        "setAttribute(k, v) { this.attrs[k] = v; }, addEventListener() {}, append(k) { this.kids.push(k); } }), "
+        "createTextNode: (t) => ({ text: t }) };\n" + function("h") + "\n"
+        "const out = {};\n"
+        "for (const k of ['href', 'src', 'srcdoc', 'action', 'onclick', 'ONLOAD', 'formaction']) {\n"
+        "  try { h('a', { [k]: 'x' }); out[k] = 'allowed'; } catch (e) { out[k] = 'refused'; }\n"
+        "}\n"
+        "out.title = h('a', { title: '<b>' }).attrs.title;\n"
+        "console.log(JSON.stringify(out));\n", encoding="utf-8")
+    run = subprocess.run(["node", str(src)], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr
+    assert json.loads(run.stdout) == {"href": "refused", "src": "refused", "srcdoc": "refused", "action": "refused",
+                                      "onclick": "refused", "ONLOAD": "refused", "formaction": "refused",
+                                      "title": "<b>"}

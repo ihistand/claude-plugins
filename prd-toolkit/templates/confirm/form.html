@@ -65,7 +65,7 @@ h1 { font-size: 1.15rem; margin: 0 0 10px; overflow-wrap: anywhere; }
 .summary { margin: 0 0 16px; padding: 12px 14px; border-radius: 8px; background: var(--accent-soft); overflow-wrap: anywhere; }
 .acs { margin: 0 0 16px; padding-left: 1.2em; }
 .acs li { margin: 6px 0; overflow-wrap: anywhere; }
-.acid { font-weight: 600; white-space: nowrap; }
+.acid { font-weight: 600; overflow-wrap: anywhere; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 16px; }
 .mono, pre.code, textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.86rem; }
 details.code { margin: 0 0 20px; }
@@ -91,7 +91,7 @@ kbd {
 }
 .link { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .box { margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
-label.prompt { display: block; font-weight: 600; margin-bottom: 6px; }
+label.prompt { display: block; font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
 textarea {
   display: block; width: 100%; font: inherit; line-height: 1.45; padding: 10px 12px; resize: vertical;
   border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--fg);
@@ -99,7 +99,7 @@ textarea {
 textarea.edited { background: var(--edited); border-color: var(--warn); }
 .hint { font-size: 0.86rem; color: var(--muted); margin: 6px 0 0; }
 .criteria { margin-top: 12px; }
-.criteria label { display: block; margin: 14px 0 4px; font-size: 0.9rem; }
+.criteria label { display: block; margin: 14px 0 4px; font-size: 0.9rem; overflow-wrap: anywhere; }
 .tag { font-size: 0.78rem; color: var(--muted); margin-left: 6px; }
 .tag.on { color: var(--warn); font-weight: 700; }
 .saved { padding: 12px 14px; border-radius: 8px; background: var(--accent-soft); }
@@ -165,7 +165,7 @@ const NOTE_PROMPT = {
   question: 'Your answer in your own words, or a note to go with Yes or No (optional for those two)',
   marker: 'What should the value be?',
 };
-const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, ended: null, notice: '' };
+const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, closing: false, ended: null, notice: '' };
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -176,7 +176,7 @@ function h(tag, props, ...kids) {
     else if (k === 'value') el.value = String(v);
     else if (k === 'disabled') el.disabled = true;
     else if (k === 'events') for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
-    else if (/^on/i.test(k)) throw new Error('no inline handlers');
+    else if (/^(?:on|href|src|srcdoc|action|formaction)/i.test(k)) throw new Error(`refused prop ${k}`);
     else el.setAttribute(k, String(v));
   }
   for (const kid of kids.flat()) {
@@ -216,7 +216,7 @@ async function call(method, path, body) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (err) {
-    if (S.ended !== 'done') end('stopped');
+    if (S.ended !== 'done') end(S.closing ? 'done' : 'stopped');
     return null;
   }
   let data = null;
@@ -264,6 +264,7 @@ function nextOpen(from) {
 function go(i, focusCard = true) {
   if (i < 0 || i >= S.order.length) return;
   S.cur = i;
+  S.notice = '';
   render();
   if (!focusCard) return;
   const title = document.getElementById('card-title');
@@ -284,7 +285,7 @@ async function save(it, decision, text, acs) {
   const body = { id: it.id, decision };
   if (text && text.trim()) body.text = text.trim();
   if (acs && Object.keys(acs).length) body.acs = acs;
-  S.busy = true; d.error = ''; S.notice = '';
+  S.busy = true; d.error = '';
   render();
   const r = await call('POST', '/answer', body);
   S.busy = false;
@@ -295,12 +296,11 @@ async function save(it, decision, text, acs) {
   if (!(await load())) return;
   const next = nextOpen(S.cur);
   if (next >= 0) go(next);
-  else { S.notice = 'Everything is answered. Press Done when you are ready.'; render(); }
 }
 
 async function undo(it) {
   if (S.busy) return;
-  S.busy = true; render();
+  S.busy = true; S.notice = ''; render();
   const r = await call('POST', '/undo', { id: it.id });
   S.busy = false;
   if (!r) return;
@@ -319,6 +319,7 @@ function change(it) {
   d.acs = new Map(Object.entries((a && a.acs) || {}));
   d.editAcs = d.acs.size > 0;
   d.error = '';
+  S.notice = '';
   S.changing.add(it.id);
   render();
   focusId(act && act.prompt ? 'answer-text' : 'card-title');
@@ -378,11 +379,12 @@ function submitBox(it) {
 
 async function finish() {
   if (S.busy) return;
-  S.busy = true; render();
+  S.busy = true; S.closing = true; render();
   const r = await call('POST', '/done', {});
   S.busy = false;
   if (!r) return;
   if (r.status === 200) { end('done'); return; }
+  S.closing = false;
   if (r.status === 409) {
     await load();
     const n = r.data && Array.isArray(r.data.open) ? r.data.open.length : 0;
@@ -469,7 +471,7 @@ function listView() {
   }
   out.push(h('div', { class: 'finish' },
     h('button', { type: 'button', class: 'btn primary', disabled: open > 0 || S.busy, events: { click: finish } }, 'Done'),
-    h('p', { class: 'muted', text: open ? `${open} still open. Done unlocks when every item is answered.` : 'Everything is answered.' }),
+    h('p', { class: 'muted', text: open ? `${open} still open. Done unlocks when every item is answered.` : 'Everything is answered. Press Done when you are ready.' }),
     S.notice ? h('p', { class: 'muted', role: 'status', text: S.notice }) : null));
   return out;
 }
@@ -520,7 +522,7 @@ function cardView() {
         h('button', { type: 'button', class: 'btn', disabled: S.busy, events: { click: () => undo(it) } }, 'Undo'))));
   }
   if (deciding(it.id)) out.push(decideView(it, d));
-  if (d.error) out.push(h('p', { class: 'error', role: 'alert', text: d.error }));
+  if (d.error) out.push(h('p', { class: 'error', id: 'card-error', role: 'alert', text: d.error }));
   const nextI = nextOpen(S.cur);
   out.push(h('div', { class: 'nav' },
     h('button', { type: 'button', class: 'btn', disabled: S.cur === 0, events: { click: () => go(S.cur - 1) } }, '← Previous'),
@@ -538,7 +540,15 @@ function savedView(it, a) {
 }
 
 function textarea(id, value, onInput, rows, extra) {
-  return h('textarea', { id, rows: rows || 3, class: extra, value, events: { input: (e) => onInput(e.target.value) } });
+  return h('textarea', { id, rows: rows || 3, class: extra, value,
+    events: { input: (e) => { onInput(e.target.value); clearError(); } } });
+}
+
+function clearError() {
+  const it = cur();
+  if (it && S.drafts.has(it.id)) S.drafts.get(it.id).error = '';
+  const el = document.getElementById('card-error');
+  if (el) el.remove();
 }
 
 function decideView(it, d) {
@@ -573,7 +583,7 @@ function boxView(it, d, a) {
   if (a.criteria && it.acs.length) {
     if (!d.editAcs) {
       box.append(h('p', { class: 'hint' }, 'Want to be exact? ',
-        h('button', { type: 'button', class: 'link', 'aria-expanded': 'false',
+        h('button', { type: 'button', class: 'link',
           events: { click: () => { d.editAcs = true; render(); focusId('ac-0'); } } }, 'edit the criteria'),
         ' instead.'));
     } else {
@@ -626,7 +636,8 @@ document.addEventListener('keydown', (e) => {
       } else {
         submitBox(it);
       }
-    } else if (e.key === 'Escape' && t.id !== 'note') {
+    } else if (e.key === 'Escape') {
+      if (t.id === 'note') { t.blur(); return; }
       const d = draft(it.id);
       d.decision = null; d.error = '';
       render();
