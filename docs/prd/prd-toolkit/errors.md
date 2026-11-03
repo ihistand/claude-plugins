@@ -54,5 +54,5 @@ Classification: code bug
 Confirmed: 2026-11-03, "Real bug (Recommended)"
 Touches: FR-007
 Diagnosis: The sample keeps every loaded case whose `str(level).strip()` is not `unit` (prd_lint.py:67). A case with no `level` gives `""` and one with `level: Unit` gives `Unit`, so both are sampled. T-007.5 printed `T-009.1 test-cases/odd.yaml` and `T-009.2 test-cases/odd.yaml` beside the nine expected lines, where AC-007.4 (the owner's answer to Q-02) samples neither.
-Resolution: open, intended: Level names are lowercase only, so lint should report Unit instead of sampling it; a test case with no level should not be sampled.
+Resolution: T-007.5 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
