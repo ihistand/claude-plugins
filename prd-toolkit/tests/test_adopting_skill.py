@@ -50,7 +50,7 @@ def test_every_lint_call_echoes_its_exit_code():
     assert LINT_CMD in text
     assert "prd-lint-exit=0" not in text  # the lint-exit-0 eval grader's literal
     for line in text.splitlines():
-        if "prd_lint.py" in line:
+        if "prd_lint.py" in line and "--list-packs" not in line:  # R26: --list-packs echoes prd-list-packs-exit
             assert 'echo "prd-lint-exit=$?"' in line, line
         if "lint" in line.lower() and re.search(r"\bexits? 0\b", line):
             assert "prd-lint-exit" in line, f"a gate must name the echoed value: {line}"

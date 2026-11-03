@@ -20,7 +20,8 @@ BUILDER = ROOT / "agents/prd-builder.md"
 CHANGING = SKILLS / "changing-prds/SKILL.md"
 ERRORS = SKILLS / "handling-errors/SKILL.md"
 
-GATE = '; echo "prd-lint-exit=$?"'  # every prd_lint.py call echoes its exit (test_dry_run_prompt, test_adopting_skill)
+# --list-packs echoes its own tag (R26): `prd-lint-exit=0` belongs to a lint of the PRD folder, and graders read it
+GATE = '; echo "prd-list-packs-exit=$?"'
 LIST_PACKS = "uv run --script <scripts>/prd_lint.py --list-packs" + GATE
 LIST_PACKS_VENDORED = "uv run --script .prd-toolkit/prd_lint.py --list-packs" + GATE
 JUDGE = "uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>"
@@ -57,11 +58,21 @@ def test_authoring_phase_1_lists_packs_as_one_bash_call():
     assert "`<name> <version> (<source>) — <description>`" in row
 
 
-def test_authoring_phase_1_proposes_the_profile_as_proposed_rows():
+PROFILE = "`- Profile: [ASSUMPTION A-nn: <pack>, language <code>, output language <code>; <basis>]`"
+OUTPUT_RULE = "`- Output language: <code>` only when the outputs' language differs from `language:`"
+
+
+def test_authoring_phase_1_proposes_the_profile_as_one_assumption():
     row = " ".join(phase_row(1).split())
-    for s in ("the default pack", "`language:`", "the output language", "as `proposed` rows",
-              "`- Pack: <name> <X.Y.Z> (<source>)`", "`- Output language: <code>`", "phase 4 decides them"):
+    for s in ("the default pack", "`language:`", "the output language", PROFILE, "indexed `open` in §12",
+              "`- Pack: <name> <X.Y.Z> (<source>)`", OUTPUT_RULE, "phase 4 decides it like any assumption"):
         assert s in row, s
+    assert "as `proposed` rows" not in row  # R27.2: one mechanism, the assumption
+
+
+def test_authoring_profile_lines_use_the_same_mechanism():
+    s = section(AUTHORING, "### Applying the pack")
+    assert PROFILE in s and OUTPUT_RULE in s and "indexed `open` in §12" in s
 
 
 def test_authoring_phase_2_applies_the_pack():
@@ -166,7 +177,7 @@ def test_tester_agent_fallback_names_the_judged_call():
 
 def test_builder_skill_states_the_builder_tests_none_exception():
     s = section(BUILDING, "## An area whose pack says `builder-tests: none`")
-    for needle in ("`.prd-toolkit/packs/<name>/pack.yaml`",
+    for needle in ("`.prd-toolkit/packs/<name>/`",
                    "write each output its contracts name",
                    "each `outline` entry's `path`",
                    "`audience`, `purpose`, `sections`, `terms` and `length`",
@@ -208,7 +219,7 @@ def test_builder_agent_fallback_states_the_exception():
 # ---------------------------------------------------------------- changing-prds (D5)
 
 def test_changing_lists_packs_before_calling_one_missing():
-    s = flat(CHANGING)
+    s = section(CHANGING, "## Packs and retargeting")
     assert f"`{LIST_PACKS}`" in s and "its own Bash call" in s
     assert "Before you say a pack is missing" in s
 
@@ -236,6 +247,29 @@ def test_changing_red_flag_for_a_planned_retarget():
 def test_handling_errors_maps_judge_exit_2_to_environment():
     s = flat(ERRORS)
     assert "A `prd_judge.py` exit 2" in s and "is proposed as `environment`" in s
+
+
+# ---------------------------------------------------------------- R26: --list-packs has its own exit tag
+
+def test_no_list_packs_command_echoes_the_lint_tag():
+    files = sorted(SKILLS.glob("*/*.md")) + sorted((ROOT / "agents").glob("*.md"))
+    lines = [(p.name, line) for p in files for line in p.read_text(encoding="utf-8").splitlines() if "--list-packs;" in line]
+    assert lines, "no --list-packs command found"
+    for name, line in lines:
+        assert 'echo "prd-list-packs-exit=$?"' in line and "prd-lint-exit" not in line, (name, line)
+
+
+def test_builder_finds_the_manifest_in_the_three_places():
+    for path in (BUILDING, BUILDER, RUNNING):
+        s = flat(path)
+        assert "`.prd-toolkit/packs/<name>/`" in s and "the toolkit's `packs/<name>/`" in s, path.name
+        assert "`<installPath>/prd-packs/<name>/`" in s, path.name
+        assert "that `--list-packs` resolves" not in s, path.name  # --list-packs prints no path (R27.1)
+
+
+def test_tester_example_runs_the_judge_from_the_repository_root():
+    s = section(TESTING, "## A judged case")
+    assert "cwd=ROOT" in s and 'ROOT = Path(__file__).resolve().parents[2]' in s
 
 
 # ---------------------------------------------------------------- R20: no plugin-root variable in a command

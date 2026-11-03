@@ -217,8 +217,11 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    step 5 is skipped.
 
    **An area whose pack says `builder-tests: none`.** The implement pack's Header line `Target:`
-   names the area's pack (no line: §1's `Pack:`, or `service`); read its `builder-tests:` in
-   `.prd-toolkit/packs/<name>/pack.yaml`. The built-in `document` pack says `none`. Such an area has
+   names the area's pack (no line: §1's `Pack:`, or `service`); read its `builder-tests:` in its
+   `pack.yaml`: in `.prd-toolkit/packs/<name>/` when the repository has `.prd-toolkit/`, else the
+   toolkit's `packs/<name>/` for the source `prd-toolkit`, else `<installPath>/prd-packs/<name>/`
+   of the plugin that `~/.claude/plugins/installed_plugins.json` records. The built-in `document`
+   pack says `none`. Such an area has
    no unit T-ids: the builder prompt carries `Unit T-ids: none`, and you dispatch the builder all
    the same, beside the tester, because the builder writes the area's outputs (for `document`, each
    `outline` entry's `path`) and runs the standards linters, as building-from-prds says. A request

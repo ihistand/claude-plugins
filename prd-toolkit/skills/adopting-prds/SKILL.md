@@ -158,7 +158,7 @@ Otherwise show the map, recommend one area and why, and stop for the user's pick
 
 - Show the area's Boundary and the files it matches; correct it if the user does.
 - **The area's pack.** List the packs, its own Bash call:
-  `uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`. Then propose a pack from the area's Boundary files: Markdown documents written
+  `uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-list-packs-exit=$?"`. Then propose a pack from the area's Boundary files: Markdown documents written
   for people (`docs/**/*.md`: a guide, a runbook, a policy) are `document`; code with an API, a
   database or events is `service`; a pack of an installed plugin whose description fits its files
   is that pack. Show the proposal with the files that led to it, and write the area's `Target:`

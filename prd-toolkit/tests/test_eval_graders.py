@@ -238,3 +238,42 @@ def test_the_confirm_file_graders_hold_on_the_extracted_start_repo_and_fail_on_a
     lint = subprocess.run([sys.executable, str(ROOT / "scripts/prd_lint.py"), str(dst / "docs/prd/notes")],
                           capture_output=True, text=True)
     assert lint.returncode == 0, lint.stdout + lint.stderr
+
+
+# --- R26: lint-exit-0 needs a lint of the PRD folder whose own result is prd-lint-exit=0 ---
+
+LINT_EXIT_CASES = ("authoring-new-prd", "authoring-proposes-pack", "authoring-spanish-ears")
+
+
+def _tool_use(i: str, cmd: str) -> str:
+    return json.dumps({"type": "tool_use", "id": i, "name": "Bash", "input": {"command": cmd}}, separators=(",", ":"))
+
+
+def _tool_result(i: str, content: str) -> str:
+    return json.dumps({"tool_use_id": i, "type": "tool_result", "content": content}, separators=(",", ":"))
+
+
+def test_lint_exit_0_graders_need_a_lint_of_the_prd_folder():
+    gate = '; echo "prd-lint-exit=$?"'
+    passing = [
+        _tool_use("toolu_A", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_A", "prd-lint-exit=0"),
+        _tool_use("toolu_B", 'uv run --script "/p q/prd_lint.py" docs/prd/greet' + gate) + "\n" + _tool_result("toolu_B", "prd-lint-exit=0"),
+        _tool_use("toolu_C", "uv run --script $P/scripts/prd_lint.py $D" + gate) + "\n" + _tool_result("toolu_C", "prd-lint-exit=0"),
+    ]
+    failing = [
+        # a listing echoed with the lint tag (the 0.8.0 review's case): 0 before any PRD exists
+        _tool_use("toolu_D", "uv run --script /p/scripts/prd_lint.py --list-packs" + gate) + "\n" + _tool_result("toolu_D", "demo 1.0.0\nprd-lint-exit=0"),
+        _tool_use("toolu_E", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_E", "x: y\nprd-lint-exit=1"),
+        _tool_use("toolu_F", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_F", "prd-lint-exit=1")
+        + "\n" + _tool_use("toolu_G", "uv run --script /p/scripts/prd_lint.py --list-packs" + gate) + "\n" + _tool_result("toolu_G", "prd-lint-exit=0"),
+        '{"type":"text","text":"it passes lint (`prd-lint-exit=0`)"}',
+    ]
+    patterns = {_grader(c, "lint-exit-0")["pattern"] for c in LINT_EXIT_CASES}
+    assert len(patterns) == 1, "the three lint-exit-0 graders share one pattern"
+    for c in LINT_EXIT_CASES:
+        assert _grader(c, "lint-exit-0")["target"] == "trace"
+    pattern = re.compile(patterns.pop())
+    for t in passing:
+        assert pattern.search(t), t
+    for t in failing:
+        assert not pattern.search(t), t

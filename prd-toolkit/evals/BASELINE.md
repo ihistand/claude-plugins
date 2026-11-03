@@ -28,6 +28,24 @@ claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plug
 The table's rows are the final runs, all on the final scaffold (`tester-judged-calls-judge` and
 `changing-refuses-retarget` were run once more after the scaffold's last fix, with the same scores).
 
+### Re-score after R26 (the lint-exit-0 graders)
+
+The review found the three `lint-exit-0` graders vacuous: phase 1 ran `--list-packs; echo "prd-lint-exit=$?"`,
+and `--list-packs` always exits 0, so `prd-lint-exit=0` was in every with-arm trace before a PRD existed. Now
+`--list-packs` echoes `prd-list-packs-exit=$?` (pinned: no `--list-packs` line echoes the lint tag), and the
+graders match only a Bash call that lints `docs/prd/…` (or a shell variable) bound by its id to a
+`tool_result` holding `prd-lint-exit=0`; a listing, a lint that exits 1 and prose fail
+(`tests/test_eval_graders.py`). Re-scored with the command above, 2026-11-03, `--runs 3`, sonnet:
+
+| Case | with, before → after | w/out, before → after | Δ after |
+|---|---|---|---|
+| `authoring-proposes-pack` | 1.00 → 1.00 | 0.50 → 0.50 | +0.50 |
+| `authoring-spanish-ears` | 1.00 → 1.00 | 0.40 → 0.40 | +0.60 |
+| `authoring-new-prd` | 1.00 → 1.00 (last recorded in the 0.2 baseline's fix round 1, below) | 0.00 → 0.00 | +1.00 |
+
+Every with run reached a real lint with exit 0 and echoed `prd-list-packs-exit=0` for its listing; every
+without run still fails `lint-exit-0` (it never lints). The scores did not move, so the vacuity hid no failure.
+
 ### Rounds and rulings (0.8.0)
 
 - **`listed-packs` was a wrong grader.** `input_match: 'prd_lint\.py --list-packs'` cannot match a quoted

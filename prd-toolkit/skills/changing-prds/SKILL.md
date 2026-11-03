@@ -47,7 +47,7 @@ the gap as the change.
 An area's pack is its `Target:` line (`Target: pack <name> <X.Y.Z> (<source>)`), or §1's `Pack:`
 line for an area with none, or `service` when there is neither. Before you say a pack is missing,
 list the packs, its own Bash call:
-`uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-lint-exit=$?"`. It prints
+`uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-list-packs-exit=$?"`. It prints
 the built-ins and every installed plugin's packs, `<name> <version> (<source>) — <description>`; a
 pack on that list exists, whatever a search of the repository found.
 

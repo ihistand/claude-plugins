@@ -129,14 +129,20 @@ command and asserts exit 0 and nothing else. In pytest:
 
 ```python
 import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]  # tests/judged/<file> -> the repository root
 
 
 def test_install_guide_judged():
     """@prd T-010.2"""
     r = subprocess.run(["uv", "run", "--script", ".prd-toolkit/prd_judge.py",
-                        "docs/prd/greet", "T-010.2", "docs/guide/install.md"])
+                        "docs/prd/greet", "T-010.2", "docs/guide/install.md"], cwd=ROOT)
     assert r.returncode == 0
 ```
+
+The paths are relative to the repository root, so the call runs there (`cwd=`), whatever directory
+the harness starts in.
 
 Exit 1 is the case failing its threshold; exit 2 is a case that could not be judged (no output
 file, no `claude`, two bad grader answers), a test error, never a pass: never accept it. The call

@@ -139,8 +139,11 @@ allowed. Never pipe, filter or truncate a gated command's output.
 
 An area's output is not always code. The pack's Header line `Target: pack <name> <X.Y.Z> (<source>)`
 names the area's pack (no `Target:` line: §1's `Pack:` line, or `service`). Read its
-`builder-tests:` in `.prd-toolkit/packs/<name>/pack.yaml` (the vendored copy; without one, the
-pack's folder that `--list-packs` resolves). `unit`, the default, is every rule above. The built-in
+`builder-tests:` in the pack's `pack.yaml`, in the first of three places: `.prd-toolkit/packs/<name>/`
+when the repository has `.prd-toolkit/` (the vendored copy, the only one then); for the source
+`prd-toolkit`, the toolkit's `packs/<name>/` (the plugin root is two directories above the skill's
+base directory); for an installed plugin's pack, `<installPath>/prd-packs/<name>/`, with the
+`installPath` that `~/.claude/plugins/installed_plugins.json` records. `unit`, the default, is every rule above. The built-in
 `document` pack says `none`: a document has no unit level, the caller's prompt says
 `Unit T-ids: none`, and "write the unit tests first" names nothing to write.
 
