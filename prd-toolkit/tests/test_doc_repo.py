@@ -101,6 +101,13 @@ def test_every_claim_of_ac_010_2_is_a_rubric_item_of_t_010_2(tmp_path, state):
     assert "- No step relies on a tool that Requirements does not list" in cases
 
 
+@pytest.mark.parametrize("state", ["approved", "built"])
+def test_the_harness_says_a_section_heading_appears_once(tmp_path, state):
+    """A tester asked whether a section heading may repeat and stopped the build (0.8.0 proof, P2 attempt 4)."""
+    r = build(tmp_path, state)
+    assert "Each `sections` entry heads exactly one section; a repeated one fails." in read(r, "testing.md")
+
+
 def test_built_has_the_guide_and_fr_010_verified(tmp_path):
     r = build(tmp_path, "built")
     guide = (r / "docs/guide/install.md").read_text(encoding="utf-8")

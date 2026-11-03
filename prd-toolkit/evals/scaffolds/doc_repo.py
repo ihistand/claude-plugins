@@ -370,7 +370,7 @@ TESTING = """# Testing
 - **HTTP requests.** Not applicable: no HTTP API.
 - **Fixtures.** Not applicable: no fixture files.
 - **Browser identity.** Not applicable: no UI.
-- **Assertions.** Unit outputs compare with `==`; a judged test asserts `prd_judge.py`'s exit code and nothing else. A section of a document is a Markdown heading of any level whose text is an outline `sections` entry; other headings may sit between them.
+- **Assertions.** Unit outputs compare with `==`; a judged test asserts `prd_judge.py`'s exit code and nothing else. A section of a document is a Markdown heading of any level whose text is an outline `sections` entry; other headings may sit between them. Each `sections` entry heads exactly one section; a repeated one fails.
 - **Waits.** Not applicable: calls are synchronous.
 - **Effects.** Not applicable: no side effects.
 - **Leaks.** Not applicable: no logs.
