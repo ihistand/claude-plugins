@@ -268,3 +268,47 @@ def test_builder_refusals_run(tmp_path):
     assert json.loads(run.stdout) == {"href": "refused", "src": "refused", "srcdoc": "refused", "action": "refused",
                                       "onclick": "refused", "ONLOAD": "refused", "formaction": "refused",
                                       "title": "<b>"}
+
+
+# ---- final-review fix ----
+
+def test_the_card_names_the_entries_that_touch_it_under_the_title():
+    card = function("cardView")
+    assert "it.related" in card and "Touched by " in card
+    assert card.index("id: 'card-title'") < card.index("Touched by ") < card.index("it.summary")
+
+
+RELATED_RUN = DONE_RUN.split("const ctx = {")[0].replace(
+    "acs: [], excerpts: [], where: 'w', summary: null",
+    "acs: [], excerpts: [], where: 'w', summary: null, related: ['E-001', '<b>E-002</b>']") + r"""
+const ctx = {
+  console, URLSearchParams, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
+  document: { title: '', createElement: () => new El(), createTextNode: (t) => ({ t }),
+              getElementById: (id) => fixed[id] || null, addEventListener() {} },
+  fetch: async () => ({ status: 200, json: async () => listing }),
+};
+vm.createContext(ctx);
+vm.runInContext(js, ctx);
+setTimeout(() => {
+  const texts = fixed.card.children.map((c) => c.text).filter((t) => t !== undefined);
+  console.log(JSON.stringify(texts));
+}, 50);
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_touched_by_renders_as_text(tmp_path):
+    src, js = tmp_path / "run.js", tmp_path / "form.js"
+    src.write_text(RELATED_RUN, encoding="utf-8")
+    js.write_text(scripts(), encoding="utf-8")
+    run = subprocess.run(["node", str(src), str(js)], capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0, run.stderr
+    texts = json.loads(run.stdout)
+    assert texts[:2] == ["t", "Touched by E-001, <b>E-002</b>"]
+
+
+def test_the_stopped_view_asks_for_a_new_form():
+    end = function("endView")
+    stopped = end[end.rindex("The form has stopped"):]
+    assert "Ask the session to start a new form" in stopped and "new link" in stopped
+    assert "Run serve again" not in end
