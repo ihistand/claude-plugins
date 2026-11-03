@@ -26,6 +26,7 @@
 > - §6 (execution, R-11e): a session never begins a member's step 2 that it cannot finish. For a member that is not the session's repository it logs the stop and stops before editing, and that member's own session runs the whole of step 2 for its row.
 > - §8 (proof, R-13a): the deploy pre-flight lets a drift line through when an open change-set record (Status not `done` or `abandoned`, under the PRD's own `changes/` or in a member repository its links point to, as **Where to enter** finds it) lists both this PRD and the drifting side as members, and the run's report prints each such line as `drift allowed by <start-prd>/CS-nnn: <line>`. Any other drift still refuses. `prd_links.py check` is unchanged, so CI still reports it; production deploys follow the merges in Merge order, when the consumer's default branch holds the re-lock.
 > - §6 (final review, R-F1): an environment wait holds for that environment or any later one in the upstream member's `operations.md` Environments order (read through the row's Location); a wait for `verified` holds for `verified` or any `live in`. `set` refuses a State `live in <e1>` after `live in <e2>` when e1 is before e2 (`<prd>: live in <e1> is before live in <e2>`), and an environment missing from the order by name. Before, a wait held only for its exact environment, so an upstream already `live in production` blocked a downstream waiting for `live in staging` for good.
+> - §8 (final review, R-F2): `check --ci` applies R-13a's let-through, sharing the pre-flight's open-record lookup: a drift line between two members of an open record (Status not `done` or `abandoned`, visible from the checkout) prints as `drift allowed by <start-prd>/CS-nnn: <line>` and does not count toward exit 1. A plain `check` is unchanged. This revises R-13a's "`prd_links.py check` is unchanged, so CI still reports it": during an open change set each member's CI reported the other as drift, so the upstream's merge request was red by construction.
 
 ## 1. Scope
 
@@ -300,7 +301,9 @@ checked. **The `commit-msg` hook** applies the same form check when a trailer is
 - **Deploy pre-flight.** `prd_deploy.py run` refuses to start (exit 1, naming the drifted items)
   when `prd_links.py check` exits 1. Exit 3 is reported and does not refuse. Drift between two members of
   an open change set does not refuse either: the run prints `drift allowed by <start-prd>/CS-nnn: <line>`
-  for each such line, because an upstream's staging deploy precedes the downstream's re-lock.
+  for each such line, because an upstream's staging deploy precedes the downstream's re-lock. `check --ci`
+  applies the same let-through, through the same lookup, so neither member's merge request is red by
+  construction while the record is open; a plain `check` reports and exits as before.
 - **`/prd-status`.** Upstreams (lock, Needs, the verdict counts of `check`, for a path location only; a git URL location shows `check: not run`), Consumers, and
   each record under `changes/` that is not `done` or `abandoned`, with its rows' States.
 - **`prd_context.py`.** A task whose `Touches:` or test cases cite a `<prd>/` reference gets the

@@ -6,7 +6,9 @@
 """Links between PRDs in different repositories: add, sync, check, impact, and changeset (the change-set record's only writer).
 
 Exit 0 done or clean, 1 refused (`refused: <why>` on stderr) or drift, 2 usage or tool error, 3 (check and impact)
-nothing drifted but a side was unreachable; `check --ci` exits 0 there, after printing the unreachable line.
+nothing drifted but a side was unreachable; `check --ci` exits 0 there, after printing the unreachable line, and prints
+each drift line between two members of an open change set as `drift allowed by <start-prd>/CS-nnn: <line>`, which
+does not count toward exit 1.
 """
 import argparse
 import sys
@@ -36,7 +38,7 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("check", help="compare every snapshot with the other side, and the rows on both sides")
     p.add_argument("prd_dir", metavar="PRD")
     p.add_argument("--ref", help="the ref to read each upstream at (default: its default branch); consumers are read at theirs")
-    p.add_argument("--ci", action="store_true", help="exit 0 where an unreachable side alone would exit 3")
+    p.add_argument("--ci", action="store_true", help="exit 0 where an unreachable side alone would exit 3; drift between members of an open change set is allowed")
     p = sub.add_parser("impact", help="the contract items this working tree changes, and the consumers that cite them")
     p.add_argument("prd_dir", metavar="PRD")
     p.add_argument("--base", default="HEAD", help="the ref to compare the working tree with (default: HEAD)")
@@ -122,8 +124,11 @@ def _command(args, prd: model.Prd) -> tuple[list[str], int]:
         return links.sync(prd, args.upstream, args.ref), 0
     if args.command == "check":
         lines = links.check(prd, args.ref)
-        code = links.check_exit(lines)
-        return [str(x) for x in lines], 0 if args.ci and code == 3 else code
+        if not args.ci:
+            return [str(x) for x in lines], links.check_exit(lines)
+        marked = links.let_through(prd, links.toplevel(prd.root), lines)  # R-F2: an open change set's drift
+        code = links.check_exit([x for x, by in marked if by is None])
+        return [links.allowed(by, x) if by else str(x) for x, by in marked], 0 if code == 3 else code
     changed, cited, unreachable = links.impact(prd, args.base)
     report = ([f"changed: {x}" for x in changed] + [f"consumer {c}: {x}" for c in sorted(cited) for x in cited[c]]
               + [f"consumer {c}: unreachable" for c in unreachable])

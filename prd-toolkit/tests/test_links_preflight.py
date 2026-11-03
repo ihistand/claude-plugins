@@ -228,3 +228,58 @@ def test_a_run_prints_each_drift_line_it_let_through(tmp_path, monkeypatch, caps
     with pytest.raises(Started):
         prd_deploy._new_run(type("A", (), {"until": None, "timeout": 60})(), model.load(rp(reports)), reports, [])
     assert capsys.readouterr().out == "drift allowed by orders/CS-001: upstream orders table:orders: changed\n"
+
+
+# ---------------------------------------------------------------- R-F2: check --ci applies the R-13a let-through
+
+def test_check_ci_lets_drift_through_between_members_of_an_open_change_set(tmp_path):
+    """R-F2: each member's CI would report the other as drift while the change set is open; --ci prints the line as
+    allowed and does not fail on it."""
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), "running", ["orders", "reports"])
+    r = run_links("check", rp(reports), "--ci")
+    assert (r.code, r.err) == (0, ""), r
+    out = r.out.splitlines()
+    assert sorted(x for x in out if x.startswith("drift allowed by ")) == sorted(ALLOWED), out
+    assert "upstream orders op:getOrder: same" in out
+    assert "upstream orders table:orders: changed" not in out
+
+
+def test_check_without_ci_still_reports_drift_in_an_open_change_set(tmp_path):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), "running", ["orders", "reports"])
+    r = run_links("check", rp(reports))
+    assert r.code == 1, r
+    assert "upstream orders table:orders: changed" in r.out.splitlines()
+    assert "drift allowed" not in r.out
+
+
+@pytest.mark.parametrize("status", ["done", "abandoned"])
+def test_check_ci_fails_on_drift_once_the_record_is_closed(tmp_path, status):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), status, ["orders", "reports"])
+    r = run_links("check", rp(reports), "--ci")
+    assert r.code == 1, r
+    assert "upstream orders table:orders: changed" in r.out.splitlines()
+    assert "drift allowed" not in r.out
+
+
+def test_check_ci_fails_on_drift_with_a_non_member(tmp_path):
+    orders, reports = synced(tmp_path)
+    change_orders(orders)
+    _record(op(orders), "running", ["orders", "dashboards"])
+    assert run_links("check", rp(reports), "--ci").code == 1
+
+
+def test_preflight_and_check_ci_share_one_lookup():
+    """R-F2: the open-record lookup is one function, in links, used by both."""
+    import inspect
+
+    from prdlint import links
+
+    assert not hasattr(deploy, "_open_change_sets")
+    assert "links.let_through(" in inspect.getsource(deploy.preflight)
+    assert callable(links.let_through)

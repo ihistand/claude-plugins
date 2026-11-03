@@ -446,9 +446,10 @@ A change to a contract item that another PRD cites cannot stop at one repository
    quotes it; an amendment is approved alone.
 4. Each member builds in Order once its Waits for holds, through `/prd-build`, with the
    `Change-set: <prd>/CS-nnn` trailer on its commits; an upstream is deployed through `/prd-deploy
-   --until <env>` first when a downstream link needs it. Its pre-flight lets drift between two members
-   of the open change set through, printing `drift allowed by <start-prd>/CS-nnn: <line>`; other drift
-   still refuses, and `check` and CI still report it.
+   --until <env>` first when a downstream link needs it. Its pre-flight, and `check --ci` (the
+   generated `prd-lint` job), let drift between two members of the open change set through, printing
+   `drift allowed by <start-prd>/CS-nnn: <line>`; other drift still refuses or fails, and a plain
+   `check` still reports it.
 5. A failed build, a human step without a reply or an error stops the chain. The stop is on the
    record's Status and in its Log, and a new session resumes from the record alone.
 6. `changeset close` writes the Merge order, upstream first. Nothing is pushed, merged or opened as a
@@ -472,6 +473,9 @@ A headless run registers only `prd-toolkit:<command>` (a bare `/prd-status` is n
 - Every member must be cloned on the machine running the change set, and a dry run or build of a member
   runs in a session started in that member's root.
 - An approval is trusted to be yours, as `prd_error.py confirm` is.
+- While a change set is open, a reachable member's plain `check` reports the other member as drift
+  until both land; `check --ci` lets it through while the record is open (Status not `done` or
+  `abandoned`, visible from the checkout).
 
 ## Known limits (0.6)
 

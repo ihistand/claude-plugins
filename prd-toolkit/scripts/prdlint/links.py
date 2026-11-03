@@ -480,11 +480,58 @@ class CheckLine:
         return f"{head}: {self.verdict}" + (f" ({self.why})" if self.why else "")
 
 
+def is_drift(x: CheckLine) -> bool:
+    return x.verdict in DRIFT or x.verdict.startswith(_NEEDS_ENV)
+
+
 def check_exit(lines: list[CheckLine]) -> int:
     """1 on any drift; else 3 when a side was unreachable; else 0."""
-    if any(x.verdict in DRIFT or x.verdict.startswith(_NEEDS_ENV) for x in lines):
+    if any(is_drift(x) for x in lines):
         return 1
     return 3 if any(x.verdict == "unreachable" for x in lines) else 0
+
+
+def open_change_sets(prd: model.Prd, repo_root: Path) -> list[tuple[str, set[str]]]:
+    """(`<start-prd>/CS-nnn`, its member slugs) of each open record (Status not done or abandoned) whose rows name this
+    PRD: under its own changes/, and under docs/prd/*/changes/ in each path Location of links.md (Where to enter's
+    lookup), read from the working tree."""
+    me = prd.frontmatter.get("prd", "")
+    found: list[tuple[str, model.ChangeSet]] = [(c.id, c) for c in prd.change_sets.values()]
+    seen = {prd.root.resolve()}
+    for row in (prd.links.upstreams + prd.links.consumers) if prd.links else []:
+        try:
+            loc = parse_location(row.location)
+        except ValueError:
+            continue
+        if loc.path is None:
+            continue
+        for folder in sorted((Path(repo_root) / loc.path / "docs/prd").glob("*/")):
+            if folder.resolve() in seen or not (folder / model.CHANGES_DIR).is_dir():
+                continue
+            seen.add(folder.resolve())
+            for p in sorted((folder / model.CHANGES_DIR).glob("CS-*.md")):
+                if model._CS_FILE.fullmatch(p.name):
+                    found.append((p.stem, model._change_set(f"{model.CHANGES_DIR}/{p.name}", p.read_text(encoding="utf-8"))))
+    out = []
+    for cid, cs in found:
+        members = {r.prd for r in cs.rows}
+        if cs.status in ("done", "abandoned") or me not in members:
+            continue
+        start = cs.started.rpartition(" in ")[2].strip() or me
+        out.append((f"{start}/{cid}", members))
+    return out
+
+
+def let_through(prd: model.Prd, repo_root: Path, lines: list[CheckLine]) -> list[tuple[CheckLine, str | None]]:
+    """R-13a, shared by the deploy pre-flight and `check --ci` (R-F2): each line with the open record
+    (`<start-prd>/CS-nnn`) that lets it through, or None. A drift line is let through when an open record lists both
+    this PRD and the line's other side as members; the records are read only when some line drifted."""
+    sets = open_change_sets(prd, repo_root) if any(is_drift(x) for x in lines) else []
+    return [(x, next((cid for cid, members in sets if x.name in members), None) if is_drift(x) else None) for x in lines]
+
+
+def allowed(by: str, x: CheckLine) -> str:
+    return f"drift allowed by {by}: {x}"
 
 
 def _ver(v: str) -> tuple[int, ...] | None:
