@@ -34,9 +34,8 @@ def test_t005_2_uppercase_prd_md(tmp_path, monkeypatch):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="E-001")
 def test_t005_3_prd_md_is_a_directory(tmp_path):
-    """@prd T-005.3 known-failing E-001"""
+    """@prd T-005.3"""
     (tmp_path / "p").mkdir()
     (tmp_path / "p" / "prd.md").mkdir()
     resolved = Path(tmp_path).resolve()
@@ -93,9 +92,8 @@ def test_t006_2_rule_crash(tmp_path, monkeypatch, capsys):
     assert out.err == "prd_lint: internal error in rule zz-crash: ZeroDivisionError: division by zero\n"
 
 
-@pytest.mark.xfail(strict=True, reason="E-005")
 def test_t006_3_md_directory_is_a_finding(tmp_path, monkeypatch):
-    """@prd T-006.3 known-failing E-005"""
+    """@prd T-006.3"""
     root = s0(tmp_path, monkeypatch)
     (root / "notes.md").mkdir()
     r = run(["docs/prd/orders"], cwd=tmp_path)

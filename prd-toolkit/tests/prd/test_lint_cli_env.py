@@ -70,9 +70,8 @@ def test_t010_1_lint_missing_package(tmp_path):
     )
 
 
-@pytest.mark.xfail(strict=True, reason="E-002")
 def test_t010_2_publish_missing_package(tmp_path):
-    """@prd T-010.2 known-failing E-002"""
+    """@prd T-010.2"""
     py = _bare_venv(tmp_path)
     r = run(["--help"], cwd=tmp_path, env={"LC_ALL": "C.UTF-8"},
             unset=("PYTHONPATH", "PYTHONHOME"), script=PRD_PUBLISH, python=str(py))

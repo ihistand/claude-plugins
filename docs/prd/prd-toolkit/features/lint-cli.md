@@ -71,9 +71,8 @@ Tests: T-004.1 [integration], T-004.2 [integration], T-004.3 [integration], T-00
 Traces: cli:prd_lint
 
 ### FR-005 Refuse a folder without prd.md
-Status: approved
-Source: prd-toolkit/scripts/prdlint/model.py:711 @d1a4146
-  prd-toolkit/scripts/prd_lint.py:58 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prdlint/model.py:721 @97c04e1
 Acceptance (EARS):
 - AC-005.1 If the folder argument names no directory, or a directory with no regular file named
   exactly `prd.md`, the lint command shall print `prd_lint: <resolved folder>: no prd.md` to stderr
@@ -90,9 +89,8 @@ Tests: T-005.1 [integration], T-005.2 [integration], T-005.3 [integration]  (tes
 Traces: cli:prd_lint; `prdlint/model.py` NotAPrd
 
 ### FR-006 Report an internal error without a traceback
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:61 @d1a4146
-  prd-toolkit/scripts/prdlint/registry.py:35 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prdlint/model.py:729 @97c04e1
 Acceptance (EARS):
 - AC-006.1 If loading the folder raises an error other than a missing prd.md, the lint command shall
   print `prd_lint: internal error: <exception type>: <message>` to stderr, print no traceback and
@@ -109,8 +107,8 @@ Tests: T-006.1 [integration], T-006.2 [integration], T-006.3 [integration]  (tes
 Traces: cli:prd_lint; `prdlint/registry.py` RuleCrash
 
 ### FR-007 Sample T-ids for the dry run
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:65 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:67 @97c04e1
 Acceptance (EARS):
 - AC-007.1 When run with `--sample-tids N`, the lint command shall print min(N, M) distinct test
   cases chosen at random from the M loaded cases whose `level` value, as text with surrounding
@@ -152,9 +150,8 @@ Tests: T-009.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-010 Name a missing dependency
-Status: approved
-Source: prd-toolkit/scripts/prdlint/deps.py:7 @d1a4146
-  prd-toolkit/scripts/prd_lint.py:17 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prdlint/deps.py:12 @97c04e1
 Acceptance (EARS):
 - AC-010.1 If `pyyaml`, `sqlglot` or `openapi-spec-validator` cannot be imported, the lint command
   shall print, for the first one missing in that order,
@@ -171,9 +168,8 @@ Tests: T-010.1 [integration], T-010.2 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; cli:prd_publish; `prdlint/deps.py` require
 
 ### FR-011 Load the test-case files
-Status: approved
-Source: prd-toolkit/scripts/prdlint/yamlload.py:45 @d1a4146
-  prd-toolkit/scripts/prdlint/model.py:746 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prdlint/yamlload.py:40 @97c04e1
 Acceptance (EARS):
 - AC-011.1 When a `test-cases/*.yaml` file repeats a key in a mapping, the loader shall keep the
   first value and report `id-unique` at the repeat's line with
@@ -195,8 +191,8 @@ Tests: T-011.1 [integration], T-011.2 [integration], T-011.3 [integration], T-01
 Traces: cli:prd_lint
 
 ### FR-012 Load the contract YAML files
-Status: approved
-Source: prd-toolkit/scripts/prdlint/model.py:758 @d1a4146
+Status: verified
+Source: prd-toolkit/scripts/prdlint/model.py:711 @97c04e1
 Acceptance (EARS):
 - AC-012.1 When a `.yaml` file under `contracts/`, outside `contracts/fixtures/`, repeats a key, does
   not parse, has a mapping key that is a list or a mapping, or has a top level that is not a

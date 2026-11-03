@@ -83,9 +83,8 @@ def test_t011_5_only_yaml_directly_in_test_cases(tmp_path, monkeypatch):
     assert sorted(r2.stdout_lines) == sorted(NINE), r2.stdout
 
 
-@pytest.mark.xfail(strict=True, reason="E-003")
 def test_t011_6_unhashable_key_in_test_cases(tmp_path, monkeypatch):
-    """@prd T-011.6 known-failing E-003"""
+    """@prd T-011.6"""
     root = s0(tmp_path, monkeypatch)
     _write(root / "test-cases" / "keys.yaml", b"? [a, b]\n: x\n")
     r = run(["docs/prd/orders"], cwd=tmp_path)
@@ -117,9 +116,8 @@ def test_t012_1_contract_yaml_findings(tmp_path, monkeypatch):
     assert r.stderr == ""
 
 
-@pytest.mark.xfail(strict=True, reason="E-004")
 def test_t012_2_fixtures_not_read(tmp_path, monkeypatch):
-    """@prd T-012.2 known-failing E-004"""
+    """@prd T-012.2"""
     root = s0(tmp_path, monkeypatch)
     _write(root / "contracts" / "fixtures" / "extra" / "dup.yaml", b"K: 1\nK: 2\n")
     _write(root / "contracts" / "fixtures" / "extra" / "notes.md", b"\xff\xfe")
@@ -127,9 +125,8 @@ def test_t012_2_fixtures_not_read(tmp_path, monkeypatch):
     assert (r.exit, r.stdout, r.stderr) == (0, "", ""), (r.stdout, r.stderr)
 
 
-@pytest.mark.xfail(strict=True, reason="E-003")
 def test_t012_3_unhashable_key_in_contracts(tmp_path, monkeypatch):
-    """@prd T-012.3 known-failing E-003"""
+    """@prd T-012.3"""
     root = s0(tmp_path, monkeypatch)
     _write(root / "contracts" / "extra" / "keys.yaml", b"? [a, b]\n: x\n")
     r = run(["docs/prd/orders"], cwd=tmp_path)

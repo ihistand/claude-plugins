@@ -166,3 +166,43 @@ def test_code_commit_citing_an_unconfirmed_entry_is_blocked(repo):
     assert githook.commit_msg(p(repo), repo, msg, ["src/x.py"], merging=False) == [
         "E-002 is not confirmed; a commit that changes code may cite it only after prd_error.py confirm"]
     assert githook.commit_msg(p(repo), repo, msg, ["docs/prd/orders/errors.md"], merging=False) == []
+
+
+def _pwd_lint(repo, prd_dir):
+    """Point the **/*.py standards row at a linter that records the directory it runs in."""
+    script(repo, "pwd-lint", 'pwd -P >> "$(dirname "$0")/../cwdlog"\n')
+    edit(prd_dir, "prd.md", "| `**/*.py` | `ok-lint` |", "| `**/*.py` | `pwd-lint` |")
+
+
+def _cwdlog(repo):
+    f = repo / "cwdlog"
+    return f.read_text().splitlines() if f.exists() else []
+
+
+def test_pre_commit_in_a_linked_worktree_runs_linters_at_its_root(repo, tmp_path):
+    # E-007: git exports GIT_DIR (the absolute .git/worktrees/<name>) to a hook in a linked worktree and no
+    # GIT_WORK_TREE, so `git rev-parse --show-toplevel` run from the PRD folder answered the PRD folder
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "init")
+    wt = tmp_path / "wt"
+    git(repo, "worktree", "add", "-q", "-b", "w", str(wt))
+    _pwd_lint(repo, wt / "docs/prd/orders")
+    stage(wt, "src/new.py")
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    env["GIT_DIR"] = str((repo / ".git/worktrees/wt").resolve())
+    r = subprocess.run([sys.executable, str(CLI), "pre-commit", "docs/prd/orders"], cwd=wt, capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert _cwdlog(repo) == [str(wt.resolve())]
+
+
+def test_pre_commit_with_a_relative_git_dir_runs_linters_at_the_root(repo):
+    # the same hook in the main checkout, where git may export GIT_DIR=.git, relative to the hook's directory
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "init")
+    _pwd_lint(repo, repo / "docs/prd/orders")
+    stage(repo, "src/new.py")
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    env["GIT_DIR"] = ".git"
+    r = subprocess.run([sys.executable, str(CLI), "pre-commit", "docs/prd/orders"], cwd=repo, capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert _cwdlog(repo) == [str(repo.resolve())]

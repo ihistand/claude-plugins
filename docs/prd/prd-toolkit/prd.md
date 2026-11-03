@@ -127,14 +127,14 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-002 | Name each finding's file from the working directory | live | features/lint-cli.md | 1.0.0 |
 | FR-003 | List the rules | live | features/lint-cli.md | 1.0.0 |
 | FR-004 | Reject a bad command line | live | features/lint-cli.md | 1.0.0 |
-| FR-005 | Refuse a folder without prd.md | approved | features/lint-cli.md |  |
-| FR-006 | Report an internal error without a traceback | approved | features/lint-cli.md |  |
-| FR-007 | Sample T-ids for the dry run | approved | features/lint-cli.md |  |
+| FR-005 | Refuse a folder without prd.md | verified | features/lint-cli.md |  |
+| FR-006 | Report an internal error without a traceback | verified | features/lint-cli.md |  |
+| FR-007 | Sample T-ids for the dry run | verified | features/lint-cli.md |  |
 | FR-008 | Mark a CI run for the rules | live | features/lint-cli.md | 1.0.0 |
 | FR-009 | Write UTF-8 in any locale | live | features/lint-cli.md | 1.0.0 |
-| FR-010 | Name a missing dependency | approved | features/lint-cli.md |  |
-| FR-011 | Load the test-case files | approved | features/lint-cli.md |  |
-| FR-012 | Load the contract YAML files | approved | features/lint-cli.md |  |
+| FR-010 | Name a missing dependency | verified | features/lint-cli.md |  |
+| FR-011 | Load the test-case files | verified | features/lint-cli.md |  |
+| FR-012 | Load the contract YAML files | verified | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 

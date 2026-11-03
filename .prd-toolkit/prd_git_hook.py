@@ -5,6 +5,7 @@
 # ///
 """Git hook logic. `commit-msg <prd-folder> <message-file>` or `pre-commit <prd-folder>`. Exit 0 allow, 1 block, 2 usage or tool error (also blocks)."""
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +50,19 @@ def _merging(root: Path) -> bool:
     return (path if path.is_absolute() else root / path).exists()
 
 
+def _pin_work_tree() -> None:
+    """Git starts a hook at the top of the work tree and may export GIT_DIR (absolute in a linked worktree,
+    possibly relative in the main checkout) without GIT_WORK_TREE. Every git call below runs from another
+    directory (the PRD folder, the repo root), where that GIT_DIR alone would make git take the call's own
+    directory for the top of the work tree. So pin both, from the hook's own directory, before any git call."""
+    git_dir = os.environ.get("GIT_DIR")
+    if not git_dir or os.environ.get("GIT_WORK_TREE"):
+        return
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, check=True, encoding="utf-8").stdout.strip()
+    os.environ["GIT_DIR"] = str(Path(git_dir).resolve())
+    os.environ["GIT_WORK_TREE"] = top
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_git_hook.py", description="Logic of the PRD git hooks.")
     sub = parser.add_subparsers(dest="hook")
@@ -63,6 +77,11 @@ def main(argv: list[str]) -> int:
         return 0 if e.code in (0, None) else 2
     if not args.hook:
         parser.print_usage(sys.stderr)
+        return 2
+    try:
+        _pin_work_tree()
+    except Exception as e:
+        print(f"prd-toolkit: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     try:
         prd = model.load(Path(args.prd_dir))
