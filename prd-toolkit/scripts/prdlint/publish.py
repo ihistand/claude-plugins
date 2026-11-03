@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from string import Template
 
-from . import status, trace
+from . import languages, status, trace
 from .context import _section
 from .deps import require
 from .markdown import sections
@@ -21,6 +21,25 @@ NO_COMMIT = "no commit"
 _MD = markdown_it.MarkdownIt("commonmark", {"html": False}).enable("table").disable("image")
 _MD.validateLink = lambda url: url.strip().lower().startswith(("#", "http://", "https://", "mailto:"))  # no data: or relative targets
 _ID = re.compile(r"^([A-Z]+)-(\d+)$")
+
+
+_LABELS: dict[str, str] = {}
+
+
+def L(key: str, **fmt) -> str:
+    """A chrome label in the PRD's language; a key its table lacks falls back to `en`."""
+    text = _LABELS.get(key)
+    if text is None:
+        text = languages.load("en").labels[key]
+    return text.format(**fmt) if fmt else text
+
+
+def _use_language(prd: Prd) -> None:
+    _LABELS.clear()
+    _LABELS.update(languages.load("en").labels)
+    table = languages.for_prd(prd)
+    if table is not None:
+        _LABELS.update(table.labels)
 
 
 class Refused(Exception):
@@ -42,7 +61,7 @@ def _inline(text: str) -> str:
 
 
 def _none() -> str:
-    return '<p class="none">None.</p>'
+    return f'<p class="none">{_e(L("none"))}</p>'
 
 
 def _table(header: list[str], rows: list[list[str]]) -> str:
@@ -137,11 +156,11 @@ def _summary_box(prd: Prd, area: str, summaries: dict | None) -> str:
     if not entry:
         return ""
     ids = entry.get("ids") or []
-    label = f"Summary by Claude of {id_label(ids)}, PRD {prd.frontmatter.get('version', '')}" if ids else \
-        f"Summary by Claude of area {area}, PRD {prd.frontmatter.get('version', '')}"
+    version = prd.frontmatter.get("version", "")
+    label = L("summary_of_ids", ids=id_label(ids), version=version) if ids else L("summary_of_area", area=area, version=version)
     links = " ".join(f'<a href="#{_e(i)}">{_e(i)}</a>' for i in ids)
     return (f'<div class="summary"><p class="label">{_e(label)}</p><p>{_e(entry["text"])}</p>'
-            + (f'<p class="label">Blocks: {links}</p>' if links else "") + "</div>")
+            + (f'<p class="label">{_e(L("blocks"))}: {links}</p>' if links else "") + "</div>")
 
 
 # ---- blocks ----------------------------------------------------------------------------------
@@ -154,10 +173,10 @@ def _chip(status_: str | None) -> str:
 
 def _block(b: ReqBlock) -> str:
     acs = "".join(
-        f'<li id="{_e(a.id)}">' + (f'<span class="removed"><strong>{_e(a.id)}</strong> {_inline(a.text)}</span> (removed)'
+        f'<li id="{_e(a.id)}">' + (f'<span class="removed"><strong>{_e(a.id)}</strong> {_inline(a.text)}</span> ({_e(L("removed"))})'
                                     if a.removed else f"<strong>{_e(a.id)}</strong> {_inline(a.text)}") + "</li>"
         for a in b.acs)
-    since = f" since {_e(b.since)}" if b.since else ""
+    since = f" {_e(L('since'))} {_e(b.since)}" if b.since else ""
     return (f'<h3 id="{_e(b.id)}">{_e(b.id)} {_inline(b.title)} {_chip(b.status)}<small class="none">{since}</small></h3>'
             + (f"<ul>{acs}</ul>" if acs else ""))
 
@@ -167,7 +186,7 @@ def _area_blocks(prd: Prd, summaries: dict | None, nfr: bool) -> str:
     for area, blocks in _areas(prd).items():
         if (area == "nfr") != nfr:
             continue
-        out.append(f"<h2>Requirements: {_e(area)}</h2>")
+        out.append(f"<h2>{_e(L('requirements_area', area=area))}</h2>")
         out.append(_summary_box(prd, area, summaries))
         out += [_block(b) for b in blocks if b.kind != "UJ"]
     return "".join(out)
@@ -191,9 +210,9 @@ def _header(prd: Prd, repo_root: Path, today: date) -> str:
     st_html = _e(st) if st == "Approved" else f'<span class="status-flag">{_e(st)}</span>'
     h1 = _e(_title(prd))
     return (f"<h1>{h1}</h1>\n<dl class=\"facts\">"
-            f"<dt>Project</dt><dd>{_e(fm.get('prd', '-'))}</dd><dt>PRD version</dt><dd>{_e(fm.get('version', '-'))}</dd>"
-            f"<dt>Status</dt><dd>{st_html}</dd><dt>Commit</dt><dd>{_e(commit_of(repo_root))}</dd>"
-            f"<dt>Generated</dt><dd>{_e(today.isoformat())}</dd></dl>")
+            f"<dt>{_e(L('project'))}</dt><dd>{_e(fm.get('prd', '-'))}</dd><dt>{_e(L('prd_version'))}</dt><dd>{_e(fm.get('version', '-'))}</dd>"
+            f"<dt>{_e(L('status'))}</dt><dd>{st_html}</dd><dt>{_e(L('commit'))}</dt><dd>{_e(commit_of(repo_root))}</dd>"
+            f"<dt>{_e(L('generated'))}</dt><dd>{_e(today.isoformat())}</dd></dl>")
 
 
 def _title(prd: Prd) -> str:
@@ -208,13 +227,13 @@ def _deployed(prd: Prd) -> str:
     rows = {r.env: r for r in prd.operations.deployed}
     missing = [e for e in prd.operations.environments if e in production_envs(prd) and e not in rows]
     body = [[_e(r.env), _e(r.version), _e(r.commit), _e(r.date)] for r in rows.values()]
-    body += [[_e(e), "not deployed", "", ""] for e in missing]
-    return _table(["Environment", "PRD version", "Commit", "Date"], body)
+    body += [[_e(e), _e(L("not_deployed")), "", ""] for e in missing]
+    return _table([_e(L("environment")), _e(L("prd_version")), _e(L("commit")), _e(L("date"))], body)
 
 
 def _assumptions(prd: Prd) -> str:
     open_rows = [r for r in prd.assumptions if len(r.cells) >= 3 and r.cells[2].strip("` ").lower() != "confirmed"]
-    return _table(["ID", "Assumption", "Status"], [[_inline(c) for c in r.cells[:3]] for r in open_rows])
+    return _table([_e(L("id")), _e(L("assumption")), _e(L("status"))], [[_inline(c) for c in r.cells[:3]] for r in open_rows])
 
 
 def _open_entries(prd: Prd) -> str:
@@ -233,14 +252,14 @@ def _journeys(prd: Prd) -> str:
 
 def business(prd: Prd, summaries: dict | None) -> str:
     return "\n".join([
-        "<h2>Summary and goals</h2>", _section_md(prd, 2),
-        "<h2>Glossary</h2>", _section_md(prd, 3),
-        "<h2>User journeys</h2>", _journeys(prd),
+        f"<h2>{_e(L('summary_goals'))}</h2>", _section_md(prd, 2),
+        f"<h2>{_e(L('glossary'))}</h2>", _section_md(prd, 3),
+        f"<h2>{_e(L('user_journeys'))}</h2>", _journeys(prd),
         _area_blocks(prd, summaries, nfr=False),
-        "<h2>Open assumptions</h2>", _assumptions(prd),
-        "<h2>Open questions</h2>", _section_md(prd, 13),
-        "<h2>Running in each environment</h2>", _deployed(prd),
-        "<h2>Open error entries</h2>", _open_entries(prd),
+        f"<h2>{_e(L('open_assumptions'))}</h2>", _assumptions(prd),
+        f"<h2>{_e(L('open_questions'))}</h2>", _section_md(prd, 13),
+        f"<h2>{_e(L('running_environments'))}</h2>", _deployed(prd),
+        f"<h2>{_e(L('open_errors'))}</h2>", _open_entries(prd),
     ])
 
 
@@ -262,8 +281,8 @@ def _contracts(prd: Prd) -> str:
 
     tbl = [f"{t} ({', '.join(sorted(c))})" if c else t for t, c in sorted(tables.items())]
     tl = "".join(f"<li><code>{_e(t)}</code></li>" for t in tbl)
-    return (names("Operations", ops) + "<h3>Tables</h3>" + (f"<ul>{tl}</ul>" if tl else _none()) + names("Events", events)
-            + "<h3>Error codes</h3>" + _table(["Code", "Status", "Meaning"], code_rows))
+    return (names(_e(L("operations")), ops) + f"<h3>{_e(L('tables'))}</h3>" + (f"<ul>{tl}</ul>" if tl else _none()) + names(_e(L("events")), events)
+            + f"<h3>{_e(L('error_codes'))}</h3>" + _table([_e(L("code")), _e(L("status")), _e(L("meaning"))], code_rows))
 
 
 def _nfrs(prd: Prd, summaries: dict | None) -> str:
@@ -280,12 +299,12 @@ def _matrix(prd: Prd, repo_root: Path) -> str:
         block = next(b for b in prd.blocks if b.id == item.id)
         cells = item.text.split(": ", 1)[1]
         if cells == "no tests":
-            rows.append([_e(item.id), _chip(block.status), "no tests", "", "", ""])
+            rows.append([_e(item.id), _chip(block.status), _e(L("no_tests")), "", "", ""])
             continue
         for cell in cells.split("; "):
             tid, level, gate, cited = cell.split(" ")
-            rows.append([_e(item.id), _chip(block.status), _e(tid), _e(level), _e(gate), _e(cited)])
-    return _table(["Requirement", "Status", "Test", "Level", "Gate", "In code"], rows)
+            rows.append([_e(item.id), _chip(block.status), _e(tid), _e(level), _e(gate), _e(L(cited))])
+    return _table([_e(L("requirement")), _e(L("status")), _e(L("test")), _e(L("level")), _e(L("gate")), _e(L("in_code"))], rows)
 
 
 def _runbook(prd: Prd) -> str:
@@ -300,10 +319,10 @@ def _runbook(prd: Prd) -> str:
 def _ledger(prd: Prd) -> str:
     out = []
     for e in prd.errors_ledger.values():
-        facts = [("State", e.state), ("Detected", e.detected), ("Classification", e.classification),
-                 ("Confirmed", e.confirmed_raw or ""), ("Touches", ", ".join(t for t, _ in e.touches)),
-                 ("Diagnosis", e.diagnosis), ("Resolution", e.resolution), ("Recurrence of", e.recurrence)]
-        rows = "".join(f"<dt>{k}</dt><dd>{_inline(v)}</dd>" for k, v in facts if v not in ("", "-"))
+        facts = [(L("state"), e.state), (L("detected"), e.detected), (L("classification"), e.classification),
+                 (L("confirmed"), e.confirmed_raw or ""), (L("touches"), ", ".join(t for t, _ in e.touches)),
+                 (L("diagnosis"), e.diagnosis), (L("resolution"), e.resolution), (L("recurrence_of"), e.recurrence)]
+        rows = "".join(f"<dt>{_e(k)}</dt><dd>{_inline(v)}</dd>" for k, v in facts if v not in ("", "-"))
         out.append(f'<div class="entry" id="{_e(e.id)}"><h3>{_e(e.id)} {_inline(e.title)}</h3><dl class="facts">{rows}</dl></div>')
     return "".join(out) or _none()
 
@@ -312,19 +331,19 @@ def technical(prd: Prd, repo_root: Path, summaries: dict | None) -> str:
     fm = prd.frontmatter
     meta = "".join(f"<dt>{_e(k)}</dt><dd>{_e(v)}</dd>" for k, v in fm.items())
     return "\n".join([
-        "<h2>Metadata and stack</h2>", f'<dl class="facts">{meta}</dl>', _section_md(prd, 1),
-        "<h2>Architecture</h2>", _section_md(prd, 4),
-        "<h2>Contracts</h2>", _contracts(prd),
-        "<h2>Non-functional requirements</h2>", _nfrs(prd, summaries),
-        "<h2>Test levels</h2>", _doc_section_md(prd, "testing.md", "Levels"),
-        "<h2>Requirement to test matrix</h2>", _matrix(prd, repo_root),
-        "<h2>Environments</h2>", _doc_section_md(prd, "operations.md", "Environments"),
-        *(["<h2>Links</h2>", _doc_md(prd, "links.md")] if "links.md" in prd.docs else []),
-        "<h2>Runbook</h2>", _runbook(prd),
-        "<h2>Standards registry</h2>", _section_md(prd, 5),
-        "<h2>Skills registry</h2>", _section_md(prd, 6),
-        "<h2>Contract types</h2>", _section_md(prd, 7),
-        "<h2>Error ledger</h2>", _ledger(prd),
+        f"<h2>{_e(L('metadata_stack'))}</h2>", f'<dl class="facts">{meta}</dl>', _section_md(prd, 1),
+        f"<h2>{_e(L('architecture'))}</h2>", _section_md(prd, 4),
+        f"<h2>{_e(L('contracts'))}</h2>", _contracts(prd),
+        f"<h2>{_e(L('nfrs'))}</h2>", _nfrs(prd, summaries),
+        f"<h2>{_e(L('test_levels'))}</h2>", _doc_section_md(prd, "testing.md", "Levels"),
+        f"<h2>{_e(L('matrix'))}</h2>", _matrix(prd, repo_root),
+        f"<h2>{_e(L('environments'))}</h2>", _doc_section_md(prd, "operations.md", "Environments"),
+        *([f"<h2>{_e(L('links'))}</h2>", _doc_md(prd, "links.md")] if "links.md" in prd.docs else []),
+        f"<h2>{_e(L('runbook'))}</h2>", _runbook(prd),
+        f"<h2>{_e(L('standards'))}</h2>", _section_md(prd, 5),
+        f"<h2>{_e(L('skills'))}</h2>", _section_md(prd, 6),
+        f"<h2>{_e(L('contract_types'))}</h2>", _section_md(prd, 7),
+        f"<h2>{_e(L('error_ledger'))}</h2>", _ledger(prd),
     ])
 
 
@@ -335,8 +354,12 @@ def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date) 
         problems = summary_problems(prd, summaries)
         if problems:
             raise Refused(problems)
+    _use_language(prd)
+    table = languages.for_prd(prd)
     return Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
-        title=_e(f"{prd.frontmatter.get('prd', 'PRD')} PRD {prd.frontmatter.get('version', '')}"),
+        lang=_e(table.code if table else "en"),
+        business_label=_e(L("business")), technical_label=_e(L("technical")),
+        title=_e(f"{prd.frontmatter.get('prd', 'PRD')} {L('prd')} {prd.frontmatter.get('version', '')}"),
         header=_header(prd, repo_root, today),
         business=business(prd, summaries),
         technical=technical(prd, repo_root, summaries),

@@ -253,3 +253,18 @@ def test_another_prds_newer_run_does_not_hide_this_prds(prd_repo):
 def test_link_parts_say_none_on_a_plain_prd(items):
     for name in ("Upstreams", "Consumers", "Change sets"):
         assert [i.text for i in items if i.part == name] == ["None."]
+
+
+def test_areas_part_lists_each_areas_profile(prd_repo, cli, tmp_path):
+    code, out, _ = cli(prd_repo / "docs/prd/orders")
+    areas = out.split("## Areas\n\n", 1)[1].split("\n\n", 1)[0].splitlines()
+    assert "import: pack service default, output language en" in areas and len(areas) == 2
+
+
+def test_areas_part_names_a_document_pack(tmp_path, cli, monkeypatch):
+    from doc_fixture import document_prd
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    git(tmp_path, "init", "-q")
+    root = document_prd(tmp_path, language="es")
+    code, out, _ = cli(root)
+    assert "## Areas\n\ninstall: pack document 1.0.0, output language es\n" in out

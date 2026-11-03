@@ -180,3 +180,53 @@ def test_req_unknown_error_entry_exits_2(ctx):
 def test_req_error_entry_needs_area(ctx):
     code, out, err = pack(ctx, "--req", "E-002")
     assert code == 2 and out == "" and "--req needs --area" in err
+
+
+# ---- profiles in the pack (0.8.0) ----
+
+def _doc_repo(tmp_path, monkeypatch):
+    import subprocess
+    from conftest import PLUGINS_FILE
+    from doc_fixture import document_prd
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    return document_prd(tmp_path)
+
+
+def test_target_line_is_in_the_header_of_both_modes(tmp_path, monkeypatch):
+    root = _doc_repo(tmp_path, monkeypatch)
+    for mode in ("decide", "implement"):
+        _, out, err = pack(root, "--area", "install", "--for", mode)
+        assert "Target: pack document 1.0.0 (prd-toolkit), output language en" in parts(out)["Header"], err
+
+
+def test_service_default_target_line(ctx):
+    _, out, _ = pack(ctx, "--area", "import")
+    assert "Target: pack service (default), output language en" in parts(out)["Header"]
+
+
+def test_implement_pack_holds_harness_defaults_and_rubrics(tmp_path, monkeypatch):
+    root = _doc_repo(tmp_path, monkeypatch)
+    _, out, _ = pack(root, "--area", "install", "--for", "implement")
+    p = parts(out)
+    assert "- **HTTP requests.** Not applicable: no HTTP interface" in p["Harness defaults"]
+    assert "asserts `prd_judge.py`'s exit code" in p["Harness defaults"]
+    from prdlint import packs
+    text = (packs.toolkit_packs_dir() / "document/rubrics.md").read_text().rstrip("\n")
+    assert text in p["Rubric conventions"]
+    assert "Harness defaults" not in parts(pack(root, "--area", "install")[1])
+    assert "Rubric conventions" not in parts(pack(root, "--area", "install")[1])
+
+
+def test_service_pack_has_no_harness_or_rubrics_part(ctx):
+    import subprocess
+    subprocess.run(["git", "init", "-q"], cwd=ctx.parent.parent.parent, check=True)
+    _, out, _ = pack(ctx, "--area", "import", "--for", "implement")
+    assert "Harness defaults" not in parts(out) and "Rubric conventions" not in parts(out)
+
+
+def test_pack_target_kind_pulls_its_outline_entry(tmp_path, monkeypatch):
+    root = _doc_repo(tmp_path, monkeypatch)
+    for mode in ("decide", "implement"):
+        _, out, _ = pack(root, "--area", "install", "--req", "FR-001", "--for", mode)
+        assert "install-guide:" in parts(out)["Cited"] and "audience: first-time users" in parts(out)["Cited"], mode
