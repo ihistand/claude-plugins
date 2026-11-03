@@ -319,11 +319,29 @@ def profile(prd: Prd, area: str | None) -> tuple[PackRef, str]:
     return (t.pack if t and t.pack else pack), (t.output_language if t and t.output_language else lang)
 
 
+_FAILURES = (ManifestError, PackNotFound, PackMismatch, OSError, ValueError)
+
+
+def resolve_cached(prd: Prd, ref: PackRef) -> Pack:
+    """`resolve(ref, repo_root)`, once per (name, version, source) per loaded PRD: the Pack, or the failure re-raised."""
+    cache = prd.__dict__.setdefault("_resolved", {})
+    key = (ref.name, ref.version, ref.source)
+    if key not in cache:
+        try:
+            cache[key] = resolve(ref, repo_root(prd.root))
+        except _FAILURES as e:
+            cache[key] = e
+    got = cache[key]
+    if isinstance(got, Exception):
+        raise got
+    return got
+
+
 def pack_for(prd: Prd, area: str | None) -> Pack | None:
     """The resolved pack of `area`'s profile; None on any failure (pack-resolves reports it)."""
     try:
-        return resolve(profile(prd, area)[0], repo_root(prd.root))
-    except (ManifestError, PackNotFound, PackMismatch, OSError, ValueError):
+        return resolve_cached(prd, profile(prd, area)[0])
+    except _FAILURES:
         return None
 
 
@@ -332,12 +350,11 @@ def languages_dirs(prd: Prd) -> list[Path]:
     refs = named(prd)
     if not refs:
         return []
-    root = repo_root(prd.root)
     out = []
     for ref in refs:
         try:
-            d = resolve(ref, root).languages_dir
-        except (ManifestError, PackNotFound, PackMismatch, OSError, ValueError):
+            d = resolve_cached(prd, ref).languages_dir
+        except _FAILURES:
             continue
         if d:
             out.append(d)

@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from ..deps import require
 from ..findings import Finding
 from ..markdown import strip_code, tables
-from ..model import UPSTREAM_DIR, Prd, repo_root
+from ..model import UPSTREAM_DIR, Prd
 from ..registry import rule
 from .ids import defined_ids
 from .structure import prose
@@ -399,11 +399,10 @@ def pack_list(prd: Prd) -> list:
     if cached is None:
         from .. import packs  # local: packs imports the rules package
 
-        root = repo_root(prd.root)
         cached = []
         for ref in [*packs.named(prd), packs.SERVICE_DEFAULT]:
             try:
-                pack = packs.resolve(ref, root)
+                pack = packs.resolve_cached(prd, ref)
             except (packs.ManifestError, packs.PackNotFound, packs.PackMismatch, OSError, ValueError):
                 continue
             if all(pack.name != c.name for c in cached):
