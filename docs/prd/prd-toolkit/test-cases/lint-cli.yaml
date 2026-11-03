@@ -1,0 +1,879 @@
+# Format: references/prd-format.md, "Test cases". One entry per T-id.
+# Conventions for every case below:
+#   <repo> is the repository root; <tmp> is the test's own tmp_path; <resolved tmp> is Path(<tmp>).resolve().
+#   "python" is the interpreter running the tests (sys.executable), which has prd-toolkit/pyproject.toml's
+#   dependencies; a CLI case runs `python <repo>/prd-toolkit/scripts/prd_lint.py ...` as a subprocess
+#   (not `uv run`, whose own stderr lines would break the stderr assertions).
+#   S0 = write each entry of fixture lint-cli/orders (contracts/fixtures/lint-cli/orders.yaml) to
+#   <tmp>/docs/prd/orders/<key>, and set PRD_PLUGINS_FILE to the absolute path of fixture
+#   lint-cli/plugins_superpowers.json (the registries rule reads it). With S0 alone the folder lints clean (T-001.1).
+#   M1 = append the line `FORBIDDEN: {}` to <tmp>/docs/prd/orders/contracts/errors.yaml (it becomes line 41).
+T-001.1:
+  ac: AC-001.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-001.2:
+  ac: AC-001.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-001.3:
+  ac: AC-001.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "append the line `T-002.1: {}` to test-cases/api.yaml (it becomes line 68)"
+      - "append the lines `IMPORT_EMPTY: {}` and `FORBIDDEN: {}` to contracts/errors.yaml (lines 41 and 42)"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the loader reads test-cases/ before contracts/, so the printed order proves the sort
+  expect:
+    output:
+      exit: 1
+      stdout_lines_in_this_relative_order:
+        - "docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'IMPORT_EMPTY' (first at line 9, again at line 41)"
+        - "docs/prd/orders/contracts/errors.yaml:42: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 42)"
+        - "docs/prd/orders/test-cases/api.yaml:68: id-unique: duplicate key 'T-002.1' (first at line 1, again at line 68)"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-001.4:
+  ac: AC-001.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - M1
+      - in the test process, register a rule named zz-warn with the decorator prdlint.registry.rule("zz-warn", severity="warn") on a function that takes one argument, the loaded PRD, and returns [prdlint.findings.Finding("prd.md", 1, "zz-warn", "a warning", severity="warn")]; remove it afterwards from prdlint.registry.RULES (a dict of rule name to function) and prdlint.registry.SEVERITY (a dict of rule name to severity)
+      - change the test process's working directory to <tmp>
+    call: prd_lint.main(["docs/prd/orders"]) in process (prd-toolkit/scripts on sys.path), capturing stdout and stderr
+  expect:
+    output:
+      return: 1
+      stdout_exact: |
+        docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)
+        docs/prd/orders/prd.md:1: warn: zz-warn: a warning
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-001.5:
+  ac: AC-001.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - register the rule zz-warn as T-001.4 does, and remove it afterwards
+      - change the test process's working directory to <tmp>
+    call: prd_lint.main(["docs/prd/orders"]) in process (prd-toolkit/scripts on sys.path), capturing stdout and stderr
+    note: with S0 alone the folder lints clean (T-001.1), so the warn finding is the only one
+  expect:
+    output:
+      return: 0
+      stdout_exact: "docs/prd/orders/prd.md:1: warn: zz-warn: a warning\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-002.1:
+  ac: AC-002.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1]
+    cwd: <tmp>/docs
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)"
+    effects: []
+    errors: []
+    leaks: none
+T-002.2:
+  ac: AC-002.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1]
+    cwd: <tmp>/docs/prd/orders
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py .
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)"
+    effects: []
+    errors: []
+    leaks: none
+T-002.3:
+  ac: AC-002.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1, create the empty directory <tmp>/elsewhere]
+    cwd: <tmp>/elsewhere
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py <tmp>/docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "<resolved tmp>/docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)"
+    effects: []
+    errors: []
+    leaks: none
+T-003.1:
+  ac: AC-003.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-rules
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-rules <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      each_run:
+        exit: 0
+        stderr: ""
+        stdout_exact_lines: ["ac-ears error", "ac-has-test error", "assumption-indexed error", "change-sets error",
+          "classified-fixtures error", "contracts-valid error", "deny-tested error", "drift-rows error",
+          "error-codes error", "error-entries error", "fr-has-ac error", "frontmatter error",
+          "glossary-synonym error", "id-format error", "id-removed-reused error", "id-unique error",
+          "index-consistent error", "judged-case error", "language-table error", "links-format error",
+          "markers-open error", "nfr-bound error", "open-questions-empty error", "pack-resolves error",
+          "placeholder error", "platform-word warn", "production-gate error", "registries error",
+          "runbook-env error", "runbook-steps error", "runbook-tests error", "schema-refs error",
+          "sections error", "snapshot-cited error", "sufficiency error", "test-cases-consistent error",
+          "test-level error", "test-refs error", "upstream-refs error", "vague-word error"]
+    effects: []
+    errors: []
+    leaks: none
+T-004.1:
+  ac: AC-004.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    env: {COLUMNS: "40"}
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py
+    note: COLUMNS narrower than the usage line shows it is never wrapped
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]\n"
+    effects: []
+    errors: []
+    leaks: none
+T-004.2:
+  ac: AC-004.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --bogus docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids x docs/prd/orders
+  expect:
+    output:
+      run_1: {exit: 2, stdout: "", stderr_first_line_starts: "usage: prd_lint.py", stderr_last_line: "prd_lint.py: error: unrecognized arguments: --bogus"}
+      run_2: {exit: 2, stdout: "", stderr_first_line_starts: "usage: prd_lint.py", stderr_last_line: "prd_lint.py: error: argument --sample-tids: invalid int value: 'x'"}
+    effects: []
+    errors: []
+    leaks: none
+T-004.3:
+  ac: AC-004.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    env: {COLUMNS: "200"}
+    note: a wide COLUMNS keeps the help body on its lines; T-004.1 shows the usage never wraps when COLUMNS is narrow
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --help
+      - python <repo>/prd-toolkit/scripts/prd_lint.py -h
+  expect:
+    output:
+      each_run:
+        exit: 0
+        stderr: ""
+        stdout_first_line: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]"
+        stdout_contains: ["Lint a PRD folder.", "skip the checks that need this machine's skills and linters"]
+    effects: []
+    errors: []
+    leaks: none
+T-004.4:
+  ac: AC-004.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids -1 <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_lint: --sample-tids N must be >= 0\n"
+    effects: []
+    errors: []
+    leaks: none
+T-005.1:
+  ac: AC-005.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create the empty directory <tmp>/empty]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py <tmp>/empty
+      - python <repo>/prd-toolkit/scripts/prd_lint.py <tmp>/missing   # does not exist
+  expect:
+    output:
+      run_1: {exit: 2, stdout: "", stderr: "prd_lint: <resolved tmp>/empty: no prd.md\n"}
+      run_2: {exit: 2, stdout: "", stderr: "prd_lint: <resolved tmp>/missing: no prd.md\n"}
+    effects: []
+    errors: []
+    leaks: none
+T-005.2:
+  ac: AC-005.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - rename docs/prd/orders/prd.md to PRD.md through an intermediate name (the file system may ignore case)
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_lint: <resolved tmp>/docs/prd/orders: no prd.md; found PRD.md; the file name is lowercase prd.md\n"
+    effects: []
+    errors: []
+    leaks: none
+T-005.3:
+  ac: AC-005.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create the directory <tmp>/p and, inside it, the directory <tmp>/p/prd.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py <tmp>/p
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_lint: <resolved tmp>/p: prd.md must be a file\n"
+    effects: []
+    errors: []
+    leaks: none
+T-006.1:
+  ac: AC-006.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, append the two bytes 0xff 0xfe to docs/prd/orders/prd.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr_single_line_starts: "prd_lint: internal error: UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position "
+      stderr_not_contains: Traceback
+    effects: []
+    errors: []
+    leaks: none
+T-006.2:
+  ac: AC-006.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - in the test process, register a rule named zz-crash with the decorator prdlint.registry.rule("zz-crash") whose function evaluates 1 / 0; remove it from prdlint.registry.RULES afterwards
+    call: prd_lint.main(["<tmp>/docs/prd/orders"]) in process (prd-toolkit/scripts on sys.path), capturing stdout and stderr
+  expect:
+    output:
+      return: 2
+      stdout: ""
+      stderr: "prd_lint: internal error in rule zz-crash: ZeroDivisionError: division by zero\n"
+    effects: []
+    errors: []
+    leaks: none
+T-006.3:
+  ac: AC-006.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, create the empty directory <tmp>/docs/prd/orders/notes.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: with the directory gone the folder lints clean (T-001.1), so the one line is the loader's
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/notes.md:0: sufficiency: a .md entry that is not a file\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-007.1:
+  ac: AC-007.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
+    note: the fixture holds ten cases; T-001.3 is the only one with level unit
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout_lines_any_order_exact:
+        - T-001.1 test-cases/import.yaml
+        - T-001.2 test-cases/import.yaml
+        - T-001.4 test-cases/import.yaml
+        - T-002.1 test-cases/api.yaml
+        - T-002.2 test-cases/api.yaml
+        - T-003.1 test-cases/api.yaml
+        - T-003.2 test-cases/api.yaml
+        - T-004.1 test-cases/nfr.yaml
+        - T-004.2 test-cases/nfr.yaml
+    effects: []
+    errors: []
+    leaks: none
+T-007.2:
+  ac: AC-007.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 3 docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 0 docs/prd/orders
+  expect:
+    output:
+      run_1: {exit: 0, stderr: "", stdout: "exactly 3 distinct lines, each one of the nine lines of T-007.1"}
+      run_2: {exit: 0, stderr: "", stdout: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-007.3:
+  ac: AC-007.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
+    note: without --sample-tids this folder prints the contracts-valid line of T-001.2 and exits 1
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout: "exactly the nine lines of T-007.1, in any order; no line contains contracts-valid"
+    effects: []
+    errors: []
+    leaks: none
+T-007.4:
+  ac: AC-007.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "in every docs/prd/orders/test-cases/*.yaml replace each `level: <word>` with `level: unit`"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 3 docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout: ""
+      stderr: "prd_lint: no non-unit T-ids to sample\n"
+    effects: []
+    errors: []
+    leaks: none
+T-007.5:
+  ac: AC-007.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/odd.yaml with the full text `T-009.1: plain text`, newline, `T-009.2: {level: Unit}`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
+    note: T-009.1 loads with no level (AC-011.4); T-009.2's level is not lowercase
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout: "exactly the nine lines of T-007.1, in any order; no line names T-009.1 or T-009.2"
+    effects: []
+    errors: []
+    leaks: none
+T-008.1:
+  ac: AC-008.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_none]
+  input:
+    setup:
+      - copy fixture lint-cli/orders to <tmp>/docs/prd/orders
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json; make sure PRD_LINT_CI is unset in the test's environment
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders          # proves the check can fail
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --ci docs/prd/orders
+    note: the registries rule (lint-registries) skips its installed-skill check when PRD_LINT_CI is 1; the fixture's prd.md line 65 is the required row superpowers:writing-plans
+  expect:
+    output:
+      run_1:
+        exit: 1
+        stdout_contains_line: "docs/prd/orders/prd.md:65: registries: required skill 'superpowers:writing-plans' is not installed; if it is built into Claude Code, mark the row 'recommended'"
+      run_2: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-008.2:
+  ac: AC-008.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_none]
+  input:
+    setup:
+      - copy fixture lint-cli/orders to <tmp>/docs/prd/orders
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json
+    cwd: <tmp>
+    env: {PRD_LINT_CI: "1"}
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: without --ci; T-008.1 run 1 shows the same folder fails its installed-skill check when the variable is unset
+  expect:
+    output: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-009.1:
+  ac: AC-009.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete docs/prd/orders/contracts/config.yaml]
+    cwd: <tmp>
+    env: {LC_ALL: C, LANG: C, PYTHONUTF8: "0", PYTHONCOERCECLOCALE: "0"}
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the finding's text, which holds an em dash, is the sections rule's (lint-structure); this case checks only that it is written as UTF-8
+  expect:
+    output:
+      exit: 1
+      stderr: ""
+      stdout_decoded_as_utf8_contains_line: "docs/prd/orders/prd.md:1: sections: 'contracts/config.yaml' is absent and section 1 has no 'Not applicable: `contracts/config.yaml` — reason' line"
+    effects: []
+    errors: []
+    leaks: none
+T-010.1:
+  ac: AC-010.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create a virtual environment with `python3 -m venv <tmp>/venv` (no packages installed)]
+    cwd: <tmp>
+    env: {LC_ALL: C.UTF-8}
+    command: <tmp>/venv/bin/python <repo>/prd-toolkit/scripts/prd_lint.py --list-rules
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_lint: missing Python package 'pyyaml'. Run with: uv run --script prd_lint.py …, or: pip install pyyaml sqlglot openapi-spec-validator\n"
+    effects: []
+    errors: []
+    leaks: none
+T-010.2:
+  ac: AC-010.2
+  level: integration
+  target: cli:prd_publish
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup: [create a virtual environment with `python3 -m venv <tmp>/venv` (no packages installed)]
+    cwd: <tmp>
+    env: {LC_ALL: C.UTF-8}
+    command: <tmp>/venv/bin/python <repo>/prd-toolkit/scripts/prd_publish.py --help
+    note: prd_publish.py's dependency header lists pyyaml, sqlglot, openapi-spec-validator and markdown-it-py
+  expect:
+    output:
+      exit: 2
+      stdout: ""
+      stderr: "prd_publish: missing Python package 'pyyaml'. Run with: uv run --script prd_publish.py …, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py\n"
+    effects: []
+    errors: []
+    leaks: none
+T-011.1:
+  ac: AC-011.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "append one line to <tmp>/docs/prd/orders/test-cases/api.yaml (67 lines, ending in a newline), so it becomes line 68: `T-002.1: {}`"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the first T-002.1 value is kept, so no other rule reports anything; a kept {} would draw sufficiency findings
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/test-cases/api.yaml:68: id-unique: duplicate key 'T-002.1' (first at line 1, again at line 68)\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-011.2:
+  ac: AC-011.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/broken.yaml with the full text `T-009.1: a: b` and a newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the problem text is PyYAML's ScannerError problem for a second mapping value on one line
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/test-cases/broken.yaml:1: sufficiency: YAML parse error: mapping values are not allowed here\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-011.3:
+  ac: AC-011.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/list.yaml with the full text `- a`, newline, `- b`, newline"
+      - write <tmp>/docs/prd/orders/test-cases/empty.yaml as an empty file (0 bytes)
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_exact: |
+        docs/prd/orders/test-cases/empty.yaml:1: sufficiency: top level must be a mapping
+        docs/prd/orders/test-cases/list.yaml:1: sufficiency: top level must be a mapping
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-011.4:
+  ac: AC-011.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/scalar.yaml with the full text `T-009.1: plain text` and a newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the test-cases-consistent line (a lint-testcases rule) names T-009.1, which only a loaded case gets, so it shows the case was loaded; other lines are not asserted. --sample-tids is no proof, since a case with no level is not sampled (AC-007.4)
+  expect:
+    output:
+      exit: 1
+      stdout_contains_lines:
+        - "docs/prd/orders/test-cases/scalar.yaml:1: sufficiency: T-009.1: a test case must be a mapping"
+        - "docs/prd/orders/test-cases/scalar.yaml:1: test-cases-consistent: T-009.1 is cited by no Tests line naming test-cases/scalar.yaml"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-011.5:
+  ac: AC-011.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/sub/c.yaml with the full text `T-002.1: {}`, newline, `T-002.1: {}`, newline"
+      - "write <tmp>/docs/prd/orders/test-cases/d.yml with the same full text"
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --sample-tids 99 docs/prd/orders
+    note: if either file were read, run 1 would print an id-unique duplicate-key line naming it
+  expect:
+    output:
+      run_1: {exit: 0, stdout: "", stderr: ""}
+      run_2: {exit: 0, stderr: "", stdout: "exactly the nine lines of T-007.1, in any order"}
+    effects: []
+    errors: []
+    leaks: none
+T-011.6:
+  ac: AC-011.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/test-cases/keys.yaml with the full text `? [a, b]`, newline, `: x`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/test-cases/keys.yaml:1: sufficiency: YAML parse error: found unhashable key\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-012.1:
+  ac: AC-012.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "append one line to <tmp>/docs/prd/orders/contracts/errors.yaml (40 lines, ending in a newline), so it becomes line 41: `FORBIDDEN: {}`"
+      - "write <tmp>/docs/prd/orders/contracts/extra/a.yaml with the full text `K: 1`, `L: 2`, `K: 3`, each line ending in a newline"
+      - "write <tmp>/docs/prd/orders/contracts/extra/b.yaml with the full text `- a` and a newline"
+      - "write <tmp>/docs/prd/orders/contracts/extra/c.yaml with the full text `k: v: w` and a newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: contracts/errors.yaml still loads as a mapping with its first FORBIDDEN value, so contracts-valid's own checks of it stay silent
+  expect:
+    output:
+      exit: 1
+      stdout_exact: |
+        docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)
+        docs/prd/orders/contracts/extra/a.yaml:3: contracts-valid: duplicate key 'K' (first at line 1, again at line 3)
+        docs/prd/orders/contracts/extra/b.yaml:1: contracts-valid: top level must be a mapping
+        docs/prd/orders/contracts/extra/c.yaml:1: contracts-valid: YAML parse error: mapping values are not allowed here
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-012.2:
+  ac: AC-012.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/contracts/fixtures/extra/dup.yaml with the full text `K: 1`, newline, `K: 2`, newline"
+      - write <tmp>/docs/prd/orders/contracts/fixtures/extra/notes.md as the two bytes 0xff 0xfe
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: read as contract YAML, dup.yaml would draw a contracts-valid duplicate-key line; read as a document, notes.md would end lint with an internal error (AC-006.1)
+  expect:
+    output: {exit: 0, stdout: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-012.3:
+  ac: AC-012.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "write <tmp>/docs/prd/orders/contracts/extra/keys.yaml with the full text `? [a, b]`, newline, `: x`, newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/contracts/extra/keys.yaml:1: contracts-valid: YAML parse error: found unhashable key\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-013.1:
+  ac: AC-013.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/plugins_none]
+  input:
+    setup: [set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      each_run:
+        exit: 0
+        stderr: ""
+        stdout_exact_lines:
+          - "document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
+          - "service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7."
+    effects: []
+    errors: []
+    leaks: none
+T-013.2:
+  ac: AC-013.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup:
+      - copy the folder <repo>/prd-toolkit/packs/document to <tmp>/plugin/prd-packs/document
+      - "write <tmp>/plugins.json as the JSON {\"version\": 2, \"plugins\": {\"demo@local\": [{\"installPath\": \"<resolved tmp>/plugin\"}]}}"
+      - set PRD_PLUGINS_FILE to <tmp>/plugins.json
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs
+    note: the copied pack keeps its name and version, so only the source tells the two document lines apart
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout_lines_in_this_relative_order:
+        - "document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
+        - "service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7."
+        - "document 1.0.0 (demo@local) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
+    effects: []
+    errors: []
+    leaks: none

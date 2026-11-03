@@ -168,7 +168,7 @@ def test_t_id_without_a_test_case(repo):
 
 def test_t_id_cited_by_no_test(repo):
     p = repo / "tests/test_cases.py"
-    p.write_text(p.read_text().replace('@prd T-001.1"""', 'no citation"""'))
+    p.write_text(p.read_text().replace('@' 'prd T-001.1"""', 'no citation"""'))
     commit(repo, "Drop a citation", "tests")
     base = start(repo, entry())
     put(repo, ledger(resolved(repo, fix())))
@@ -184,7 +184,7 @@ def test_still_known_failing_on_a_case(repo):
 
 def test_still_known_failing_on_a_tag(repo):
     p = repo / "tests/test_cases.py"
-    p.write_text(p.read_text().replace('@prd T-001.1"""', '@prd T-001.1  known-failing: E-002"""'))
+    p.write_text(p.read_text().replace('@' 'prd T-001.1"""', '@' 'prd T-001.1  known-failing: E-002"""'))
     commit(repo, "Tag a test", "tests")
     base = start(repo, entry())
     put(repo, ledger(resolved(repo, fix())))
@@ -193,7 +193,7 @@ def test_still_known_failing_on_a_tag(repo):
 
 def test_known_failing_on_another_entry_is_not_this_one(repo):
     p = repo / "tests/test_cases.py"
-    p.write_text(p.read_text().replace('@prd T-001.1"""', '@prd T-001.1 known-failing E-009"""'))
+    p.write_text(p.read_text().replace('@' 'prd T-001.1"""', '@' 'prd T-001.1 known-failing E-009"""'))
     commit(repo, "Tag a test", "tests")
     base = start(repo, entry())
     put(repo, ledger(resolved(repo, fix())))

@@ -28,8 +28,19 @@ def _display_root(root: Path) -> str:
         return root.as_posix()
 
 
+class _OneLineUsage(argparse.HelpFormatter):
+    """The usage line never wraps, whatever the terminal width (AC-004.1); the help text below it still does."""
+
+    def _format_usage(self, *args, **kwargs):
+        width, self._width = self._width, sys.maxsize
+        try:
+            return super()._format_usage(*args, **kwargs)
+        finally:
+            self._width = width
+
+
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.")
+    parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.", formatter_class=_OneLineUsage)
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--list-rules", action="store_true")
     parser.add_argument("--list-packs", action="store_true", help="print every pack on this machine, built-ins first")
@@ -72,10 +83,12 @@ def main(argv: list[str]) -> int:
 
     if args.sample_tids is not None:
         # unit cases stay with the builder (they read code); only the other levels are dry-run
-        cases = [t for t in prd.test_cases if str(t.data.get("level", "")).strip() != "unit"]
-        if not cases:
+        levels = [(t, str(t.data.get("level", "")).strip()) for t in prd.test_cases]
+        if all(lv == "unit" for _, lv in levels):
             print("prd_lint: no non-unit T-ids to sample", file=sys.stderr)
             return 1
+        # level names are lowercase only: a case with no level, or one such as `Unit`, is lint's test-level finding
+        cases = [t for t, lv in levels if lv and lv == lv.lower() and lv != "unit"]
         # each line names the test-case file, so the tester opens the right one
         for t in random.sample(cases, min(args.sample_tids, len(cases))):
             print(f"{t.id} {t.file}")

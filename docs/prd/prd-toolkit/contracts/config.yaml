@@ -1,0 +1,14 @@
+# Format: references/prd-format.md, "Contract YAML shapes".
+# Required content per setting: NAME, `type`, `default`, `environments` (a value per environment),
+# and `owner` (who may change it).
+settings:
+  PRD_LINT_CI:
+    type: string
+    default: unset
+    environments: {local: unset, production: unset}
+    owner: "Ivan Histand (Q-01, 2026-11-03); prd_lint.py --ci sets it to 1, and so does prd_error.py by default"
+  PRD_PLUGINS_FILE:
+    type: string
+    default: "~/.claude/plugins/installed_plugins.json"
+    environments: {local: unset, production: unset}
+    owner: "Ivan Histand (2026-11-03); tests set it to a fixture file, and a user may point it at another installed-plugins file"

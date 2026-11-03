@@ -58,7 +58,7 @@ def test_uncited_tid_fires_t_implemented(tmp_path):
 
 def test_citation_prefix_does_not_count(tmp_path):
     prd = build(tmp_path)
-    (prd.parents[2] / "tests/test_notes.py").write_text('def test_x():\n    """@prd T-001.10"""\n', encoding="utf-8")
+    (prd.parents[2] / "tests/test_notes.py").write_text('def test_x():\n    """@' 'prd T-001.10"""\n', encoding="utf-8")
     f = trace_rules(prd)
     assert [x.message.split()[0] for x in f if x.rule == "t-implemented"] == ["T-001.1"]
     assert "T-001.10" in " ".join(x.message for x in f if x.rule == "test-cites-live")
@@ -67,7 +67,7 @@ def test_citation_prefix_does_not_count(tmp_path):
 def test_citation_of_unknown_or_removed_tid_fires_test_cites_live(tmp_path):
     feats = {"notes": block("FR-001", "live", ["T-001.1"]) + block("FR-002", "removed", ["T-002.1"])}
     prd = build(tmp_path, features=feats)
-    (prd.parents[2] / "tests/test_extra.py").write_text('"""@prd T-002.1 @prd T-009.9"""\n', encoding="utf-8")
+    (prd.parents[2] / "tests/test_extra.py").write_text('"""@' 'prd T-002.1 @' 'prd T-009.9"""\n', encoding="utf-8")
     f = [x for x in trace_rules(prd) if x.rule == "test-cites-live"]
     assert len(f) == 2
     msgs = " ".join(x.message for x in f)
@@ -212,7 +212,7 @@ def test_a_leftover_dry_run_directory_does_not_count(tmp_path):
     prd = build(tmp_path, features={"notes": block("FR-001", "as-built", ["T-001.1", "T-001.2"])})
     leftover = prd.parents[2] / "tests/.prd-dry-run-20261030T120000/nested"
     leftover.mkdir(parents=True)
-    (leftover / "test_t0012.py").write_text('def test_x():\n    """@prd T-001.2"""\n', encoding="utf-8")
+    (leftover / "test_t0012.py").write_text('def test_x():\n    """@' 'prd T-001.2"""\n', encoding="utf-8")
     assert "T-001.2" not in trace.citations(model.load(prd), model.repo_root(prd))
     f = trace_rules(prd)
     assert rules(f) == ["t-implemented"] and "T-001.2" in f[0].message
@@ -242,7 +242,7 @@ def gated(tmp_path: Path, features: dict[str, str]) -> Path:
     prd = build(tmp_path, features=features)
     t = prd / "testing.md"
     t.write_text(t.read_text(encoding="utf-8").replace("# Testing\n\n", "# Testing\n\n" + LEVELS), encoding="utf-8")
-    (prd.parents[2] / "tests/test_more.py").write_text('def test_y():\n    """@prd T-001.2"""\n', encoding="utf-8")
+    (prd.parents[2] / "tests/test_more.py").write_text('def test_y():\n    """@' 'prd T-001.2"""\n', encoding="utf-8")
     return prd
 
 
