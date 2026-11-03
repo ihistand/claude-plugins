@@ -246,10 +246,29 @@ def test_a_prose_word_on_traces_names_nothing(tmp_path):
     assert not [i for i in got if "store" in i]
 
 
-def test_bare_dotted_traces_names_nothing(tmp_path):
+def test_bare_dotted_traces_names_its_identifier(tmp_path):
     _, prd = make_confirm_repo(tmp_path)
     rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: settings.NOTES_LIMIT")
-    assert "config.yaml:NOTES_LIMIT.owner" not in ids(prd)
+    assert "config.yaml:NOTES_LIMIT.owner" in ids(prd)
+
+
+def test_unbackticked_identifier_on_traces_names_the_key(tmp_path):
+    # 0.7.1 proof F-1: FR-008's Traces named its setting without backticks, and the marker was never served
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store",
+            "Traces: cli:notes; setting NOTES_LIMIT (contracts/config.yaml)")
+    got = ids(prd)
+    assert "config.yaml:NOTES_LIMIT.owner" in got
+    assert not [i for i in got if "OTHER" in i]
+
+
+def test_plain_prose_words_on_traces_name_nothing(tmp_path):
+    _, prd = make_confirm_repo(tmp_path)
+    rewrite(prd, "features/notes.md", "Traces: `NOTES_LIMIT` caps the store", "Traces: Store setting, see Contracts")
+    (prd / "contracts/config.yaml").write_text(
+        'settings:\n  Store:\n    owner: "[NEEDS CLARIFICATION: a]"\n  setting:\n    owner: "[NEEDS CLARIFICATION: b]"\n'
+        '  Contracts:\n    owner: "[NEEDS CLARIFICATION: c]"\n')
+    assert [i for i in ids(prd) if i.startswith("config.yaml:")] == []
 
 
 def test_extensionless_detected_file_is_cited(tmp_path):

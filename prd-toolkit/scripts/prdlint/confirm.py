@@ -157,14 +157,23 @@ def _walk(node: Any, path: list[str], start: int | None, named: set[str], hits: 
             hits.append((path, start, m.group(0), line, n))
 
 
+def _identifier(word: str) -> bool:
+    """A word outside backticks names a key only when it is shaped like one: NOTES_LIMIT, v2, maxSize, API."""
+    return bool(re.search(r"[_\d]|[a-z][A-Z]", word)) or (len(word) > 1 and word.isupper())
+
+
 def _named(prd: Prd, area: str, blocks: list[ReqBlock]) -> set[str]:
-    """Contract keys the area names: backticked spans on its Traces lines, and its test cases' targets."""
+    """Contract keys the area names: backticked spans and identifier-shaped words on its Traces lines,
+    and its test cases' targets. A plain prose word (store, Setting) names nothing."""
     words: set[str] = set()
     for b in blocks:
         for _, text in _field_lines(b.lines, "Traces"):
-            for span in re.findall(r"`([^`]+)`", text):  # a prose word names nothing
+            for span in re.findall(r"`([^`]+)`", text):
                 for tok in re.findall(r"[A-Za-z_][\w.-]*", span):
                     words.add(tok.strip(".").rsplit(".", 1)[-1])  # `settings.KEY` names KEY
+            for tok in re.findall(r"[A-Za-z_]\w*", re.sub(r"`[^`]*`", " ", text)):
+                if _identifier(tok):
+                    words.add(tok)
     for tc in prd.test_cases:
         target = tc.data.get("target") if isinstance(tc.data, dict) else None
         if tc.file == f"test-cases/{area}.yaml" and isinstance(target, str):
@@ -379,7 +388,7 @@ class _State:
                     dirfd = None
             try:
                 answers = load_answers(self.path).get("answers")
-                data = {"prd": self.prd.frontmatter.get("project", ""), "area": self.area,
+                data = {"prd": self.prd.frontmatter.get("prd", ""), "area": self.area,
                         "commit": self.head, "answers": answers if isinstance(answers, dict) else {}}
                 apply(data["answers"])
                 save_answers(self.path, data)
