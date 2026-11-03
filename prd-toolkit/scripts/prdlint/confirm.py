@@ -263,6 +263,8 @@ REQUIRES_TEXT = {"correct", "bug", "ask", "answer"}  # `correct` is also satisfi
 ALLOWED = {"requirement": {"confirm", "correct", "bug", "ask"}, "bug": {"bug", "intended", "ask"},
            "question": {"intended", "fix", "answer"}, "marker": {"answer"}}
 MAX_BODY = 1024 * 1024
+CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
+       "base-uri 'none'; form-action 'none'")
 EXCLUDE_LINE = "/.prd-confirm-*.json"
 
 
@@ -401,6 +403,8 @@ class _State:
         text = (text or "").strip()
         if acs is not None and not (isinstance(acs, dict) and all(isinstance(v, str) for v in acs.values())):
             raise _Bad(400, "acs must map an AC ID to text")
+        if acs is not None and decision != "correct":
+            raise _Bad(400, "acs is allowed only with correct")
         known = {a for a, _ in item.acs}
         for k in acs or {}:
             if k not in known:
@@ -417,6 +421,8 @@ class _State:
         if acs:
             entry["acs"] = acs
         entry["fingerprint"] = item.fingerprint
+        entry["where"] = item.where  # with `served`, how the session finds the item again
+        entry["served"] = item.text
         entry["at"] = datetime.now(timezone.utc).isoformat()
         return self.change(lambda a: a.__setitem__(item.id, entry))
 
@@ -452,9 +458,11 @@ def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *args) -> None:  # no per-request log
             pass
 
-        def _send(self, status: int, body: bytes, ctype: str) -> None:
+        def _send(self, status: int, body: bytes, ctype: str, csp: bool = False) -> None:
             self.send_response(status)
             self.send_header("Content-Type", ctype)
+            if csp:
+                self.send_header("Content-Security-Policy", CSP)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -504,7 +512,7 @@ def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
 
         def _route(self, method: str, route: str) -> None:
             if method == "GET" and route == "/":
-                self._send(200, state.page.encode("utf-8"), "text/html; charset=utf-8")
+                self._send(200, state.page.encode("utf-8"), "text/html; charset=utf-8", csp=True)
             elif method == "GET" and route == "/items":
                 self._json(200, state.listing())
             elif method == "POST" and route in ("/answer", "/undo"):

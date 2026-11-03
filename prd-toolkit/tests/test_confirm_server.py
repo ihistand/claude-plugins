@@ -425,3 +425,43 @@ def test_ctrl_c_returns_3(tmp_path, monkeypatch):
         assert confirm.run(server) == 3
     finally:
         server.server_close()
+
+
+# ---- final-review fix ----
+
+def test_acs_only_with_correct(live):
+    lv = live()
+    for decision in ("confirm", "bug", "ask"):
+        body = {"id": "FR-001", "decision": decision, "text": "t", "acs": {"AC-001.1": "new"}}
+        status, out = lv.json("/answer", body)
+        assert status == 400 and "error" in out, decision
+    assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "acs": {}})[0] == 400
+    assert not lv.file.exists()
+
+
+def test_answer_records_where_and_served(live):
+    lv = live()
+    marker = "config.yaml:NOTES_LIMIT.owner"
+    assert lv.json("/answer", {"id": marker, "decision": "answer", "text": "ops"})[0] == 200
+    assert lv.json("/answer", {"id": "FR-001", "decision": "confirm"})[0] == 200
+    saved = json.loads(lv.file.read_text())["answers"]
+    items = {i.id: i for i in lv.items}
+    for iid in (marker, "FR-001"):
+        assert saved[iid]["where"] == items[iid].where and saved[iid]["served"] == items[iid].text, iid
+    assert saved[marker]["served"] == 'owner: "[NEEDS CLARIFICATION: who owns the limit]"'
+    assert saved[marker]["where"] == "contracts/config.yaml NOTES_LIMIT.owner"
+
+
+def test_items_carry_related(live):
+    lv = live()
+    listing = lv.json("/items")[1]
+    rel = {i["id"]: i["related"] for i in listing["items"]}
+    assert rel["FR-002"] == ["E-001"] and rel["FR-001"] == [] and rel["E-001"] == []
+
+
+def test_page_sends_a_content_security_policy(live):
+    lv = live()
+    with urllib.request.urlopen(f"{lv.base}/?token={lv.token}", timeout=10) as r:
+        assert r.headers["Content-Security-Policy"] == (
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'")
