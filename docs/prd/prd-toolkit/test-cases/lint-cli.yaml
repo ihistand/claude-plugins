@@ -740,7 +740,6 @@ T-012.2:
   target: cli:prd_lint
   environment: local
   identity: none
-  known-failing: E-004
   preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
   input:
     setup:
