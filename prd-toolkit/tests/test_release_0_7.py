@@ -40,7 +40,11 @@ def test_versions():
 def test_readme_version_spec_link_and_rules():
     assert re.search(r"Version \d+\.\d+\.\d+\.", README)
     assert f"(../{SPEC_07})" in README and (REPO / SPEC_07).is_file()
-    assert "a 36-rule linter" in flat(README) and "prints the 36 rules" in flat(README)
+    import prdlint.rules  # noqa: F401
+    from prdlint.registry import RULES
+
+    n = len(RULES)
+    assert f"a {n}-rule linter" in flat(README) and f"prints the {n} rules" in flat(README)
     assert "- **0.7.0:**" in README
 
 
