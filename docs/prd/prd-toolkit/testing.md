@@ -44,6 +44,9 @@
 
 | Fixture | Creates | Load | Teardown |
 |---|---|---|---|
+| lint-cli/orders | the orders PRD folder (slug `orders`), which lints clean with `lint-cli/plugins_superpowers`; one YAML file mapping each relative path to its full text | write each key's text to `<tmp>/docs/prd/orders/<key>`, creating parent folders | none: the test's tmp_path is discarded |
+| lint-cli/plugins_superpowers | an installed-plugins file that lists `superpowers@superpowers-marketplace` with no installPath | set `PRD_PLUGINS_FILE` to the fixture file's absolute path for the run | restore `PRD_PLUGINS_FILE` (pytest monkeypatch) |
+| lint-cli/plugins_none | an installed-plugins file with no plugin | set `PRD_PLUGINS_FILE` to the fixture file's absolute path for the run | restore `PRD_PLUGINS_FILE` (pytest monkeypatch) |
 
 ## Sign-offs
 
