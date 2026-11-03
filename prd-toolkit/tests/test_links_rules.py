@@ -47,7 +47,7 @@ def test_baseline_is_clean(prd):
 def test_rule_count():
     import prdlint.rules  # noqa: F401
 
-    assert len(RULES) == 36 and set(RULES4) <= set(RULES)
+    assert len(RULES) == 37 and set(RULES4) <= set(RULES)
 
 
 # ---- links-format

@@ -2,6 +2,7 @@
 import re
 from collections.abc import Iterator
 
+from .. import languages
 from ..deps import require
 from ..findings import Finding
 from ..markdown import mask_quoted, strip_code, tables
@@ -107,6 +108,8 @@ def frontmatter(prd: Prd):
         "owner": (lambda v: bool(v), "must not be empty"),
         "updated": (lambda v: re.fullmatch(r"\d{4}-\d{2}-\d{2}", v), "must be YYYY-MM-DD"),
     }
+    if "language" in fm:
+        checks["language"] = (lambda v: re.fullmatch(r"[a-z]{2,3}", v), "must match ^[a-z]{2,3}$")
     for key, (ok, msg) in checks.items():
         if key not in fm:
             yield f(key, f"missing key '{key}'")
@@ -122,6 +125,13 @@ def frontmatter(prd: Prd):
                 sqlglot.Dialect.get_or_raise(dialect)
             except Exception as exc:
                 yield f("sql-dialect", f"'sql-dialect: {dialect}' is not a sqlglot dialect ({exc})")
+
+
+@rule("language-table")
+def language_table(prd: Prd):
+    lang = languages.code(prd)
+    if re.fullmatch(r"[a-z]{2,3}", lang) and languages.load(lang) is None:
+        yield Finding("prd.md", _fm_line(prd, "language"), "language-table", f"language '{lang}' has no table")
 
 
 @rule("sections")
@@ -241,7 +251,6 @@ def placeholder(prd: Prd):
                 yield Finding(rel, n, "placeholder", f"placeholder '{m.group(0)}' in a YAML value")
 
 
-_VAGUE = re.compile(r"\b(fast|secure|scalable|robust|intuitive|seamless|user-friendly)\b", re.I)
 _ID = re.compile(r"\b(?:AC|FR|NFR|UJ|T)-\d+(?:\.\d+)?\b")
 
 
@@ -262,8 +271,10 @@ def _removed_ac_lines(b) -> set[int]:
 
 @rule("vague-word")
 def vague_word(prd: Prd):
+    vague = languages.for_prd(prd).vague
+
     def check(file, n, text):
-        m = _VAGUE.search(text)
+        m = vague.search(text)
         if m and not re.search(r"\d", _ID.sub("", text)):
             return Finding(file, n, "vague-word", f"'{m.group(1)}' with no measurable number on the line")
 

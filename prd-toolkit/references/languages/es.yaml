@@ -1,0 +1,22 @@
+language: es
+ears:
+  openers: [Cuando, Mientras, Si, Donde]
+  ubiquitous: '^(El|La|Los|Las) \S.*? deberán?\b'
+  ubiquitous_hint: "'El/La/Los/Las <cosa> deberá'"
+  modal: '\bdeberán?\b'
+  modal_word: deberá
+vague:
+  - rápido
+  - rápida
+  - seguro
+  - segura
+  - escalable
+  - robusto
+  - robusta
+  - intuitivo
+  - intuitiva
+  - fluido
+  - fluida
+  - amigable
+  - fácil de usar
+labels: {}

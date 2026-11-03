@@ -1,0 +1,16 @@
+language: en
+ears:
+  openers: [When, While, If, Where]
+  ubiquitous: '^The \S.*? shall\b'
+  ubiquitous_hint: "'The <thing> shall'"
+  modal: '\bshall\b'
+  modal_word: shall
+vague:
+  - fast
+  - secure
+  - scalable
+  - robust
+  - intuitive
+  - seamless
+  - user-friendly
+labels: {}
