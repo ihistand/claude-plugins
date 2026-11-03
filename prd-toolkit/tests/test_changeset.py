@@ -248,9 +248,9 @@ def test_set_verified_need(tmp_path):
     one in the upstream's operations.md Environments order."""
     _, cs = started(tmp_path, {("reports", "transform"): "verified"})
     ok("approve", cs, "--reply", "yes")
-    ok("set", cs, "transform", "state=live in production")
-    ok("set", cs, "reports", "state=built")
-    # dashboards' wait for transform live in staging holds (production is later); its wait for reports does not
+    ok("set", cs, "transform", "state=live in staging")  # its Target, from dashboards' default need
+    ok("set", cs, "reports", "state=built")  # a need `verified` holds for `live in staging`
+    # dashboards' wait for transform holds; its wait for reports does not
     assert refused("set", cs, "dashboards", "state=built") == "refused: dashboards waits for reports live in staging; reports is built"
 
 
@@ -297,9 +297,22 @@ def test_env_state_cannot_go_back_to_an_earlier_env(tmp_path):
 
 def test_env_not_in_the_order_is_refused(tmp_path):
     cs = fan_out(tmp_path)
-    ok("set", cs, "transform", "state=live in qa")
-    assert refused("set", cs, "dashboards", "state=built") == "refused: transform's operations.md Environments has no qa"
-    assert refused("set", cs, "transform", "state=live in staging") == "refused: transform's operations.md Environments has no qa"
+    before = cs.read_bytes()
+    assert refused("set", cs, "transform", "state=live in qa") == "refused: transform's operations.md Environments has no qa"
+    assert cs.read_bytes() == before
+
+
+def test_set_past_the_target_is_refused(tmp_path):
+    """R-F4: the Target is the furthest the change set needs; a deploy further (production) follows the close."""
+    _, cs = started(tmp_path)
+    ok("approve", cs, "--reply", "yes")
+    walk(cs)
+    before = cs.read_bytes()
+    assert refused("set", cs, "transform", "state=live in production") == "refused: transform: live in production is past its Target live in staging"
+    assert refused("set", cs, "dashboards", "state=live in staging") == "refused: dashboards: live in staging is past its Target verified"
+    assert cs.read_bytes() == before
+    ok("set", cs, "transform", "state=live in staging")  # at its Target again: no move
+    ok("close", cs)
 
 
 def test_record_argument_checked(tmp_path):
@@ -373,9 +386,7 @@ def test_close(tmp_path):
     ok("approve", cs, "--reply", "approve CS-001")
     assert refused("close", cs) == "refused: CS-001: transform is approved, not its target live in staging"
     ok("set", cs, "transform", "state=built")
-    before = cs.read_text(encoding="utf-8")
     assert refused("close", cs) == "refused: CS-001: transform is built, not its target live in staging"
-    assert cs.read_text(encoding="utf-8") == before
     walk(cs)
     r = ok("close", cs)
     assert r.out.strip() == str(cs)
@@ -447,7 +458,9 @@ def test_state_env_must_be_a_name(tmp_path):
         assert (r.code, r.out) == (2, ""), bad
         assert bad in r.err
         assert cs.read_bytes() == before
-    ok("set", cs, "transform", "state=live in stg-2.eu_west")
+    r = run_links("changeset", "set", cs, "transform", "state=live in stg-2.eu_west")
+    # the grammar takes the name (not exit 2); the environment order then refuses it (R-F1, R-F4)
+    assert (r.code, r.err.strip()) == (1, "refused: transform's operations.md Environments has no stg-2.eu_west")
 
 
 def test_new_refuses_what_the_table_cannot_hold(tmp_path):

@@ -79,6 +79,17 @@ def holds(state: str, need: str, envs, prd: str) -> bool:
     return _env_at(order, state.removeprefix(_LIVE), prd) >= _env_at(order, need.removeprefix(_LIVE), prd)
 
 
+def _past(state: str, target: str, envs, prd: str) -> bool:
+    """R-F4: `state` is beyond `target` (the furthest the change set needs): a higher rank, or a `live in` environment
+    after the Target's in `prd`'s Environments order (`envs()`, read only when both are `live in`)."""
+    if rank(state) != rank(target):
+        return rank(state) > rank(target)
+    if not state.startswith(_LIVE):
+        return False
+    order = envs()
+    return _env_at(order, state.removeprefix(_LIVE), prd) > _env_at(order, target.removeprefix(_LIVE), prd)
+
+
 def default_needs(prd: model.Prd) -> str:
     """An empty Needs: `live in` the Environment of the first deploy-gate level in testing.md Levels order, else `verified`."""
     for level in sorted(prd.testing.levels, key=prd.testing.levels.get):
@@ -328,7 +339,8 @@ def _env_order(path: Path, cs: model.ChangeSet, prd: str):
 
 
 def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
-    """Set Branch, Version, IDs or State of row `prd`; a State moves Status to running."""
+    """Set Branch, Version, IDs or State of row `prd`; a State moves Status to running. A State never goes back,
+    never past the row's Target (R-F4), and never skips its Waits for."""
     parsed = []
     for a in assignments:
         key, eq, value = a.partition("=")
@@ -364,8 +376,11 @@ def set_fields(record: str | Path, prd: str, assignments: list[str]) -> Path:
                 raise Refused(f"{cs.id} is not approved yet")
             if rank(value) < rank(row.state):
                 raise Refused(f"{prd} cannot go back from {row.state} to {value}")
-            if value.startswith(_LIVE) and row.state.startswith(_LIVE) and not holds(value, row.state, _env_order(path, cs, prd), prd):
+            own = _env_order(path, cs, prd)
+            if value.startswith(_LIVE) and row.state.startswith(_LIVE) and not holds(value, row.state, own, prd):
                 raise Refused(f"{prd}: {value} is before {row.state}")
+            if _past(value, row.target, own, prd):
+                raise Refused(f"{prd}: {value} is past its Target {row.target}")
             if rank(value) >= rank("built") and row.waits_for != NONE:
                 for wait in row.waits_for.split(";"):
                     up, _, need = wait.strip().partition(" ")

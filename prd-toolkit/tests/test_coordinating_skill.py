@@ -234,6 +234,8 @@ def test_step_4_build_in_order():
     assert ("`<prd> live in <env>` when it is `live in` that environment or one after it in that member's "
             "`operations.md` Environments table") in four
     assert "`live in` an earlier environment than its State is refused" in four
+    # R-F4: never past the Target; a further deploy follows the close, in Merge order
+    assert "A `set` past the row's Target is refused too" in four
     assert four.index("/prd-build") < four.index("prd_links.py sync --ref <branch>")  # the build runs it (Important 3)
     assert "/prd-deploy --until <env>" in four and "deploying-from-prds" in four
     assert "prd_links.py changeset set" in four and "state=" in four

@@ -27,6 +27,7 @@
 > - §8 (proof, R-13a): the deploy pre-flight lets a drift line through when an open change-set record (Status not `done` or `abandoned`, under the PRD's own `changes/` or in a member repository its links point to, as **Where to enter** finds it) lists both this PRD and the drifting side as members, and the run's report prints each such line as `drift allowed by <start-prd>/CS-nnn: <line>`. Any other drift still refuses. `prd_links.py check` is unchanged, so CI still reports it; production deploys follow the merges in Merge order, when the consumer's default branch holds the re-lock.
 > - §6 (final review, R-F1): an environment wait holds for that environment or any later one in the upstream member's `operations.md` Environments order (read through the row's Location); a wait for `verified` holds for `verified` or any `live in`. `set` refuses a State `live in <e1>` after `live in <e2>` when e1 is before e2 (`<prd>: live in <e1> is before live in <e2>`), and an environment missing from the order by name. Before, a wait held only for its exact environment, so an upstream already `live in production` blocked a downstream waiting for `live in staging` for good.
 > - §8 (final review, R-F2): `check --ci` applies R-13a's let-through, sharing the pre-flight's open-record lookup: a drift line between two members of an open record (Status not `done` or `abandoned`, visible from the checkout) prints as `drift allowed by <start-prd>/CS-nnn: <line>` and does not count toward exit 1. A plain `check` is unchanged. This revises R-13a's "`prd_links.py check` is unchanged, so CI still reports it": during an open change set each member's CI reported the other as drift, so the upstream's merge request was red by construction.
+> - §6 (final review, R-F4): `changeset set` refuses a State past the row's Target (`<prd>: <state> is past its Target <target>`), by the same order as R-F1 (`verified` < `live in <e1>` < `live in <e2>` in that member's `operations.md` Environments order). The Target is the furthest the change set needs; a further deploy (production) follows the close, in Merge order. Without it, a row set past its Target could never reach `close`, since R-F1 refuses the move back.
 
 ## 1. Scope
 
@@ -225,12 +226,14 @@ Approval: 2026-11-03, "<the user's reply, quoted>"
   states the member's `operations.md` Environments order, read through the row's Location: a wait
   for `live in <e1>` holds for `live in <e2>` when e2 is e1 or after it, a wait for `verified` holds
   for `verified` or any `live in`, and an environment missing from that table is refused by name.
+  `set` never moves a State past its Target, in that same order: the Target is the furthest the
+  change set needs, and a further deploy (production) follows the close, in Merge order (step 6).
 - **State:** the row's place in that order. A stop is recorded on Status and in Log; the row keeps its State.
 
 | `changeset` subcommand | Does |
 |---|---|
 | `new <PRD> --title <text> --member <location>…` | Numbers the record, reads every member's `links.md`, computes Order, Waits for and Target, writes `Status: proposed` |
-| `set <record> <prd> <field>=<value>…` | Sets Branch, Version, IDs or State; refuses a State that goes backward (`live in` an earlier environment among them) or skips its Waits for |
+| `set <record> <prd> <field>=<value>…` | Sets Branch, Version, IDs or State; refuses a State that goes backward (`live in` an earlier environment among them), goes past the row's Target, or skips its Waits for |
 | `approve <record> --reply <text> [--amendment]` | Quotes the reply on the Approval line (an amendment adds a dated line); moves every `proposed` row to `approved` |
 | `stop <record> <prd> <reason>`, `log <record> <text>` | Records a stop (Status `stopped: <prd>: <reason>`, and Log) or a line in Log; `set` of any State moves Status back to `running` |
 | `close <record>` | Refuses unless every row's State equals its Target; writes `Status: done` and a **Merge order** list, upstream first |

@@ -63,7 +63,7 @@ inside double quotes a backtick or a `$` runs as shell.
 | Exit | Means | Next |
 |---|---|---|
 | 0 | done or clean | `changeset new` printed `<record>`; `impact` printed no `consumer` line: go on |
-| 1 | refused, drift, or a cited item changed | a `refused:` line on stderr (a `set` that goes backward or skips its Waits for, a `close` before every Target): report it, and never work around it with another command or a hand edit. `impact` prints `consumer <prd>: <item>` lines instead: step 1 |
+| 1 | refused, drift, or a cited item changed | a `refused:` line on stderr (a `set` that goes backward, past its Target or skips its Waits for, a `close` before every Target): report it, and never work around it with another command or a hand edit. `impact` prints `consumer <prd>: <item>` lines instead: step 1 |
 | 2 | usage | a command you mistyped: fix it and run it again |
 | 3 | unreachable (`check`, `impact`) | `consumer <prd>: unreachable`: step 1's unreachable consumer |
 
@@ -196,6 +196,8 @@ Text with no record is a new change set: step 1.
 
    `changeset set` refuses a State that skips its Waits for: the row's upstream has not reached
    it, and the build waits. A `set` to `live in` an earlier environment than its State is refused.
+   A `set` past the row's Target is refused too: the Target is the furthest the change set needs,
+   and a further deploy (production) follows the close, in Merge order (step 6).
    An upstream that is `verified` is not `live in staging`, and "basically done" is not a State. A
    build of a member other than this session's repository stops here, as **One record drives a
    change set** says.
