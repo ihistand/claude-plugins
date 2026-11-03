@@ -2,31 +2,27 @@
 
 > **Date:** 2026-11-02
 > **Spec:** `2026-11-02-prd-toolkit-0.7-design.md`, §13 (Q1 to Q6), with §6 (its **Sessions** paragraph) and the
-> Revisions block
-> **Result:** **stopped at Q3 on F-3, which needs a design decision** (NEEDS_CONTEXT). Q1, Q4 and Q6 pass. Q5's
-> mechanism passes on a provisional start state. Q2 and Q3 hold up to greet's staging deploy, which the deploy
-> pre-flight refuses inside every change set whose downstream waits for `live in <env>`.
+> Revisions block (R-13a added by this run)
+> **Result:** **pass on every pass line, Q1 to Q6**, on the third attempt. The proof resumed in place after F-3
+> was fixed. Three toolkit defects found on the way (F-1 to F-3) were fixed on the branch.
 > - **Q1.** `add` wrote both sides, `sync` copied only the `greet` key, and lint and `check` exit 0 in both
 >   repositories, after the upstream's Consumers row went through its own `/prd-change` in greet (R-2).
-> - **Q2.** `impact` named the client. CS-001 was written, both PRDs were edited, and both were approved by one
->   reply. greet was built and `verified`, with a resume per member. Then **F-3**: greet's
->   `/prd-deploy --until staging` was refused before step 1 (`refused: prd_links check found drift: greet-client
->   cli:greet`). The client build, the close and the Merge order were not reached.
-> - **Q3.** A fresh session resumed from the record alone and went straight to greet's staging deploy, which F-3
->   refused.
+> - **Q2.** `impact` named the client. CS-001 was written, and both PRDs were edited and approved by one reply.
+>   greet was built and deployed to staging. The client was synced and built. The client's first build stopped on
+>   a contradiction in its approved PRD, which an amendment, approved alone, settled. `close` wrote the Merge
+>   order with every row at its Target. Each member's agent steps ran in a session started in its own root.
+> - **Q3.** After Q2's greet session ended at `verified`, a fresh session resumed from the record alone and ran
+>   greet's staging deploy (after F-3; the first try, Q3a, was refused and found F-3).
 > - **Q4.** `check` exits 1 in both repositories. With greet moved away, the client's `check` exits 3, and its
 >   `prd-lint` job's commands all exit 0.
-> - **Q5 (provisional).** On greet's change-set branch at Q3's start (built, not deployed), squash-merged into
->   `main`: the client's `check` flags `orphaned lock` (exit 1), and `sync` clears it (`check` exit 0). Rerun it
->   on Q2's closed branch once F-3 is settled.
+> - **Q5.** greet's change-set branch from Q2's close, squash-merged into `main`: the client's `check` flagged
+>   `orphaned lock`, and `sync` cleared it.
 > - **Q6.** With the client clone moved away, `impact` exits 3, and the change stops at the hand-off without
 >   skipping the client.
 >
-> Three toolkit defects were found. F-1 and F-2 are fixed on the branch. F-3 is open.
->
 > **Scope.** Two sibling scratch repositories, `<scratch>/greet` and `<scratch>/greet-client`, built by
 > `link_repo.py <scratch>/greet-client unlinked --upstream <scratch>/greet`. Neither has a remote, and nothing
-> was pushed. Deploys go only to local `.deploy/<env>` installs.
+> was pushed. Deploys went only to greet's local `.deploy/staging`.
 
 **Attempts.**
 - **Attempt 1** (`<scratch>/attempt1/`, session Q1a) stopped at Q1's dry run on two gaps in the scaffold PRD:
@@ -35,27 +31,31 @@
 
   This is F-1, fixed in f6f2607. Q1 reran from a fresh scaffold.
 - **Attempt 2** ran Q1 to its pass (sessions Q1a to Q1e, kept as the Q1 proof), then Q2 to step 3 (sessions in
-  `<scratch>/attempt2/`). That record wrote greet's row as `1.1.0`, with no arrow: F-2, fixed in 24273b1.
-- **Attempt 3** restarted Q2 from the after-Q1 state, with the toolkit re-vendored (R-4). It ran through Q3a,
-  which stopped on F-3. Q4, Q5 and Q6 ran on their own copies.
+  `<scratch>/attempt2/`). That record wrote greet's row Version as `1.1.0`, with no `→`: F-2, fixed in 24273b1.
+- **Attempt 3** restarted Q2 from the after-Q1 state, with the toolkit re-vendored (R-4).
+  - Q3a was refused at greet's staging deploy: F-3, ruled R-13a and fixed in f0b023c.
+  - The proof then resumed in place from Q3's start state, re-vendored again (R-5): Q3b, then Q2f to Q2h.
+  - Q4, Q5 and Q6 ran on their own copies.
 - All repositories, transcripts and state tarballs are kept under `<scratch>/`.
 
 ## Run setup
 
 - **Start state.** `python3 -B prd-toolkit/evals/scaffolds/link_repo.py <scratch>/greet-client unlinked --upstream
-  <scratch>/greet`, with exit 0. `git remote -v` prints nothing in either repository. The client's Location for
-  greet is `../greet`.
+  <scratch>/greet`, with exit 0. `git remote -v` prints nothing in either repository, before and after the run.
+  The client's Location for greet is `../greet`.
 - **Sessions.**
   - Headless `claude -p` (Claude Code 2.1.316), `--model sonnet`, `--output-format stream-json --verbose`.
   - `--plugin-dir` is this branch's `prd-toolkit`, with the installed copy disabled.
   - The allowed tools are `Read Glob Grep Write Edit Bash Agent Skill`, with no permission-bypass flag.
-  - Each init event shows `prd-toolkit@inline` 0.7.0. Commands use the `prd-toolkit:<command>` form (O-a).
+  - Each init event shows `prd-toolkit@inline` 0.7.0, and its slash-command list holds
+    `prd-toolkit:prd-change-set`. Commands use the `prd-toolkit:<command>` form (O-a).
   - One session ran at a time, each from the repository its step names (R-11c).
 - **Files.**
   - Each session's prompt, stream and stderr: `<scratch>/proof/<id>.prompt.md`, `.jsonl` and `.stderr`.
   - `<id>.resume` names the session a reply resumed (R-1).
-  - State tarballs: `start-unlinked.tgz`, `after-q1.tgz`, `q2-start.tgz`, `q2-approved.tgz` and `q3-start.tgz`.
-  - Full-suite logs: `suite-F1.txt` and `suite-F2.txt`.
+  - State tarballs: `start-unlinked`, `after-q1`, `q2-start`, `q2-approved`, `q3-start`, `q3b-start`,
+    `q2f-start`, `q2g-start` and `q2-closed`, each `.tgz`.
+  - Full-suite logs: `suite-F1.txt`, `suite-F2.txt` and `suite-F3.txt`.
 - **Owner's replies.** Sent under the approved plan's authorization, each after the stop it answers, naming its
   run:
   - `approved`, in Q1b: a fresh session after Q1a's report. It re-ran the dry run and asked again (R-1).
@@ -63,8 +63,14 @@
   - `approved`, in Q1e: Q1d resumed, for greet's Consumers-row patch (R-2).
   - `yes, greet and greet-client are the members`, twice: attempt 2's Q2b and attempt 3's Q2b, each resuming its
     Q2a after the `impact` lines and the proposed members were shown.
-  - `approved`, in attempt 3's Q2d: Q2c resumed, after both members' PRD diffs were shown together. This is the
-    one approval of CS-001.
+  - `approved`, in Q2d: Q2c resumed, after both members' PRD diffs were shown together. This is the one approval
+    of CS-001.
+  - In Q2g, resuming Q2f after its build stopped on the PRD contradiction: "The banner is
+    `*** <greeting>, <name>! ***`, built from the JSON's `greeting` and `name`, so T-001.1's `*** Hi, World! ***`
+    is right. Amend AC-001.1, AC-001.2 and the glossary to say so." (R-6)
+  - In Q2h, resuming Q2g after the amendment's diff and dry run were shown: "approved; remove the stale
+    tests/system/test_welcome_staging.py and discard the old builder branch". This is the amendment's own
+    approval.
 
   No other reply was sent. No `deploy production` was needed, because Q2's Target is staging.
 
@@ -79,13 +85,18 @@
 | Q1d | greet | `prd-toolkit:prd-change` record the Consumers row | 1.0.2 patch drafted, `impact` 0; stopped for approval | — |
 | Q1e | greet | `approved` (resume Q1d) | Approved 1.0.2 | da2f406 |
 | Q2a | greet | `prd-toolkit:prd-change-set <greet --json …>` | FR-003 edited; `impact` exit 1 names the client; stopped for members | — |
-| Q2b | greet | the members reply (resume) | `changeset new`; branches in both; greet in review; set; log; stopped for the client's step 2 | 4 record/PRD commits |
-| Q2c | greet-client | `prd-toolkit:prd-change-set CS-001` | client 2.0.0 edited, `sync --ref`, lint 0, dry run passed; both diffs shown; stopped for the approval | in review, record |
-| Q2d | greet-client | `approved` (resume Q2c) | `changeset approve`; both members' approval commits; stopped for greet's build | 4 |
+| Q2b | greet | the members reply (resume) | `changeset new`; branches in both; greet in review; set; log; stopped for the client's step 2 | 68bf802, 822c01f, 4e0563b, 28be79a |
+| Q2c | greet-client | `prd-toolkit:prd-change-set CS-001` | client 2.0.0 edited, `sync --ref`, lint 0, dry run passed; both diffs shown; stopped for the approval | 91c6325; record 431f898 |
+| Q2d | greet-client | `approved` (resume Q2c) | `changeset approve`; both members' approval commits; stopped for greet's build | 5894e86, 850ebe2, 1f69f76, 6cfef44 |
 | Q2e | greet | `prd-toolkit:prd-change-set CS-001`, end once greet is verified (R-3) | `/prd-build` FR-003: builder, 5 unit passed, trace 0; `state=verified`; ended | 3f3e676, 146b103, a263d6f |
-| Q3a | greet | `prd-toolkit:prd-change-set CS-001` (fresh) | resumed from the record; `/prd-deploy --until staging` **refused by the pre-flight (F-3)**; stopped and asked | — |
+| Q3a | greet | `prd-toolkit:prd-change-set CS-001` (fresh) | resumed from the record; `/prd-deploy --until staging` refused by the pre-flight (F-3) | — |
+| — | (driver) | F-3 fixed (f0b023c); re-vendored (R-5) | — | 2e7d689 (greet), 024c54d (client) |
+| Q3b | greet | `prd-toolkit:prd-change-set CS-001` (fresh) | **Q3**: resumed from the record; staging deploy done with `drift allowed by greet/CS-001: …`; `state=live in staging`; stopped for the client's build | 7aee229, 5ae3427, caa5448 |
+| Q2f | greet-client | `prd-toolkit:prd-change-set CS-001` | sync re-lock; `/prd-build welcome FR-001`; builder and tester; stopped on a PRD contradiction before the merge; `changeset stop` | 691aca5; record c9265f6 |
+| Q2g | greet-client | the owner's answer (resume Q2f) | amendment drafted: 3.0.0, AC-001.1, AC-001.2, T-001.2, glossary; dry run passed; stopped for its approval | — |
+| Q2h | greet-client | the amendment's approval (resume Q2g) | `approve --amendment`; approval commit; rebuild; FR-001 `verified`; `close`, Merge order | 4bd8a54, 734a06c, 761ae6c, d0ded99, d4affe2; record 4cfef3a, 9bf0324, 6a3e17a |
 | — | (driver) | Q4 on a copy of `q2-start` | see Q4 | 8f58969 (greet), CI include (client) |
-| — | (driver) | Q5 on a copy of `q3-start` | see Q5 | squash 89ee194, re-lock |
+| — | (driver) | Q5 on a copy of `q2-closed` | see Q5 | squash 3d1d6d4; re-lock |
 | Q6a | greet (client moved away) | `prd-toolkit:prd-change` usage on stderr | `impact` exit 3; handed to `prd-toolkit:prd-change-set`; stopped at step 1 | — |
 
 ## Pass lines
@@ -93,10 +104,10 @@
 | # | Pass line (spec §13) | Result |
 |---|---|---|
 | Q1 | `add` writes both sides; `sync` copies only the `greet` key; both repositories' lint and `check` exit 0 | **Pass (R-2).** Q1a's `add`: `links.md: added Upstreams row greet \`../greet\`` and `../greet/docs/prd/greet/links.md: added Consumers row greet-client \`../greet-client\``, exit 0. `sync`: `wrote contracts/upstream/greet/cli.yaml`, whose only top-level key is `greet`, under the header `# Snapshot of greet 1.0.1 at e3dc6b3…, written by prd_links.py sync. Do not edit. Type: cli.` After Q1c (2dd38db) and Q1e (da2f406), greet gives lint 0 and `check` 0 (`consumer greet-client cli:greet: same`). greet-client gives lint 0 and `check` 0 (`upstream greet cli:greet: same`). Both note `newer than lock`, which is not drift. Trace 0 in both. Before Q1e, the client's `check` exited 1 (`upstream greet: missing row`), because greet's links.md was uncommitted on greet's `main`. |
-| Q2 | `impact` names the client; CS-001 written; both PRDs edited and approved by one reply; `greet` built, deployed to staging; the client synced and built; `close` writes the Merge order; every row at its Target, with a resume in `greet-client`'s own session for the steps that dispatch agents there | **Not reached: stopped on F-3.** What held: `impact` gave `changed: cli:greet` / `consumer greet-client: cli:greet`, `prd-links-exit=1`. CS-001 is in greet, Order greet then greet-client, Waits for `greet live in staging`, Targets `live in staging` and `verified`, Versions `1.0.2 → 1.1.0` and `1.0.1 → 2.0.0` (after F-2). The client's step 2 and its dry run ran in its own session (Q2c), from the record. One reply became `Approval: 2026-11-02, "approved"`, and both members' approval commits carry `Change-set: greet/CS-001`. greet was built in its own session (Q2e): the builder commit 3f3e676 carries `Refs: FR-003` and `Change-set: greet/CS-001`, trace 0, and the row went `verified`. **Failed:** greet's staging deploy (F-3). Not reached: the client build, `close`, the Merge order. |
-| Q3 | Q2's session ended once `greet` is `verified`: a new session resumes from the record alone and continues with `greet`'s staging deploy | **Resume held; the deploy was refused (F-3).** Q3a, a fresh session given only `prd-toolkit:prd-change-set CS-001`, Read the procedure, Globbed `docs/prd/*/changes/CS-001.md`, Read the record, and called `prd-toolkit:prd-deploy --until staging` next, with no other context. The plan showed two agent steps. `run` then printed `refused: prd_links check found drift: greet-client cli:greet`, `prd-deploy: refused step=0 run=none`, `prd-deploy-exit=1`. The session did not retry or work around it, edited no snapshot, and asked. |
+| Q2 | `impact` names the client; CS-001 written; both PRDs edited and approved by one reply; `greet` built, deployed to staging; the client synced and built; `close` writes the Merge order; every row at its Target, with a resume in `greet-client`'s own session for the steps that dispatch agents there | **Pass (after F-2 and F-3).** Evidence: <br>• **impact:** Q2a gave `changed: cli:greet`, `consumer greet-client: cli:greet`, `prd-links-exit=1`. <br>• **CS-001:** Order greet, greet-client; Waits for `greet live in staging`; Targets `live in staging`, `verified`. <br>• **Edits and approval:** both PRDs were edited in their own sessions (the client's in Q2c, with `sync --ref` and its dry run) and committed `In review`. One reply became `Approval: 2026-11-02, "approved"`, then both approval commits. <br>• **greet built:** Q2e: 3f3e676 carries `Refs: FR-003`, `Change-set: greet/CS-001`; `verified`. <br>• **greet deployed:** Q3b, run `20261103T011856Z-staging`, `prd-deploy: done step=2`; the staging row `\| staging \| 1.1.0 \| 2e7d689 \| 2026-11-03 \| 20261103T011856Z-staging \|`; `state=live in staging`. <br>• **Client synced and built:** in its own session, Q2f to Q2h. The first build stopped on a contradiction in the approved PRD: T-001.1 expected `*** Hi, World! ***`, while AC-001.1 gave `*** <greeting> ***`. `changeset stop` recorded it. An amendment, its diff shown and approved alone (`Approval: … (amendment)`), took the client to 3.0.0. The rebuild (761ae6c, `Refs: FR-001`, `Change-set: greet/CS-001`) passed 3 unit tests with trace 0, and FR-001 went `verified`. <br>• **Close:** `Status: done`, rows `live in staging` / `live in staging` and `verified` / `verified`, then `## Merge order` `1. greet (cs-001-…)`, `2. greet-client (cs-001-…)`. <br>• **Afterwards:** lint and trace 0 in both. The client's code against greet's staging install prints `*** Hi, World! ***`. |
+| Q3 | Q2's session ended once `greet` is `verified`: a new session resumes from the record alone and continues with `greet`'s staging deploy | **Pass (after F-3).** Q2e ended after `state=verified`, recorded (a263d6f). Q3b, a fresh session given only `prd-toolkit:prd-change-set CS-001`, Read the procedure and then the record, and called `prd-toolkit:prd-deploy --until staging`. Its `run` printed `drift allowed by greet/CS-001: consumer greet-client cli:greet: changed`, `run: 20261103T011856Z-staging`, `prd-deploy: done step=2 run=20261103T011856Z-staging`. `prd_deploy.py check` exited 0, then `changeset set greet 'state=live in staging'` and the log of the client's hand-off. Q3a, the same resume before the fix, was refused (`refused: prd_links check found drift: greet-client cli:greet`, `prd-deploy-exit=1`): F-3. |
 | Q4 | An edit to `greet`'s `cli.yaml` outside a change set: `check` exits 1 in both repositories; with `greet` moved away, the client's `check` exits 3 and its CI job passes | **Pass.** On a copy of `q2-start`, greet commit 8f58969 (hooks on) changed exit code 2's text. greet's `check`: `consumer greet-client cli:greet: changed`, exit **1**. The client's: `upstream greet cli:greet: changed`, exit **1**. With greet moved away, the client's `check` printed `upstream greet: unreachable (\`../greet\` is unreachable: no directory …)` and exited **3**. `prd_hooks.py ci --github` wrote the `prd-lint` job, and its three `run:` lines, run locally with greet away, each exit **0**: `prd_lint.py --ci`, `prd_hooks.py check --ci`, and `prd_links.py check --ci` (which printed the unreachable line). |
-| Q5 | `greet`'s change-set branch squash-merged into `main`: `check` flags the orphaned lock; `sync` clears it | **Pass on a provisional start state.** On a copy of `q3-start` (greet's branch built and `verified`, not deployed), `git merge --squash` plus a commit (89ee194) and the branch deleted. The client on its branch, locked at greet 28be79a: `upstream greet: orphaned lock`, exit **1**. Then `sync docs/prd/greet-client greet`: `links.md: locked greet 1.1.0 at 89ee194… (main)`, exit 0. Then `check`: `upstream greet cli:greet: same`, exit **0**. To be rerun on Q2's closed branch. |
+| Q5 | `greet`'s change-set branch squash-merged into `main`: `check` flags the orphaned lock; `sync` clears it | **Pass.** On a copy of `q2-closed`, greet ran `git merge --squash cs-001-…` plus a commit (3d1d6d4), and the branch was deleted. The client on its branch, locked at greet 4cfef3a: `upstream greet: orphaned lock`, exit **1**. `sync docs/prd/greet-client greet`: `links.md: locked greet 1.1.0 at 3d1d6d4… (main)`, exit 0. `check`: `upstream greet cli:greet: same`, exit **0**. The re-lock was committed (`Refs: none (no behaviour change)`, the trailer), and lint stayed 0. An earlier provisional run on `q3-start` gave the same three results. |
 | Q6 | `/prd-change` in `greet` touching `cli:greet` with the client clone moved away: `impact` exits 3; the change stops and hands off without skipping the client | **Pass.** Q6a: `consumer greet-client: unreachable`, `prd-links-exit=3`. The session handed off to `prd-toolkit:prd-change-set` with the edits in the tree. Its step 1 re-ran `impact` (exit 3 again) and stopped: "Either make `../greet-client` available … or tell me in your own words that it stays out of this change." Nothing was committed, no record or branch was made, and the client was never skipped. |
 
 ## Rulings (this run)
@@ -106,7 +117,7 @@
   - A fresh session sent `approved` (Q1b) re-ran the dry run and asked again: "Your "approved" came before I had a
     dry-run report for the current files, so I re-ran the dry run first."
   - Every later reply was sent as a new `claude -p --resume <stopped session>` invocation, after that session's
-    stop. Q3 alone uses a fresh session, by its pass line.
+    stop. Q3's sessions alone are fresh, by its pass line.
 - **R-2: the upstream's Consumers row is its own PRD change.** `add` writes it into greet's working tree. Q1a's
   session said "That file is a PRD change in greet's repository. It needs its own patch bump and approval there",
   so Q1d ran `prd-toolkit:prd-change` in greet for it. Spec §3 makes a link part of a PRD change with its bump,
@@ -114,10 +125,25 @@
   See O-1.
 - **R-3: Q2e's prompt carried the owner's leaving.** It said to end the session once greet's row was `verified`.
   `--until staging` has no human step, so Q3 has no natural stop to start from.
-- **R-4: Q2 reran from the after-Q1 state, re-vendored.** It did not rerun Q1. The plugin's `prd_hooks.py check`
-  named only `.prd-toolkit/prdlint/changeset.py` as differing in each repository. `prd_hooks.py install`
-  refreshed it, committed with `Refs: none (no behaviour change)` (13f15da greet, 102cba4 client). Afterwards
-  `check` 0 in both. This is the 0.6 Q1b procedure.
+- **R-4: after F-2, Q2 reran from the after-Q1 state, re-vendored.** It did not rerun Q1. The plugin's
+  `prd_hooks.py check` named only `.prd-toolkit/prdlint/changeset.py` as differing in each repository.
+  `prd_hooks.py install` refreshed it, committed with `Refs: none (no behaviour change)` (13f15da greet, 102cba4
+  client). This is the 0.6 Q1b procedure.
+- **R-5: after F-3, the proof resumed in place.** Q2 and Q3 were not rebuilt, because the state was clean: Q3a
+  had refused before step 1 and written nothing. `prd_hooks.py check` named only `.prd-toolkit/prd_deploy.py` and
+  `.prd-toolkit/prdlint/deploy.py`. `install` refreshed them, committed on the change-set branch with
+  `Refs: none (no behaviour change)` and the trailer (2e7d689, 024c54d). Q3 was then judged on Q3b, a fresh
+  session from that state.
+- **R-6: the owner's answer to Q2f's stop.**
+  - Q2f stopped on a contradiction the session had written into the approved PRD in Q2c. The stop asked which
+    output is meant.
+  - The answer sent is the scaffold's own text for this change. `link_repo.py`'s `CLIENT_JSON_AC` reads "print
+    `*** <greeting>, <name>! ***` from the `greeting` and `name` of its JSON output".
+  - The fix went through step 5's amendment: edit, dry run, its diff shown, and approved alone.
+- **R-13a (controller, F-3).** The deploy pre-flight lets a drift line through when an open record (Status not
+  `done` or `abandoned`, under the PRD's own `changes/` or in a repository its links point to) lists both this PRD
+  and the drifting side. It prints `drift allowed by <start-prd>/CS-nnn: <line>`. Any other drift still refuses,
+  and `check` and CI are unchanged. Spec §8 and its Revisions, and the README's Change sets, say so.
 
 ## Findings
 
@@ -125,23 +151,9 @@
 |---|---|---|
 | F-1 | The scaffold's client `testing.md` left two gaps a dry run of T-001.2 must answer: what GREET's path is relative to, and an unset `TEST_ENV`. Q1's change could not pass its dry run (attempt 1). | Fixed in f6f2607 (`link_repo.py`, pinned in `test_link_repo.py` first). Q1 reran from a fresh scaffold; its dry run passed with each question dismissed by a quote. |
 | F-2 | `changeset new` read each member's `version:` from its working tree. Step 1 leaves the change's edits there, the bump among them, so greet's row read `1.1.0`, and `set version=1.1.0` wrote no `→`. **Where to enter** then reads greet's step 2 as not done (attempt 2). | Fixed in 24273b1: the version comes from the member's default branch, where its branch is cut (`test_new_reads_each_version_where_the_branch_is_cut` failed first). Q2 reran (R-4): `1.0.2 → 1.1.0`. |
-| F-3 | **Open, needs a design decision.** The deploy pre-flight runs `prd_links.py check`. Its Consumers side reads greet-client at its default branch (§5 Revision), where the snapshot is greet 1.0.1, so greet's change-set edit of `cli:greet` is `changed` (exit 1). §8 makes that refuse the run, while §6 step 4 needs the upstream's `/prd-deploy --until <env>` before a downstream that waits for `live in <env>` builds. Every such change set deadlocks before its upstream deploy, and the downstream's own deploy would meet the same refusal (`upstream greet: orphaned lock`, `changed`). Evidence: Q3a, `refused: prd_links check found drift: greet-client cli:greet`, `prd-deploy: refused step=0 run=none`, `prd-deploy-exit=1`. A manual `check` in greet gives `consumer greet-client cli:greet: changed`, exit 1. | Not fixed. Options, below. |
+| F-3 | The deploy pre-flight runs `prd_links.py check`, whose Consumers side reads greet-client at its default branch, where the snapshot is greet 1.0.1. greet's change-set edit of `cli:greet` was therefore `changed` (exit 1), which refused the run. But §6 step 4 needs the upstream's `/prd-deploy --until <env>` before a downstream that waits for `live in <env>` builds, so every such change set deadlocked. Q3a: `refused: prd_links check found drift: greet-client cli:greet`, `prd-deploy: refused step=0 run=none`, `prd-deploy-exit=1`. | Ruled R-13a (option A, scoped) and fixed in f0b023c. Eight tests went in first: let-through with an open record found through links.md and with its own; refused when the record is `done` or `abandoned`, when either side is not a member, or with no record; the run prints each let-through line. The fix commit also carries the spec Revision, the §8 sentence and the README line. Proven by Q3b (`drift allowed by greet/CS-001: consumer greet-client cli:greet: changed`, then `done`). |
 
-**F-3 options** (the spec settles none of them):
-- **A. The pre-flight excuses drift between members of an open change set.** On a branch with an open record
-  (`changes/CS-nnn.md` here, or a record a member's trailer points to) whose rows name the drifted consumer or
-  upstream, drift on those items is reported and does not refuse. This is narrowest, and it matches
-  `coordinating-prds` rule 4 ("a `check` that then reports an orphaned lock or `changed` items is expected until
-  the upstream lands").
-- **B. `check` reads a member consumer at the record's Branch.** Inside an open change set, the Consumers side
-  reads the consumer at the record's Branch instead of its default branch. This revises the §5 Revision (default
-  branch only). The downstream's own deploy would still see `orphaned lock` on its Upstreams side.
-- **C. An explicit override.** `prd_deploy.py run --change-set <record>`, passed by `running-a-change-set.md`
-  step 4, turns member drift into a report line. Same effect as A, but opt-in in the procedure, not inferred.
-- **D. No deploy inside a change set.** Change §6 so a `live in <env>` wait is met only after the upstream lands.
-  This drops Q2's "deployed to staging" from the change set.
-
-**Observations (minor, not fixed).**
+**Observations (minor, not fixed; none blocks a pass line).**
 - **O-1: no skill text names `add` for a change, or the upstream-side patch.** `changing-prds` never says
   `prd_links.py add`; Q1a found it in `references/prd-format.md` and `--help`. The Consumers row it writes into
   the upstream is left for a separate change. Q1a's report said so, but Q1c's close did not repeat it. Q1d's §14
@@ -153,19 +165,28 @@
   effect on any outcome.
 - **O-4: both Q2a sessions bumped the version before `changeset new`.** Step 1 runs only `changing-prds` steps 1
   and 2. This is what exposed F-2, and after the fix it is harmless.
-- **O-5: the refused run exited 1, not 2.** §8 says the pre-flight refuses with exit 2, but the run gave
+- **O-5: a pre-flight refusal exits 1, not 2.** §8 says the pre-flight refuses with exit 2, but the run gave
   `prd-deploy-exit=1`, `refused step=0`. Not decided here.
 - **O-6: Q2e misstated the deploy.** Its close said "the deploy has human steps"; `--until staging` has none (Q3a's
   plan).
-- **O-7: some first `result` events came early.** Q1a, Q2c and Q2e each emitted one while their agent ran in the
-  background. The process went on and finished in the same run, with no effect.
+- **O-7: some first `result` events came early.** Q1a, Q2c, Q2e, Q2f and Q2g each emitted one while their agent
+  ran in the background. The process went on and finished in the same run, with no effect.
+- **O-8: the amendment bumped the unlanded 2.0.0 to 3.0.0.** Two majors went into one change set: the record row
+  reads `1.0.1 → 3.0.0`, and §14 holds both rows. The text does not say whether an amendment to an unlanded
+  version revises it in place.
+- **O-9: the dry run cannot catch a contradiction between an AC and a unit case.** Q2c's dry run passed:
+  T-001.1 is a unit case and was never sampled, while T-001.2 [system] said nothing on the banner. The build's
+  reconciliation caught it and stopped, as designed.
 
 **What held.**
-- No request was taken as an approval or a members reply.
-- Every stop waited for its reply.
-- A step that dispatches agents always ran from its member's root: the client's step 2 and dry run in Q2c,
-  greet's build in Q2e. The record's Log names each hand-off.
-- No snapshot was edited by hand, and nothing was pushed.
+- No request was taken as an approval or a members reply, and every stop waited for its reply.
+- A step that dispatches agents always ran from its member's root: the client's step 2, its dry run and both
+  builds in client sessions, greet's build in a greet session. The record's Log names each hand-off.
+- A stop went on Status with the row's State kept (`stopped: greet-client: …`, the row still `approved`), and the
+  next `set` moved it back to running.
+- No snapshot was edited by hand: every one was written by `sync`.
+- Nothing was pushed or merged by a session. `close` wrote the Merge order, and the session told the owner to
+  land greet first.
 
 ## O-a
 
