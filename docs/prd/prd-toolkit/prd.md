@@ -1,6 +1,6 @@
 ---
 prd: prd-toolkit
-version: 1.0.0
+version: 1.0.1
 status: Approved
 owner: Ivan Histand
 updated: 2026-11-03
@@ -25,7 +25,7 @@ updated: 2026-11-03
 - Not applicable: `contracts/events.md` — no events, jobs or queues
 - Not applicable: `contracts/permissions.yaml` — no identities or roles
 - Not applicable: `contracts/data-classification.yaml` — no stored personal data
-- Not applicable: `contracts/dependencies/` — no third-party service is called; git, uv and the claude CLI are tools on the runner (testing.md Harness)
+- Not applicable: `contracts/dependencies/` — no third-party service is called; git and uv are tools on the runner (testing.md Harness), and the standards row runs the claude CLI through `npx`
 
 ## 2. Summary & goals
 
@@ -76,7 +76,7 @@ flowchart LR
 
 | Object (glob) | Linter command | Rules live in | Applies to | Decision |
 |---|---|---|---|---|
-| `prd-toolkit/**` | `claude plugin validate ./prd-toolkit` | Claude Code's plugin manifest schema | code | enforced |
+| `prd-toolkit/**` | `npx -y @anthropic-ai/claude-code plugin validate ./prd-toolkit` | Claude Code's plugin manifest schema | code | enforced |
 
 ## 6. Skills registry
 
@@ -151,3 +151,4 @@ None.
 |---|---|---|---|
 | 0.1.0 | 2026-11-03 | Draft started (adoption bootstrap) | none |
 | 1.0.0 | 2026-11-03 | Approved; lint-cli area adopted; suite 29 pass, T-005.3 known-failing E-001, T-006.3 known-failing E-005, T-007.5 known-failing E-006, T-010.2 known-failing E-002, T-011.6 known-failing E-003, T-012.3 known-failing E-003, T-012.2 known-failing E-004; dry run T-004.1, T-007.1, T-007.5, T-011.1, T-011.2, 0 open questions, 0 dismissed by quote (an earlier dry run's 2 testing.md gaps were fixed) | UJ-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012 |
+| 1.0.1 | 2026-11-03 | §5 standards row runs `plugin validate` through `npx -y @anthropic-ai/claude-code`, so the generated CI job needs no claude CLI on the runner; §1 says so; no dry run (wording only) | none |
