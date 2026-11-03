@@ -1,6 +1,6 @@
 ---
 prd: prd-toolkit
-version: 1.0.1
+version: 2.0.0
 status: Approved
 owner: Ivan Histand
 updated: 2026-11-03
@@ -123,10 +123,10 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | ID | Title | Status | File | Since |
 |---|---|---|---|---|
 | UJ-01 | An engineer lints a PRD folder and fixes what it reports | live | features/lint-cli.md | 1.0.0 |
-| FR-001 | Lint a PRD folder and print its findings | live | features/lint-cli.md | 1.0.0 |
+| FR-001 | Lint a PRD folder and print its findings | approved | features/lint-cli.md |  |
 | FR-002 | Name each finding's file from the working directory | live | features/lint-cli.md | 1.0.0 |
-| FR-003 | List the rules | live | features/lint-cli.md | 1.0.0 |
-| FR-004 | Reject a bad command line | live | features/lint-cli.md | 1.0.0 |
+| FR-003 | List the rules | approved | features/lint-cli.md |  |
+| FR-004 | Reject a bad command line | approved | features/lint-cli.md |  |
 | FR-005 | Refuse a folder without prd.md | verified | features/lint-cli.md |  |
 | FR-006 | Report an internal error without a traceback | verified | features/lint-cli.md |  |
 | FR-007 | Sample T-ids for the dry run | verified | features/lint-cli.md |  |
@@ -135,6 +135,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-010 | Name a missing dependency | verified | features/lint-cli.md |  |
 | FR-011 | Load the test-case files | verified | features/lint-cli.md |  |
 | FR-012 | Load the contract YAML files | verified | features/lint-cli.md |  |
+| FR-013 | List the packs | approved | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 
@@ -152,3 +153,4 @@ None.
 | 0.1.0 | 2026-11-03 | Draft started (adoption bootstrap) | none |
 | 1.0.0 | 2026-11-03 | Approved; lint-cli area adopted; suite 29 pass, T-005.3 known-failing E-001, T-006.3 known-failing E-005, T-007.5 known-failing E-006, T-010.2 known-failing E-002, T-011.6 known-failing E-003, T-012.3 known-failing E-003, T-012.2 known-failing E-004; dry run T-004.1, T-007.1, T-007.5, T-011.1, T-011.2, 0 open questions, 0 dismissed by quote (an earlier dry run's 2 testing.md gaps were fixed) | UJ-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011, FR-012 |
 | 1.0.1 | 2026-11-03 | §5 standards row runs `plugin validate` through `npx -y @anthropic-ai/claude-code`, so the generated CI job needs no claude CLI on the runner; §1 says so; no dry run (wording only) | none |
+| 2.0.0 | 2026-11-03 | lint-cli for prd-toolkit 0.8.0: `warn` findings and an exit code that counts errors only, `--list-rules` with severities (a format change §9 calls breaking, accepted by the owner for 0.8.0), `--list-packs` (FR-013), and a one-line usage; the PRD_PLUGINS_FILE setting in contracts/config.yaml; testing.md defines the output keys, `runs`/`each_run` and in-process calls; dry run T-001.4, T-001.5, T-003.1, T-004.1, T-004.3, T-013.1, T-013.2, 0 open questions, 0 dismissed by quote (three earlier dry runs' 10 gaps fixed) | FR-001, AC-001.2, AC-001.4, AC-001.5, T-001.4, T-001.5, FR-003, AC-003.1, T-003.1, FR-004, AC-004.1, AC-004.3, T-004.1, T-004.3, FR-013, AC-013.1, AC-013.2, T-013.1, T-013.2 |
