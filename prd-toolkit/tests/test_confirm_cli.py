@@ -16,11 +16,14 @@ from confirm_fixture import make_confirm_repo
 from prdlint import confirm, model
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts/prd_confirm.py"
+# Every wait below is a deadline for a hung child, not an expected duration: the full suite loads the machine
+# until a child needs tens of seconds to start. A generous deadline fails nothing that passes on a quiet machine.
+WAIT = 180
 URL = re.compile(r"^url=http://127\.0\.0\.1:(\d+)/\?token=([0-9a-f]{64})$")
 
 
 def run(*args, cwd=None):
-    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True, cwd=cwd, timeout=60)
+    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True, cwd=cwd, timeout=WAIT)
 
 
 @pytest.fixture
@@ -43,7 +46,7 @@ def serve(procs, prd, *extra):
     return p
 
 
-def first_line(p, timeout=30):
+def first_line(p, timeout=WAIT):
     """The child's first stdout line, read with a deadline so a hung child fails the test instead of hanging it."""
     got = []
     reader = threading.Thread(target=lambda: got.append(p.stdout.readline()), daemon=True)
@@ -60,7 +63,7 @@ def call(base, token, path, body=None):
     req = urllib.request.Request(f"{base}{path}?token={token}", data=None if body is None else json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=WAIT) as r:
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read() or b"{}")
@@ -82,14 +85,14 @@ def test_serve_prints_url_first_and_serves_until_done(tmp_path, procs):
             body["text"] = "settled"
         assert call(base, token, "/answer", body)[0] == 200
     assert call(base, token, "/done", {})[0] == 200
-    assert p.wait(15) == 0
+    assert p.wait(WAIT) == 0
 
 
 def test_serve_excludes_the_answers_file_and_page_is_served(tmp_path, procs):
     repo, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd)
     m = URL.match(first_line(p))
-    with urllib.request.urlopen(f"http://127.0.0.1:{m.group(1)}/?token={m.group(2)}", timeout=10) as r:
+    with urllib.request.urlopen(f"http://127.0.0.1:{m.group(1)}/?token={m.group(2)}", timeout=WAIT) as r:
         assert b"<title>" in r.read()
     assert confirm.EXCLUDE_LINE in (repo / ".git/info/exclude").read_text().splitlines()
 
@@ -166,17 +169,17 @@ def test_usage_error_exits_2(tmp_path):
 
 def test_sigint_exits_3(tmp_path, procs):
     _, prd = make_confirm_repo(tmp_path)
-    p = serve(procs, prd, "--idle-minutes", "0.5")
+    p = serve(procs, prd, "--idle-minutes", "10")  # long: only the signal may end it
     assert URL.match(first_line(p))
     p.send_signal(signal.SIGINT)
-    assert p.wait(15) == 3
+    assert p.wait(WAIT) == 3
 
 
 def test_idle_exits_3(tmp_path, procs):
     _, prd = make_confirm_repo(tmp_path)
     p = serve(procs, prd, "--idle-minutes", "0.01")
     assert URL.match(first_line(p))
-    assert p.wait(30) == 3
+    assert p.wait(WAIT) == 3
 
 
 def test_a_failing_browser_is_ignored(tmp_path, procs, monkeypatch):
@@ -189,7 +192,7 @@ def test_a_failing_browser_is_ignored(tmp_path, procs, monkeypatch):
     procs.append(p)
     assert URL.match(first_line(p))
     p.send_signal(signal.SIGINT)
-    assert p.wait(15) == 3 and p.stderr.read() == ""
+    assert p.wait(WAIT) == 3 and p.stderr.read() == ""
 
 
 def test_token_shape_is_64_hex(tmp_path):
@@ -212,7 +215,7 @@ def test_first_line_fails_a_hung_child():
     try:
         with pytest.raises(pytest.fail.Exception, match="no stdout line"):
             first_line(p, timeout=0.5)
-        assert p.wait(5) != 0
+        assert p.wait(WAIT) != 0
     finally:
         p.stdout.close()
 
@@ -222,7 +225,7 @@ def test_sigterm_exits_3(tmp_path, procs):
     p = serve(procs, prd)
     assert URL.match(first_line(p))
     p.terminate()
-    assert p.wait(15) == 3
+    assert p.wait(WAIT) == 3
     assert p.stderr.read() == ""
 
 
@@ -243,7 +246,7 @@ def test_ctrl_c_while_opening_the_browser_exits_3(tmp_path, procs):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     procs.append(p)
     assert URL.match(first_line(p))
-    assert p.wait(15) == 3 and p.stderr.read() == ""
+    assert p.wait(WAIT) == 3 and p.stderr.read() == ""
 
 
 def test_a_bind_failure_other_than_in_use_names_its_reason(tmp_path, monkeypatch, capsys):

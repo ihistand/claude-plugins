@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -257,13 +258,10 @@ def build_items(prd: Prd, area: str) -> list[Item]:
     return items
 
 
-def load_summaries(path: Path, items: list[Item], area: str) -> dict[str, str]:
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
-        raise Refused(f"cannot read summaries {path}: {e}") from e
+def check_summaries(data: Any, items: list[Item], area: str, source: str = "summaries") -> dict[str, str]:
+    """The 0.7.1 summary rules: each summary names its item, and is at most SUMMARY_MAX characters."""
     if not isinstance(data, dict):
-        raise Refused(f"summaries {path} must be a JSON object mapping item ID to text")
+        raise Refused(f"{source} must be a JSON object mapping item ID to text")
     known = {i.id for i in items}
     for key, text in data.items():
         if key not in known:
@@ -275,6 +273,14 @@ def load_summaries(path: Path, items: list[Item], area: str) -> dict[str, str]:
         if len(text) > SUMMARY_MAX:
             raise Refused(f"summary for {key} is over {SUMMARY_MAX} characters")
     return dict(data)
+
+
+def load_summaries(path: Path, items: list[Item], area: str) -> dict[str, str]:
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise Refused(f"cannot read summaries {path}: {e}") from e
+    return check_summaries(data, items, area, f"summaries {path}")
 
 
 # --- the answers file and the local server -------------------------------------------------------------------
@@ -355,6 +361,143 @@ def ensure_excluded(repo_root: Path) -> None:
         f.write(("" if not text or text.endswith("\n") else "\n") + EXCLUDE_LINE + "\n")
 
 
+_WRITE_LOCK = threading.Lock()  # one writer at a time in this process; the directory flock covers other processes
+
+
+@contextmanager
+def _locked(root: Path):
+    with _WRITE_LOCK:
+        dirfd = None
+        if fcntl is not None:
+            try:
+                dirfd = os.open(root, os.O_RDONLY)
+                try:
+                    fcntl.flock(dirfd, fcntl.LOCK_EX)
+                except OSError:
+                    os.close(dirfd)
+                    dirfd = None
+            except OSError:
+                dirfd = None
+        try:
+            yield
+        finally:
+            if dirfd is not None:
+                os.close(dirfd)
+
+
+def _head(root: Path) -> str:
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
+                          encoding="utf-8", timeout=30).stdout.strip()
+
+
+def _mutate(prd: Prd, area: str, root: Path, apply, head: str | None = None) -> dict:
+    """Under the locks: re-read the file, let `apply(data)` change the keys it owns, save. Every other key stays."""
+    root = Path(root)
+    path = answers_path(root, area)
+    with _locked(root):
+        data = load_answers(path)
+        answers = data.get("answers")
+        data.update({"prd": prd.frontmatter.get("prd", ""), "area": area, "commit": head or _head(root)})
+        data["answers"] = answers if isinstance(answers, dict) else {}
+        apply(data)
+        save_answers(path, data)
+        return data
+
+
+def validate_answer(item: Item, decision: Any, text: Any, acs: Any) -> tuple[str, dict[str, str]]:
+    """The checks the form's save makes; (text, acs) cleaned, or Refused."""
+    if not isinstance(decision, str) or decision not in {d for ds in ALLOWED.values() for d in ds}:
+        raise Refused(f"unknown decision {decision!r}")
+    if decision not in ALLOWED[item.kind]:
+        raise Refused(f"decision {decision} is not allowed for a {item.kind}")
+    if text is not None and not isinstance(text, str):
+        raise Refused("text must be a string")
+    text = (text or "").strip()
+    if acs is not None and not (isinstance(acs, dict) and all(isinstance(v, str) for v in acs.values())):
+        raise Refused("acs must map an AC ID to text")
+    if acs is not None and decision != "correct":
+        raise Refused("acs is allowed only with correct")
+    known = {a for a, _ in item.acs}
+    for k in acs or {}:
+        if k not in known:
+            raise Refused(f"{k} is not an AC of {item.id}")
+    acs = {k: v.strip() for k, v in (acs or {}).items() if v.strip()}
+    if decision == "correct":
+        if not text and not acs:
+            raise Refused("correct needs text or an edited AC")
+    elif decision in REQUIRES_TEXT and not text:
+        raise Refused(f"{decision} needs text")
+    return text, acs
+
+
+def _entry(item: Item, decision: str, text: str, acs: dict[str, str], reply: str | None = None) -> dict[str, Any]:
+    entry: dict[str, Any] = {"decision": decision}
+    if text:
+        entry["text"] = text
+    if acs:
+        entry["acs"] = acs
+    if reply is not None:
+        entry["reply"] = reply  # verbatim: never stripped or rewritten
+    entry["fingerprint"] = item.fingerprint
+    entry["where"] = item.where  # with `served`, how the session finds the item again
+    entry["served"] = item.text
+    entry["at"] = datetime.now(timezone.utc).isoformat()
+    return entry
+
+
+def _store(prd: Prd, area: str, root: Path, item: Item, entry: dict, head: str | None = None) -> dict:
+    def apply(data: dict) -> None:
+        data["answers"][item.id] = entry
+        data.pop("done", None)  # a reopened area is pending again
+    return _mutate(prd, area, root, apply, head)
+
+
+def record_answer(prd: Prd, area: str, item_id: str, decision: str, reply: str, correction: str | None,
+                  repo_root: Path) -> dict:
+    """Answer one item from outside the form. `reply` is kept verbatim; `text` is the correction, else the reply."""
+    if not isinstance(reply, str) or not reply.strip():
+        raise Refused("the reply is empty")
+    by_id = {i.id: i for i in build_items(prd, area)}
+    if item_id not in by_id:
+        raise Refused(f"unknown item {item_id!r}")
+    item = by_id[item_id]
+    text, acs = validate_answer(item, decision, correction if correction is not None and correction.strip() else reply, None)
+    return _store(prd, area, repo_root, item, _entry(item, decision, text, acs, reply))
+
+
+def mark_done(prd: Prd, area: str, items: list[Item], repo_root: Path) -> dict:
+    """Write `"done": true`; Refused while an item has no answer or its answer was given to other text."""
+    root = Path(repo_root)
+    path = answers_path(root, area)
+    with _locked(root):
+        data = load_answers(path)
+        pending = open_ids(items, data)
+        if pending:  # refuses before anything is written
+            raise Refused(f"{len(pending)} item(s) still open: {', '.join(pending)}")
+        answers = data.get("answers")
+        data.update({"prd": prd.frontmatter.get("prd", ""), "area": area, "answers": answers if isinstance(answers, dict) else {}})
+        data.setdefault("commit", _head(root))
+        data["done"] = True
+        save_answers(path, data)
+        return data
+
+
+def open_file(prd: Prd, area: str, items: list[Item], summaries: dict, repo_root: Path) -> Path:
+    """Start the answers file: summaries and no answers. Never replaces a file that exists."""
+    root = Path(repo_root)
+    if not items:
+        raise Refused(f"area {area} has no item to confirm")
+    summaries = check_summaries(summaries, items, area)
+    path = answers_path(root, area)
+    ensure_excluded(root)
+    with _locked(root):
+        if path.exists():
+            raise Refused(f"{path.name} exists; answer, run status, or move it aside")
+        save_answers(path, {"prd": prd.frontmatter.get("prd", ""), "area": area, "commit": _head(root),
+                            "summaries": summaries, "answers": {}})
+    return path
+
+
 class _Bad(Exception):
     def __init__(self, status: int, why: str):
         super().__init__(why)
@@ -374,91 +517,44 @@ class _State:
         self.idle_seconds = idle_minutes * 60
         self.last = time.monotonic()
         self.end: str | None = None
-        self.lock = threading.Lock()
-        self.head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root, capture_output=True, text=True,
-                                   encoding="utf-8", timeout=30).stdout.strip()
+        self.head = _head(self.root)
         load_answers(self.path)  # a corrupt file refuses the server before anything is served
 
     def snapshot(self) -> dict:
-        with self.lock:
+        with _WRITE_LOCK:
             return load_answers(self.path)
 
-    def change(self, apply) -> dict:
-        """Under one lock (and a directory lock across processes): re-read the disk, apply one change, save."""
-        with self.lock:
-            dirfd = None
-            if fcntl is not None:
-                try:
-                    dirfd = os.open(self.root, os.O_RDONLY)
-                    try:
-                        fcntl.flock(dirfd, fcntl.LOCK_EX)
-                    except OSError:
-                        os.close(dirfd)
-                        dirfd = None
-                except OSError:
-                    dirfd = None
-            try:
-                answers = load_answers(self.path).get("answers")
-                data = {"prd": self.prd.frontmatter.get("prd", ""), "area": self.area,
-                        "commit": self.head, "answers": answers if isinstance(answers, dict) else {}}
-                apply(data["answers"])
-                save_answers(self.path, data)
-                return data
-            finally:
-                if dirfd is not None:
-                    os.close(dirfd)
-
     def answer(self, body: dict) -> dict:
-        iid, decision = body.get("id"), body.get("decision")
+        iid = body.get("id")
         if not isinstance(iid, str) or iid not in self.by_id:
             raise _Bad(400, f"unknown item {iid!r}")
         item = self.by_id[iid]
-        if not isinstance(decision, str) or decision not in {d for ds in ALLOWED.values() for d in ds}:
-            raise _Bad(400, f"unknown decision {decision!r}")
-        if decision not in ALLOWED[item.kind]:
-            raise _Bad(400, f"decision {decision} is not allowed for a {item.kind}")
-        text, acs = body.get("text"), body.get("acs")
-        if text is not None and not isinstance(text, str):
-            raise _Bad(400, "text must be a string")
-        text = (text or "").strip()
-        if acs is not None and not (isinstance(acs, dict) and all(isinstance(v, str) for v in acs.values())):
-            raise _Bad(400, "acs must map an AC ID to text")
-        if acs is not None and decision != "correct":
-            raise _Bad(400, "acs is allowed only with correct")
-        known = {a for a, _ in item.acs}
-        for k in acs or {}:
-            if k not in known:
-                raise _Bad(400, f"{k} is not an AC of {item.id}")
-        acs = {k: v.strip() for k, v in (acs or {}).items() if v.strip()}
-        if decision == "correct":
-            if not text and not acs:
-                raise _Bad(400, "correct needs text or an edited AC")
-        elif decision in REQUIRES_TEXT and not text:
-            raise _Bad(400, f"{decision} needs text")
-        entry: dict[str, Any] = {"decision": decision}
-        if text:
-            entry["text"] = text
-        if acs:
-            entry["acs"] = acs
-        entry["fingerprint"] = item.fingerprint
-        entry["where"] = item.where  # with `served`, how the session finds the item again
-        entry["served"] = item.text
-        entry["at"] = datetime.now(timezone.utc).isoformat()
-        return self.change(lambda a: a.__setitem__(item.id, entry))
+        try:
+            text, acs = validate_answer(item, body.get("decision"), body.get("text"), body.get("acs"))
+        except Refused as e:
+            raise _Bad(400, str(e)) from e
+        return _store(self.prd, self.area, self.root, item, _entry(item, body["decision"], text, acs), self.head)
 
     def undo(self, body: dict) -> dict:
         iid = body.get("id")
         if not isinstance(iid, str) or iid not in self.by_id:
             raise _Bad(400, f"unknown item {iid!r}")
-        return self.change(lambda a: a.pop(iid, None))
+
+        def apply(data: dict) -> None:
+            data["answers"].pop(iid, None)
+            data.pop("done", None)
+        return _mutate(self.prd, self.area, self.root, apply, self.head)
 
     def finish(self) -> list[str]:
-        """The open IDs; when there are none, mark the run done. Check and mark share the write lock."""
-        with self.lock:
-            pending = open_ids(self.items, load_answers(self.path))
-            if not pending:
-                self.end = "done"
-            return pending
+        """The open IDs; when there are none, write `done` and end the run."""
+        pending = open_ids(self.items, self.snapshot())
+        if not pending:
+            try:
+                mark_done(self.prd, self.area, self.items, self.root)
+            except Refused:  # an answer was undone between the check and the write
+                return open_ids(self.items, self.snapshot())
+            self.end = "done"
+        return pending
 
     def listing(self) -> dict:
         data = self.snapshot()
