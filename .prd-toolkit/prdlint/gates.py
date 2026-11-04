@@ -1,6 +1,12 @@
-"""prd_gates.py list (0.8.1): every pending human decision of a PRD, in one shape. One helper per kind."""
+"""prd_gates.py list and answer (0.8.1): every pending human decision of a PRD, in one shape, and one reply passed to its owner."""
+import datetime
 import json
+import os
+import re
+import shutil
 import subprocess
+import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -182,3 +188,168 @@ def list_gates(prd: Prd, repo_root: Path, worktrees: bool = False) -> list[Gate]
     gates = (_approval(prd, Path(repo_root), worktrees) + _error_class(prd) + _deploy_step(prd, Path(repo_root))
              + _adoption(prd, Path(repo_root)) + _signoff(prd))
     return sorted(gates, key=lambda g: (KIND_ORDER.index(g.kind), g.id))
+
+
+# --- answer: one reply for one gate, passed to the script that owns the decision ---
+
+SCRIPTS = Path(__file__).resolve().parent.parent  # the scripts beside this package, so a vendored copy calls vendored scripts
+REFUSED_CHANGED = "the gate changed; list again"
+
+
+class Refused(Exception):
+    """A refusal by `answer` itself: nothing ran and nothing was written."""
+
+
+def _run(script: str, *argv: str) -> dict:
+    """Call an owning script as `<this interpreter> <script> argv...`: an argv list, never a shell string."""
+    run = subprocess.run([sys.executable, str(SCRIPTS / script), *argv], capture_output=True, text=True, encoding="utf-8",
+                         env={**os.environ, "PYTHONUTF8": "1"})
+    out = {"stdout": run.stdout.splitlines(), "exit": run.returncode}
+    if run.stderr.strip():
+        out["stderr"] = run.stderr.splitlines()
+    return out
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """A temp file in the same folder, then os.replace."""
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        if path.exists():
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _pick(gate: Gate, choice: str | None, default: str) -> str:
+    choice = choice or default
+    if choice not in gate.choices:
+        raise Refused(f"{gate.id} offers {', '.join(gate.choices)}, not {choice}")
+    return choice
+
+
+def _answer_approval(prd: Prd, gate: Gate, reply: str, choice: str | None, **_) -> dict:
+    choice = _pick(gate, choice, "approve")
+    root = Path(prd.root)
+    if choice == "changes":
+        path = root / REVIEW_FILE
+        verdict = json.loads(path.read_text(encoding="utf-8"))
+        verdict["owner"] = {"choice": "changes", "reply": reply, "at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        verdict["ready"] = False
+        verdict["blockers"] = [*(verdict.get("blockers") or []), f"owner: {reply}"]
+        _atomic_write(path, json.dumps(verdict, ensure_ascii=False, indent=2) + "\n")
+        return {"stdout": [f"recorded changes for {gate.id}"], "exit": 0}
+    verdict = json.loads((root / REVIEW_FILE).read_text(encoding="utf-8"))
+    record = (verdict.get("dry_run") or {}).get("record")
+    if not record:
+        raise Refused("the verdict holds no dry-run record")
+    return _run("prd_change.py", "approve", str(root), f"--reply={reply}", f"--dry-run={record}")
+
+
+def _answer_error_class(prd: Prd, gate: Gate, reply: str, choice: str | None, cls: str | None, **_) -> dict:
+    choice = _pick(gate, choice, "confirm")
+    if choice == "correct" and not cls:
+        raise Refused("--choice correct needs --class")
+    if choice == "confirm" and cls:
+        raise Refused("--class goes with --choice correct")
+    extra = [f"--class={cls}"] if choice == "correct" else []
+    return _run("prd_error.py", "confirm", str(prd.root), gate.id.split(":", 1)[1], f"--reply={reply}", *extra)
+
+
+def _answer_deploy_step(prd: Prd, gate: Gate, reply: str, choice: str | None, **_) -> dict:
+    _pick(gate, choice, "confirm")
+    run_id, step = gate.id.split(":", 1)[1].rsplit(":", 1)
+    return _run("prd_deploy.py", "confirm", str(prd.root), "--run", run_id, "--step", step, f"--reply={reply}")
+
+
+def _answer_adoption(prd: Prd, gate: Gate, reply: str, choice: str | None, item: str | None, correction: str | None, repo_root: Path, **_) -> dict:
+    area = gate.id.split(":", 1)[1]
+    if choice == "done":
+        return _run("prd_confirm.py", "done", str(prd.root), area)
+    if not item or not choice:
+        raise Refused("an adoption answer needs --item with --choice, or --choice done")
+    try:
+        by_id = {i.id: i for i in confirm.build_items(prd, area)}
+    except confirm.Refused as e:
+        raise Refused(str(e)) from None
+    if item not in by_id:
+        raise Refused(f"unknown item {item!r}")
+    allowed = confirm.ALLOWED[by_id[item].kind]
+    if choice not in allowed:
+        raise Refused(f"{item} cannot be answered {choice}; allowed: {', '.join(sorted(allowed))}")
+    extra = [f"--correction={correction}"] if correction is not None else []
+    return _run("prd_confirm.py", "answer", str(prd.root), area, item, "--decision", choice, f"--reply={reply}", *extra)
+
+
+def _answer_signoff(prd: Prd, gate: Gate, reply: str, choice: str | None, result: str | None, **_) -> dict:
+    """`--result` is required and is the sign-off; `--choice`, when given, must equal it."""
+    if result is None:
+        raise Refused("signoff needs --result pass|fail")
+    if result not in ("pass", "fail"):
+        raise Refused("--result must be pass or fail")
+    if choice is not None and choice != result:
+        raise Refused(f"--choice {choice} disagrees with --result {result}")
+    tid = gate.id.split(":", 1)[1]
+    case = next(tc for tc in prd.test_cases if tc.id == tid)
+    row = f"| {tid} | {case.data.get('signoff')} | {datetime.date.today().isoformat()} | {result} |"
+    path = Path(prd.root) / "testing.md"
+    with path.open(encoding="utf-8", newline="") as f:  # newline="" keeps CRLF as it is
+        raw = f.read()
+    eol = "\r\n" if "\r\n" in raw else "\n"
+    text = _with_signoff_row(raw.replace("\r\n", "\n"), tid, row)
+    _atomic_write(path, text.replace("\n", eol) if eol != "\n" else text)
+    return {"stdout": [row], "exit": 0}
+
+
+def _with_signoff_row(text: str, tid: str, row: str) -> str:
+    """Append `row` to the Sign-offs table, or fill the row that names `tid` and holds no result."""
+    lines = text.split("\n")
+    start = next((n for n, ln in enumerate(lines) if re.match(r"^#+\s*Sign-offs\s*$", ln)), None)
+    if start is None:
+        raise Refused("testing.md has no Sign-offs section")
+    end = next((n for n in range(start + 1, len(lines)) if lines[n].startswith("#")), len(lines))
+    table = [n for n in range(start + 1, end) if lines[n].startswith("|")]
+    if not table:
+        body = [lines[n] for n in range(start + 1, end) if lines[n].strip() not in ("", "None.", "None")]
+        lines[start + 1:end] = ["", "| T-id | Owner | Date | Result |", "|---|---|---|---|", row, "", *body]
+        return "\n".join(lines)
+    for n in table:
+        cells = [c.strip() for c in lines[n].strip().strip("|").split("|")]
+        if cells[0] == tid and len(cells) > 3 and not cells[3]:
+            lines[n] = row
+            return "\n".join(lines)
+    lines.insert(table[-1] + 1, row)
+    return "\n".join(lines)
+
+
+# the optional flags each kind takes (`--question` and the reply apply to all)
+FLAGS = {"approval": {"choice"}, "error-class": {"choice", "cls"}, "deploy-step": {"choice"},
+         "adoption": {"choice", "item", "correction"}, "signoff": {"choice", "result"}}
+FLAG_NAMES = {"choice": "--choice", "cls": "--class", "result": "--result", "item": "--item", "correction": "--correction"}
+
+
+ANSWERERS = {"approval": _answer_approval, "error-class": _answer_error_class, "deploy-step": _answer_deploy_step,
+             "adoption": _answer_adoption, "signoff": _answer_signoff}
+
+
+def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | None = None, cls: str | None = None,
+           result: str | None = None, item: str | None = None, correction: str | None = None, question: str | None = None) -> dict:
+    """Pass one reply for one gate to its owner: `{gate, result}`, `result` being the owner's `{stdout, exit}`. Raises Refused."""
+    if not isinstance(reply, str) or not reply.strip():
+        raise Refused("the reply is empty")
+    for name, value in (("reply", reply), ("correction", correction), ("question", question), ("choice", choice), ("class", cls),
+                        ("result", result), ("item", item)):
+        if value is not None and "\x00" in value:
+            raise Refused(f"--{name} holds a NUL character")
+    gate = next((g for g in list_gates(prd, repo_root) if g.id == gate_id), None)
+    if gate is None or (question is not None and gate.question != question):
+        raise Refused(REFUSED_CHANGED)
+    given = {"choice": choice, "cls": cls, "result": result, "item": item, "correction": correction}
+    for key, value in given.items():
+        if value is not None and key not in FLAGS[gate.kind]:
+            raise Refused(f"{FLAG_NAMES[key]} does not apply to {gate.kind}")
+    out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
+    return {"gate": gate.id, "result": out}
