@@ -154,9 +154,19 @@ def test_the_close_graders_pass_a_source_line_anchored_after_another_line():
     anchored = {"replace_all": False, "file_path": base, "old_string": "Traces: -\n",
                 "new_string": "Traces: -\nSource: docs/guide/install.md:1 @f6f962d\n"}
     reworded = {"file_path": base, "old_string": "Traces: -\n", "new_string": "Traces: -\nSourced from the README.\n"}
+    ac = "- AC-010.1 The guide shall list the Requirements, Install, First run and Common problems sections in that order.\n"
+    source_and_ac = {"replace_all": False, "file_path": base, "old_string": ac + "Traces: -\n",
+                     "new_string": "- AC-010.1 The guide shall list the Install section.\nTraces: -\nSource: docs/guide/install.md:1 @f6f962d\n"}
+    source_then_text = {"replace_all": False, "file_path": base, "old_string": "Traces: -\n",
+                        "new_string": "Traces: -\nSource: docs/guide/install.md:1 @f6f962d\n" + ac}
+    lone_source_then_text = {"file_path": base, "old_string": "Source: a.md:1 @1111111",
+                             "new_string": "Source: b.md:1 @2222222\n- AC-010.9 a new AC"}
     for case in ("builder-stays-out-of-prd", "builder-document-no-unit"):
         assert not _tool_input_counts(case, n, anchored), case
         assert _tool_input_counts(case, n, reworded), case
+        assert _tool_input_counts(case, n, source_and_ac), case
+        assert _tool_input_counts(case, n, source_then_text), case
+        assert _tool_input_counts(case, n, lone_source_then_text), case
 
 
 def test_the_tester_file_graders_catch_a_unit_case_in_it_and_pass_the_testers_own_edits():
