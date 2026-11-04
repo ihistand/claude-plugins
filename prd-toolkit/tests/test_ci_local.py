@@ -62,3 +62,62 @@ def test_job_subset_and_all_pass_exits_zero(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     assert "ci-local: good pass" in r.stdout
     assert "bad" not in r.stdout
+
+
+def run_wf(tmp_path, text, *args, script=SCRIPT):
+    wf = tmp_path / "wf2.yml"
+    wf.write_text(text, encoding="utf-8")
+    env = dict(os.environ, CI_LOCAL_WORKFLOW=str(wf))
+    env.pop("CI_LOCAL_JOBS", None)
+    return subprocess.run([str(script), *args], capture_output=True, text=True, env=env, cwd=tmp_path)
+
+
+def test_a_step_reading_stdin_does_not_eat_the_job_list(tmp_path):
+    r = run_wf(tmp_path, "jobs:\n  first:\n    steps:\n      - run: cat >/dev/null\n  second:\n    steps:\n      - run: 'true'\n", "HEAD")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ci-local: first pass" in r.stdout
+    assert "ci-local: second pass" in r.stdout
+
+
+def test_leftover_expression_is_unsupported(tmp_path):
+    r = run_wf(tmp_path, "jobs:\n  a:\n    steps:\n      - run: echo ${{ secrets.X }}\n", "HEAD")
+    assert r.returncode == 2
+    assert "ci-local: unsupported" in r.stderr
+
+
+def test_unhonoured_key_is_unsupported(tmp_path):
+    for where in ("    needs: b\n    steps:\n      - run: 'true'\n", "    steps:\n      - run: 'true'\n        working-directory: x\n"):
+        r = run_wf(tmp_path, "jobs:\n  a:\n" + where, "HEAD")
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "ci-local: unsupported" in r.stderr
+
+
+def test_substitution_is_the_merge_base_not_the_base(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    script = repo / "scripts" / "ci-local.sh"
+    script.write_bytes(SCRIPT.read_bytes())
+    script.chmod(0o755)
+
+    def g(*a):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+    g("init", "-q", "-b", "main")
+    g("add", "scripts")
+    g("commit", "-q", "-m", "a")
+    fork = g("rev-parse", "HEAD")
+    g("checkout", "-q", "-b", "feature")
+    (repo / "f").write_text("b")
+    g("add", "f")
+    g("commit", "-q", "-m", "b")
+    g("checkout", "-q", "main")
+    (repo / "m").write_text("c")
+    g("add", "m")
+    g("commit", "-q", "-m", "c")
+    main_head = g("rev-parse", "main")
+    g("checkout", "-q", "feature")
+    assert fork != main_head
+    r = run_wf(tmp_path, "jobs:\n  a:\n    steps:\n      - run: echo got=${{ github.event.pull_request.base.sha }}\n", "main", script=script)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"got={fork}" in r.stdout
+    assert main_head not in r.stdout

@@ -45,11 +45,33 @@ want = os.environ["JOBS"].split()
 unknown = [j for j in want if j not in doc["jobs"]]
 if unknown:
     raise SystemExit("ci-local: unknown job(s): " + " ".join(unknown))
+BAD = {"env", "if", "working-directory", "shell", "needs", "strategy", "services", "container"}
+SUB = "${{ github.event.pull_request.base.sha }}"
+def unsupported(msg):
+    import sys
+    sys.stderr.write("ci-local: unsupported " + msg + "\n")
+    sys.exit(2)
+if "env" in doc:
+    unsupported("top-level key env")
+chosen = []
 for name, job in doc["jobs"].items():
+    for k in job:
+        if k in BAD:
+            unsupported("job key " + k + " in " + name)
+    runs = []
+    for s in job.get("steps", []):
+        for k in s:
+            if k in BAD:
+                unsupported("step key " + k + " in " + name)
+        if "run" in s:
+            runs.append(s["run"])
+    text = "\n".join(runs).replace(SUB, os.environ["BASE_SHA"])
+    if "${{" in text:
+        unsupported("expression ${{ in " + name)
+    chosen.append((name, text))
+for name, text in chosen:
     if want and name not in want:
         continue
-    runs = [s["run"] for s in job.get("steps", []) if "run" in s]
-    text = "\n".join(runs).replace("${{ github.event.pull_request.base.sha }}", os.environ["BASE_SHA"])
     with open(os.path.join(os.environ["OUT_DIR"], name + ".sh"), "w", encoding="utf-8") as f:
         f.write("set -e\n" + text + "\n")
     print(name)
@@ -61,7 +83,7 @@ while IFS= read -r job; do
   echo "ci-local: $job running"
   if env -i HOME="$work/home" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
        UV_CACHE_DIR="$uv_cache" npm_config_cache="$npm_cache" \
-       bash "$work/jobs/$job.sh"; then
+       bash "$work/jobs/$job.sh" </dev/null; then
     results+=("ci-local: $job pass")
   else
     results+=("ci-local: $job fail")
@@ -69,5 +91,5 @@ while IFS= read -r job; do
   fi
 done < "$work/names"
 
-printf '%s\n' "${results[@]}"
+if [ "${#results[@]}" -gt 0 ]; then printf '%s\n' "${results[@]}"; fi
 exit "$failed"
