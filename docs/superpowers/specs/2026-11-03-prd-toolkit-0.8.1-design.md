@@ -190,8 +190,8 @@ item. A file that already exists is refused (exit 1), so a second `open` never e
 
 `prd_confirm.py done <prd dir> <area>` writes `"done": true` (see the adoption gate above). The
 form's Done button writes it too, through the same function, once no item is open. Every writer of
-the file keeps the keys it does not own (`summaries`, `done`), and an answer written after `done`
-removes it, so a reopened area is pending again.
+the file keeps the keys it does not own (`summaries`, `done`), and an answer or an undo written after
+`done` removes it, so a reopened area is pending again.
 
 ## 6. Review mode
 

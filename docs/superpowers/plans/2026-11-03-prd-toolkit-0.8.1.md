@@ -266,7 +266,7 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
   - The record gains a `reply` field; the form ignores fields it does not know.
   - (Spec §5, gate changes from 0.8.2 §6.) `confirm.mark_done(prd, area, items, repo_root)`, under the same locks: refused (`Refused`) while `open_ids` is not empty, else writes `"done": true`. CLI `prd_confirm.py done <prd dir> <area>`, which prints `done <area>`, exit 1 refused. The form's `/done` calls `mark_done` once no item is open.
   - `confirm.open_file(prd, area, items, summaries, repo_root)`: writes `{prd, area, commit: HEAD, summaries, answers: {}}` and the exclude line; refuses an existing file and an area with no item; the 0.7.1 summary rules apply. CLI `prd_confirm.py open <prd dir> --area <area> [--summaries F]`, which prints the file's path. `serve` reads `summaries` from the file when `--summaries` is not given.
-  - Every write keeps the keys it does not own (`summaries`, `done`; today `_State.change` rebuilds the dict and drops them), and an answer write removes `done`.
+  - Every write keeps the keys it does not own (`summaries`, `done`; today `_State.change` rebuilds the dict and drops them), and an answer or an undo (the form's item reset) removes `done`.
 
 - [ ] **Step 1: Write the failing tests.**
   - The CLI answer on `confirm_fixture` writes the same record shape as the form's save, plus `reply` verbatim (Review Focus 2).
@@ -277,7 +277,7 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
     - both are in the file;
     - repeat 20 times.
   - `status` counts the CLI answer.
-  - `done` is refused while an item is open or changed since answered (fingerprint), then writes `"done": true`; the form's Done writes it too; an answer after `done` removes it.
+  - `done` is refused while an item is open or changed since answered (fingerprint), then writes `"done": true`; the form's Done writes it too; an answer or an undo after `done` removes it.
   - `open` writes the file with `summaries` and no answers, refuses an existing file (its answers untouched) and an area with no item, and applies the summary rules; `serve` without `--summaries` shows the file's summaries.
   - A form save and a CLI answer keep `summaries` and `done`.
 - [ ] **Step 2: Run them to see them fail.**
