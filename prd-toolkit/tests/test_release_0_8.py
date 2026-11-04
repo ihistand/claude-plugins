@@ -85,6 +85,15 @@ def test_readme_known_limits_and_changelog():
         assert needle in e, needle
 
 
+def test_changelog_names_the_lint_cli_breaks():
+    """0.8.0 changes the lint command's output; the owner approved the `--list-rules` break on this condition."""
+    c = section(README, "Changelog")
+    e = flat(c[c.index("- **0.8.0:**"):c.index("- **0.7.3:**")])
+    for needle in ("`--list-rules` now prints `<name> <severity>`", "parses it must change",
+                   "built-ins first", "usage line is one line", "docs/prd/prd-toolkit", "2.0.0", "FR-013"):
+        assert needle in e, needle
+
+
 def test_format_documents_profiles():
     f = flat(FORMAT)
     for needle in ("`language`", "- Pack: <name> <X.Y.Z> (<source>)", "- Output language: <code>", "Target: pack",
