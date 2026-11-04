@@ -2,18 +2,23 @@
 
 > **Date:** 2026-11-03 to 2026-11-04 (UTC)
 > **Spec:** `2026-11-03-prd-toolkit-0.8.0-design.md`, §13 (P1 to P4), with §15 and its Revisions (R28)
-> **Result:** **every run passes, two on a weaker reading.**
-> - **P1, a Spanish user guide: pass (weaker reading on the dry-run clause).**
+> **Result:** **P2, P3 and P4 pass (P4 on a weaker reading). P1 fails one clause, the dry run with judged T-ids in
+> its sample (ruling R34), and passes every other clause.**
+> - **P1, a Spanish user guide: fail on the dry-run clause.**
 >   - Lint exits 0 with Spanish ACs.
 >   - `/prd-build` wrote the guide.
 >   - The `checks` level passed (18) and the `judged` level passed (3), with every `.prd-judge/` median at or above
 >     its threshold.
->   - The dry run that passed sampled no judged T-id. Five earlier dry runs had sampled T-007.1 or T-007.2, and each
->     failed on `checks` parsing conventions only.
+>   - The authoring dry run that passed sampled no judged T-id. R34 asked for one more dry run on the verified PRD,
+>     with a forced sample of T-007.1 (judged) and T-001.2 (checks).
+>   - In that run, the judged test called `prd_judge.py` with its three arguments and asserted exit 0. The run
+>     still failed: the tester's `checks` helper for T-001.2 asserted something other than rule (6).
 > - **P2, a CLI and its guide in one PRD: pass.** It took attempt 4, which the owner allowed past the three-attempt
->   cap. Both areas are `verified` on one branch, and `/prd-status` shows each area's pack and output language.
->   Three scaffold defects broke attempts 1 to 3. A fourth stopped attempt 4, and the owner settled it with a PRD
->   change made during the run.
+>   cap.
+>   - FR-001 was already `verified` in the scaffold. The run built FR-002 (greet area) and FR-010 (guide area) to
+>     `verified`, on one branch, and `/prd-status` shows each area's pack and output language.
+>   - Three scaffold defects broke attempts 1 to 3. A fourth stopped attempt 4, and the owner settled it with a PRD
+>     change made during the run.
 > - **P3, an external pack: pass (R28 deviation).**
 >   - The `demo` pack resolves, is vendored and locked.
 >   - A requirement holding a vocabulary word gets a `platform-word` warning, with lint exit 0.
@@ -138,7 +143,7 @@ every fact of the guide:
 
 | # | Pass line (spec §13) | Result |
 |---|---|---|
-| P1 | `/prd-new` for an installation guide of a small CLI, `language: es`, pack `document`. Lint exits 0 with Spanish ACs; the dry run passes with judged T-ids in its sample; `/prd-build` writes the guide; the `checks` and `judged` levels pass, with `.prd-judge/` records showing every median at or above its threshold | **Pass, with a weaker reading on the dry-run clause.** See P1 below. |
+| P1 | `/prd-new` for an installation guide of a small CLI, `language: es`, pack `document`. Lint exits 0 with Spanish ACs; the dry run passes with judged T-ids in its sample; `/prd-build` writes the guide; the `checks` and `judged` levels pass, with `.prd-judge/` records showing every median at or above its threshold | **Fail on the dry-run clause (R34).** Every other clause passes. The R34 dry run's judged test was right, but the run failed on its checks test. See P1 below. |
 | P2 | `service` by default, the guide as a `document` area with `Target: pack document 1.0.0 (prd-toolkit), output language en`. Both areas build to `verified` in one PRD, and `/prd-status` shows each area's profile | **Pass (attempt 4, allowed by the owner past the three-attempt cap, 2026-11-03).** See P2 below. |
 | P3 | A stub plugin with `prd-packs/demo/` (a custom contract type, a target kind, a vocabulary of two words), loaded with `--plugin-dir`. The pack resolves, is vendored and locked; a requirement holding a vocabulary word gets a `platform-word` warning with lint exit 0; and a vendored version that differs from §1 fails `pack-resolves` | **Pass (R28).** See P3 below. |
 | P4 | The hello-world `greet` PRD from 0.7 lints, builds and deploys under 0.8.0 with no edit to its PRD folder | **Pass, with a weaker reading.** See P4 below. |
@@ -167,9 +172,37 @@ every fact of the guide:
   quote`. Every failure was a `checks` parsing convention (Unicode, fences, headings, lists, visible text) or a test
   case less precise than its AC. None concerned a judged case.
 
-  *Weaker reading:* the passing dry run's sample holds no judged T-id. `--sample-tids` draws at random
-  (`random.sample`), and with 3 judged cases among 20 non-unit ones a sample of 5 misses all of them about 40% of the
-  time. Judged T-ids were sampled in runs 1, 2, 4, 6 and 7, and their tests were written from the PRD alone. See O-1.
+  The passing dry run's sample holds no judged T-id. `--sample-tids` draws at random (`random.sample`), and with 3
+  judged cases among 20 non-unit ones, a sample of 5 misses all of them about 40% of the time. Judged T-ids were
+  sampled in runs 1, 2, 4, 6 and 7, which failed on checks conventions. See O-1.
+- **The R34 dry run** (P1o, a fresh session at 273a9fe, on the verified PRD at f00dc5c):
+  - The prompt asked for the phase-6 procedure of `dispatching.md`, with the sample forced to `T-007.1
+    test-cases/instalacion.yaml` and `T-001.2 test-cases/instalacion.yaml`, and no change to the PRD. It dispatched
+    `prd-tester` in `Mode: dry run` to `tests/.prd-dry-run-20261103T202353/`.
+  - The judged test it wrote, quoted by the caller before cleanup:
+
+    ```python
+    def test_guia_calidad_judged():
+        """@prd T-007.1"""
+        r = subprocess.run(["uv", "run", "--script", ".prd-toolkit/prd_judge.py",
+                            "docs/prd/guia", "T-007.1", "docs/guia/instalacion.md"], cwd=ROOT)
+        assert r.returncode == 0
+    ```
+
+    That is `prd_judge.py` with its three arguments, asserting the exit code and nothing else, as the judged-test
+    rule requires.
+  - TESTS: one per T-id. FILES READ: the PRD folder and the dry-run directory only. One question was dismissed by
+    the quote "(4) un bloque de código es un bloque de código delimitado (fenced code block) de CommonMark abierto
+    con comillas invertidas".
+  - The state check was clean: only the three files the tester wrote were new. The directory was deleted afterwards.
+  - **Judgment: fail.** The caller found that the tester's helper for T-001.2, `assert_no_unclosed_backtick_fence`,
+    asserts something other than rule (6), which reads "si el archivo termina con un bloque de código abierto sin
+    su valla de cierre, la prueba falla". The helper fails on any backtick fence whose last line is not a closing
+    fence, and it strips leading spaces, tabs and `>`. Per the triage, "a harness choice that changes an assertion
+    is a question in disguise", so the run fails.
+  - The caller judged it "a mistake in the tester's helper rather than a gap in the PRD", and changed nothing.
+  - **So the clause is not met.** The judged half of the sample passes the clause's test (a test calling
+    `prd_judge.py` with three arguments), but the dry run as a whole does not pass.
 - **Approval.** P1m set `Approved` 1.0.0, and the session committed f12cd74 on its own branch `prd-guia` with
   `Refs: none (no behaviour change)`. I then vendored the toolkit (5f91d50).
 - **`/prd-build instalacion FR-001 FR-002 FR-003 FR-004 FR-005 FR-006 FR-007`** (P1n):
@@ -261,7 +294,8 @@ every fact of the guide:
     None.
     ```
   - *Note:* the pass came on attempt 4, past the cap, with one PRD change during the run (7607b2f) that the owner
-    chose.
+    chose. Of the three requirements, FR-001 was already `verified (since 1.0.0)` in the scaffold (S-2), and the run
+    built FR-002 (greet area) and FR-010 (guide area) to `verified`.
 
 ### P3: an external pack
 
@@ -285,8 +319,13 @@ every fact of the guide:
   ```
 
   It wrote a Draft `docs/prd/deck/` with §1 `- Pack: demo 1.0.0 (demo@local)` and §7
-  `| deck | contracts/deck.yaml | pack |`. Lint reports no `pack-resolves` finding. The Draft was never answered,
-  because P3's pass lines need no approval.
+  `| deck | contracts/deck.yaml | pack |`.
+  - Its first lint of the draft exited 1 (`prd-lint-exit=1`), on `ac-ears`, `glossary-synonym`, `nfr-bound` and
+    `sufficiency` errors, plus `platform-word` warnings on FR-006, AC-006.1, FR-007 and AC-007.1.
+  - The session fixed the draft until its next lint exited 0. The transcript holds two lint calls: one exit 1, then
+    one exit 0.
+  - At no point did lint report a `pack-resolves` finding.
+  - The Draft was never answered, because P3's pass lines need no approval.
 - **Warning, exit 0:**
 
   ```
@@ -343,7 +382,7 @@ every fact of the guide:
 | ID | Finding | Disposition |
 |---|---|---|
 | F-1 | The known 0.7.x hook defect, recorded elsewhere. | Not this run's. |
-| F-2 | The eval grader `no-prd-edit-beyond-status` (`builder-document-no-unit` and `builder-stays-out-of-prd`) let a close's `Source:` line through only when the Edit's new_string began with it. A close that added it after `Traces: -`, as running-a-build.md allows ("replacing any `Source:` line it had"), counted as a PRD edit, and one with run of `builder-document-no-unit` scored 0.86. | Fixed in 97ae256: both graders also pass a new_string holding a `\nSource: ` line, and a reworded line still fails. `test_the_close_graders_pass_a_source_line_anchored_after_another_line` failed first, then the full suite passed (2201). Not lint-cli. |
+| F-2 | The eval grader `no-prd-edit-beyond-status` (`builder-document-no-unit` and `builder-stays-out-of-prd`) let a close's `Source:` line through only when the Edit's new_string began with it. A close that added it after `Traces: -`, as running-a-build.md allows ("replacing any `Source:` line it had"), counted as a PRD edit, and one with run of `builder-document-no-unit` scored 0.86. | Fixed in 97ae256: both graders also pass a new_string holding a `\nSource: ` line, and a reworded line still fails. `test_the_close_graders_pass_a_source_line_anchored_after_another_line` failed first, then the full suite passed (2201). The fix round tightened it so that an Edit that also changes other PRD text fails: beyond a status move, the only thing allowed is a `Source:` line appended to the old text, or a lone `Source:` line. Pinned first by three failing inputs. Every recorded trace of `builder-document-no-unit` scores the same under it (see the Fix round below). Not lint-cli. |
 
 **Scaffold defects** (`evals/scaffolds/doc_repo.py`, the `approved` state; not F-n; each pinned first in
 `tests/test_doc_repo.py`):
@@ -351,7 +390,7 @@ every fact of the guide:
 | ID | Defect | Fix |
 |---|---|---|
 | S-1 | FR-001 said nothing of the CLI's `usage: greet <name>`, exit 2 (P2 attempt 1) | 66abe07 |
-| S-2 | FR-001 was `approved` with code and cited tests older than the PRD, so no build could earn it a status (P2 attempt 2) | 540501b |
+| S-2 | FR-001 was `approved` with code and cited tests older than the PRD, so no build could earn it a status (P2 attempt 2) | 540501b; its test is pinned to the exit code and output in the fix round |
 | S-3 | AC-010.2's "in one sentence" was checked by no case (P2 attempt 3) | 0c4ba32 |
 | S-4 | The Harness did not say whether a section heading may repeat (P2 attempt 4, and one eval run) | 9754966 |
 
@@ -362,11 +401,13 @@ every fact of the guide:
 | tester-judged-calls-judge (with / without) | 1.00 / 0.50 | 1.00 / 0.50 | — |
 | builder-document-no-unit (with / without) | 0.90 / 0.86 | 0.95 / 0.86 | 1.00 / 0.86 |
 
-**Observations** (none blocks a pass line):
+**Observations** (none blocks a pass line; O-1 bears on P1's failed clause):
 
 - **O-1: a judged T-id in the dry-run sample is chance.** `--sample-tids` is `random.sample` over the non-unit cases.
-  Spec §9 says dry runs *may* sample judged T-ids, so this is not a defect. A proof line that needs one cannot be
-  forced.
+  Spec §9 says dry runs *may* sample judged T-ids, so this is not a defect.
+  - The authoring flow cannot force one. R34 allowed a forced sample from a separate session (P1o), and that run
+    failed on its checks T-id, not its judged one.
+  - A further forced dry run could meet the clause. It needs the owner's leave, because R34 asked for one run.
 - **O-2: P1's two judged medians sit at their thresholds.** In T-007.1 and T-007.2, every run failed the same single
   item, so each scored 0.75 against 0.75. A one-item flip would fail the case: spec §15's "judged cases are not
   deterministic".
@@ -400,3 +441,19 @@ every fact of the guide:
   in both P1 and P2.
 - Every judged test called `prd_judge.py` and asserted its exit code. No session graded an output itself.
 - No session pushed or merged onto `main`.
+
+## Fix round 1 (after review)
+
+- **R34:** P1's dry-run clause needs a passing dry run with a judged T-id in its sample. The R34 run (P1o) failed,
+  so P1 is recorded as failing that clause (above).
+- **S-2's test** now asserts `(returncode, stdout) == (0, "Hello, --version!\n")`. The old `stdout != "greet
+  1.0.0\n"` also passed when the command failed. Shown first on a copy with `src/greet/__main__.py` removed: there
+  the old assertion passes and the new one fails.
+- **F-2's grader** was tightened, with `tests/test_eval_graders.py` failing first on three inputs: a `Source:` line
+  added beside an AC rewrite; a `Source:` line followed by an added AC; and a lone `Source:` line with an added AC.
+  - Against every recorded trace of `builder-document-no-unit` (the 0c4ba32, 9754966 and 97ae256 runs, 18 runs), the
+    97ae256 grader and the tightened one count the same: zero on every run.
+  - The pre-F-2 grader counts the one Edit it failed in the 9754966 run, so this check reproduces the eval's own
+    serialization.
+  - So BASELINE.md's scores stand, and no rerun was needed. `builder-stays-out-of-prd` keeps no trace from its
+    baseline, and its graders' tests still pass.
