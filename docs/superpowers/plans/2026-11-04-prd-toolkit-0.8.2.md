@@ -28,7 +28,7 @@
   - the reply suffix ` (form)` (one space, then `(form)`);
   - refusal texts `prd_gates: an inbox is already serving at <url>` and, for a gate not pending, `prd_gates: <gate id> is not pending`;
   - the default idle timeout of 120 minutes and the page's refresh every 5 seconds.
-- **Ruling (plan, spec sections 2–4):** the spec's `list_gates()` and `answer_gate()` are 0.8.1's `gates.list_gates(prd, repo_root, worktrees=False)` and `gates.answer(prd, repo_root, gate_id, reply, choice=None, cls=None, result=None, item=None)`. 0.8.2 adds the keyword `by: str = "cli"` to `gates.answer`; the CLI never passes `form`.
+- **Ruling (plan, spec sections 2–4):** the spec's `list_gates()` and `answer_gate()` are 0.8.1's `gates.list_gates(prd, repo_root, worktrees=False)` and `gates.answer(prd, repo_root, gate_id, reply, question=None, choice=None, cls=None, result=None, item=None, correction=None)` (0.8.1 at 8f557b5; Task 0 records the shipped signature). It returns `{"stdout": [...], "exit": N}` plus `"stderr"` when the owner printed any, refuses a changed question only when `question` is given, and refuses a flag the gate's kind does not take and a NUL in any text. 0.8.2 adds the keyword `by: str = "cli"` to `gates.answer`; the CLI never passes `form`. **The inbox always passes `question`**, the text the page showed.
 - **Ruling (plan, spec section 5): buttons and replies.** The page sends a button key; the server maps it:
 
   | Kind | Button key | Label in the reply | Passed as |
@@ -65,7 +65,7 @@
 - [ ] **Step 1:** In the new worktree, after the merge of the spec branch, check 0.8.1 shipped the three changes of spec section 6. Run each and check the result:
   - `uv run --script prd-toolkit/scripts/prd_gates.py answer --help`: `--choice` is listed;
   - `uv run --script prd-toolkit/scripts/prd_confirm.py done --help` and `… open --help`: exit 0.
-- [ ] **Step 2:** Read `prd-toolkit/scripts/prdlint/gates.py` and `confirm.py`. Write to the ledger the actual names of: the function behind `prd_confirm.py done` (expected `confirm.mark_done`), the one behind `open` (expected `confirm.open_answers`), `confirm.record_answer`, `gates.Gate`, `gates.list_gates`, `gates.answer`. Later tasks use the names written there.
+- [ ] **Step 2:** Read `prd-toolkit/scripts/prdlint/gates.py` and `confirm.py`. Write to the ledger `gates.answer`'s shipped signature and result shape (the Global Constraints give 8f557b5's), and the actual names of: the function behind `prd_confirm.py done` (expected `confirm.mark_done`), the one behind `open` (expected `confirm.open_answers`), `confirm.record_answer`, `gates.Gate`, `gates.list_gates`, `gates.answer`. Later tasks use the names written there.
 - [ ] **Step 3:** If any of the three changes is missing, stop and tell Ivan: the plan cannot start.
 
 ### Task 1: `formserver.py`, the shared page assembly, and `panel.html`
@@ -151,7 +151,9 @@
   - the approval gate carries the verdict's fields, the version from → to, and `diff` equal to `git diff <merge-base with main> -- docs/prd/orders`; a diff over 200 KB is cut, with `diff_truncated: true`;
   - `POST /answer` for each kind and button: the owner's file holds the reply that `build_reply` gives (for example `Approve: ship it (form)`, `Correct it to spec gap: the PRD never says (form)`, `deploy production (form)`); the log line has `by: "form"`;
   - a button that needs words, sent without: 400 and nothing written; `correct` without a class: 400;
-  - a gate changed between `GET /gates` and the answer (edit its `errors.md` entry): 409, nothing written;
+  - a gate changed between `GET /gates` and the answer (edit its `errors.md` entry): 409, nothing written; a body whose `question` differs from the current one, with the gate unchanged otherwise: 409; a body missing `question`: 400 (the inbox never answers without it);
+  - words holding a NUL: 400 with the refusal's text, nothing written; the body for a `signoff` sends `result` only, never `--class` or `--item`;
+  - a `signoff` Fail: the Sign-offs row holds `fail`, and the log line and `wait`'s outcome hold `Fail: <words> (form)`;
   - an item text holding `<script>alert(1)</script>` comes back from `/gates` as that exact string inside JSON;
   - the adoption routes: answer an item through `?wt=<second worktree>`, then `done`: the second worktree's answers file holds `"done": true` and its `summaries`, and the first's is untouched; `done` with an open item, or with an item changed since answered: 409; an answer after `done` removes `done` and the `adoption:<area>` gate is pending again;
   - a `wt` that is not a worktree: 404;

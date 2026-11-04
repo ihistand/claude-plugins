@@ -17,6 +17,9 @@
 >   (`2026-11-04-prd-toolkit-0.8.3-prd-readmes-design.md`), so best practices are 0.8.4 and
 >   conversion 0.8.5; the retarget refusal names no release number, so renumbering never again
 >   changes shipped text.
+> - Sections 4 and 5 (2026-11-04, from 0.8.1's spec at 8f557b5): 0.8.1's `answer` refuses a changed
+>   question only when given `--question`, so the inbox always sends the question it showed; its
+>   other refusals are 400; a sign-off's reply lives only in the answer log.
 
 ## 1. Scope
 
@@ -117,7 +120,7 @@ is refused (409), as 0.8.1's `answer` refuses it.
 | `GET /?token=…` | The page |
 | `GET /ping` | 200, for the liveness check |
 | `GET /gates` | Every pending gate per worktree, and the log's answers from this inbox's run |
-| `POST /answer` | `{worktree, gate, choice, words, class?, result?}`: builds the reply (section 5), calls `answer_gate(…, by="form")`, returns its result. 400 for required words missing, 409 for a changed or gone gate |
+| `POST /answer` | `{worktree, gate, question, choice, words, class?, result?}`, where `question` is the gate's `question` exactly as the page showed it: builds the reply (section 5), calls `answer_gate(…, question=<that text>, by="form")`, and returns its `result` (`{stdout, exit}`, and `stderr` when the owner printed any). 400 for required words missing, or for any other refusal (a NUL in the words, a flag the kind does not take), with the refusal's text; 409 for `refused: the gate changed; list again`, a changed or gone gate. The question is always sent, so a gate whose question changed while the owner read it is refused, never answered |
 | `GET /adoption/<area>/items`, `POST /adoption/<area>/answer`, `POST /adoption/<area>/undo`, `POST /adoption/<area>/done` | The 0.7.1 panel's requests for one area, against that area's answers file |
 
 **The answer log.** `answer_gate()` appends one JSON line per answer to
@@ -139,7 +142,7 @@ gate's `question` and its `evidence` lines (folded beyond 5).
 | `approval` | From `.prd-review.json`: `restate`, `touches`, the version from → to with `bump.level` and `bump.decided`, `impact.lines`, `dry_run.record`. Then `git diff <base> -- <prd dir>` in that worktree, one folded section per file | **Approve** · **Request changes…** (words required) | `prd_change.py approve` with the reply and the verdict's dry-run record; or `--choice changes` (section 6) |
 | `error-class` | The entry's title, Diagnosis and proposed class | **Confirm the class** · **Correct it to…** (a choice of `code bug`, `spec gap`, `invalid requirement`, `environment`, `standard`; words required) | `prd_error.py confirm` (`correct` with `--class`) |
 | `deploy-step` | The run ID, environment, the step's actor and its `Do:` and `Check:` lines | No buttons: a text box and **Send reply**; words required, and the reply is the words alone, then ` (form)` | `prd_deploy.py confirm <run> <step> --reply` |
-| `signoff` | The T-id, the case's title, `input` and `expect`, and "Signing as `<owner>`" from its `signoff:` | **Pass** · **Fail…** (words required) | The Sign-offs row, `--result pass\|fail` |
+| `signoff` | The T-id, the case's title, `input` and `expect`, and "Signing as `<owner>`" from its `signoff:` | **Pass** · **Fail…** (words required) | The Sign-offs row, `--result pass\|fail`. The row has no reply column, so the reply, a Fail's words included, is kept only in the answer log and `wait`'s outcome, where the session reads why it failed |
 | `adoption` | The area and `<answered> of <total>`. **Open** expands the 0.7.1 panel in place | Inside the panel, as 0.7.1: per item, then **Done** | `prd_confirm.py answer` per item; `prd_confirm.py done` on Done |
 
 **Why a deploy step is always typed.** A human step's reply is the go for that step, and a runbook may
