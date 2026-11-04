@@ -135,7 +135,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-010 | Name a missing dependency | verified | features/lint-cli.md |  |
 | FR-011 | Load the test-case files | verified | features/lint-cli.md |  |
 | FR-012 | Load the contract YAML files | verified | features/lint-cli.md |  |
-| FR-013 | List the packs | approved | features/lint-cli.md |  |
+| FR-013 | List the packs | verified | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 

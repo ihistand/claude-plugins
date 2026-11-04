@@ -216,8 +216,9 @@ Tests: T-012.1 [integration], T-012.2 [integration], T-012.3 [integration]  (tes
 Traces: cli:prd_lint
 
 ### FR-013 List the packs
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:60 @6e9f685
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:60 @2244187
+  prd-toolkit/scripts/prdlint/packs.py:373 @2244187
 Acceptance (EARS):
 - AC-013.1 When the plugin's lint command (`prd-toolkit/scripts/prd_lint.py`) is run with
   `--list-packs`, it shall print every pack on the machine, one
