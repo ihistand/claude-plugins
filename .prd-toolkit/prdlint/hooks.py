@@ -18,6 +18,7 @@ CONFIRM_PAGE = "confirm/form.html"  # templates/confirm/form.html in the plugin,
 JUDGE_DIR = "judge"  # templates/judge/ in the plugin, .prd-toolkit/judge/ vendored
 LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit/languages/ vendored
 PACKS_DIR = "packs"  # .prd-toolkit/packs/<name>/
+PACK_SOURCES = "pack-sources.json"  # .prd-toolkit/pack-sources.json: {"<pack name>": "<source>"} of each vendored pack
 RECORD_DIR = ".prd-judge/"
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
@@ -163,6 +164,8 @@ def _vendor(repo_root: Path, sources_packs=()) -> None:
         target = packs_dest / pack.name
         shutil.rmtree(target, ignore_errors=True)
         shutil.copytree(pack.root, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    record = {p.name: p.source for p in sorted(sources_packs, key=lambda p: p.name)}
+    (dest / PACK_SOURCES).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     (dest / "VERSION").write_text(plugin_version(PLUGIN_ROOT) + "\n", encoding="utf-8")
     (dest / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
 
@@ -231,9 +234,19 @@ def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
     return out
 
 
+def vendored_sources(vendor_dir: Path) -> dict[str, str]:
+    """The source each vendored pack was copied from, by `_vendor`'s pack-sources.json; {} when it does not read."""
+    try:
+        data = json.loads((Path(vendor_dir) / PACK_SOURCES).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(k): v for k, v in data.items() if isinstance(v, str)} if isinstance(data, dict) else {}
+
+
 def _stale_packs(repo_root: Path, prd) -> list[str]:
-    """One line per vendored pack that is missing or differs from its source."""
+    """One line per vendored pack that is missing, differs from its source, or was vendored from another source."""
     out = []
+    recorded = vendored_sources(repo_root / VENDOR_DIR)
     for ref in _pack_refs(prd):
         try:
             src = _resolve_sources_one(repo_root, ref)
@@ -245,6 +258,9 @@ def _stale_packs(repo_root: Path, prd) -> list[str]:
             out.append(f"{PACKS_DIR}/{ref.name}: missing; source {what}; run prd_hooks.py install")
         elif _pack_tree(vend) != _pack_tree(src.root):
             out.append(f"{PACKS_DIR}/{ref.name}: differs from {what}; run prd_hooks.py install")
+        elif recorded.get(ref.name) != src.source:
+            was = recorded.get(ref.name) or "an unrecorded source"
+            out.append(f"{PACKS_DIR}/{ref.name}: vendored from {was}, the PRD names {src.source}; run prd_hooks.py install")
     return out
 
 

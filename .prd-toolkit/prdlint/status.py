@@ -42,7 +42,7 @@ def _areas(prd: Prd) -> list[StatusItem]:
         m = re.fullmatch(r"features/([^/]+)\.md", rel)
         if m:
             ref, lang = packs.profile(prd, m.group(1))
-            out.append(StatusItem("Areas", m.group(1), f"{m.group(1)}: pack {ref.name} {ref.version or 'default'}, output language {lang}"))
+            out.append(StatusItem("Areas", m.group(1), f"{m.group(1)}: pack {ref.name} {ref.version or '(default)'}, output language {lang}"))
     return out or [StatusItem("Areas", None, "None.")]
 
 
