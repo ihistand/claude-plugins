@@ -76,7 +76,8 @@ def test_approved_has_the_shipped_cli_verified_and_two_changes_to_build(tmp_path
     index = read(r, "prd.md")
     assert "| FR-001 | Print a greeting | verified |" in index and "| FR-002 | Print the version | approved |" in index
     run = subprocess.run(["uv", "run", "--directory", "src", "python", "-m", "greet", "--version"], cwd=r, capture_output=True, text=True)
-    assert run.stdout != "greet 1.0.0\n", "FR-002 must not be built yet"
+    # FR-002 is not built: the CLI greets the flag as a name. A command that fails or prints nothing fails here.
+    assert (run.returncode, run.stdout) == (0, "Hello, --version!\n"), run.stdout + run.stderr
 
 
 @pytest.mark.parametrize("state", ["approved", "built"])
