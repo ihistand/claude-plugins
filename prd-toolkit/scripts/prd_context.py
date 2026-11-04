@@ -39,13 +39,14 @@ def _main(argv: list[str]) -> int:
     parser.add_argument("--context", type=int, default=20, metavar="N", help="code lines either side of a Source line (implement)")
     interface.add_flags(parser)
     try:
+        argv, asked = interface.split_argv(argv)
         args = parser.parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else 2
     if args.interface:
         print(interface.INTERFACE)
         return 0
-    bad = interface.check_version(args.json)
+    bad = interface.check_version(asked)
     if bad:
         print(f"prd_context: {bad}", file=sys.stderr)
         return 2

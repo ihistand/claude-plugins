@@ -20,12 +20,23 @@ def error(kind: str, message: str) -> str:
 
 
 def add_flags(parser) -> None:
-    parser.add_argument("--json", nargs="?", const="1", metavar="N", help="print one JSON document (interface 1)")
+    parser.add_argument("--json", action="store_true", help="print one JSON document (interface 1); --json=N asks for interface N")
     parser.add_argument("--interface", action="store_true", help="print the interface version and exit")
 
 
 def wants_json(argv: list[str]) -> bool:
     return any(a == "--json" or a.startswith("--json=") for a in argv)
+
+
+def split_argv(argv: list[str]) -> tuple[list[str], str | None]:
+    """Turn each `--json=N` into a plain `--json`; return the argv and the last N asked for (None if none)."""
+    out, version = [], None
+    for a in argv:
+        if a.startswith("--json="):
+            version = a[len("--json="):]
+            a = "--json"
+        out.append(a)
+    return out, version
 
 
 def check_version(value: str | None) -> str | None:
@@ -46,6 +57,7 @@ def run(main_text: Callable[[list[str]], int], kind: str, argv: list[str]) -> in
     sys.stderr.write(text)
     if code == 2:
         lines = [ln for ln in text.strip().splitlines() if ln.strip()]
-        message = _PREFIX.sub("", lines[-1]) if lines else "usage error"
+        pick = next((ln for ln in lines if re.match(r"^prd_\w+\.py: error: ", ln)), lines[0] if lines else "usage error")
+        message = _PREFIX.sub("", pick)
         sys.stdout.write(error(kind, message))
     return code

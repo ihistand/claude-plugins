@@ -54,6 +54,15 @@ def test_json_document_starts_with_interface_and_kind(kind, prd):
 
 
 @pytest.mark.parametrize("kind", MAINS)
+def test_json_takes_the_folder_in_either_order(kind, prd):
+    a = call(MAINS[kind], "--json", str(prd))
+    b = call(MAINS[kind], str(prd), "--json")
+    assert a[0] == b[0] and a[0] in (0, 1) and json.loads(a[1]) == json.loads(b[1])
+    assert json.loads(call(MAINS[kind], "--json=1", str(prd))[1]) == json.loads(a[1])
+    assert "[--json] [--interface]" in " ".join(call(MAINS[kind], "--help")[1].split())
+
+
+@pytest.mark.parametrize("kind", MAINS)
 def test_unsupported_version_is_an_error_document(kind, prd):
     code, out, err = call(MAINS[kind], str(prd), "--json=2")
     assert code == 2 and err
@@ -64,7 +73,8 @@ def test_unsupported_version_is_an_error_document(kind, prd):
 def test_argparse_failure_with_json_is_an_error_document(kind, prd):
     code, out, err = call(MAINS[kind], str(prd), "--json", "--bogus")
     doc = json.loads(out)
-    assert code == 2 and err and doc["kind"] == kind and "--bogus" in doc["error"]
+    assert code == 2 and err and doc["kind"] == kind and doc["error"].startswith("unrecognized arguments: --bogus") or "--bogus" in doc["error"]
+    assert not doc["error"].startswith(("usage:", "prd_"))
 
 
 @pytest.mark.parametrize("kind", MAINS)
@@ -72,6 +82,7 @@ def test_missing_folder_is_an_error_document_and_text_stays_on_stderr(kind, tmp_
     code, out, err = call(MAINS[kind], str(tmp_path / "nope"), "--json")
     doc = json.loads(out)
     assert code == 2 and doc["kind"] == kind and doc["error"] and doc["error"] in err
+    assert err.splitlines()[0].endswith(doc["error"])
 
 
 @pytest.mark.parametrize("kind", MAINS)
