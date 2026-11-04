@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""The pending human decisions of a PRD (`list`). Exit 0 done, 2 usage, dependency or internal error."""
+"""The pending human decisions of a PRD (`list`) and one reply for one of them (`answer`). Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
 import sys
 from pathlib import Path
@@ -35,7 +35,25 @@ def _build() -> argparse.ArgumentParser:
     lst.add_argument("prd_dir")
     lst.add_argument("--worktrees", action="store_true", help="also list the approval gates of every worktree of the repository")
     _flags(lst, leaf=True)
+    ans = sub.add_parser("answer", help="pass one reply for one gate to the script that owns the decision",
+                         description="Re-lists the gate first; a gate that is gone or whose question changed is refused (exit 1). "
+                                     "Free text goes to the owner as --opt=VALUE, so a reply may start with a dash.")
+    ans.add_argument("prd_dir")
+    ans.add_argument("gate", help="a gate id from `list`")
+    ans.add_argument("--reply", required=True, help="the owner's words, verbatim (write --reply=TEXT when it starts with a dash)")
+    ans.add_argument("--choice", help="one of the gate's choices (default: approve, confirm, confirm; a decision or done for adoption)")
+    ans.add_argument("--class", dest="cls", help="error-class: the corrected class, with --choice correct")
+    ans.add_argument("--result", help="signoff: the result, required; --choice, when given, must equal it")
+    ans.add_argument("--item", help="adoption: the item the decision answers")
+    ans.add_argument("--correction", help="adoption: the corrected text")
+    ans.add_argument("--question", help="the question the client showed; a gate whose question differs is refused")
+    _flags(ans, leaf=True)
     return parser
+
+
+def _cmd_answer(prd: model.Prd, args) -> tuple[str, dict]:
+    done = gates.answer(prd, model.repo_root(prd.root), args.gate, args.reply, args.choice, args.cls, args.result, args.item, args.correction, args.question)
+    return "", done
 
 
 def _cmd_list(prd: model.Prd, args) -> tuple[str, dict]:
@@ -43,7 +61,7 @@ def _cmd_list(prd: model.Prd, args) -> tuple[str, dict]:
     return "".join(f"{g.id} {g.title}\n" for g in found), {"prd": prd.frontmatter.get("prd", prd.root.name), "gates": [g.to_dict() for g in found]}
 
 
-COMMANDS = {"list": ("gates", _cmd_list)}
+COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer)}
 
 
 def main(argv: list[str]) -> int:
@@ -68,7 +86,7 @@ def _main(argv: list[str]) -> int:
     if entry is None:
         parser.print_usage(sys.stderr)
         return 2
-    _, handler = entry
+    kind, handler = entry
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
@@ -79,10 +97,21 @@ def _main(argv: list[str]) -> int:
         return 2
     try:
         text, payload = handler(prd, args)
+    except gates.Refused as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
     except Exception as e:
         print(f"prd_gates: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
-    sys.stdout.write(interface.dump("gates", payload) if args.json else text)
+    if args.cmd == "answer":
+        owner = payload["result"]
+        if args.json:
+            sys.stdout.write(interface.dump(kind, payload))
+        else:
+            sys.stdout.write("".join(f"{ln}\n" for ln in owner["stdout"]))
+            sys.stderr.write("".join(f"{ln}\n" for ln in owner.get("stderr", [])))
+        return owner["exit"]
+    sys.stdout.write(interface.dump(kind, payload) if args.json else text)
     return 0
 
 
