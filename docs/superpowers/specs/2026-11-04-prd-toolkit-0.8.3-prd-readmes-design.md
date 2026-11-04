@@ -1,4 +1,4 @@
-# prd-toolkit 0.8.3: README files for the PRD folders — design
+# prd-toolkit 0.8.3: README files and an Overview tab for each PRD — design
 
 > **Date:** 2026-11-04
 > **Author:** Ivan Histand & Claude Code
@@ -7,6 +7,12 @@
 > under `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.8.3.
 > **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.2 merged.
+>
+> **Revisions.**
+> - Sections 1, 2 and 7 to 15 (owner, 2026-11-04): the published page's Overview tab is folded in,
+>   with §2's optional `Principles:` and `Getting started:` parts and one set of facts for the README
+>   and the tab; the toolkit's own PRD gains both parts in the same `/prd-change` as its `lint-cli`
+>   requirement.
 
 ## 1. Scope
 
@@ -14,16 +20,27 @@ A person who browses a repository the toolkit manages finds `docs/prd/` and `doc
 no explanation: a dozen Markdown and YAML files, IDs like `FR-013` and `T-004.3`, and nothing that
 says what the folder is, whether to edit it, or how. 0.8.3 gives both folders a README.
 
+A person who opens a page from `/prd-publish` meets the same gap one level up: a Business and a
+Technical tab, each a deep dive, and nothing that says in one screen what the system is, what it
+holds to, how it is built and where it stands. 0.8.3 gives the page an **Overview** tab, opened by
+default. Both the README and the tab are assembled from the PRD's own sections, never from text
+outside the PRD folder, so `prd.md` §2 gains two optional parts the format had no place for:
+**Principles** and **Getting started**.
+
 0.8.3 delivers:
 - a managed block in `docs/prd/<slug>/README.md` and in `docs/prd/README.md`, written by
   `prd_block.py` beside the `CLAUDE.md` block (sections 3 and 4);
 - the PRD folder's root `README.md` skipped by lint, the change digest, the bump and the tester
   (section 5), through a `lint-cli` change to the toolkit's own PRD;
 - a stale-block check in `prd_hooks.py check --ci`, covering `CLAUDE.md` too (section 6);
-- `prd_hooks.py install` refreshing the three blocks, so an upgrade writes the READMEs (section 6).
+- `prd_hooks.py install` refreshing the three blocks, so an upgrade writes the READMEs (section 6);
+- the optional `Principles:` and `Getting started:` parts of §2 (section 7);
+- the published page's Overview tab (section 8);
+- one module that gathers the facts both the README and the tab show (section 9);
+- the toolkit's own PRD with its principles and getting-started steps in §2 (section 10).
 
-**Success:** someone new who opens either folder on GitHub understands within a minute what it is
-and how it is used, and neither README is ever stale on `main`.
+**Success:** someone new who opens either folder on GitHub, or a published page, understands within
+a minute what it is and how it is used, and neither README is ever stale on `main`.
 
 ### Decisions
 
@@ -34,7 +51,10 @@ and how it is used, and neither README is ever stale on `main`.
 | The system's description | Quoted from the PRD: §2's first paragraph in the PRD's README, its first sentence in the parent's table. A better description is a better §2, through `/prd-change` |
 | Staying current | The skills refresh it wherever `prd_block.py` already runs; `prd_hooks.py check --ci`, which the PR workflow runs, fails on a stale block. No pre-commit check: mid-change the version moves before step 5 refreshes the blocks |
 | Architecture | `prd_block.py` writes all three blocks from three templates; one command, one `--check` |
-| Release vehicle | 0.8.3, after 0.8.2. Best practices move to 0.8.4 and conversion to 0.8.5. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
+| Where the overview goes on the page | Its own tab, first and opened by default. Not the top of the Business tab: engineers go straight to Technical and would miss it |
+| The overview's source | The PRD only, as the publish rules require: §2, §4, §11 and the block statuses, `adoption.md`, `errors.md`, `links.md`. No Claude-written introduction; a better introduction is a better §2 |
+| What the PRD lacked | Principles and getting-started steps: two optional labelled parts of §2, written like `Goals:` and `Personas:`, so no section is added or renumbered and no existing PRD breaks |
+| Release vehicle | 0.8.3, after 0.8.2, with the Overview tab folded in because it shows the same facts as the README from the same sections. Best practices move to 0.8.4 and conversion to 0.8.5. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
 
 ## 2. Components
 
@@ -49,8 +69,14 @@ and how it is used, and neither README is ever stale on `main`.
 | `.claude-plugin/plugin.json` | changed | Gains `"homepage"`: the plugin's README on its repository |
 | `skills/authoring-prds`, `adopting-prds`, `changing-prds`, `coordinating-prds` | changed | Stage the two READMEs with the PRD commit wherever they run `prd_block.py` |
 | `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md` | changed | The README is a guide generated from the PRD, never a source for a test |
-| `docs/prd/prd-toolkit/` (the toolkit's own PRD) | changed | The `lint-cli` requirement of section 5, through `/prd-change` |
-| `README.md`, version files | changed | The READMEs, the upgrade note, the 0.8.3 changelog |
+| `scripts/prdlint/overview.py` | new | The facts both the README and the Overview tab show (section 9) |
+| `scripts/prdlint/publish.py`, `templates/publish/page.html` | changed | The Overview tab, first and checked by default; a mermaid fence as `<pre class="mermaid">` (section 8) |
+| `references/prd-format.md`, `templates/prd/prd.md` | changed | §2's optional `Principles:` and `Getting started:` parts (section 7) |
+| `references/languages/en.yaml`, `es.yaml` | changed | The tab's labels and the two parts' labels |
+| `skills/authoring-prds/SKILL.md`, `skills/adopting-prds/SKILL.md` | changed | Phase 2 and the bootstrap offer the two parts; neither is ever required |
+| `skills/publishing-prds/SKILL.md` | changed | Three tabs; the Overview needs no summary and gets none |
+| `docs/prd/prd-toolkit/` (the toolkit's own PRD) | changed | The `lint-cli` requirement of section 5 and §2's two parts (section 10), in one `/prd-change` |
+| `README.md`, version files | changed | The READMEs, the Overview tab, the upgrade note, the 0.8.3 changelog |
 
 ## 3. The PRD's README
 
@@ -173,9 +199,9 @@ source reads it. Only that one file is skipped; any other README (the template's
 
 **The toolkit's own PRD changes first.** `prdlint/model.py` is in the adopted `lint-cli` area's
 Boundary, and the commit hook refuses a change to it without a requirement ID. The release begins
-with `/prd-change` on `lint-cli`: a requirement that lint ignores the PRD folder's root `README.md`,
-with its test case. The owner approves it before any code, and `/prd-build` builds it, as 0.8.0 and
-0.8.1 did.
+with `/prd-change` (section 10): on `lint-cli`, a requirement that lint ignores the PRD folder's root
+`README.md`, with its test case. The owner approves it before any code, and `/prd-build` builds it,
+as 0.8.0 and 0.8.1 did.
 
 ## 6. Writing, checking and upgrading
 
@@ -202,7 +228,90 @@ the new check.
 their merge can conflict there. The fix is to rerun `prd_block.py`, never a hand edit; the check
 message says which command.
 
-## 7. Changes to the 0.8.2 spec and the umbrella
+## 7. Principles and Getting started in §2
+
+`prd.md` §2 may hold two more labelled parts, beside `Goals:`, `Personas:` and `Out of scope:`:
+
+```markdown
+Principles:
+
+- **<name>.** <one or two sentences>
+
+Getting started:
+
+1. <a step a new user takes>
+```
+
+- A part starts at a line that begins with its label (`Principles:` or `Getting started:`, or the
+  PRD language's label from `references/languages/<code>.yaml`: `es` is `Principios:` and
+  `Primeros pasos:`) and runs to the next labelled line of §2 (`Goals:`, `Personas:`,
+  `Out of scope:`, `Principles:`, `Getting started:`) or the end of §2. Text after the label on its
+  own line belongs to the part.
+- Both are optional and free Markdown. Lint checks nothing new: the `sections` rule reads headings
+  only, and the prose rules already read §2.
+- The template's §2 gains one HTML comment naming the two parts, and no marker: a PRD without them
+  is complete.
+- Authoring phase 2 and the adoption bootstrap offer to draft them from what the user has said; the
+  user's words decide them like any other §2 text. Neither skill requires them.
+
+## 8. The published Overview tab
+
+`prd_publish.py render` writes three tabs: **Overview**, checked by default, then Business and
+Technical, unchanged. The tab is CSS-only, as the other two, and loads nothing. Its parts, in order,
+each from the PRD and each left out when its source is empty:
+
+| Part | Source |
+|---|---|
+| The line `<version> · <status> · Owner: <owner> · Updated <updated>` | `prd.md` frontmatter |
+| **What it is** | §2's first paragraph (section 9) |
+| **Principles** | §2's `Principles:` part, rendered as Markdown |
+| **Architecture** | §4, rendered as Markdown |
+| **Areas** | A table `\| Area \| Adoption \| Requirements \|`: one row per `features/*.md`, sorted; Adoption from `adoption.md` (`-` without one); Requirements the area's FR and NFR blocks counted by `Status:`, as `3 verified, 1 approved`, in the order `live`, `verified`, `built`, `approved`, `as-built`, and `removed` left out |
+| **Open errors** | The count of open `errors.md` entries, as `2 open errors; the Technical tab lists them`, or `No open errors.` |
+| **Linked PRDs** | `links.md`'s Upstreams and Consumers, as the README shows them |
+| **Getting started** | §2's `Getting started:` part, rendered as Markdown |
+| The line `A snapshot of the PRD at version <version>. The PRD in the repository is the authority.` | fixed, in the PRD's language |
+
+- **Mermaid.** A ```` ```mermaid ```` fence anywhere on the page, the Technical tab's §4 included,
+  renders as `<pre class="mermaid">` holding the escaped source. The page still loads nothing; an
+  Artifact viewer draws the diagram, and a plain browser shows the source as before.
+- The Overview takes no summary: `--summaries` keys are areas, and the tab restates nothing.
+- Every label is a language-table key (`overview`, `what_it_is`, `principles`, `areas`,
+  `open_errors`, `linked_prds`, `getting_started`, `snapshot_line`), with `en` and `es` values; a key
+  a table lacks falls back to `en`, as today.
+
+## 9. One set of facts
+
+`prdlint/overview.py` gathers what the README blocks and the Overview tab show, so the two never
+disagree:
+
+- `overview.facts(prd) -> Facts`: slug, version, status, owner, updated; `summary` (§2's first
+  paragraph) and `first_sentence`; `principles` and `getting_started` (section 7's parts, or `None`);
+  `areas` (name, file, adoption state, status counts); `open_errors`; `links` (upstreams,
+  consumers); `files` (which of section 3's paths exist).
+- **§2's first paragraph** is the first run of non-blank lines in §2 after HTML comments are
+  removed, ending at a blank line or a heading, and never a paragraph that starts with a labelled
+  part (`Goals:` and the rest). With none, `summary` is `None`.
+- `prd_block.py` fills the README slots from `Facts`; `publish.py` fills the tab from it. The
+  README shows no status counts (section 3); the page, a snapshot, does.
+- `summary_paragraph` and `first_sentence` live here, not in `prd_block.py`, so §3's `summary` slot
+  and the tab's What it is are one function.
+
+## 10. The toolkit's own PRD
+
+One `/prd-change` on the toolkit's own PRD carries both of its 0.8.3 changes, before any code:
+
+- the `lint-cli` requirement of section 5;
+- §2's `Principles:` part (the seven principles of the design binder's Overview: the PRD is the
+  authority; spec-first, enforced; black-box testable; Error-Driven Development; the owner's word
+  decides; mechanical gates before judgement; the toolkit stays generic) and its `Getting started:`
+  part (install the plugin; `/prd-new` or `/prd-adopt`; install the hooks once per clone;
+  `/prd-change` then `/prd-build`, and `/prd-error` for a bug), in words the owner approves.
+
+The lint requirement adds behaviour, so the change is a minor bump. The owner approves it as one
+change, and `/prd-build` builds the lint requirement; §2's parts need no build.
+
+## 11. Changes to the 0.8.2 spec and the umbrella
 
 - **The umbrella's §4:** 0.8.3 is this release, 0.8.4 best practices, 0.8.5 conversion, with their
   "Needs" columns moved; a Revisions line records it.
@@ -211,7 +320,7 @@ message says which command.
   places), its test pin and the eval's expected text, in place of the text naming 0.8.4. Their
   Revisions record it.
 
-## 8. Testing the toolkit
+## 12. Testing the toolkit
 
 Fixture PRDs `greet`, `orders` and `notes`.
 
@@ -232,24 +341,45 @@ Fixture PRDs `greet`, `orders` and `notes`.
 - **The skills:** each skill that runs `prd_block.py` stages both READMEs; the tester rule is present.
   One eval, written with `superpowers:writing-skills`: the tester, given a README that states a
   behaviour the feature file does not, never cites it or writes a test from it.
+- **§2's parts:** each label found at the start of a line and ended by the next labelled line or the
+  end of §2; the `es` labels; text on the label's own line kept; a §2 that opens with `Goals:` has no
+  summary; a template comment before the summary is skipped.
+- **The Overview tab:** checked by default, and the Business and Technical tabs unchanged otherwise;
+  each part of section 8 present from a fixture that has its source and absent from one that lacks
+  it; the status counts in their order with `removed` left out; the open-error line in both forms;
+  every label from the `es` table on a Spanish fixture; a mermaid fence as `<pre class="mermaid">`
+  with `<` and `&` escaped, on both tabs; the page still loads nothing (no `<script`, `<link`,
+  `@import`, `url(`). The golden page `tests/fixtures/publish/orders.html` is regenerated once, and its
+  diff reviewed as the change.
+- **One set of facts:** the README's slots and the tab's parts on one fixture name the same version,
+  summary and areas.
+- **The skills:** `publishing-prds` names three tabs and says the Overview takes no summary; the
+  authoring and adoption texts offer the two parts and never require them.
 
-## 9. Proof
+## 13. Proof
 
 1. `prd_block.py docs/prd/prd-toolkit` writes `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md`
    in this repository, and the PR's CI passes.
 2. One block made stale on purpose fails CI with the fix command; the fix passes it.
 3. The owner reads both files on GitHub and confirms they explain the folders to someone new.
+4. `/prd-publish` on the toolkit's own PRD opens on the Overview tab, with its principles, its
+   architecture diagram drawn, its one adopted area and its getting-started steps. Republished into
+   the design artifact's PRD page, it replaces the 2.1.0 snapshot there; the owner confirms it.
 
-## 10. Upgrade
+## 14. Upgrade
 
 - A repository upgraded with `prd_hooks.py install` gets both READMEs and a current `CLAUDE.md` block
   in that commit.
 - A repository that hand-edited its `CLAUDE.md` block fails `check --ci` until it reruns
   `prd_block.py`; the changelog names this as the one thing to watch for.
+- A published page gains its Overview tab on the next `/prd-publish`; a PRD with no `Principles:` or
+  `Getting started:` part gets the tab without those two parts, and nothing else changes.
 
-## 11. Out of scope
+## 15. Out of scope
 
 - A README in any other folder of the PRD (`features/`, `contracts/` and so on).
-- A Claude-written description; the description is the PRD's §2.
+- A Claude-written description or introduction, in the README or on the Overview tab; the
+  description is the PRD's §2.
+- Principles or getting-started steps as required parts, or as numbered sections of `prd.md`.
 - Requirement statuses in the README; `/prd-status` gives them.
 - More than one PRD in `CLAUDE.md`'s block.
