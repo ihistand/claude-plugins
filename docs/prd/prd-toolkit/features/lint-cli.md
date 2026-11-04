@@ -11,8 +11,8 @@ Flow: 1. run `prd_lint.py` on `docs/prd/<slug>`
 Traces: FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
 
 ### FR-001 Lint a PRD folder and print its findings
-Status: built
-Source: prd-toolkit/scripts/prd_lint.py:116 @f19f84c
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:116 @daea95a
 Flow: 1. load the folder (prdlint.model.load) → 2. run every registered rule (prdlint.registry.run)
       → 3. print the loader's and the rules' findings, sorted → 4. exit 1 when any is an error, else 0
 Acceptance (EARS):
@@ -62,8 +62,8 @@ Tests: T-003.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RULES
 
 ### FR-004 Reject a bad command line
-Status: built
-Source: prd-toolkit/scripts/prd_lint.py:59 @f19f84c
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:59 @daea95a
 Acceptance (EARS):
 - AC-004.1 If none of a folder argument, `--list-rules`, `--list-packs` and `--interface` is given,
   the lint command shall print its usage on one line to stderr,
@@ -245,8 +245,8 @@ Tests: T-013.1 [integration], T-013.2 [integration], T-013.3 [integration], T-01
 Traces: cli:prd_lint; setting PRD_PLUGINS_FILE (contracts/config.yaml); `.prd-toolkit/pack-sources.json`
 
 ### FR-014 Print the lint result as a JSON document
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:42 @f19f84c
+Status: verified
+Source: prd-toolkit/scripts/prd_lint.py:42 @daea95a
 Acceptance (EARS):
 - AC-014.1 When prd_lint.py is run with `--json` on a PRD folder, the lint command shall print on
   stdout one JSON object on one line, ending in a newline, and nothing else,
