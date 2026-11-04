@@ -318,6 +318,36 @@ class _Diff:
         return block in self.gone or block in self.fresh
 
 
+_TEST_REF = re.compile(r"T-\d+\.\d+\s*\[[^\]]+\]")
+
+
+def _tests_rest(b: model.ReqBlock) -> str:
+    """A block's `Tests:` text without its T-id [level] tags and its (test-cases/<file>) part."""
+    text = " ".join(t for _, t in model._field_lines(b.lines, "Tests")).replace(b.tests_file or "\0", "")
+    return re.sub(r"[\s,()]+", " ", _TEST_REF.sub("", text)).strip()
+
+
+def _tests_line_follows_cases(d: _Diff, before: model.ReqBlock, now: model.ReqBlock) -> bool:
+    """Is the edit of a block's `Tests:` line only the T-ids of cases added or removed for it in this diff, with every
+    `[level]` tag and the `(test-cases/<file>)` part agreeing with the cases? Then the cases carry their own rule."""
+    old_cases = {t.id: t for t in d.old.test_cases}
+    new_cases = {t.id: t for t in d.new.test_cases}
+    was, now_ids = {t for t, _, _ in before.tests}, {t for t, _, _ in now.tests}
+
+    def mine(tc: model.TestCase) -> bool:
+        return d.block_of_ac.get(_block_id_of_ac(_owner_ac(tc))) == now.id
+
+    if not all(t in new_cases and t not in old_cases and mine(new_cases[t]) for t in now_ids - was):
+        return False
+    if not all(t in old_cases and t not in new_cases and mine(old_cases[t]) for t in was - now_ids):
+        return False
+    for tid, level, _ in now.tests:
+        case = new_cases.get(tid)
+        if case is None or case.data.get("level") != level or (now.tests_file and case.file != now.tests_file):
+            return False
+    return _tests_rest(before) == _tests_rest(now)
+
+
 def _diff_blocks(d: _Diff) -> None:
     """New and removed blocks; for the rest, title, prose and other fields, and each AC."""
     for i, b in d.new_blocks.items():
@@ -335,6 +365,8 @@ def _diff_blocks(d: _Diff) -> None:
         was, now = _fields(before), _fields(b)
         for name in sorted(set(was) | set(now)):
             if name in _IGNORED_FIELDS or was.get(name) == now.get(name):
+                continue
+            if name == "Tests" and _tests_line_follows_cases(d, before, b):
                 continue
             d.add(_PROSE if name in _PROSE_FIELDS else _OTHER_FILE, b.id, b.file, b.line, "changed")
         for a in b.acs:

@@ -299,3 +299,37 @@ def test_config_without_settings_is_one_whole_file_item(prd):
     (prd / "contracts/config.yaml").write_text("flags:\n  a: 1\n", encoding="utf-8")
     items = change.contract_items(model.load(prd))
     assert set(items["contracts/config.yaml"]) == {"contracts/config.yaml"}
+
+
+TESTS_OLD = "Tests: T-002.1 [integration], T-002.2 [integration]  (test-cases/api.yaml)"
+
+
+def test_a_tests_line_that_follows_its_new_cases_adds_no_item(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", TESTS_OLD, TESTS_OLD.replace("T-002.2 [integration]", "T-002.2 [integration], T-002.3 [integration]"))
+    doc = run_bump(repo)
+    assert {i["id"]: i["level"] for i in doc["items"]} == {"AC-002.3": "minor", "T-002.3": "minor"} and doc["level"] == "minor"
+
+
+def test_a_tests_line_with_a_new_id_and_no_case_needs_judgment(repo):
+    prd = repo / PRD
+    edit(prd, "features/api.md", TESTS_OLD, TESTS_OLD.replace("T-002.2 [integration]", "T-002.2 [integration], T-002.3 [integration]"))
+    doc = run_bump(repo)
+    assert [(i["id"], i["level"], i["reason"]) for i in doc["items"]] == [("FR-002", J, "unclassified change in features/api.md")] and doc["level"] == J
+
+
+def test_a_tests_line_whose_level_tag_disagrees_needs_judgment(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", TESTS_OLD, TESTS_OLD.replace("T-002.2 [integration]", "T-002.2 [integration], T-002.3 [system]"))
+    doc = run_bump(repo)
+    assert {i["id"] for i in doc["items"]} == {"AC-002.3", "T-002.3", "FR-002"} and doc["level"] == J
+
+
+def test_a_removed_case_and_its_id_dropped_from_tests_is_one_item(repo):
+    prd = repo / PRD
+    drop_case(prd)
+    edit(prd, "features/api.md", TESTS_OLD, "Tests: T-002.1 [integration]  (test-cases/api.yaml)")
+    doc = run_bump(repo)
+    assert [(i["id"], i["change"], i["level"]) for i in doc["items"]] == [("T-002.2", "removed", J)]
