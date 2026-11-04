@@ -7,6 +7,7 @@
 import argparse
 import dataclasses
 import datetime
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +53,12 @@ def _build() -> argparse.ArgumentParser:
     rec.add_argument("--bump", required=True, choices=change.RECORD_LEVELS, help="the version level")
     rec.add_argument("--change", required=True, help="the changelog text")
     _flags(rec, leaf=True)
+    app = sub.add_parser("approve", help="record the dry run, set the status and commit the approval")
+    app.add_argument("prd_dir")
+    app.add_argument("--reply", required=True, help="the owner's reply, verbatim")
+    app.add_argument("--dry-run", required=True, help="the dry-run record for the §14 row")
+    app.add_argument("--refs", help="the trailer's IDs, for an E-nnn change")
+    _flags(app, leaf=True)
     return parser
 
 
@@ -77,12 +84,19 @@ def _cmd_record(prd: model.Prd, args) -> tuple[str, dict]:
     return f"{done.version}\n{done.row}\n", dataclasses.asdict(done)
 
 
-# (command, subcommand) -> (document kind, handler); the next task adds approve here
+def _cmd_approve(prd: model.Prd, args) -> tuple[str, dict]:
+    done = change.approve(change.repo_root(prd.root), prd.root, args.reply, args.dry_run, args.refs)
+    short = subprocess.run(["git", "rev-parse", "--short", done.commit], cwd=prd.root, capture_output=True, text=True).stdout.strip()
+    return f"approved {prd.root.name} {prd.frontmatter["version"]} {short}\n", {"commit": done.commit}
+
+
+# (command, subcommand) -> (document kind, handler)
 COMMANDS = {
     ("ids", "next"): ("change.ids", _cmd_ids_next),
     ("digest", None): ("change.digest", _cmd_digest),
     ("bump", None): ("change.bump", _cmd_bump),
     ("record", None): ("change.record", _cmd_record),
+    ("approve", None): ("change.approve", _cmd_approve),
 }
 
 

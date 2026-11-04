@@ -627,3 +627,6 @@ def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, to
     row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"
     _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, model.load(prd_root), result.items))
     return Recorded(version, row)
+
+
+from .change_approve import Approved, approve  # noqa: E402,F401  (the approve step lives in its own module)
