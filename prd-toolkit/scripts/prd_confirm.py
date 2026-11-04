@@ -58,7 +58,11 @@ def _serve_items(prd, args) -> int:
         summaries = confirm.load_summaries(Path(args.summaries), items, args.area)
     else:  # the file `open` wrote carries them
         saved = confirm.load_answers(confirm.answers_path(model.repo_root(prd.root), args.area)).get("summaries")
-        summaries = confirm.check_summaries(saved, items, args.area, "summaries in the answers file") if saved else {}
+        where = confirm.answers_path(model.repo_root(prd.root), args.area).name
+        try:
+            summaries = confirm.check_summaries(saved, items, args.area, f"summaries in {where}") if saved else {}
+        except confirm.Refused as e:
+            raise confirm.Refused(f"the summaries saved in the answers file {where} are not valid: {e}; fix or remove them") from e
     try:
         page = confirm.page_path().read_text(encoding="utf-8")
     except OSError as e:
@@ -108,8 +112,8 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="command")
     sv = sub.add_parser("serve", help="serve the form until Done")
     st = sub.add_parser("status", help="print answered/total and the open items")
-    an = sub.add_parser("answer", help="answer one item without the form")
-    dn = sub.add_parser("done", help="write done once no item is open")
+    an = sub.add_parser("answer", help="answer one item without the form (exit 1 when refused, a corrupt answers file included)")
+    dn = sub.add_parser("done", help="write done once no item is open (exit 1 when refused, a corrupt answers file included)")
     op = sub.add_parser("open", help="start the answers file with summaries and no answers")
     for p in (sv, st, op):
         p.add_argument("prd_dir")

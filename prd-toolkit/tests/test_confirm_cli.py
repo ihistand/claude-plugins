@@ -22,6 +22,16 @@ WAIT = 180
 URL = re.compile(r"^url=http://127\.0\.0\.1:(\d+)/\?token=([0-9a-f]{64})$")
 
 
+def _sigint_default():
+    """A child started from a background job inherits SIGINT ignored, and Python then never installs its handler,
+    so a test that sends SIGINT would wait out its whole deadline. Start every child with the default."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+def popen(cmd, **kw):
+    return subprocess.Popen(cmd, preexec_fn=_sigint_default, **kw)
+
+
 def run(*args, cwd=None):
     return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True, cwd=cwd, timeout=WAIT)
 
@@ -40,7 +50,7 @@ def procs():
 
 
 def serve(procs, prd, *extra):
-    p = subprocess.Popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes", "--no-open", *extra],
+    p = popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes", "--no-open", *extra],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     procs.append(p)
     return p
@@ -187,7 +197,7 @@ def test_a_failing_browser_is_ignored(tmp_path, procs, monkeypatch):
     sc = tmp_path / "sitecustomize.py"
     sc.write_text("import webbrowser\ndef _boom(*a, **k):\n    raise RuntimeError('no browser')\nwebbrowser.open = _boom\n")
     env = {"PYTHONPATH": str(tmp_path), "PATH": "/usr/bin:/bin"}
-    p = subprocess.Popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
+    p = popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     procs.append(p)
     assert URL.match(first_line(p))
@@ -242,7 +252,7 @@ def test_ctrl_c_while_opening_the_browser_exits_3(tmp_path, procs):
     sc = tmp_path / "sitecustomize.py"
     sc.write_text("import webbrowser\ndef _stop(*a, **k):\n    raise KeyboardInterrupt\nwebbrowser.open = _stop\n")
     env = {"PYTHONPATH": str(tmp_path), "PATH": "/usr/bin:/bin"}
-    p = subprocess.Popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
+    p = popen([sys.executable, str(SCRIPT), "serve", str(prd), "--area", "notes"], env=env,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     procs.append(p)
     assert URL.match(first_line(p))

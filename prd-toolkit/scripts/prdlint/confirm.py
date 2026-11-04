@@ -36,6 +36,14 @@ class Refused(Exception):
     """Something the owner must fix before a form can be served."""
 
 
+class StillOpen(Refused):
+    """`mark_done` found items with no answer, or an answer given to other text."""
+
+    def __init__(self, ids: list[str]):
+        super().__init__(f"{len(ids)} item(s) still open: {', '.join(ids)}")
+        self.ids = ids
+
+
 @dataclass
 class Item:
     id: str
@@ -457,11 +465,13 @@ def record_answer(prd: Prd, area: str, item_id: str, decision: str, reply: str, 
     """Answer one item from outside the form. `reply` is kept verbatim; `text` is the correction, else the reply."""
     if not isinstance(reply, str) or not reply.strip():
         raise Refused("the reply is empty")
+    if correction is not None and not correction.strip():
+        raise Refused("--correction is empty")
     by_id = {i.id: i for i in build_items(prd, area)}
     if item_id not in by_id:
         raise Refused(f"unknown item {item_id!r}")
     item = by_id[item_id]
-    text, acs = validate_answer(item, decision, correction if correction is not None and correction.strip() else reply, None)
+    text, acs = validate_answer(item, decision, correction if correction is not None else reply, None)
     return _store(prd, area, repo_root, item, _entry(item, decision, text, acs, reply))
 
 
@@ -473,7 +483,7 @@ def mark_done(prd: Prd, area: str, items: list[Item], repo_root: Path) -> dict:
         data = load_answers(path)
         pending = open_ids(items, data)
         if pending:  # refuses before anything is written
-            raise Refused(f"{len(pending)} item(s) still open: {', '.join(pending)}")
+            raise StillOpen(pending)
         answers = data.get("answers")
         data.update({"prd": prd.frontmatter.get("prd", ""), "area": area, "answers": answers if isinstance(answers, dict) else {}})
         data.setdefault("commit", _head(root))
@@ -505,7 +515,7 @@ class _Bad(Exception):
 
 
 class _State:
-    """Everything a request needs; every write to the answers file goes through `change`."""
+    """Everything a request needs; every write to the answers file goes through `_mutate`, `_store` or `mark_done`."""
 
     def __init__(self, prd: Prd, area: str, items: list[Item], summaries: dict, page: str, token: str,
                  idle_minutes: float, request_timeout: float):
@@ -547,14 +557,12 @@ class _State:
 
     def finish(self) -> list[str]:
         """The open IDs; when there are none, write `done` and end the run."""
-        pending = open_ids(self.items, self.snapshot())
-        if not pending:
-            try:
-                mark_done(self.prd, self.area, self.items, self.root)
-            except Refused:  # an answer was undone between the check and the write
-                return open_ids(self.items, self.snapshot())
-            self.end = "done"
-        return pending
+        try:
+            mark_done(self.prd, self.area, self.items, self.root)
+        except StillOpen as e:  # the check and the write share one lock, so this is the answer, not a race
+            return e.ids
+        self.end = "done"  # reported only after `done` is on disk
+        return []
 
     def listing(self) -> dict:
         data = self.snapshot()

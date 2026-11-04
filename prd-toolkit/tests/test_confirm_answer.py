@@ -302,3 +302,142 @@ def test_serve_shows_the_summaries_of_the_file_and_summaries_flag_wins(tmp_path,
     assert {i["id"]: i["summary"] for i in listing["items"]}["FR-001"] == "FR-001 from the flag."
     assert call(f"http://127.0.0.1:{m.group(1)}", m.group(2), "/answer", {"id": "FR-002", "decision": "confirm"})[0] == 200
     assert data(repo)["summaries"] == {"FR-001": "FR-001 from the file."} and before != b""
+
+
+# ---- fix round 1 ----
+
+def test_blank_correction_is_refused(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    r = answer(prd, "FR-001", "correct", "reply", "--correction", "   ")
+    assert r.returncode == 1 and r.stderr.strip() == "refused: --correction is empty"
+    assert not confirm.answers_path(repo, "notes").exists()
+
+
+def test_the_reply_is_utf8_on_disk_not_escaped(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    assert answer(prd, "FR-001", "ask", REPLY).returncode == 0
+    raw = confirm.answers_path(repo, "notes").read_text(encoding="utf-8")
+    assert "sí" in raw and "¿ok?" in raw and "\\u00" not in raw
+
+
+def test_corrupt_file_refuses_answer_and_done_with_exit_1(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    confirm.answers_path(repo, "notes").write_text("{nope")
+    for r in (answer(prd, "FR-001", "confirm"), run("done", str(prd), "notes")):
+        assert r.returncode == 1 and r.stderr.startswith("refused: ")
+
+
+def test_serve_names_the_answers_file_when_its_summaries_are_stale(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    assert run("open", str(prd), "--area", "notes").returncode == 0
+    d = data(repo)
+    d["summaries"] = {"FR-099": "FR-099 is gone."}
+    confirm.save_answers(confirm.answers_path(repo, "notes"), d)
+    r = run("serve", str(prd), "--area", "notes", "--no-open")
+    assert r.returncode == 2 and ".prd-confirm-notes.json" in r.stderr and "FR-099" in r.stderr
+    assert "answers file" in r.stderr
+
+
+def test_a_done_that_finds_an_item_open_is_not_reported_done(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    p = model.load(prd)
+    items = confirm.build_items(p, "notes")
+    server, _ = confirm.make_server(p, "notes", items, {}, "<html></html>")
+    state = server.state
+    try:
+        assert state.finish() == [i.id for i in items] and state.end is None
+        assert "done" not in (data(repo) if confirm.answers_path(repo, "notes").exists() else {})
+        for i in items:
+            state.answer({"id": i.id, "decision": kind_decision(i), "text": "settled"})
+        assert state.finish() == [] and state.end == "done" and data(repo)["done"] is True
+    finally:
+        server.server_close()
+
+
+def test_the_directory_lock_makes_a_form_save_and_a_cli_answer_wait(tmp_path):
+    """Hold the directory flock ourselves: neither writer may write until we let go."""
+    import fcntl
+    import os
+    import time
+    repo, prd = make_confirm_repo(tmp_path)
+    f = summaries_file(tmp_path, {"FR-001": "FR-001 adds a note."})
+    assert run("open", str(prd), "--area", "notes", "--summaries", str(f)).returncode == 0
+    path = confirm.answers_path(repo, "notes")
+    seed = path.read_bytes()
+    p = model.load(prd)
+    items = confirm.build_items(p, "notes")
+    server, token = confirm.make_server(p, "notes", items, {}, "<html></html>")
+    runner = threading.Thread(target=lambda: confirm.run(server), daemon=True)
+    runner.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    posted = threading.Event()
+    result = []
+
+    def post():
+        result.append(call(base, token, "/answer", {"id": "FR-001", "decision": "ask", "text": "form"})[0])
+        posted.set()
+
+    fd = os.open(repo, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    held = True
+    child = None
+    try:
+        child = subprocess.Popen([sys.executable, str(SCRIPT), "answer", str(prd), "notes", "Q-01", "--decision", "answer",
+                                  "--reply=cli"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        poster = threading.Thread(target=post, daemon=True)
+        poster.start()
+        deadline = time.monotonic() + 8  # a window to observe, not a synchronisation: unlocked, both finish well inside it
+        while time.monotonic() < deadline:
+            assert not posted.is_set() and child.poll() is None and path.read_bytes() == seed
+            posted.wait(0.1)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        held = False
+        poster.join(WAIT)
+        out, err = child.communicate(timeout=WAIT)
+        assert result == [200] and child.returncode == 0, err
+        d = data(repo)
+        assert set(d["answers"]) == {"FR-001", "Q-01"} and d["summaries"] == {"FR-001": "FR-001 adds a note."}
+    finally:
+        if held:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.communicate()
+        server.shutdown()
+        runner.join(WAIT)
+        server.server_close()
+
+
+def test_the_thread_lock_serialises_in_process_writers(tmp_path, monkeypatch):
+    """Both writers read before either writes unless the lock stops it; a lost update would drop an answer."""
+    repo, prd = make_confirm_repo(tmp_path)
+    p = model.load(prd)
+    monkeypatch.setattr(confirm, "fcntl", None)  # the directory flock would also serialise; test the thread lock alone
+    real = confirm.load_answers
+    both_read = threading.Barrier(2)
+
+    def load_then_meet(path):
+        got = real(path)
+        try:
+            both_read.wait(3)  # only an unlocked pair gets here together
+        except threading.BrokenBarrierError:
+            pass
+        return got
+
+    monkeypatch.setattr(confirm, "load_answers", load_then_meet)
+    errors = []
+
+    def go(item, decision):
+        try:
+            confirm.record_answer(p, "notes", item, decision, "reply " + item, None, repo)
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=go, args=a) for a in (("FR-001", "confirm"), ("Q-01", "answer"))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(WAIT)
+    assert errors == []
+    assert set(data(repo)["answers"]) == {"FR-001", "Q-01"}
