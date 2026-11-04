@@ -1,0 +1,182 @@
+"""changing-prds calls prd_change.py for the bookkeeping, and /prd-change --review runs reviewing-a-change.md
+(spec 0.8.1 §4 and §6)."""
+import json
+import re
+from pathlib import Path
+
+from prdlint import change
+
+ROOT = Path(__file__).parent.parent
+SKILL = ROOT / "skills/changing-prds/SKILL.md"
+REVIEW = ROOT / "skills/changing-prds/reviewing-a-change.md"
+COMMAND = ROOT / "commands/prd-change.md"
+SPEC = ROOT.parent / "docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md"
+GATE = '; echo "prd-change-exit=$?"'
+
+
+def flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def between(text: str, start: str, end: str) -> str:
+    a = text.index(start)
+    return text[a:text.index(end, a + len(start))]
+
+
+def step(n: int) -> str:
+    t = flat(SKILL.read_text(encoding="utf-8"))
+    heads = {0: "0. **Check the PRD", 1: "1. **Restate the change**", 2: "2. **Edit the PRD.**",
+             3: "3. **Bump the version**", 4: "4. **Lint and dry run.**", 5: "5. **Approval, then commit.**"}
+    return between(t, heads[n], heads[n + 1] if n < 5 else "## Red Flags")
+
+
+def commands(text: str, script: str) -> list[str]:
+    """Every backticked command that runs `script`, and every line of a bash block that does."""
+    spans = re.findall(r"`(uv run --script [^`]*" + re.escape(script) + r"[^`]*)`", flat(text))
+    blocks = [ln.strip() for b in re.findall(r"```bash\n(.*?)```", text, re.S) for ln in b.splitlines()
+              if script in ln]
+    return spans + blocks
+
+
+# --- the skill: one Bash call per subcommand, with the exit gate ---
+
+def test_skill_runs_each_prd_change_subcommand_as_its_own_gated_call():
+    text = SKILL.read_text(encoding="utf-8")
+    cmds = commands(text, "prd_change.py")
+    for sub in ("ids next", "bump", "record", "approve"):
+        mine = [c for c in cmds if f"prd_change.py {sub} " in c]
+        assert mine, sub
+        for c in mine:
+            assert c.startswith("uv run --script <scripts>/prd_change.py "), c
+            assert c.endswith(GATE), c
+            assert "&&" not in c and "|" not in c.replace("prd-change-exit", ""), c
+            assert "CLAUDE_PLUGIN_ROOT" not in c, c
+
+
+def test_skill_states_the_exit_gate():
+    t = flat(SKILL.read_text(encoding="utf-8"))
+    assert "`prd-change-exit=`" in t
+    gate = between(t, "The `prd-change-exit=` value", ".")
+    for s in ("`0`", "`1`", "refused", "`2`", "usage"):
+        assert s in gate, s
+
+
+def test_skill_stops_on_a_vendored_copy_without_prd_change():
+    t = flat(SKILL.read_text(encoding="utf-8"))
+    assert "When `.prd-toolkit/` holds no `prd_change.py`, the vendored copy predates 0.8.1: stop" in t
+
+
+def test_step_2_takes_each_new_id_from_ids_next():
+    s = step(2)
+    assert "prd_change.py ids next docs/prd/<slug> <kind>" in s
+    for kind in ("`FR`", "`NFR`", "`UJ`", "`AC-<nnn>`", "`T-<nnn>`"):
+        assert kind in s, kind
+    assert "never count" in s
+
+
+def test_step_3_runs_bump_then_record_and_the_model_decides_judgment():
+    s = step(3)
+    assert s.index("prd_change.py bump docs/prd/<slug> --base HEAD") < s.index("prd_change.py record docs/prd/<slug> --base HEAD")
+    for needle in ("`needs judgment`", "Version rule", "`--bump`", "`patch`, `minor` or `major`",
+                   "refused: the diff needs", "a needs-judgment bump must be decided first",
+                   "replaces its own `pending` row", "never edit the version"):
+        assert needle in s, needle
+
+
+def test_step_4_writes_the_verdict_after_lint_and_dry_run():
+    s = step(4)
+    assert s.index("prd-lint-exit=") < s.index(".prd-review.json")
+    assert "reviewing-a-change.md" in s and "`ready`" in s
+
+
+def test_step_5_approves_through_the_script_with_the_reply_verbatim():
+    s = step(5)
+    approve = next(c for c in commands(SKILL.read_text(encoding="utf-8"), "prd_change.py") if " approve " in c)
+    assert "--reply '<the reply, verbatim>'" in approve and "--dry-run '<the dry-run record>'" in approve
+    assert "`'\\''`" in s
+    assert "`--refs" in s and "E-nnn" in s
+    assert "Change-set:" in s
+
+
+def test_version_rule_table_equals_bump_rules():
+    text = SKILL.read_text(encoding="utf-8")
+    rule = between(text, "## Version rule", "## ID rules")
+    head = "| Item | Level |\n|---|---|\n"
+    assert head in rule
+    rows = rule.split(head, 1)[1].split("\n\n", 1)[0].strip().splitlines()
+    cells = [tuple(c.strip() for c in r.strip().strip("|").split("|")) for r in rows]
+    assert cells == [(item, level) for item, level in change.BUMP_RULES]
+
+
+def test_skill_points_at_review_mode():
+    t = flat(SKILL.read_text(encoding="utf-8"))
+    assert "/prd-change --review <dir>" in t and "reviewing-a-change.md" in t
+
+
+def test_id_rules_name_ids_next_and_uj():
+    t = flat(between(SKILL.read_text(encoding="utf-8"), "## ID rules", "## The five steps"))
+    assert "`ids next`" in t and "UJ" in t and "two digits" in t
+
+
+# --- review mode ---
+
+def review_rule_1() -> str:
+    paragraphs = REVIEW.read_text(encoding="utf-8").split("\n\n")
+    assert paragraphs[0].startswith("# "), paragraphs[0]
+    return flat(paragraphs[1])
+
+
+def test_review_first_rule_is_edit_nothing():
+    r1 = review_rule_1()
+    assert r1.startswith("**Rule 1: edit nothing.**"), r1
+    for s in ("no Write", "no Edit", "no Bash that writes", "outside the dry-run directory", "`.prd-review.json`"):
+        assert s in r1, s
+
+
+def test_review_refuses_an_edit_asked_for_during_the_review():
+    t = flat(REVIEW.read_text(encoding="utf-8"))
+    assert "just fix the AC while you review it" in t
+    assert "not edited" in t
+
+
+def test_review_runs_digest_head_and_impact():
+    text = REVIEW.read_text(encoding="utf-8")
+    t = flat(text)
+    assert commands(text, "prd_change.py digest") and all(c.endswith(GATE) for c in commands(text, "prd_change.py digest"))
+    assert "`git rev-parse HEAD`" in t
+    impact = commands(text, "prd_links.py impact")
+    assert impact and all(c.endswith('; echo "prd-links-exit=$?"') for c in impact)
+    assert "When `links.md` has Consumers" in t
+    bump = commands(text, "prd_change.py bump")
+    assert bump and all(c.endswith(GATE) for c in bump)
+    assert not commands(text, "prd_change.py record") and not commands(text, "prd_change.py approve")
+
+
+def _verdict(text: str) -> dict:
+    block = next(b for b in re.findall(r"```json\n(.*?)```", text, re.S) if '"kind": "review"' in b)
+    return json.loads(block)
+
+
+def test_review_verdict_keys_equal_the_spec():
+    spec = SPEC.read_text(encoding="utf-8")
+    want = _verdict(spec[spec.index("## 6. Review mode"):spec.index("## 7.")])
+    got = _verdict(REVIEW.read_text(encoding="utf-8"))
+    assert list(got) == list(want)
+    for key in ("impact", "bump", "dry_run"):
+        assert list(got[key]) == list(want[key]), key
+    assert got["interface"] == 1 and got["kind"] == "review"
+
+
+def test_review_states_ready_and_the_client_order():
+    t = flat(REVIEW.read_text(encoding="utf-8"))
+    for s in ("`ready` is `false`", "lint", "impact", "judgment", "open question", "`blockers`"):
+        assert s in t, s
+    order = between(t, "The order a client runs", ".")
+    assert order.index("bump") < order.index("review") < order.index("record") < order.index("lint")
+
+
+def test_command_routes_review_to_review_mode():
+    t = flat(COMMAND.read_text(encoding="utf-8"))
+    assert COMMAND.read_text(encoding="utf-8").startswith("---\ndescription: ")
+    assert "`--review <dir>`" in t and "skills/changing-prds/reviewing-a-change.md" in t
+    assert "Invoke the prd-toolkit:changing-prds skill and follow it exactly" in t

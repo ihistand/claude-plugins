@@ -36,6 +36,6 @@ def test_description_says_links_across_repositories():
     assert "links PRDs across repositories" in plugin["description"]
 
 
-def test_version_is_0_8_0():
+def test_version_is_0_8_1():
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.8.0"
+    assert plugin["version"] == "0.8.1"

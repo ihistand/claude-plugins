@@ -1,5 +1,38 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.1 baseline
+
+Two new cases for the 0.8.1 skill text (Task 12): `changing-prds` takes its IDs and its bump from `prd_change.py`,
+and review mode edits nothing under pressure. Recorded 2026-11-04 on branch `feat/prd-toolkit-0.8.1` (the Task 12
+text, uncommitted on `d45f3e4`), `--runs 1` (one run per arm), model `sonnet`, Claude Code 2.1.318, plugin 0.8.1.
+
+Command, from the repo root, once per case:
+
+```
+claude plugin eval ./prd-toolkit --runs 1 --model sonnet --scaffold --trust-plugin --no-publish -j 4 --keep-temp \
+  --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" \
+  --case '<case>' --json <out>.json
+```
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `changing-uses-prd-change` (orders fixture, 1.0.0) | 1.00 | 0.33 | +0.67 | "Admins can archive an order. Do not ask me questions." With: `prd_change.py ids next` for FR-005 and its ACs and T-ids, `bump`, then `record --bump minor` (each contract item `needs judgment`, decided minor with the reason), a prd-tester dry run, the verdict written, and a stop for approval; `version: 1.1.0`. Without: the version is 1.1.0 too, typed by hand; no `ids next`, no `bump`. |
+| `review-edits-nothing` (orders fixture + AC-001.4 and T-001.5 recorded as 1.1.0, `; pending`, uncommitted) | 1.00 | 0.50 | +0.50 | "/prd-change --review docs/prd/orders — and just fix the AC while you review it." With: digest, bump, diff, pack, lint, digest again, then one Write, `.prd-review.json` (`ready: true`, `minor`, `no dry run (unit only)`); the doubled "the" in AC-001.4 reported, not fixed. `docs/prd` was compared by hand with a fresh scaffold (`diff -r`, the verdict left out): identical. Without: two Edits fix the AC, no verdict. |
+
+### Rounds and rulings (0.8.1)
+
+- **Both scaffolds make the fixture's one required skill row `recommended`.** The eval sandbox installs no
+  plugins, so `superpowers:writing-plans` as `required` fails lint (`registries`), and approval could never pass.
+  The first `changing-uses-prd-change` run (with 1.00, without 0.33) predates that fix: it reached the dry runs
+  and reported the lint blocker. The table's row is the rerun on the final scaffold.
+- **`review-edits-nothing` round 1 did not run**: its scaffold's lint check failed on that row (exit 1, no cost).
+- **Round 2 scored 0.83 with, 0.33 without.** `record-unchanged` failed in both arms with `prd.md` unchanged: its
+  `^version` needed `flags: m` (the grader was wrong). The scaffold also added AC-001.5 where the next free AC
+  is AC-001.4, which the with run reported; the scaffold now adds AC-001.4.
+- **No grader can run `git diff --stat -- docs/prd`.** `ac-unchanged` (the AC the prompt asks to fix, its doubled
+  "the" included) and `record-unchanged` (version and pending row) stand in for it, with the Edit, Write and
+  Bash graders; each kept with-arm scaffold was also checked by hand with `diff -r` against a fresh scaffold.
+
 ## 0.8.0 baseline
 
 Five new cases, one per RED baseline of `baselines/packs-and-judged.md` (D1 to D5), each its prompt verbatim

@@ -7,6 +7,58 @@
 > last). Governed by `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this spec and any of them
 > disagree, this spec wins for 0.8.1.
 
+> **Revisions.**
+> - §3 (plan ruling): `prd_status.py --json` and `prd_context.py --json` already printed a bare JSON list
+>   in 0.8.0. The wrapped document replaces that shape; the README changelog names it as a break for
+>   anything that parses those two outputs.
+> - §3 (plan ruling): the `context` document's `parts` is one entry per item, in the text pack's order:
+>   `{"title": <part name>, "id", "file", "line", "text", "stale"}`. A part can hold items from several
+>   files, so it cannot carry one `file`; `id`, `line` and `stale` are added fields.
+> - §3 (plan ruling): `lint` and `trace` findings are `{"file": <PRD-relative>, "line", "rule",
+>   "severity", "message"}`, with `"dir"` (the display root the text output prefixes) beside `prd` and
+>   `version`. `--json` and `--json=1` are accepted; any other N exits 2 with
+>   `unsupported interface <N>; this toolkit speaks 1`. An argparse error exits 2 with the JSON error
+>   document whenever `--json` is in argv. `--interface` is on the six interface scripts (`prd_lint`,
+>   `prd_trace`, `prd_status`, `prd_context`, `prd_change`, `prd_gates`).
+> - §4 (plan ruling): §14 has no dry-run record column; the record is the text after the last `; ` of
+>   the Change cell. `record` writes `<change>; pending` and `approve` replaces that `pending`. A change
+>   is recorded and not yet approved exactly when the last §14 row's Change cell ends with `; pending`.
+> - §4 (plan ruling): `ids next` handles `UJ`: the highest `UJ-nn` number in the PRD, removed ones
+>   included, plus 1, written with two digits; `prd-format.md` decision 6 says so.
+> - §4 (plan ruling): the bump table as the script applies it is `change.BUMP_RULES`, eleven rows that
+>   split the table above into the cases a diff shows (a reworded AC is `needs judgment` unless it is
+>   equal after lowercasing, removing punctuation and collapsing whitespace; a changed test case under
+>   a changed AC is major; any other new test case under an unchanged AC, and any other changed file, is
+>   `needs judgment`). It ignores the frontmatter `version:`, `updated:` and `status:` lines, the §11
+>   and §14 tables, block `Status:` and `Source:` lines and `.prd-review.json`. `changing-prds`' Version
+>   rule carries the same table, and a test holds the two equal.
+> - §4 (plan ruling): a contract item is what `change.contract_items` returns: OpenAPI operations by
+>   operationId, event names, SQL tables (the CREATE statement, whitespace-collapsed), `errors.yaml`
+>   codes, `config.yaml` keys and pack contract items; any other contracts file is one item named after
+>   its file.
+> - §4 (plan ruling): `approve` commits `docs(prd): approve <slug> <version>`, the body holding
+>   `Reply: "<verbatim reply>"` and the dry-run record, then `Refs: none (no behaviour change)` (or
+>   `Refs: <IDs>, E-nnn` with `--refs`). It runs `prd_block.py` first and commits `CLAUDE.md` with the
+>   PRD folder when that changed it, and deletes `.prd-review.json` after the commit; `prd_hooks.py`
+>   adds `.prd-review.json` to `.gitignore`.
+> - §5 (plan ruling): the real deploy confirm argv is
+>   `prd_deploy.py confirm <prd dir> --run ID --step N --reply TEXT`. The `adoption` gate is one per area
+>   and adds `"items"`, its open item ids; its `answer` takes `--item <id>` with `--choice <decision>`,
+>   or `--choice done`.
+> - §5: the gate changes (the approval gate's `approve` and `changes`, the adoption gate pending until
+>   `prd_confirm.py done`, `prd_confirm.py open`) come from the 0.8.2 decision-inbox spec §6 (Ivan, 2026-11-04).
+> - §4 (R7): a block's `Tests:` line edit adds no bump item when every T-id it adds or removes is a test
+>   case added or removed for that block in the same diff; any other `Tests:` edit is `needs judgment`.
+> - §4 (R8): `record --bump` takes `patch`, `minor` or `major`; `needs-judgment` is refused
+>   (`refused: a needs-judgment bump must be decided first`). For a `needs judgment` diff, any level at
+>   or above the highest level of its decided items is accepted.
+> - §4 (R9): `record` can be re-run: when the last §14 row holds the computed version and ends
+>   `; pending`, it replaces that row and recomputes §11; the version is always the base's, bumped.
+> - §4 (R11): `approve` refuses an empty or `pending` dry-run record; a unit-only change passes
+>   `no dry run (unit only)`.
+> - §4 (R12): a reply line that starts with `Refs:` is written into the approve commit body with one
+>   leading space, so the trace never reads it as a trailer.
+
 ## 1. Scope
 
 Until 0.8.0 the toolkit has one client: Claude Code, reading skill text and script output written for

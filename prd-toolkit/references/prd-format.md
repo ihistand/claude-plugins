@@ -109,6 +109,14 @@ Tables (the header row is parsed; column names and order are fixed):
 | 12 Assumptions | `\| ID \| Assumption \| Status \|` |
 | 14 Changelog | `\| Version \| Date \| Change \| IDs \|` |
 
+A §14 row's Change cell ends with the change's dry-run record, after its last `; `
+(`dry run T-002.3, 0 open questions, 1 dismissed by quote`, or `no dry run (<why>)`).
+`prd_change.py record` writes the row as `<change>; pending`, and `prd_change.py approve` writes
+the record in place of `pending`: a change is recorded and not yet approved exactly when the last
+§14 row's Change cell ends with `; pending`. The review verdict, `.prd-review.json` in the PRD
+folder, is git-ignored (`prd_hooks.py install` adds it to `.gitignore`), never committed, linted
+or counted in `prd_change.py digest`; `approve` deletes it.
+
 Cells keep backticks; a `|` inside backticks does not split a cell. Section 7 built-in rows use
 the validator `built-in`; a custom type gives a validator command that exits 0 when its files
 are valid. Registry Decision values (decision 5): standards `enforced`, `declined` or
@@ -301,9 +309,12 @@ outside `as-built`.
    AC number in that block, removed ones included, plus 1. The next free T number for a
    requirement is the highest it has ever used plus 1, counting the T-ids that `Tests:` lines,
    `test-cases/` and section 14 changelog rows name, since a deleted test case survives only
-   in the changelog. A removed requirement keeps its block and index row with status
-   `removed`; a removed AC keeps its line, marked as above. Every removed ID, T-ids included,
-   is listed in the IDs cell of the changelog row for the version that removes it.
+   in the changelog. The next free UJ number is the highest UJ number in the PRD, removed ones
+   included, plus 1, written with two digits (`UJ-03`). A removed requirement keeps its block and
+   index row with status `removed`; a removed AC keeps its line, marked as above. Every removed
+   ID, T-ids included, is listed in the IDs cell of the changelog row for the version that
+   removes it. `prd_change.py ids next <prd dir> <FR|NFR|UJ|AC-<nnn>|T-<nnn>>` prints the next
+   free ID by these rules.
 
 ## Test cases
 

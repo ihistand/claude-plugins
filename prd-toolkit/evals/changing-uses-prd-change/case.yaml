@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: changing-uses-prd-change
+context:
+  scaffold_script: scaffold.sh

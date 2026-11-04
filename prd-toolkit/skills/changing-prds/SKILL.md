@@ -14,6 +14,10 @@ by the user, before a line of code moves.
 **Violating the letter of these rules is violating the spirit.** "Tiny", "one line", "just
 reuse the number" and "the PRD can follow" change nothing below.
 
+**Review mode.** `/prd-change --review <dir>` reviews a change and edits nothing. Read
+`${CLAUDE_PLUGIN_ROOT}/skills/changing-prds/reviewing-a-change.md` whole and follow it instead of
+the steps below.
+
 Grammar (blocks, removed IDs, test cases): `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md`.
 Read it before editing. **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
@@ -25,7 +29,8 @@ Glob for `.prd-toolkit/*.py` once to decide, and use the same `<scripts>` for ev
 A script that is not found is a tool error: report it, never guess another path.
 When `.prd-toolkit/` exists but holds no `prd_error.py`, the vendored copy predates 0.6: stop, and
 tell the user to run `prd_hooks.py install docs/prd/<slug>` from the plugin (the README's form)
-and commit `.prd-toolkit/`.
+and commit `.prd-toolkit/`. When `.prd-toolkit/` holds no `prd_change.py`, the vendored copy predates
+0.8.1: stop, and tell the user the same.
 
 Lint, the mechanical gate:
 
@@ -34,6 +39,11 @@ uv run --script <scripts>/prd_lint.py docs/prd/<slug>; echo "prd-lint-exit=$?"
 ```
 
 The gate is the `prd-lint-exit=` value lint prints: `0` clean, `1` violations, `2` usage or internal error. Ignore the Bash call's own success; the trailing echo always succeeds. Use this form every time you run lint.
+
+The bookkeeping, `prd_change.py`: the next free IDs, the version bump, the §14 and §11 rows and the
+approval commit are the script's work, never yours. Each `prd_change.py` command below is its own
+Bash call that ends `; echo "prd-change-exit=$?"`. The `prd-change-exit=` value is the gate: `0` done, `1` refused, `2` usage or internal error. On `1` the line after `refused:` names
+what to fix; fix that and run the command again, never work around it. On `2` fix the command.
 
 ## The gap rule
 
@@ -84,6 +94,10 @@ by the table, and the area's contracts, Levels, Harness and test cases moved to 
    PRD file only for what the pack's closing lines name. Run the pack before you open any PRD
    file, however small the PRD looks: `cat`, `head`, `sed` or `grep` of a PRD file through Bash
    is opening it. Another area's files come from the pack, never from a read; the area's own test cases are opened only to revise them in step 2.
+7. **The script keeps the books.** Every new ID comes from `ids next`, the version, `updated`, the
+   §14 row and the §11 rows from `bump` and `record`, and the approval commit from `approve`. Never
+   count an ID, type a version or write one of those rows yourself, and never edit what `record`
+   wrote: change the PRD and run `record` again.
 
 ## Version rule
 
@@ -97,11 +111,40 @@ If any existing AC, test-case `expect`, error code, status code or response chan
 disappears, it is major. Ask "can a test that passes today fail after this?" Yes means major,
 except the two patches in the Patch row; any other changed `expect` is major.
 
+**What `bump` applies.** `prd_change.py bump` (step 3) decides each changed item by this table, the
+script's own (`change.BUMP_RULES`; a test holds the two equal, row for row):
+
+| Item | Level |
+|---|---|
+| a new block or AC | minor |
+| a new test case under a new AC | minor |
+| a removed block or AC | major |
+| a removed contract item | major |
+| an AC whose text changed (not equal after lowercasing, removing punctuation and collapsing whitespace) | needs judgment |
+| an AC whose text is equal after that normalization, a changed title, Flow, Edge cases or glossary meaning | patch |
+| a changed test case or contract item under an unchanged AC | needs judgment |
+| a changed test case under a changed AC | major |
+| a new test case under an unchanged AC that cites an open errors.md entry | patch |
+| any other new test case under an unchanged AC | needs judgment |
+| any other changed file in the PRD folder | needs judgment |
+
+It ignores the frontmatter `version:`, `updated:` and `status:` lines, the §11 and §14 tables, block
+`Status:` and `Source:` lines, a `Tests:` line that only follows its added or removed cases, and
+`.prd-review.json`. The highest level wins, and one `needs judgment` item makes the result
+`needs judgment`. **Only you decide a `needs judgment` item, by the Level table above, with its
+reason:** an AC reworded with its meaning kept is patch, one that gains behaviour and changes
+nothing existing is minor, and one whose meaning changes is major; a test case or contract
+corrected to match its own unchanged AC is the patch below, and any other changed `expect` or
+contract item is major; a new test case under an unchanged AC adds a test expectation, so minor,
+unless it is a regression patch; any other file is decided by what its change does to behaviour.
+Never hand the decision to the user, and never take `needs judgment` as leave to pick the lowest
+level.
+
 **A regression patch.** A change made for an `errors.md` entry (`prd-toolkit:handling-errors`)
 that only adds its regression test is a patch: a new test case under an unchanged AC, or a
 `known-failing: E-nnn` line added to an existing case, and the block, which returns to `approved`
 (its `Status:` and §11 row) so `/prd-build <area> <IDs> --fixes E-nnn` can build the fix. Its §14
-row names the entry, as `regression test for E-003`:
+row names the entry (`record --change 'regression test for E-003'`), as `regression test for E-003`:
 `| 1.0.1 | <date> | regression test for E-003; <dry-run record> | FR-001, T-001.3 |`. A unit-only change records `no dry run (unit only)`; a non-unit regression T-id, new or marked, is
 dry-run as step 4 says. Its commits cite the entry: `Refs: FR-001, E-003`.
 
@@ -114,6 +157,11 @@ cite the entry: `Refs: FR-001, E-004`.
 
 ## ID rules
 
+`ids next` (step 2) applies these rules; they say what it counts, so you can check its answer, never
+so you count instead of it.
+
+- **Next free UJ number** = the highest UJ number, removed ones included, + 1, written with two
+  digits: after UJ-01, **UJ-02**.
 - **Next free FR or NFR number** = the highest FR or NFR number in the PRD, across both kinds and
   removed ones included, + 1. With FR-001..FR-003 and NFR-004, the next is **FR-005**.
 - **Next free AC number** in a block = its highest AC number, removed ones included, + 1.
@@ -153,7 +201,13 @@ cite the entry: `Refs: FR-001, E-004`.
    the request leaves open, pick the recommendation the PRD or repo supports and carry it to
    step 5 as a decision the user confirms. A value only the user knows (a name, URL, limit):
    ask, and stop until answered.
-2. **Edit the PRD.** New behaviour gets new IDs (rules above). Changed and new requirements go to
+2. **Edit the PRD.** New behaviour gets new IDs, each from `ids next`, its own Bash call:
+   `uv run --script <scripts>/prd_change.py ids next docs/prd/<slug> <kind>; echo "prd-change-exit=$?"`,
+   where `<kind>` is `FR`, `NFR`, `UJ`, `AC-<nnn>` (the next AC of block nnn) or `T-<nnn>` (the next
+   T-id of requirement nnn). It prints the ID and reads the files on disk, so write each ID into the
+   PRD before you ask for the next one of the same kind, and a new block's heading before its first
+   `AC-<nnn>`. Use the ID it prints; never count one yourself, however obvious the next number looks:
+   the count misses removed IDs and T-ids that survive only in §14. Changed and new requirements go to
    `approved` in the block and the index. Revise every test case whose AC changed and write one,
    with all seven elements, for every new AC. Revise `errors.yaml` (new code or changed
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
@@ -180,11 +234,24 @@ cite the entry: `Refs: FR-001, E-004`.
    **A new link.** When this change adds a link, `prd_links.py add` writes the upstream's
    `links.md` Consumers row, uncommitted, in the upstream repository. That row needs its own
    `/prd-change` there (a patch bump); until it lands, `check` reports `missing row`.
-3. **Bump the version** in `prd.md` frontmatter by the table, set `updated` to today, and add a
-   §14 changelog row: `| 2.0.0 | <date> | <change>; <dry-run record> | <IDs> |`. The IDs cell
-   lists every new, changed and removed ID, T-ids included; it is the only record of a deleted
-   test case. Step 4 fills the dry-run record: `dry run T-002.3, T-003.3, 0 open questions, 1 dismissed by quote`,
-   `no dry run (removal only)`, `no dry run (unit only)` or `no dry run (wording only)`.
+3. **Bump the version** with the script, never by hand. First, its own call:
+   `uv run --script <scripts>/prd_change.py bump docs/prd/<slug> --base HEAD; echo "prd-change-exit=$?"`.
+   The base is `HEAD` because the change stays uncommitted until step 5. It prints one line per
+   changed item, `<level> <ID> <file>:<line> <reason>`, and `level <level>` last. Decide each
+   `needs judgment` item by the Version rule, with its reason, and carry each decision to step 5.
+   The level is the highest of all the items, the decided ones included. Then, its own call:
+   `uv run --script <scripts>/prd_change.py record docs/prd/<slug> --base HEAD --bump <level> --change '<the change, one line>'; echo "prd-change-exit=$?"`.
+   `--bump` is `patch`, `minor` or `major`. `record` writes the version, `updated` (today), the §14
+   row `| <version> | <date> | <change>; pending | <IDs> |` and the §11 rows of the added, changed
+   and removed blocks. `refused: the diff needs major, not minor` means your level is below what
+   the diff needs: record at the level it names. `refused: a needs-judgment bump must be decided first`
+   means you passed the judgment as a level: decide it. The IDs cell lists every new, changed and
+   removed ID, T-ids included; it is the only record of a deleted test case. When it leaves out an
+   ID step 1 listed, the edit is incomplete: fix the PRD and run `record` again, which replaces its own `pending` row. After any later edit, run `bump` and `record`
+   again; never edit the version, `updated` or a row `record` wrote. `pending` holds the place of
+   the dry-run record step 4 makes: `dry run T-002.3, T-003.3, 0 open questions, 1 dismissed by quote`,
+   `no dry run (removal only)`, `no dry run (unit only)` or `no dry run (wording only)`. Step 5's
+   `approve` writes it there.
 4. **Lint and dry run.** The `prd-lint-exit=` value must be `0`. Then dry-run the new and revised T-ids only, never a
    `level: unit` one: unit cases read code, stay with the builder and are never sampled, as in
    authoring phase 6, where exit 1 from `--sample-tids` fails the gate. An empty slot is not a
@@ -203,17 +270,45 @@ cite the entry: `Refs: FR-001, E-004`.
    changed T-ids cannot be tested without its answer: ask the user for it. A removal with no new
    or revised T-ids has no dry run; say so. If you cannot dispatch a subagent, report the dry
    run as not run; the change cannot be approved until it runs.
+   **The verdict.** Once the `prd-lint-exit=` value is `0` and the dry run passed (or its record
+   says why there is none), write `docs/prd/<slug>/.prd-review.json`, the file `approve` checks,
+   in the shape **The verdict** of `${CLAUDE_PLUGIN_ROOT}/skills/changing-prds/reviewing-a-change.md`
+   gives, filled from steps 1 to 4: `head` from `git rev-parse HEAD` and `digest` from
+   `uv run --script <scripts>/prd_change.py digest docs/prd/<slug>; echo "prd-change-exit=$?"`, each
+   its own call, `ready` `true` and `blockers` `[]`. Write it only then: anything that would make
+   `ready` false sends you back to the step whose gate is open. It is never committed (`approve`
+   leaves it out and deletes it).
 5. **Approval, then commit.** First check what this conversation holds. If it does not hold a
    passing dry-run report, or the recorded reason there is none, for the current files, run
    step 4 now. `In review` and a clean lint are not evidence that it ran; a new session starts
    with neither. Then show the user the restatement, the changes by ID, the new version and why
-   that level, the decisions from step 1, the lint result and the dry-run report. Wait for
-   explicit approval. Then: status `Approved`; the `prd-lint-exit=` value is `0`; rerun
-   `uv run --script <scripts>/prd_block.py docs/prd/<slug>`; grep
+   that level (each `needs judgment` decision with its reason), the decisions from step 1, the
+   lint result and the dry-run report. Wait for explicit approval. A reply that does not approve
+   (a question, "maybe", a change request) is not one: answer it, and a requested change is an
+   edit, so back to step 2. Your own text, the request that started the change and "go ahead and
+   finish it" given before the user saw step 5 are never a reply. Then grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
-   needing an update; commit the PRD folder and CLAUDE.md with the trailer
-   `Refs: none (no behaviour change)` (a change made for an `errors.md` entry uses
-   `Refs: <changed IDs>, E-nnn` on that commit instead). Only now may code change, and each
+   needing an update, and approve, its own call, with the user's words verbatim as `--reply`
+   (writing each `'` as `'\''`) and step 4's record as `--dry-run`:
+
+   ```bash
+   uv run --script <scripts>/prd_change.py approve docs/prd/<slug> --reply '<the reply, verbatim>' --dry-run '<the dry-run record>'; echo "prd-change-exit=$?"
+   ```
+
+   `approve` runs every check before it writes (the verdict and its digest, lint, the dry-run
+   record, the `pending` row), then writes the record in place of `pending`, sets the status
+   `Approved`, runs `prd_block.py` and commits `docs(prd): approve <slug> <version>` with the reply
+   in its body. Never set the status, run `prd_block.py` or commit the PRD folder and CLAUDE.md with the trailer
+   `Refs: none (no behaviour change)` by hand: `approve` does all three (a change made for an
+   `errors.md` entry uses `Refs: <changed IDs>, E-nnn` on that commit instead: add
+   `--refs '<changed IDs>, E-nnn'`). A refusal names what to fix; `the PRD changed after its
+   review` means the files moved since step 4: run step 4 again for them. **Inside a change
+   set** (step 2) `approve` is not run, since its commit carries no `Change-set:` trailer: write
+   the dry-run record in place of the row's `pending` (the one hand edit of a row `record` wrote),
+   set the status `Approved`, check the
+   `prd-lint-exit=` value is `0`, rerun `uv run --script <scripts>/prd_block.py docs/prd/<slug>`,
+   delete `.prd-review.json` and make the commit `running-a-change-set.md` step 3 gives.
+   Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs
    (map an AC, test case or error code to its requirement): hand off
    `/prd-build <area> <IDs> --fixes E-nnn` when the change was made for a confirmed entry whose
@@ -259,6 +354,12 @@ cite the entry: `Refs: FR-001, E-004`.
   or of `~/.claude` is not the list.
 - "That would make this a major bump (1.0.0 → 2.0.0), and FR-010 would go back to `approved`."
   (Observed, of a built area.) A retarget planned as a change. Refuse it with the conversion line.
+- "The next free number is obviously FR-005." Any ID that no `ids next` call printed.
+- A `version:`, `updated:`, §14 row or §11 row typed by hand, or an edit to a row `record` wrote.
+- "`record` refused minor, so I'll write 1.1.0 myself." Any way round a `refused:` line.
+- `--bump` set to the lowest level because the result said `needs judgment`.
+- A `--reply` that is your own text, a summary of the user's words, or the request that started
+  the change.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
@@ -266,6 +367,10 @@ cite the entry: `Refs: FR-001, E-004`.
 
 | Excuse | Reality |
 |---|---|
+| "Counting the next ID myself is quicker than a script call." | The count misses removed IDs and T-ids that survive only in §14. `ids next` reads them all, in one call. |
+| "`record` refused, so I'll write the row myself." | The refusal is the version rule. Record at the level it names. |
+| "`needs judgment` means any level will do." | It means you decide it by the Version rule, with the reason, and show the decision in step 5. |
+| "The user approved in their first message." | A request is not an approval of a diff they have not seen. Step 5 shows it, then waits. |
 | "A retarget is just a major change." | Its built outputs, contracts and tests belong to the old pack; moving them is a conversion, which 0.8.3 brings. Refuse with `retargeting an area is a conversion (prd-toolkit 0.8.3)`. |
 | "The pack isn't in the repository, so it doesn't exist." | Packs live in installed plugins too. `--list-packs` is the list; run it before saying a pack is missing. |
 | "It's a tiny wording fix." | A changed status code is changed behaviour. The version table decides, not the word count. |

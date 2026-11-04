@@ -24,14 +24,16 @@ def section(text: str, title: str) -> str:
 
 
 def test_versions():
+    """Any later release keeps the versions semver and agreeing, and keeps the 0.8.0 spec linked."""
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.8.0"
+    version = plugin["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
     market = json.loads((REPO / ".claude-plugin/marketplace.json").read_text())
-    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == ["0.8.0"]
+    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == [version]
     js = (REPO / "web/src/data/plugins.js").read_text()
     block = js[js.index("id: 'prd-toolkit'"):]
-    assert "version: '0.8.0'" in block and "prd-toolkit-0.8.0-design.md" in block
-    assert "Version 0.8.0." in README
+    assert f"version: '{version}'" in block and "prd-toolkit-0.8.0-design.md" in block
+    assert f"Version {version}." in README
     assert f"(../{SPEC_REL})" in README
 
 
