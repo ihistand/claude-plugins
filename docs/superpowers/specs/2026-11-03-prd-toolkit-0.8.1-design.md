@@ -143,7 +143,7 @@ is at most 20 lines and holds no secret or classified value (the `errors.md` Evi
 
 ### `answer`
 
-`prd_gates.py answer <prd dir> <gate id> --reply "<verbatim>" [--choice <choice>] [--class <class>] [--result pass|fail]`
+`prd_gates.py answer <prd dir> <gate id> --reply "<verbatim>" [--question "<the question shown>"] [--choice <choice>] [--class <class>] [--result pass|fail] [--item <id>] [--correction "<text>"]`
 
 | Kind | Passes to |
 |---|---|
@@ -155,10 +155,14 @@ is at most 20 lines and holds no secret or classified value (the `errors.md` Evi
 
 - The reply is recorded exactly as given, as each owning script already does. An empty reply is
   refused: silence answers nothing.
-- Before passing an answer on, `answer` re-lists the gate. A gate that is gone or whose `question`
-  changed is refused (`refused: the gate changed; list again`), exit 1.
+- Before passing an answer on, `answer` re-lists the gate. A gate that is gone, or whose `question`
+  differs from the `--question` the client passes, is refused (`refused: the gate changed; list
+  again`), exit 1. `--question` is optional; without it only a gone gate is refused, so every client
+  (the skills, the 0.8.2 inbox) passes the question it showed. A flag that does not apply to the
+  gate's kind, and a NUL in any text, are refused too.
 - It prints the owning script's result as `{"interface": 1, "kind": "gates.answer", "gate": …,
-  "result": …}`.
+  "result": {"stdout": [<lines>], "exit": <N>}}` (plus `"stderr": [<lines>]` when the owner
+  printed any), and exits with the owner's exit code. `signoff` records no reply: the Sign-offs row has no column for it.
 - **The approval gate has two choices** (from the 0.8.2 decision-inbox spec §6, Ivan 2026-11-04).
   `prd_gates.py answer <prd dir> approval:<branch> --choice approve|changes --reply "<verbatim>"`,
   `approve` the default. `changes` needs a reply that is not empty. It writes
