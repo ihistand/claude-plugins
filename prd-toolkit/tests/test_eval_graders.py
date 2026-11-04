@@ -147,6 +147,28 @@ def test_the_builder_graders_see_the_callers_close_but_not_a_prd_edit():
     assert not _tool_input_counts("builder-stays-out-of-prd", w, {"file_path": "/w/tests/test_notes_unit.py", "content": "x"})
 
 
+def test_the_close_graders_pass_a_source_line_anchored_after_another_line():
+    """A close that adds `Source:` under `Traces: -` is the close, not a PRD edit (0.8.0 proof, F-2)."""
+    n = "no-prd-edit-beyond-status"
+    base = "/w/docs/prd/greet/features/guide.md"
+    anchored = {"replace_all": False, "file_path": base, "old_string": "Traces: -\n",
+                "new_string": "Traces: -\nSource: docs/guide/install.md:1 @f6f962d\n"}
+    reworded = {"file_path": base, "old_string": "Traces: -\n", "new_string": "Traces: -\nSourced from the README.\n"}
+    ac = "- AC-010.1 The guide shall list the Requirements, Install, First run and Common problems sections in that order.\n"
+    source_and_ac = {"replace_all": False, "file_path": base, "old_string": ac + "Traces: -\n",
+                     "new_string": "- AC-010.1 The guide shall list the Install section.\nTraces: -\nSource: docs/guide/install.md:1 @f6f962d\n"}
+    source_then_text = {"replace_all": False, "file_path": base, "old_string": "Traces: -\n",
+                        "new_string": "Traces: -\nSource: docs/guide/install.md:1 @f6f962d\n" + ac}
+    lone_source_then_text = {"file_path": base, "old_string": "Source: a.md:1 @1111111",
+                             "new_string": "Source: b.md:1 @2222222\n- AC-010.9 a new AC"}
+    for case in ("builder-stays-out-of-prd", "builder-document-no-unit"):
+        assert not _tool_input_counts(case, n, anchored), case
+        assert _tool_input_counts(case, n, reworded), case
+        assert _tool_input_counts(case, n, source_and_ac), case
+        assert _tool_input_counts(case, n, source_then_text), case
+        assert _tool_input_counts(case, n, lone_source_then_text), case
+
+
 def test_the_tester_file_graders_catch_a_unit_case_in_it_and_pass_the_testers_own_edits():
     t = "/w/tests/test_notes.py"
     for name in ("no-tester-file-edit", "no-tester-file-write"):
@@ -238,3 +260,42 @@ def test_the_confirm_file_graders_hold_on_the_extracted_start_repo_and_fail_on_a
     lint = subprocess.run([sys.executable, str(ROOT / "scripts/prd_lint.py"), str(dst / "docs/prd/notes")],
                           capture_output=True, text=True)
     assert lint.returncode == 0, lint.stdout + lint.stderr
+
+
+# --- R26: lint-exit-0 needs a lint of the PRD folder whose own result is prd-lint-exit=0 ---
+
+LINT_EXIT_CASES = ("authoring-new-prd", "authoring-proposes-pack", "authoring-spanish-ears")
+
+
+def _tool_use(i: str, cmd: str) -> str:
+    return json.dumps({"type": "tool_use", "id": i, "name": "Bash", "input": {"command": cmd}}, separators=(",", ":"))
+
+
+def _tool_result(i: str, content: str) -> str:
+    return json.dumps({"tool_use_id": i, "type": "tool_result", "content": content}, separators=(",", ":"))
+
+
+def test_lint_exit_0_graders_need_a_lint_of_the_prd_folder():
+    gate = '; echo "prd-lint-exit=$?"'
+    passing = [
+        _tool_use("toolu_A", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_A", "prd-lint-exit=0"),
+        _tool_use("toolu_B", 'uv run --script "/p q/prd_lint.py" docs/prd/greet' + gate) + "\n" + _tool_result("toolu_B", "prd-lint-exit=0"),
+        _tool_use("toolu_C", "uv run --script $P/scripts/prd_lint.py $D" + gate) + "\n" + _tool_result("toolu_C", "prd-lint-exit=0"),
+    ]
+    failing = [
+        # a listing echoed with the lint tag (the 0.8.0 review's case): 0 before any PRD exists
+        _tool_use("toolu_D", "uv run --script /p/scripts/prd_lint.py --list-packs" + gate) + "\n" + _tool_result("toolu_D", "demo 1.0.0\nprd-lint-exit=0"),
+        _tool_use("toolu_E", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_E", "x: y\nprd-lint-exit=1"),
+        _tool_use("toolu_F", "uv run --script /p/scripts/prd_lint.py docs/prd/greet" + gate) + "\n" + _tool_result("toolu_F", "prd-lint-exit=1")
+        + "\n" + _tool_use("toolu_G", "uv run --script /p/scripts/prd_lint.py --list-packs" + gate) + "\n" + _tool_result("toolu_G", "prd-lint-exit=0"),
+        '{"type":"text","text":"it passes lint (`prd-lint-exit=0`)"}',
+    ]
+    patterns = {_grader(c, "lint-exit-0")["pattern"] for c in LINT_EXIT_CASES}
+    assert len(patterns) == 1, "the three lint-exit-0 graders share one pattern"
+    for c in LINT_EXIT_CASES:
+        assert _grader(c, "lint-exit-0")["target"] == "trace"
+    pattern = re.compile(patterns.pop())
+    for t in passing:
+        assert pattern.search(t), t
+    for t in failing:
+        assert not pattern.search(t), t

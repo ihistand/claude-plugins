@@ -1,2 +1,2 @@
 """Importing this package imports every rule module, which registers its rules."""
-from . import contracts, errors, ids, links, registries, structure, testcases  # noqa: F401
+from . import contracts, errors, ids, links, packs, registries, structure, testcases  # noqa: F401

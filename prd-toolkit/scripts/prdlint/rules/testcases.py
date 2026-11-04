@@ -3,9 +3,11 @@ import csv
 import fnmatch
 import io
 import json
+import math
 import re
 import shlex
 from collections.abc import Iterator
+from fractions import Fraction
 
 from ..findings import Finding
 from .. import model
@@ -13,7 +15,7 @@ from ..markdown import strip_code, tables
 from ..model import Prd, TestCase
 from ..registry import rule
 from ..yamlload import yaml
-from .contracts import custom_items, event_names, operation_ids, schema_tables
+from .contracts import custom_items, custom_types, event_names, operation_ids, pack_kinds, schema_tables
 
 TARGET_KINDS = {"op", "table", "event", "job", "component", "page", "code"}
 
@@ -75,8 +77,9 @@ def is_synthetic(value: str) -> bool:
 
 
 def target_kinds(prd: Prd) -> set[str]:
-    """Built-in target kinds plus the custom type names of prd.md section 7 (validator not `built-in`)."""
-    kinds = set(TARGET_KINDS)
+    """Built-in target kinds, the custom type names of prd.md section 7 (validator not `built-in`) and the target kinds
+    of the packs the PRD names."""
+    kinds = set(TARGET_KINDS) | set(pack_kinds(prd))
     sec = next((s for s in prd.sections if s.number == 7), None)
     for t in tables(sec.body) if sec else []:
         for r in t.rows:
@@ -100,6 +103,12 @@ def _line(tc: TestCase, key: str) -> int:
 def _expect(tc: TestCase) -> dict:
     e = tc.data.get("expect")
     return e if isinstance(e, dict) else {}
+
+
+def is_judged(tc: TestCase) -> bool:
+    """A judged case: `expect` is a mapping holding `rubric` (a model grader scores it)."""
+    e = tc.data.get("expect")
+    return isinstance(e, dict) and "rubric" in e
 
 
 def _blank(v) -> bool:
@@ -307,7 +316,7 @@ def sufficiency(prd: Prd):
             yield miss("expect", "expect is missing", tc.line if "expect" not in d else None)
             expect = {}
         eline = _line(tc, "expect")
-        if _blank(expect.get("output")):
+        if not is_judged(tc) and _blank(expect.get("output")):
             yield miss("expect", "expect.output is missing", expect.key_lines.get("output", eline) if hasattr(expect, "key_lines") else eline)
         for key in ("effects", "errors"):
             if not isinstance(expect.get(key), list):
@@ -322,6 +331,55 @@ def sufficiency(prd: Prd):
                 yield miss("signoff", "an acceptance case needs signoff: the business owner", tc.line if "signoff" not in d else None)
 
 
+def _needs_every_item(threshold: float, n: int) -> str | None:
+    """Why `threshold` demands all `n` rubric items although it is below 1.0, or None: the score is passed / n, so
+    one miss scores (n-1)/n, and a threshold above that fails it (2 of 3 is 0.666..., below 0.67). The comparison
+    is in floats, as prd_judge.py scores (`sum / len`, pass on `median >= threshold`): 4 of 5 passes 0.8."""
+    miss = Fraction(n - 1, n)
+    if not (threshold > (n - 1) / n and threshold < 1.0):
+        return None
+    down = Fraction(math.floor(miss * 100), 100)
+    return (f"threshold {threshold:.4g} needs all {n} items ({n - 1} of {n} is {float(miss):.4g}); "
+            f"write {float(down):.4g} to allow one miss, or 1.0")
+
+
+@rule("judged-case")
+def judged_case(prd: Prd):
+    for tc in _cases(prd):
+        if not is_judged(tc):
+            continue
+        e = tc.data["expect"]
+        kl = getattr(e, "key_lines", {})
+        eline = _line(tc, "expect")
+
+        def bad(key: str, msg: str):
+            return Finding(tc.file, kl.get(key, eline), "judged-case", f"{tc.id}: {msg}")
+
+        r = e["rubric"]
+        items_ok = isinstance(r, list) and r and all(isinstance(x, str) and x.strip() for x in r)
+        if not items_ok:
+            yield bad("rubric", "rubric must be a non-empty list of non-empty strings")
+        else:
+            first: dict[str, int] = {}
+            for k, item in enumerate(r, 1):
+                if item.strip() in first:  # prd_judge.py refuses it with exit 2: an answer cannot name each item
+                    yield bad("rubric", f"rubric item {k} repeats item {first[item.strip()]}")
+                else:
+                    first[item.strip()] = k
+        th = e.get("threshold")
+        th_ok = not isinstance(th, bool) and isinstance(th, (int, float)) and 0 < th <= 1
+        if not th_ok:
+            yield bad("threshold" if "threshold" in e else "rubric", "threshold must be a number in (0, 1]")
+        elif items_ok and len(r) >= 2:
+            warn = _needs_every_item(th, len(r))
+            if warn:
+                yield Finding(tc.file, kl.get("threshold", eline), "judged-case", f"{tc.id}: {warn}", severity="warn")
+        if "runs" in e and (isinstance(e["runs"], bool) or not isinstance(e["runs"], int) or e["runs"] < 1):
+            yield bad("runs", "runs must be an integer of at least 1")
+        if "output" in e:
+            yield bad("output", "a judged case has no expect.output")
+
+
 @rule("test-refs")
 def test_refs(prd: Prd):
     all_acs = {ac.id for b in prd.blocks for ac in b.acs}
@@ -332,6 +390,8 @@ def test_refs(prd: Prd):
         identities |= {r["identity"] for r in perms["roles"].values() if isinstance(r, dict) and isinstance(r.get("identity"), str)}
     ops, tables_, events = operation_ids(prd), {t.lower() for t in schema_tables(prd)}, event_names(prd)
     customs = custom_items(prd)
+    packed = pack_kinds(prd)
+    rows = {kind for kind, _, _, _ in custom_types(prd)}  # the section-7 types with a validator other than built-in
 
     for tc in _cases(prd):
         d = tc.data
@@ -403,6 +463,10 @@ def test_refs(prd: Prd):
                 yield bad("target", f"target {target}: no table '{name}' in contracts/schema.sql")
             elif kind in ("event", "job") and name not in events:
                 yield bad("target", f"target {target}: no '### {name}' heading in contracts/events.md and no such asyncapi channel or operation")
+            elif kind in packed and packed[kind] not in rows:
+                yield bad("target", f"target {target}: contract type {packed[kind]} has no §7 row (Validator pack)")
+            elif kind in packed and kind in customs and name not in customs[kind]:
+                yield bad("target", f"target {target}: no {packed[kind]} entry '{name}'")
             elif kind in customs and name not in customs[kind]:
                 yield bad("target", f"target {target}: '{name}' is not an item of the {kind} files (items: {', '.join(sorted(customs[kind]))})")
 

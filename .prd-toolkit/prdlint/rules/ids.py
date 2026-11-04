@@ -3,6 +3,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterator
 
+from .. import languages
 from ..findings import Finding
 from ..model import ADOPTION_STATES, IndexRow, Prd, ReqBlock
 from ..registry import rule
@@ -24,8 +25,6 @@ _TOKEN = re.compile(r"\b(UJ|FR|NFR|AC|T|E|A)-[0-9][0-9.]*\b")
 _REQ_ID = re.compile(r"\b(?:UJ-\d+|FR-\d+|NFR-\d+|AC-\d+\.\d+)\b")
 _E_HEADING = re.compile(r"^### (E-\d+)\b")
 _UNIT = re.compile(r"\d+(\.\d+)?\s*(?:(?:ms|s|sec|seconds?|minutes?|min|h|hrs?|hours?|days?|KB|MB|GB|TB|requests?/s|req/s|requests?/min|req/min|rps|rows|users|errors?)\b|%)")
-_EARS_HEAD = re.compile(r"^(When|While|If|Where)\b")
-_EARS_THE = re.compile(r"^The \S.*? shall\b")
 
 
 def defined_ids(prd: Prd) -> dict[str, list[tuple[str, int]]]:
@@ -231,12 +230,16 @@ def fr_has_ac(prd: Prd):
 
 @rule("ac-ears")
 def ac_ears(prd: Prd):
+    table = languages.for_prd(prd)
+    if table is None:
+        return
+    head = table.opener()
     for b in prd.blocks:
         for ac in (a for a in b.acs if not a.removed):
-            if not (_EARS_HEAD.match(ac.text) or _EARS_THE.match(ac.text)):
-                yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must start with When, While, If, Where or 'The <thing> shall'")
-            elif not re.search(r"\bshall\b", ac.text):
-                yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must contain 'shall'")
+            if not (head.match(ac.text) or table.ubiquitous.match(ac.text)):
+                yield Finding(b.file, ac.line, "ac-ears", table.ears_message(ac.id))
+            elif table.modal and not table.modal.search(ac.text):
+                yield Finding(b.file, ac.line, "ac-ears", f"{ac.id} must contain '{table.modal_word}'")
 
 
 @rule("nfr-bound")

@@ -6,17 +6,22 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from lint_cli_support import run, s0  # noqa: E402
 
+# T-003.1 stdout_exact_lines: every registered rule as `<name> <severity>`, sorted by name.
 RULES = [
-    "ac-ears", "ac-has-test", "assumption-indexed", "change-sets", "classified-fixtures",
-    "contracts-valid", "deny-tested", "drift-rows", "error-codes", "error-entries", "fr-has-ac",
-    "frontmatter", "glossary-synonym", "id-format", "id-removed-reused", "id-unique",
-    "index-consistent", "links-format", "markers-open", "nfr-bound", "open-questions-empty",
-    "placeholder", "production-gate", "registries", "runbook-env", "runbook-steps", "runbook-tests",
-    "schema-refs", "sections", "snapshot-cited", "sufficiency", "test-cases-consistent",
-    "test-level", "test-refs", "upstream-refs", "vague-word",
+    "ac-ears error", "ac-has-test error", "assumption-indexed error", "change-sets error",
+    "classified-fixtures error", "contracts-valid error", "deny-tested error", "drift-rows error",
+    "error-codes error", "error-entries error", "fr-has-ac error", "frontmatter error",
+    "glossary-synonym error", "id-format error", "id-removed-reused error", "id-unique error",
+    "index-consistent error", "judged-case error", "language-table error", "links-format error",
+    "markers-open error", "nfr-bound error", "open-questions-empty error", "pack-resolves error",
+    "placeholder error", "platform-word warn", "production-gate error", "registries error",
+    "runbook-env error", "runbook-steps error", "runbook-tests error", "schema-refs error",
+    "sections error", "snapshot-cited error", "sufficiency error", "test-cases-consistent error",
+    "test-level error", "test-refs error", "upstream-refs error", "vague-word error",
 ]
 
-USAGE = "usage: prd_lint.py [-h] [--list-rules] [--ci] [--sample-tids N] [prd_dir]"
+# AC-004.1: the one-line usage.
+USAGE = "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]"
 
 
 def test_t003_1_list_rules(tmp_path):
@@ -25,12 +30,12 @@ def test_t003_1_list_rules(tmp_path):
         r = run(args, cwd=tmp_path)
         assert r.exit == 0, args
         assert r.stderr == "", args
-        assert r.stdout_lines == RULES, args
+        assert r.stdout_lines == RULES, (args, r.stdout)
 
 
 def test_t004_1_no_folder_prints_usage(tmp_path):
     """@prd T-004.1"""
-    r = run([], cwd=tmp_path)
+    r = run([], cwd=tmp_path, env={"COLUMNS": "40"})
     assert r.exit == 2
     assert r.stdout == ""
     assert r.stderr == USAGE + "\n"
@@ -57,10 +62,11 @@ def test_t004_2_argparse_errors(tmp_path, monkeypatch):
 def test_t004_3_help(tmp_path):
     """@prd T-004.3"""
     for flag in ("--help", "-h"):
-        r = run([flag], cwd=tmp_path)
+        r = run([flag], cwd=tmp_path, env={"COLUMNS": "200"})
         assert r.exit == 0, flag
         assert r.stderr == "", flag
-        assert r.stdout_lines and r.stdout_lines[0].startswith(USAGE), (flag, r.stdout)
+        assert r.stdout_lines, (flag, r.stdout)
+        assert r.stdout_lines[0] == USAGE, (flag, r.stdout)
         assert "Lint a PRD folder." in r.stdout, (flag, r.stdout)
         assert "skip the checks that need this machine's skills and linters" in r.stdout, (
             flag, r.stdout)

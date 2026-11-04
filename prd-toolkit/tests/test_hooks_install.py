@@ -300,6 +300,7 @@ def test_every_vendored_script_runs_from_the_vendored_copy(repo):
         "prd_deploy.py": ["plan", PRD], "prd_drift.py": [PRD], "prd_hooks.py": ["check", PRD],
         "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"], "prd_error.py": ["list", PRD], "prd_links.py": ["check", PRD],
         "prd_confirm.py": ["status", PRD, "--area", "none"],
+        "prd_judge.py": [PRD, "T-999.9", "msg.txt"],
     }
     assert set(calls) == set(hooks.VENDORED), set(hooks.VENDORED) ^ set(calls)
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}

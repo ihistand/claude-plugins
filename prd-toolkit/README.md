@@ -1,12 +1,12 @@
 # prd-toolkit
 
 A living PRD as the single authority agents build, test and deploy from: a PRD folder in the
-repo with contracts and black-box test cases, a 36-rule linter and trace checks, a test agent
+repo with contracts and black-box test cases, a 40-rule linter and trace checks, a test agent
 that cannot read your code, skills to author, adopt and change it, and a builder that takes an
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Version 0.7.3.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages. Version 0.8.0.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -15,7 +15,8 @@ for 0.4 [docs/superpowers/specs/2026-10-31-prd-toolkit-0.4-design.md](../docs/su
 for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md),
 for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md),
 for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md),
-and for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md).
+for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md),
+and for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md).
 
 ## Install
 
@@ -49,6 +50,7 @@ install hint and exits 2.
 ```
 uv run --script .prd-toolkit/prd_lint.py docs/prd/<slug>   # a repo with hooks installed
 uv run --script prd-toolkit/scripts/prd_lint.py --list-rules
+uv run --script prd-toolkit/scripts/prd_lint.py --list-packs
 uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 ```
 
@@ -61,7 +63,9 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
   other two lines do.
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
-- `--list-rules` prints the 36 rules. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
+- Output is `<file>:<line>: warn: <rule>: <message>` for a warning (`platform-word`); the exit code counts errors only.
+- `--list-packs` prints one line per pack, `<name> <version> (<source>) — <description>`: the built-ins first, then the installed plugins' packs. Run from a vendored copy, `--list-packs` lists the packs vendored in `.prd-toolkit/packs/` in place of the built-ins, each with the source `.prd-toolkit/pack-sources.json` records, and a line on stderr says so; the skills always list from the plugin's own copy.
+- `--list-rules` prints the 40 rules and each one's severity. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
 
@@ -495,6 +499,65 @@ deploys run for any member from any session.
 A headless run registers only `prd-toolkit:<command>` (a bare `/prd-status` is not listed, as probed in
 0.7 on Claude Code 2.1.316): invoke `prd-toolkit:prd-change-set` and the other commands in that form.
 
+## Packs
+
+A pack tells the toolkit what kind of output a PRD describes. It is a folder with a `pack.yaml`: contract
+types and their validators, target kinds, test levels, harness defaults, a vocabulary of platform words,
+and optional rubric and clarify text, a grader and language tables. Two ship with the toolkit:
+
+- **`service`** is the PRD of 0.7: an API, a database or events. It is the default, so a PRD that names no
+  pack needs no edit.
+- **`document`** is a Markdown document written for people (a guide, a runbook, a policy): the `outline`
+  contract type, `checks` and `judged` levels, and no builder unit tests. Its checks read each document as
+  CommonMark 0.31.2 after NFC normalization, a section being a level-2 heading that equals a `sections`
+  entry; a PRD that wants another standard writes it in the Harness Assertions slot.
+
+A plugin adds a pack as `prd-packs/<name>/` in its install path. A PRD names its packs in §1 (`- Pack:
+<name> <X.Y.Z> (<source>)`, with `- Output language: <code>` when it differs from `language:`) and, for one
+area, in a `Target:` line of `features/<area>.md`. `prd_hooks.py install` vendors each named pack, and
+`service`, into `.prd-toolkit/packs/<name>/` and records each one's source in `.prd-toolkit/pack-sources.json`;
+the vendored copy is then the one lint reads, and its version must equal the named one. `prd_lint.py --list-packs` lists what is installed, one `<name> <version> (<source>) — <description>` line per pack. A `Target:` line may also set an area's output language alone (`Target: output language pt-BR`). A pack's commands may use
+`${PACK}` for its own folder. The format is `references/prd-format.md` ("Target profiles") and the manifest
+is `references/contract-types.md` ("pack"). Lint adds `pack-resolves` (a profile line or pack that does
+not resolve) and the warning `platform-word` (a word from the area's pack vocabulary in a requirement).
+
+## Languages
+
+Frontmatter `language:` (default `en`) is the language of the PRD's prose. Lint reads a language's EARS
+openers, ubiquitous form and vague words from a table, `references/languages/<code>.yaml` in the toolkit
+or `languages/<code>.yaml` in a pack the PRD names. `en` and `es` ship (`es` accepts `Cuando`, `Mientras`,
+`Si` and `Donde`, and `El/La/Los/Las <cosa> deberá`). `en` reproduces 0.7 exactly. A `language:` with no
+table is a `language-table` violation. Field labels, IDs, YAML keys and headings stay English.
+
+## Judged cases
+
+A test case whose `expect` has `rubric:` and `threshold:` (and optionally `runs:`, default 3) is scored by a
+model against its rubric. `prd_judge.py <prd dir> <T-id> <output file>` runs the grader `runs` times; each
+rubric item passes only with a quote copied from the output (compared after collapsing whitespace), and the
+case passes when the median score reaches the threshold. It exits 0 on a pass, 1 on a fail and 2 when the
+case could not be judged (an unknown T-id, a missing output, `claude` missing or signed out, or two bad
+answers), so exit 2 is a test error, never a pass. The default grader is a headless `claude -p` with no
+tools in an empty temporary directory; a pack's `grader:` command replaces it. Each run is recorded in
+`.prd-judge/<T-id>.json` (git-ignored by `prd_hooks.py install`). The tester writes the test that calls
+`prd_judge.py`; it never grades. Lint adds `judged-case`.
+
+## Known limits (0.8.0)
+
+- Judged cases are not deterministic: the median of three runs damps a flip, but a case near its threshold
+  can still flip between runs, and the record shows every run.
+- Each judged case costs `runs` model calls per suite run, and the runner needs Claude Code signed in (or a
+  pack grader). A suite-mode tester that runs a judged level needs network access in its sandbox.
+- PRD languages are `en` and `es` unless a pack adds a table; field labels stay English.
+- An `es` NFR states its bound with an English unit for now (`200 ms`, `5 minutes`, not `5 minutos`):
+  units move to the language table in 0.8.1.
+- A headless `claude -p` run of the skills needs Bash permission rules for `echo` (every gate echoes its exit
+  code), `mktemp`, `GIT_INDEX_FILE=` and `sort` (the tester's state snapshot), and `--add-dir` for the user
+  temp directory (`$TMPDIR`), which the tester's snapshot writes to.
+- Documents are Markdown only; another format needs a pack.
+- Pack discovery reads `~/.claude/plugins/installed_plugins.json`, or the file named by the
+  `PRD_PLUGINS_FILE` environment variable. A plugin loaded only with `claude --plugin-dir` is not in that
+  file, so its pack is not found; point `PRD_PLUGINS_FILE` at a list that names it.
+
 ## Known limits (0.7.1)
 
 - The form has one owner at one machine: the server is local, and the answers are trusted to be that
@@ -537,6 +600,15 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.0:** Packs, languages and judged test cases.
+  - Packs: the `pack.yaml` manifest, discovery from `.prd-toolkit/packs/`, the toolkit and installed plugins' `prd-packs/<name>/`, a version lock, and two built-in packs, `service` (0.7's behaviour) and `document` (Markdown documents, with the `outline` contract type). `prd_hooks.py install` records each vendored pack's source in `.prd-toolkit/pack-sources.json`. `prd_lint.py --list-packs` lists them. A PRD names a pack in §1 (`Pack:`, `Output language:`) and per area in a `Target:` line.
+  - Languages: frontmatter `language:` with EARS and vague-word tables for `en` and `es`.
+  - Judged cases: `rubric:` and `threshold:` in a test case, scored by `prd_judge.py` (median of runs, quote-checked, recorded in `.prd-judge/`).
+    `judged-case` also refuses a repeated rubric item and warns on a threshold below 1.0 that needs every item (2 of 3 items is 0.666…, so 0.67 needs all three).
+  - Lint: severity `warn` (`<file>:<line>: warn: <rule>: <message>`; the exit code counts errors only) and four rules, `language-table`, `pack-resolves`, `judged-case` and the warning `platform-word` (40 in all). The authoring, building, testing and changing skills and the agents use packs, languages and judged cases.
+  - The lint command's output changes. `--list-rules` now prints `<name> <severity>` on each line (0.7 printed names only), so anything that parses it must change. `prd_lint.py --list-packs` lists the packs, built-ins first. The usage line is one line whatever the terminal width. The toolkit's own PRD (`docs/prd/prd-toolkit`) is at 2.0.0, with `lint-cli` FR-001, FR-003, FR-004 and the new FR-013 verified.
+  - `prd_trace.py --range` judges each commit by the adoption map in that commit's own tree, so a commit made before an area was adopted (or before `adoption.md` was committed) is not held to today's Boundary. An adoption map that was never committed still judges every commit, as before.
+  - Upgrading from 0.7: re-run `prd_hooks.py install`, which vendors the 0.8.0 scripts and the `service` pack into `.prd-toolkit/` and adds `.prd-judge/` to `.gitignore`. A PRD that adds `language:`, a `Pack:`, `Output language:` or `Target:` line takes a patch bump with the §14 row `format: target profiles (prd-toolkit 0.8)`. No 0.7 PRD needs an edit.
 - **0.7.3:** The toolkit's own PRD fixes six `lint-cli` bugs, E-001 to E-006, each closed by its regression test. A directory named `prd.md` is refused as "prd.md must be a file", with no lowercase-name hint. The missing-package message names the script that failed and only the packages of its own dependency header. A YAML mapping key that is a list or a mapping is a `YAML parse error: found unhashable key` finding, not an internal error. Nothing under `contracts/fixtures/` is read as a PRD document or contract YAML. A `.md` entry that is not a file is a `sufficiency` finding, not an internal error. `--sample-tids` no longer samples a test case with no level or a level that is not lowercase. The git hooks also work in a linked worktree: git exports `GIT_DIR` to a hook without `GIT_WORK_TREE`, and the pre-commit hook ran each enforced standards command from the PRD folder; it now pins both from the hook's own directory. Upgrading from 0.7.2: re-run `prd_hooks.py install`, which vendors the fixed scripts into `.prd-toolkit/`. No PRD needs an edit.
 - **0.7.2:** Three fixes from the 0.7.1 acceptance run. The form now serves a clarification marker whose key a requirement's `Traces:` line names without backticks, when the word is an identifier with an underscore or in camelCase (`PRD_LINT_CI`, `maxSize`; a dotted or `kind:name` word names its last part). A prose word, an all-caps word, an ID such as `FR-001`, a version and a path part still name nothing, and backticks remain the sure way to name a key. A bare `settings.KEY` now names `KEY`, which 0.7.1 did not. The answers file's `prd` field holds the PRD's slug (it read the wrong frontmatter key and was empty). Every text box in the form now has a one-line hint: a bug's box asks for the behaviour you want, not the code fix, and a question's or a setting's box says what its answer needs. Upgrading from 0.7.1: re-run `prd_hooks.py install`, which vendors the fixed scripts and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.
 - **0.7.1:** `prd_confirm.py` and `templates/confirm/form.html`: adoption step 3 confirms an area's as-built requirements, open errors, questions and clarification markers through a local form, with answers saved as they are given (see Adopting an existing repo). `AskUserQuestion` and the checklist file remain the fallbacks. Upgrading from 0.7.0: re-run `prd_hooks.py install`, which vendors `prd_confirm.py` and `confirm/form.html` into `.prd-toolkit/`. No PRD needs an edit.

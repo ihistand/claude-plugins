@@ -143,3 +143,34 @@ def test_cli(prd, tmp_path):
     assert run("render", tmp_path / "nowhere", "--out", out).returncode == 2
     summ.write_text("{not json")
     assert run("render", prd, "--out", out, "--summaries", summ).returncode == 2
+
+
+def test_spanish_chrome_and_english_fallback(tmp_path):
+    from doc_fixture import document_prd
+    root = document_prd(tmp_path, language="es")
+    page = publish.render_page(model.load(root), tmp_path, None, TODAY)
+    assert "<label for=\"tab-business\">Negocio</label>" in page and "<label for=\"tab-technical\">Técnico</label>" in page
+    assert '<html lang="es">' in page and "Versión del PRD" in page and "Matriz de requisitos y pruebas" in page
+    assert "<th>Business</th>" not in page and ">Business<" not in page
+    # PRD text is never translated
+    assert "Install section" in page
+    publish._LABELS.pop("business")  # a key missing from the language falls back to en
+    assert publish.L("business") == "Business"
+
+
+def test_every_label_key_is_in_both_tables():
+    from prdlint import languages
+    en, es = languages.load("en").labels, languages.load("es").labels
+    assert set(en) == set(es) and {"business", "technical", "requirement", "status", "test", "level", "gate", "in_code",
+                                   "diagnosis", "resolution", "recurrence_of"} <= set(en)
+    import re
+    src = (Path(publish.__file__).read_text() + (publish.TEMPLATE.read_text()))
+    used = set(re.findall(r"""L\(["'](\w+)["']""", src))
+    assert used <= set(en), used - set(en)
+
+
+def test_no_commit_cell_follows_the_page_language(tmp_path):
+    from doc_fixture import document_prd
+    root = document_prd(tmp_path, language="es")  # tmp_path is not a git repository
+    page = publish.render_page(model.load(root), tmp_path, None, TODAY)
+    assert "<dd>sin commit</dd>" in page and "no commit" not in page

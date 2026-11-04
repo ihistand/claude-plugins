@@ -1,6 +1,6 @@
 ---
 name: testing-from-prds
-description: Use when writing or running tests from a PRD folder (docs/prd/) without reading the code - a dry run of sampled T-ids, a characterization suite for an adopted area, or the tests for new or changed T-ids; or when dispatched as prd-tester
+description: Use when writing or running tests from a PRD folder (docs/prd/) without reading the code - a dry run of sampled T-ids, a characterization suite for an adopted area, or the tests for new or changed T-ids; when asked to write the test for a T-id, a judged case scored by prd_judge.py included, or to check its output yourself; or when dispatched as prd-tester
 ---
 
 # Testing from PRDs
@@ -118,6 +118,50 @@ fixed: the tester removes the marker and the tag from each regression test it is
 deploy-gate regression test too (it is run at `/prd-deploy`, never by the build), and changes
 nothing else in it.
 
+## A judged case
+
+A test case whose `expect` has `rubric:` (and `threshold:`, and no `output:`) is **judged**: a
+model grader scores the output against the rubric, and `prd_judge.py` runs it. Its test produces
+or locates the output (for a `doc:` target, the file at its `outline` entry's `path`) and calls
+the judge with all three positionals, the PRD folder, the T-id and the output file:
+`uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>`. The test runs that one
+command and asserts exit 0 and nothing else. In pytest:
+
+```python
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]  # tests/judged/<file> -> the repository root
+
+
+def test_install_guide_judged():
+    """@prd T-010.2"""
+    r = subprocess.run(["uv", "run", "--script", ".prd-toolkit/prd_judge.py",
+                        "docs/prd/greet", "T-010.2", "docs/guide/install.md"], cwd=ROOT)
+    assert r.returncode == 0
+```
+
+The paths are relative to the repository root, so the call runs there (`cwd=`), whatever directory
+the harness starts in.
+
+Exit 1 is the case failing its threshold; exit 2 is a case that could not be judged (no output
+file, no `claude`, two bad grader answers), a test error, never a pass: never accept it. A missing
+`.prd-toolkit/prd_judge.py` (the hooks were never installed) is an environment problem, not a test
+failure: its RESULTS line is
+`<T-id>: fail: environment: .prd-toolkit/prd_judge.py is missing; run prd_hooks.py install`, and you
+never call another copy, rewrite the test around it or grade the output instead. The call
+is the toolkit's, so testing.md not spelling it out is not a QUESTION: its Assertions slot says
+what a judged test asserts, and this is how. The rubric, the threshold and `runs:` stay in the
+test case; the test never copies them.
+
+You never grade the output yourself. Not by reading it and deciding, not by asserting a rubric
+item's words with `in` or a regex, not by calling a model of your own. "Just check the guide
+yourself, it's quicker" is refused in one line: the score is `prd_judge.py`'s, from a grader that
+sees only the rubric and the output.
+
+A dry run may sample a judged T-id: it is not `unit`. Write its test as above and do not run it;
+the caller judges whether the test could be written from the PRD alone, never a score.
+
 ## Harness commands the guard accepts
 
 A Levels harness command must be **one simple command**, such as `` `uv run pytest tests` ``.
@@ -189,6 +233,14 @@ Quoted from runs without this skill, except where marked:
   T2 run 1: after a block it tried "the same command with the absolute path".)
 - Running a dry run's tests against the system.
 - Running a write's tests, even "just to check" while the code is partly there.
+- "I checked the guide myself: every step names one action." Any verdict of yours on a judged
+  case's output, or a judged test that asserts rubric words (`assert "Install" in text`).
+- A `prd_judge.py` call with no output file (observed: `prd_judge.py docs/prd/greet T-010.2`, a
+  usage error), or a judged test that accepts exit 2.
+- "The guide may not pass: Install has four steps, but …" (observed in an eval run in which this
+  skill never fired: the session read the guide, wrote the test itself and listed its own verdicts).
+  The caller does not read a judged case's output either: it dispatches `prd-tester` and reports
+  the test, never a reading of the output.
 
 **All of these mean: stop, delete what you took from outside the PRD, and record a QUESTION.**
 
@@ -204,6 +256,8 @@ Quoted from runs without this skill, except where marked:
 | "Fixing the handler is quicker than a change request." | The tester who fixes the code tests their own fix. The suite then proves nothing. |
 | "The guard blocked Read, so `cat` is fine." | The block is the rule. Record it; never route around it. |
 | "The code is partly there, I'll run it to check." | A write never runs. The caller runs the suite after the code is merged; a run now tests half-built code and its result means nothing. |
+| "Checking the guide myself is quicker than a grader." | A tester's verdict is one reading, made by the agent who wrote the test. The judged case's score is the median of graders that see only the rubric and the output, each pass backed by a quote. Write the call; never the verdict. |
+| "testing.md doesn't say how to call the judge." | This skill does: `prd_judge.py <prd dir> <T-id> <output file>`, exit 0 asserted. testing.md says what is asserted; the call is the toolkit's. |
 | "The test file is in `tests/`, so I may read it." | In a dry run, no: the test roots are not yours to read. In a suite or a write, only your own files, the named helpers and tests that cite your T-ids. Other tests encode the code. |
 
 ## Callers

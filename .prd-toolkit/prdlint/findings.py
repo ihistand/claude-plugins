@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, order=True)
@@ -9,6 +9,8 @@ class Finding:
     line: int
     rule: str
     message: str
+    severity: str = field(default="error", compare=False)  # "error" or "warn"
 
     def __str__(self) -> str:
-        return f"{self.file}:{self.line}: {self.rule}: {self.message}"
+        tag = "warn: " if self.severity == "warn" else ""
+        return f"{self.file}:{self.line}: {tag}{self.rule}: {self.message}"

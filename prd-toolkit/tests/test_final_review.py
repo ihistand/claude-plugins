@@ -107,7 +107,8 @@ def test_readme_build_command_row():
 def test_description_has_no_double_and():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert "code, and skills to author" not in plugin["description"]
-    assert "a test agent that cannot read your code, skills to author, adopt and change it, and a builder" in plugin["description"]
+    # 0.8.0 final review: one ", and" in the whole list, before its last item
+    assert "a test agent that cannot read your code, skills to author, adopt and change it, a builder" in plugin["description"]
 
 
 def test_web_testing_skill_names_write():

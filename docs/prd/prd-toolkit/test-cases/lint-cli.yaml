@@ -69,6 +69,52 @@ T-001.3:
     effects: []
     errors: []
     leaks: none
+T-001.4:
+  ac: AC-001.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - M1
+      - in the test process, register a rule named zz-warn with the decorator prdlint.registry.rule("zz-warn", severity="warn") on a function that takes one argument, the loaded PRD, and returns [prdlint.findings.Finding("prd.md", 1, "zz-warn", "a warning", severity="warn")]; remove it afterwards from prdlint.registry.RULES (a dict of rule name to function) and prdlint.registry.SEVERITY (a dict of rule name to severity)
+      - change the test process's working directory to <tmp>
+    call: prd_lint.main(["docs/prd/orders"]) in process (prd-toolkit/scripts on sys.path), capturing stdout and stderr
+  expect:
+    output:
+      return: 1
+      stdout_exact: |
+        docs/prd/orders/contracts/errors.yaml:41: contracts-valid: duplicate key 'FORBIDDEN' (first at line 25, again at line 41)
+        docs/prd/orders/prd.md:1: warn: zz-warn: a warning
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-001.5:
+  ac: AC-001.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - register the rule zz-warn as T-001.4 does, and remove it afterwards
+      - change the test process's working directory to <tmp>
+    call: prd_lint.main(["docs/prd/orders"]) in process (prd-toolkit/scripts on sys.path), capturing stdout and stderr
+    note: with S0 alone the folder lints clean (T-001.1), so the warn finding is the only one
+  expect:
+    output:
+      return: 0
+      stdout_exact: "docs/prd/orders/prd.md:1: warn: zz-warn: a warning\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
 T-002.1:
   ac: AC-002.1
   level: integration
@@ -140,12 +186,16 @@ T-003.1:
       each_run:
         exit: 0
         stderr: ""
-        stdout_exact_lines: [ac-ears, ac-has-test, assumption-indexed, change-sets, classified-fixtures,
-          contracts-valid, deny-tested, drift-rows, error-codes, error-entries, fr-has-ac, frontmatter,
-          glossary-synonym, id-format, id-removed-reused, id-unique, index-consistent, links-format,
-          markers-open, nfr-bound, open-questions-empty, placeholder, production-gate, registries,
-          runbook-env, runbook-steps, runbook-tests, schema-refs, sections, snapshot-cited, sufficiency,
-          test-cases-consistent, test-level, test-refs, upstream-refs, vague-word]
+        stdout_exact_lines: ["ac-ears error", "ac-has-test error", "assumption-indexed error", "change-sets error",
+          "classified-fixtures error", "contracts-valid error", "deny-tested error", "drift-rows error",
+          "error-codes error", "error-entries error", "fr-has-ac error", "frontmatter error",
+          "glossary-synonym error", "id-format error", "id-removed-reused error", "id-unique error",
+          "index-consistent error", "judged-case error", "language-table error", "links-format error",
+          "markers-open error", "nfr-bound error", "open-questions-empty error", "pack-resolves error",
+          "placeholder error", "platform-word warn", "production-gate error", "registries error",
+          "runbook-env error", "runbook-steps error", "runbook-tests error", "schema-refs error",
+          "sections error", "snapshot-cited error", "sufficiency error", "test-cases-consistent error",
+          "test-level error", "test-refs error", "upstream-refs error", "vague-word error"]
     effects: []
     errors: []
     leaks: none
@@ -158,12 +208,14 @@ T-004.1:
   preconditions: []
   input:
     cwd: <tmp>
+    env: {COLUMNS: "40"}
     command: python <repo>/prd-toolkit/scripts/prd_lint.py
+    note: COLUMNS narrower than the usage line shows it is never wrapped
   expect:
     output:
       exit: 2
       stdout: ""
-      stderr: "usage: prd_lint.py [-h] [--list-rules] [--ci] [--sample-tids N] [prd_dir]\n"
+      stderr: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]\n"
     effects: []
     errors: []
     leaks: none
@@ -196,6 +248,8 @@ T-004.3:
   preconditions: []
   input:
     cwd: <tmp>
+    env: {COLUMNS: "200"}
+    note: a wide COLUMNS keeps the help body on its lines; T-004.1 shows the usage never wraps when COLUMNS is narrow
     runs:
       - python <repo>/prd-toolkit/scripts/prd_lint.py --help
       - python <repo>/prd-toolkit/scripts/prd_lint.py -h
@@ -204,7 +258,7 @@ T-004.3:
       each_run:
         exit: 0
         stderr: ""
-        stdout_first_line_starts: "usage: prd_lint.py [-h] [--list-rules] [--ci] [--sample-tids N] [prd_dir]"
+        stdout_first_line: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]"
         stdout_contains: ["Lint a PRD folder.", "skip the checks that need this machine's skills and linters"]
     effects: []
     errors: []
@@ -770,6 +824,56 @@ T-012.3:
       exit: 1
       stdout_exact: "docs/prd/orders/contracts/extra/keys.yaml:1: contracts-valid: YAML parse error: found unhashable key\n"
       stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-013.1:
+  ac: AC-013.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/plugins_none]
+  input:
+    setup: [set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      each_run:
+        exit: 0
+        stderr: ""
+        stdout_exact_lines:
+          - "document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
+          - "service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7."
+    effects: []
+    errors: []
+    leaks: none
+T-013.2:
+  ac: AC-013.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    setup:
+      - copy the folder <repo>/prd-toolkit/packs/document to <tmp>/plugin/prd-packs/document
+      - "write <tmp>/plugins.json as the JSON {\"version\": 2, \"plugins\": {\"demo@local\": [{\"installPath\": \"<resolved tmp>/plugin\"}]}}"
+      - set PRD_PLUGINS_FILE to <tmp>/plugins.json
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --list-packs
+    note: the copied pack keeps its name and version, so only the source tells the two document lines apart
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout_lines_in_this_relative_order:
+        - "document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
+        - "service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7."
+        - "document 1.0.0 (demo@local) — Markdown documents written for people: a user guide, a runbook for humans, a policy."
     effects: []
     errors: []
     leaks: none

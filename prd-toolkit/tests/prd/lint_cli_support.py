@@ -84,11 +84,11 @@ def run(args, cwd: Path, env: dict | None = None, unset=(), script: Path = PRD_L
     """Run `python <script> <args>` as a subprocess in `cwd`, capturing stdout and stderr as bytes.
 
     The environment is the test process's (with any monkeypatch changes) minus PYTHONIOENCODING,
-    PYTHONPATH and PYTHONHOME (testing.md, Harness, Subprocess environment) and minus `unset`,
-    plus `env`.
+    PYTHONPATH, PYTHONHOME and PRD_LINT_CI (testing.md, Harness, Subprocess environment) and minus
+    `unset`, plus `env`.
     """
     full_env = dict(os.environ)
-    for name in ("PYTHONIOENCODING", "PYTHONPATH", "PYTHONHOME", *unset):
+    for name in ("PYTHONIOENCODING", "PYTHONPATH", "PYTHONHOME", "PRD_LINT_CI", *unset):
         full_env.pop(name, None)
     if env:
         full_env.update(env)
@@ -100,3 +100,52 @@ def run(args, cwd: Path, env: dict | None = None, unset=(), script: Path = PRD_L
         timeout=300,
     )
     return Run(proc)
+
+
+def in_relative_order(lines: list[str], expected: list[str]) -> bool:
+    """stdout_lines_in_this_relative_order (testing.md, Assertions): each expected line is found,
+    whole, after the one before it, with other lines allowed between."""
+    pos = 0
+    for want in expected:
+        try:
+            pos = lines.index(want, pos) + 1
+        except ValueError:
+            return False
+    return True
+
+
+def in_process(monkeypatch):
+    """Prepare an in-process call (testing.md, Harness, In-process calls).
+
+    Applies the subprocess environment rules through monkeypatch (drops PYTHONIOENCODING,
+    PYTHONPATH, PYTHONHOME and PRD_LINT_CI), puts prd-toolkit/scripts on sys.path, and returns
+    the imported prd_lint module.
+    """
+    for name in ("PYTHONIOENCODING", "PYTHONPATH", "PYTHONHOME", "PRD_LINT_CI"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    import importlib
+
+    return importlib.import_module("prd_lint")
+
+
+def register_zz_warn():
+    """Register the rule zz-warn of T-001.4 and return a function that removes it.
+
+    The rule takes the loaded PRD and returns
+    [prdlint.findings.Finding("prd.md", 1, "zz-warn", "a warning", severity="warn")].
+    """
+    import importlib
+
+    registry = importlib.import_module("prdlint.registry")
+    findings = importlib.import_module("prdlint.findings")
+
+    @registry.rule("zz-warn", severity="warn")
+    def zz_warn(prd):
+        return [findings.Finding("prd.md", 1, "zz-warn", "a warning", severity="warn")]
+
+    def remove():
+        registry.RULES.pop("zz-warn", None)
+        registry.SEVERITY.pop("zz-warn", None)
+
+    return remove

@@ -58,7 +58,7 @@ def test_skill_lint_command_echoes_its_exit_code(skill):
     # the lint-exit-0 eval grader matches this literal; skill text must never hold it
     assert "prd-lint-exit=0" not in text
     for line in text.splitlines():
-        if "prd_lint.py" in line and "--sample-tids" not in line:
+        if "prd_lint.py" in line and "--sample-tids" not in line and "--list-packs" not in line:  # R26: own tag
             assert 'echo "prd-lint-exit=$?"' in line, line
         if "lint" in line.lower() and re.search(r"\bexits? 0\b", line):
             assert "prd-lint-exit" in line, f"a gate must name the echoed value: {line}"

@@ -578,6 +578,7 @@ def main(dst: str, state: str) -> None:
     hooks = _tool(repo, str(PLUGIN / "scripts/prd_hooks.py"), "install", "docs/prd/greet")
     if hooks.returncode != 0:
         sys.exit(f"deploy_repo: prd_hooks install failed:\n{hooks.stdout}{hooks.stderr}")
+    commit(repo, "Ignore the judge record\n\nRefs: none (no behaviour change)", ".gitignore", date="2026-01-05T11:00:00+0000")
     commit(repo, "Vendor the PRD toolkit", ".prd-toolkit", date="2026-01-05T12:00:00+0000")
     if state == "failing-check":
         (repo / "src/greet/cli.py").write_text(CLI_HEY, encoding="utf-8")

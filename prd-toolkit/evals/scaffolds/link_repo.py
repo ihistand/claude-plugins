@@ -733,6 +733,7 @@ def _client(client: Path, greet: Path) -> None:
     commit(client, "PRD: greet-client 1.0.0 Approved, every requirement verified\n\nRefs: FR-001, FR-002", "docs",
            date="2026-01-09T12:00:00+0000")
     _tool(client, str(PLUGIN / "scripts/prd_hooks.py"), "install", CLIENT)
+    commit(client, "Ignore the judge record\n\nRefs: none (no behaviour change)", ".gitignore", date="2026-01-10T11:00:00+0000")
     commit(client, "Vendor the PRD toolkit", ".prd-toolkit", date="2026-01-10T12:00:00+0000")
     _claude_md(client, CLIENT, "2026-01-10T18:00:00+0000")
 

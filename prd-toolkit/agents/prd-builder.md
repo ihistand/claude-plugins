@@ -22,7 +22,16 @@ these rules:
   On `1`, re-read each region marked STALE. Never pipe or filter it.
 - Write the unit tests first, one per unit T-id in your prompt, each citing `@prd <T-id>`, in a
   file that cites only unit T-ids; see them fail with the `unit` Levels harness command; then
-  write the code until they pass. Tests that failed before your change are not yours.
+  write the code until they pass. Tests that failed before your change are not yours. The one
+  exception is an area whose pack says `builder-tests: none` (the pack's `Target:` line names the
+  pack; read `builder-tests:` in its `pack.yaml`, in `.prd-toolkit/packs/<name>/` when vendored,
+  else the toolkit's `packs/<name>/` for the source `prd-toolkit`, else
+  `<installPath>/prd-packs/<name>/` of the plugin; the built-in `document` pack says `none`).
+  There you write no unit test: you write each output its contracts name (for
+  `document`, each `outline` entry's `path`), from the entry's audience, purpose, sections, terms
+  and length and the area's judged rubric items, with every fact taken from the repository, and you
+  run the §5 standards linters that apply. Prose the outline lets you write is not a PRD gap; a gap
+  is what the outline and the rubric do not answer.
 - Build only what the pack's ACs state. A value the pack does not give is a QUESTION, never a
   default. A change outside your IDs, even one that fixes an open `E-nnn`, is not yours, except the
   entry on the prompt's `Fixes:` line, whose regression T-ids are the build's target.

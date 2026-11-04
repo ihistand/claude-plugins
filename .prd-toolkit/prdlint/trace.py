@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .findings import Finding
-from .model import Prd, gate_of
+from .model import ADOPTION_FILE, Prd, _adoption, gate_of
 
 TRACE_RULES = ("t-implemented", "test-cites-live", "commit-refs", "status-current", "known-failing-tags")
 
@@ -224,6 +224,42 @@ def _commits(repo_root: Path, rng: str) -> list[tuple[str, str, list[str]]]:
     return commits
 
 
+def _git_out(repo_root: Path, *args: str) -> str | None:
+    proc = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=repo_root, capture_output=True,
+                          encoding="utf-8", errors="replace", timeout=60)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def _boundary_at(prd: Prd, repo_root: Path) -> Callable[[str], Callable[[str], bool] | None]:
+    """For a commit, the commit rule's predicate as the adoption map stood in that commit's own tree.
+
+    A commit made before adoption.md was committed, or while its area was not yet `adopted`, was under no Boundary,
+    so it is not judged by today's. When adoption.md has never been committed (it exists only in the working tree),
+    every commit is judged by the current map, as before."""
+    current = in_boundary(prd, repo_root)
+    if prd.adoption is None:
+        return lambda sha: current
+    try:
+        rel = (prd.root.resolve().relative_to(repo_root.resolve()) / ADOPTION_FILE).as_posix()
+    except ValueError:
+        return lambda sha: current
+    if not (_git_out(repo_root, "log", "-1", "--format=%H", "--", rel) or "").strip():
+        return lambda sha: current
+    cache: dict[str, Callable[[str], bool] | None] = {}
+
+    def at(sha: str) -> Callable[[str], bool] | None:
+        text = _git_out(repo_root, "show", f"{sha}:{rel}")
+        if text is None:
+            return None
+        if text not in cache:
+            rows = _adoption({ADOPTION_FILE: text}) or []
+            rxs = [glob_re(g) for r in rows if r.state == "adopted" for g in r.boundary]
+            cache[text] = (lambda path: any(rx.match(path) for rx in rxs)) if rxs else None
+        return cache[text]
+
+    return at
+
+
 def build_side(prd: Prd, level: str) -> bool:
     """A unit or build-gate level; a level with no Gate row counts as build, so trace fails closed."""
     return level == "unit" or gate_of(prd, level) != "deploy"
@@ -274,11 +310,12 @@ def run_trace(prd: Prd, repo_root: Path, rev_range: str | None) -> list[Finding]
                 findings.append(Finding(where, line, "known-failing-tags", f"tags {tid} known-failing {eid}, which is resolved"))
 
     if rev_range:
-        inside_boundary = in_boundary(prd, repo_root)
+        boundary_at = _boundary_at(prd, repo_root)
         for sha, body, files in _commits(repo_root, rev_range):
             for problem in changeset_problems(prd, body):
                 findings.append(Finding("prd.md", 1, "commit-refs", f"commit {sha[:8]}: {problem}"))
-            inside = [f for f in files if inside_boundary(f)]
+            inside_boundary = boundary_at(sha)
+            inside = [f for f in files if inside_boundary(f)] if inside_boundary else []
             if inside:
                 for problem in refs_problems(prd, body):
                     findings.append(Finding("prd.md", 1, "commit-refs", f"commit {sha[:8]} touches {inside[0]} inside the Boundary: {problem}"))

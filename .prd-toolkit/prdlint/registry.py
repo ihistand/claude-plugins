@@ -5,6 +5,7 @@ from .findings import Finding
 from .model import Prd
 
 RULES: dict[str, Callable[[Prd], Iterable[Finding]]] = {}
+SEVERITY: dict[str, str] = {}  # rule name -> "error" (default) or "warn"
 
 
 class RuleCrash(Exception):
@@ -14,15 +15,16 @@ class RuleCrash(Exception):
         self.exc = exc
 
 
-def rule(name: str):
+def rule(name: str, severity: str = "error"):
     def register(fn):
         RULES[name] = fn
+        SEVERITY[name] = severity
         return fn
 
     return register
 
 
-def run(prd: Prd, only: set[str] | None = None) -> list[Finding]:
+def run(prd: Prd, only: set[str] | None = None, warnings: bool = False) -> list[Finding]:
     from . import rules  # noqa: F401  (importing registers every rule module)
 
     findings = list(prd.load_findings)
@@ -33,4 +35,6 @@ def run(prd: Prd, only: set[str] | None = None) -> list[Finding]:
             findings.extend(fn(prd))
         except Exception as exc:
             raise RuleCrash(name, exc) from exc
+    if not warnings:
+        findings = [f for f in findings if f.severity != "warn"]
     return sorted(findings, key=lambda f: (f.file, f.line, f.rule))

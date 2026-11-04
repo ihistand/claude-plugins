@@ -71,6 +71,13 @@ sql-dialect: postgres
 | `owner` | free text, required |
 | `updated` | `YYYY-MM-DD` |
 | `sql-dialect` | a sqlglot dialect; required when `contracts/schema.sql` exists |
+| `language` | optional; a BCP 47 primary language subtag, `^[a-z]{2,3}$`; default `en` |
+
+`language` is the language of the PRD's prose: requirement text and ACs, the glossary, test-case
+`steps:`, `rubric:` items and published summaries. Field labels (`Status:`, `Acceptance (EARS):`),
+IDs, YAML keys, kinds and section headings stay English. Lint reads a language's EARS openers and
+vague words from its language table (see Language tables); a `language:` with no table is a
+`language-table` violation (`language 'fr' has no table`).
 
 ## prd.md sections
 
@@ -119,6 +126,113 @@ backtick span as one glob. Assumption status: `open`, `confirmed`, `corrected`, 
 The Boundary is where the commit rule applies. With an `adoption.md`, it is the globs of the `adopted` rows. A project with no `adoption.md` (a new project) has no map, so its Boundary is every path outside the PRD folder and `.prd-toolkit/`. A commit that touches a Boundary path carries a `Refs:` trailer. The grammar: the line starts with `Refs:` (case-sensitive; `refs:` is not a trailer), and its value is either exactly `none (no behaviour change)` or comma-separated IDs (spaces around a comma are fine). Every `Refs:` line in the message counts, so two lines are two lists. An ID is `UJ-nn`, `FR-nnn` or `NFR-nnn` that a block defines and that is not `removed`, or `E-nnn` that `errors.md` records. Any other key (a ticket number, say) goes in its own trailer, not in `Refs:`.
 
 Section 9 states what counts as breaking for the project. A toolkit format migration, such as moving the adoption map, is a patch. The 0.4 migration adds the Gate column to the Levels table in `testing.md`; record it as the §14 row `format: Levels Gate column (prd-toolkit 0.4)`, a patch bump.
+
+## Target profiles
+
+A profile is a pack and an output language. A PRD sets a default in §1, and a `features/<area>.md`
+file overrides it with a `Target:` line.
+
+### §1 lines
+
+Two bullet lines in `## 1. Metadata & stack` are read for the profile, `Pack:` and `Output language:`;
+`- Profile:` is the authoring skill's assumption marker, and every other §1 bullet stays prose:
+
+```
+- Pack: document 1.0.0 (prd-toolkit)
+- Output language: es
+- Profile: [ASSUMPTION A-03: document, language es, output language es; the user writes Spanish and wants a Spanish guide]
+```
+
+- `- Pack: <name> <X.Y.Z> (<source>)`. `<name>` matches `^[a-z][a-z0-9-]*$`. `<source>` is
+  `prd-toolkit` for a built-in pack, or `<plugin>@<marketplace>` for a pack in an installed plugin.
+  At most one `Pack:` line. Lint reads the line whole, so it holds no marker.
+- `- Output language: <code>`, a BCP 47 tag (`es`, `pt-BR`). At most one line. It appears only when it
+  differs from `language:`; with no such line the output language is `language:`.
+- `- Profile: [ASSUMPTION A-nn: <pack>, language <code>, output language <code>; <basis>]` is the
+  authoring skill's proposal of the target profile, one assumption indexed `open` in §12 until the
+  sign-off decides it. A decided PRD keeps the `Pack:` and `Output language:` lines and drops the
+  marker.
+- No `Pack:` line means the built-in `service` pack at whatever version is vendored (or built in,
+  before the first install). It is not locked, so a 0.7 PRD needs no edit.
+
+### The area `Target:` line
+
+An optional line at column 0 in `features/<area>.md`, after the file's level-1 heading and before its
+first level-3 heading. Blank lines and HTML comments may stand between:
+
+```
+Target: pack document 1.0.0 (prd-toolkit), output language en
+Target: output language pt-BR
+```
+
+Either part may be omitted, not both; the parts are comma-separated, pack first. An omitted part
+inherits §1. At most one `Target:` line per file. Blocks in `nfr.md` take §1's profile. The area's
+test cases (`test-cases/<area>.yaml`) belong to its profile.
+
+### `pack-resolves` messages
+
+Lint rule `pack-resolves` reports each of these on the line that holds the fault:
+
+| Message | When |
+|---|---|
+| `Pack: must be <name> <X.Y.Z> (<source>)` | a malformed `Pack:` line |
+| `Output language: must be a BCP 47 tag such as es or pt-BR` | a malformed `Output language:` line |
+| `Target: must be pack <name> <X.Y.Z> (<source>)[, output language <code>] or output language <code>` | a malformed `Target:` line |
+| `Target: must come before the first requirement` | a `Target:` line after the file's first level-3 heading |
+| `Target: must come after the file's level-1 heading` | a `Target:` line above the level-1 heading |
+| `<Label>: repeated (first at line N); one <Label>: line per PRD` | a second `Pack:` or `Output language:` line |
+| `Target: repeated (first at line N); one Target: line per area` | a second `Target:` line in one file |
+| `pack <name> named at <v1> and <v2>; one version per PRD` | one pack named at two versions |
+| `pack <name> <X.Y.Z> (<source>) not found; looked in: <places>` | no folder resolves |
+| `vendored <name> <v1>, the PRD names <v2>; run prd_hooks.py install` | the vendored copy's version differs from the named one |
+| `vendored <name> has no pack.yaml; run prd_hooks.py install` | a vendored pack folder holds no manifest (it never falls through to another copy) |
+| `pack <name> needs toolkit <range>; this is <version>` | the pack's `toolkit:` range excludes this toolkit |
+| `pack <name>: pack.yaml: <why>` | a manifest that fails its schema, naming the key |
+| `pack <name>: only the service pack may use validator built-in` | `built-in` in another pack |
+
+### The `pack` Validator cell
+
+A contract type a pack declares appears in §7 with the Validator cell `pack`:
+
+```
+| outline | `contracts/outline.yaml` | pack |
+```
+
+`contracts-valid` runs the resolved pack's validator for a `pack` row, from the PRD root with the
+matching files appended. A `pack` row whose type no resolved pack declares is a `contracts-valid`
+violation. Each target kind a pack declares (`doc:<name>` for `document`) resolves in `test-refs`
+like a custom type's name.
+
+### Upgrading a 0.7 PRD
+
+Nothing is required. A PRD that adds `language:`, a `Pack:` line, an `Output language:` line or a
+`Target:` line takes a patch bump with the §14 row `format: target profiles (prd-toolkit 0.8)`.
+
+## Language tables
+
+A language table is `references/languages/<code>.yaml` in the toolkit, or `languages/<code>.yaml` in a
+pack the PRD names (the toolkit's own wins when both exist). `en.yaml` reproduces 0.7 exactly. Keys:
+
+| Key | Holds |
+|---|---|
+| `language` | the code; equals the file name |
+| `openers` (in `ears`) | the words an EARS AC may start with, as whole words (`When`, `While`, `If`, `Where`) |
+| `ubiquitous` (in `ears`) | a regex for the ubiquitous form (`^The \S.*? shall\b`) |
+| `ubiquitous_hint` (in `ears`) | how the form reads in a message (`'The <thing> shall'`) |
+| `modal` (in `ears`) | a regex for the modal verb an AC must hold (`\bshall\b`) |
+| `modal_word` (in `ears`) | the modal verb as a word, for messages (`shall`) |
+| `vague` | a list of words and phrases `vague-word` rejects, case-insensitive whole words |
+| `labels` | the page chrome `prd_publish.py` prints; a missing key falls back to `en` |
+
+`ac-ears` accepts an AC that starts with one of `openers` or matches `ubiquitous`, and its message
+names the language's openers. `vague-word` keeps the "measurable number on the line" exemption.
+The `labels` keys are the ones in `references/languages/en.yaml`.
+
+## Lint output
+
+One line per finding: `<file>:<line>: <rule>: <message>`. A rule of severity `warn` prints
+`<file>:<line>: warn: <rule>: <message>` (`platform-word` is the one warn rule). The exit code counts
+errors only, so a warning never fails a gate. `prd_lint.py --list-rules` prints each rule's severity.
 
 ## Requirement blocks
 
@@ -238,6 +352,40 @@ T-012.2:
   (`prd.md#Component: MyLinksPage`, `testing.md#Harness`). The dry-run tester reads every entry.
   An entry whose file or heading does not exist is a `test-refs` violation.
 - A mapping key repeated in a file is an `id-unique` violation; the first value is kept.
+
+## Judged cases
+
+A case is judged when its `expect` has `rubric:`. It keeps the seven sufficiency elements;
+`rubric:` and `threshold:` take the place of `output:`:
+
+```yaml
+T-004.2:
+  ac: AC-004.2
+  level: judged
+  target: doc:install-guide
+  environment: local
+  identity: none
+  preconditions: []
+  input: {reader: has never used a terminal}
+  expect:
+    rubric:
+      - Each step in Install names one action the reader performs
+      - No step relies on a tool that Requirements does not list
+      - First run shows the command and the output the reader will see
+    threshold: 0.66
+    runs: 3
+    errors: []
+    leaks: none
+```
+
+- `rubric:` is a non-empty list of non-empty strings, in the PRD's `language:`. Each item is one claim
+  a grader can prove with a quote from the output.
+- `threshold:` is a number in (0, 1]. `runs:` is optional, an integer of at least 1, default 3.
+- `output:` must be absent. `effects:`, `errors:` and `leaks:` keep their usual meaning.
+- Lint rule `judged-case` reports a missing or malformed `rubric:`, `threshold:` or `runs:`, and an
+  `output:` beside `rubric:`.
+- The test calls `prd_judge.py <prd dir> <T-id> <output file>` and asserts its exit code. It never
+  grades. The citation stays `@prd <T-id>`.
 
 ## links.md
 

@@ -13,7 +13,7 @@ from .rules.contracts import _custom_types
 
 yaml = require("yaml", "pyyaml")
 
-PARTS = ("Header", "Stack", "Glossary", "Requirements", "Code", "Levels", "Cited", "Upstream contracts", "Known defects", "Open questions", "History")
+PARTS = ("Header", "Stack", "Glossary", "Requirements", "Code", "Levels", "Harness defaults", "Rubric conventions", "Cited", "Upstream contracts", "Known defects", "Open questions", "History")
 PARTS_REPO = ("Header", "Stack", "Areas")
 MODES = ("decide", "implement")
 
@@ -181,7 +181,15 @@ def _cited(prd: Prd, area: str, blocks: list[ReqBlock], text: str) -> list[Item]
         else:
             items.append(Item("Cited", code, "contracts/errors.yaml", None, f"{code}: not in contracts/errors.yaml"))
 
-    typed = {(m.group(1), m.group(2).rstrip(".:")) for m in _TYPED.finditer(text)}
+    from .rules.contracts import pack_kinds
+    kinds = pack_kinds(prd)  # a pack's target kind (`doc`) resolves to its contract type (`outline`)
+    typed = {(kinds.get(m.group(1), m.group(1)), m.group(2).rstrip(".:")) for m in _TYPED.finditer(text)}
+    tests = {t for b in blocks for t, _, _ in b.tests}
+    for tc in prd.test_cases:  # the targets of the selected requirements' tests, when a pack names their kind
+        target = tc.data.get("target") if isinstance(tc.data, dict) else None
+        m = _TYPED.fullmatch(target) if isinstance(target, str) else None
+        if tc.id in tests and m and m.group(1) in kinds:
+            typed.add((kinds[m.group(1)], m.group(2)))
     for kind, _, files, _ in _custom_types(prd):  # resolved as contracts-valid resolves custom_items
         for f in files:
             data = prd.yaml.get(f)
@@ -280,7 +288,42 @@ def _header(prd: Prd, area: str | None, mode: str, display: str, body: list[Item
         row = next((r for r in prd.adoption or [] if r.area == area), None)
         state = f"{row.state}; Boundary: {', '.join(row.boundary)}" if row and row.boundary else (row.state if row else "-")
         lines.append(f"Area: {area} ({state})")
+        lines.append(_profile_text(prd, area))
     return Item("Header", None, "prd.md", None, "\n".join(lines + [size]))
+
+
+def _profile_text(prd: Prd, area: str) -> str:
+    from . import packs
+
+    ref, lang = packs.profile(prd, area)
+    which = f"pack {ref.name} {ref.version} ({ref.source})" if ref.version else f"pack {ref.name} (default)"
+    return f"Target: {which}, output language {lang}"
+
+
+def _harness(prd: Prd, area: str) -> list[Item]:
+    from . import packs
+
+    pack = packs.pack_for(prd, area)
+    slots = pack.harness if pack else {}
+    if not slots:
+        return []
+    text = "\n".join(f"- **{slot}.** {value}" for slot, value in slots.items())
+    return [Item("Harness defaults", None, f"pack {pack.name} {pack.version}", None, text)]
+
+
+def _rubrics(prd: Prd, area: str) -> list[Item]:
+    from . import packs
+    from .rules.testcases import is_judged
+
+    pack = packs.pack_for(prd, area)
+    judged = any(tc.file == f"test-cases/{area}.yaml" and isinstance(tc.data, dict) and is_judged(tc) for tc in prd.test_cases)
+    if not (pack and pack.rubrics and judged):
+        return []
+    try:
+        text = pack.rubrics.read_text(encoding="utf-8").rstrip("\n")
+    except OSError:
+        return []
+    return [Item("Rubric conventions", None, f"pack {pack.name} {pack.version}", None, text)]
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
@@ -389,7 +432,7 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
     ids = {b.id for b in blocks}
     requirements = [Item("Requirements", b.id, b.file, b.line, t) for b, t in zip(blocks, texts)]
     patterns = [_word(i) for i in sorted(ids | {ac.id for b in blocks for ac in b.acs})] + [_word(area)]
-    implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd)) if mode == "implement" else []
+    implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd) + _harness(prd, area) + _rubrics(prd, area)) if mode == "implement" else []
     body = (_stack(prd) + _glossary(prd, text) + (requirements or [_none("Requirements", f"features/{area}.md")])
             + implement + _cited(prd, area, blocks, text) + _upstream_contracts(prd, blocks, text) + _defects(prd, ids, entries) + _questions(prd, patterns) + _history(prd, area))
     return [_header(prd, area, mode, display, body)] + body

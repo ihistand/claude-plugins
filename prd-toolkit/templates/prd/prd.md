@@ -20,6 +20,7 @@ sql-dialect: {{sql_dialect}}
 - Hosting: [NEEDS CLARIFICATION: where it runs]
 - Repository: [NEEDS CLARIFICATION: repository URL]
 - Not used: [NEEDS CLARIFICATION: technologies ruled out]
+<!-- Target profile, only when the outputs are not a service in English: `- Pack: <name> <X.Y.Z> (<source>)` and `- Output language: <code>` (the latter only when it differs from `language:` in the frontmatter). Delete this hint once decided. -->
 
 ## 2. Summary & goals
 

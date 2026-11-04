@@ -1,0 +1,7 @@
+---
+max_turns: 80
+timeout_seconds: 1500
+allowed_tools: [Read, Glob, Grep, Skill, Agent, Write, Edit, Bash]
+---
+
+Write a PRD for an install guide for this CLI. Don't ask me questions.

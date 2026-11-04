@@ -14,6 +14,18 @@ The six levels a test case can carry in `level:`. A level must be a row of the L
 
 The tester never sees the code, so its tests check the build independently.
 
+## Judged cases and the `checks` level
+
+A case whose `expect` has `rubric:` and `threshold:` is judged: a model grader scores the built output
+against each rubric item, and `prd_judge.py` returns exit 0 when the median score of its runs reaches the
+threshold. A judged case may sit at any level; the `document` pack names one `judged`. The test calls
+`prd_judge.py` on the output and asserts its exit code, and grades nothing itself.
+
+The `document` pack's `checks` level holds what a script can decide exactly: sections present in order,
+every `terms` entry used, no banned synonym, relative links resolving, word count in range. Everything
+else about the output's quality is a judged case. The tester writes both, and neither level has a builder
+unit test (`builder-tests: none`).
+
 ## Fields each level emphasises
 
 Every case carries the sufficiency fields (`ac`, `level`, `target`, `environment`, `identity`,

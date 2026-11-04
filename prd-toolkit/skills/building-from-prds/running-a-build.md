@@ -216,6 +216,18 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their tests, and
    step 5 is skipped.
 
+   **An area whose pack says `builder-tests: none`.** The implement pack's Header line `Target:`
+   names the area's pack (no line: §1's `Pack:`, or `service`); read its `builder-tests:` in its
+   `pack.yaml`: in `.prd-toolkit/packs/<name>/` when the repository has `.prd-toolkit/`, else the
+   toolkit's `packs/<name>/` for the source `prd-toolkit`, else `<installPath>/prd-packs/<name>/`
+   of the plugin that `~/.claude/plugins/installed_plugins.json` records. The built-in `document`
+   pack says `none`. Such an area has
+   no unit T-ids: the builder prompt carries `Unit T-ids: none`, and you dispatch the builder all
+   the same, beside the tester, because the builder writes the area's outputs (for `document`, each
+   `outline` entry's `path`) and runs the standards linters, as building-from-prds says. A request
+   to "write the unit tests first" adds no unit T-id: the area has no unit case to cite, and a test
+   for its `checks` or `judged` T-ids is the tester's `write`, never the builder's.
+
    When the Agent tool offers no worktree isolation, dispatch the builder first and the tester
    after it returns, each followed by its step 4 check. The builder then commits on the build
    branch itself, so there is no merge: its commits land on the build branch, and its range is
@@ -242,9 +254,15 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. A test
      dispute, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
      does not stop it: the caller reconciles each test dispute by quote at step 6, as a test
-     misread or a code bug. A UNIT line that is not `pass` fails the round, and the next builder
-     round carries it as its `Failure:`, with the quote of that T-id's test case and its unit test
-     as `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
+     misread or a code bug. On an area whose pack says `builder-tests: none`, a QUESTIONS line
+     that asks what the document should say, where its outline entry gives the audience, the
+     purpose and the sections, is not a gap: it is dismissed by an exact quote of the outline entry
+     or the rubric item that answers it, as a tester QUESTION is, and the builder is dispatched
+     again, the prompt adding the line `Answered: "<the quote>"`, as the next round of the
+     block's T-ids (**Rounds**); only a gap neither the outline nor the rubric answers stops the
+     build. A UNIT line that is not `pass` fails the round, and the next builder round carries it
+     as its `Failure:`, with the quote of that T-id's test case and its unit test as
+     `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
      builder again, as the next round of each of its unit T-ids. A failed round's builder branch
      is kept and listed in the report; never delete one with `-D`. Without worktree isolation, a
      failed builder check stops the build instead, as step 3 says. Without worktree isolation,

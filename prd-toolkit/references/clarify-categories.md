@@ -7,7 +7,7 @@ then ask about the weakest.
 
 ## The thirteen categories
 
-1. Stack: language, framework, runtime, hosting, versions.
+1. Stack: language, framework, runtime, hosting, versions, and the target profile: the pack (`prd_lint.py --list-packs` names the ones installed), the PRD's `language:` and the output language, per area when one differs.
 2. Data model: tables, keys, nullability, defaults, relationships.
 3. Flows: the happy path of each user journey and feature, step by step.
 4. Error and empty states: what the user sees and what the system does when something fails or nothing exists.
