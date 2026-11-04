@@ -301,6 +301,7 @@ def test_every_vendored_script_runs_from_the_vendored_copy(repo):
         "prd_git_hook.py": ["commit-msg", PRD, "msg.txt"], "prd_error.py": ["list", PRD], "prd_links.py": ["check", PRD],
         "prd_confirm.py": ["status", PRD, "--area", "none"],
         "prd_judge.py": [PRD, "T-999.9", "msg.txt"], "prd_change.py": ["digest", PRD],
+        "prd_gates.py": ["list", PRD],
     }
     assert set(calls) == set(hooks.VENDORED), set(hooks.VENDORED) ^ set(calls)
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
@@ -352,3 +353,12 @@ def test_check_reports_a_stale_vendored_confirm_page(repo):
     assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/confirm/extra.html is not in the plugin"]
     hooks.install(repo, PRD)
     assert not (repo / ".prd-toolkit/confirm/extra.html").exists()
+
+
+def test_vendors_prd_gates(repo):
+    assert "prd_gates.py" in hooks.VENDORED
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/prd_gates.py").is_file() and (repo / ".prd-toolkit/prdlint/gates.py").is_file()
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+    (repo / ".prd-toolkit/prd_gates.py").unlink()
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/prd_gates.py is missing"]
