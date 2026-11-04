@@ -73,6 +73,8 @@ def _checked(prd_root: Path, reply: str, dry_run: str):
 
     if not reply.strip():
         _fail("the owner's reply is empty")
+    if dry_run.strip() in ("", "pending"):
+        _fail('the dry-run record is pending; give the record or "no dry run (<why>)"')
     if not _one_line(dry_run):
         _fail("the dry-run record must be one non-empty line without |")
     data = _verdict(prd_root)
@@ -82,7 +84,7 @@ def _checked(prd_root: Path, reply: str, dry_run: str):
     rows = _log_rows(prd_root)
     last = rows[-1] if rows else None
     risky = _non_unit(prd_root, last) if last is not None else []
-    if risky and (dry_run.strip() == "pending" or dry_run.strip().startswith("no dry run")):
+    if risky and dry_run.strip().startswith("no dry run"):
         _fail(f"the change adds or revises a non-unit test ({', '.join(risky)}) and has no dry-run record")
     if not any(r.cells and r.cells[0].split(".")[0].isdigit() and int(r.cells[0].split(".")[0]) >= 1 for r in rows):
         _fail("a first approval is authoring's, not a change's")

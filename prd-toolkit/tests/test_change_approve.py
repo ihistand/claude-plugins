@@ -108,15 +108,29 @@ def test_lint_failing_is_refused(recorded):
 
 
 def test_pending_dry_run_with_a_non_unit_test_is_refused(recorded):
-    for record in ("pending", "no dry run: it is a typo"):
-        refused(recorded, "the change adds or revises a non-unit test (T-002.3) and has no dry-run record", dry=record)
+    refused(recorded, "the change adds or revises a non-unit test (T-002.3) and has no dry-run record", dry="no dry run: it is a typo")
+
+
+PENDING = 'the dry-run record is pending; give the record or "no dry run (<why>)"'
+
+
+@pytest.mark.parametrize("record", ["pending", "  pending \t", "", "   "])
+def test_an_empty_or_pending_record_is_always_refused(recorded, record):
+    refused(recorded, PENDING, dry=record)
+
+
+def test_a_unit_only_pending_record_is_refused(recorded):
+    edit(recorded / PRD, "test-cases/api.yaml", "T-002.3:\n  ac: AC-002.3\n  level: integration", "T-002.3:\n  ac: AC-002.3\n  level: unit")
+    edit(recorded / PRD, "features/api.md", "T-002.3 [integration]", "T-002.3 [unit]")
+    verdict(recorded)
+    refused(recorded, PENDING, dry="pending")
 
 
 def test_a_unit_test_alone_may_have_no_dry_run(recorded):
     edit(recorded / PRD, "test-cases/api.yaml", "T-002.3:\n  ac: AC-002.3\n  level: integration", "T-002.3:\n  ac: AC-002.3\n  level: unit")
     edit(recorded / PRD, "features/api.md", "T-002.3 [integration]", "T-002.3 [unit]")
     verdict(recorded)
-    code, _, err = approve(recorded, dry="no dry run: unit tests only")
+    code, _, err = approve(recorded, dry="no dry run (unit only)")
     assert code == 0, err
     assert "; pending" not in (recorded / PRD / "prd.md").read_text(encoding="utf-8")
 
