@@ -69,7 +69,8 @@ def test_list_rules_prints_severity(capsys, warn_rule):
     assert "ac-ears error" in lines and "t-warn warn" in lines
 
 
-def test_preflight_ignores_a_warn(tmp_path, warn_rule):
+def test_preflight_ignores_a_warn(tmp_path, warn_rule, monkeypatch):
+    monkeypatch.setenv("PRD_LINT_CI", "1")  # the scaffold's required skill is not installed on a CI runner
     repo = deploy_repo(tmp_path)
     reasons = deploy.preflight(model.load(repo / "docs/prd/orders"), repo)
     assert "prd_lint has findings" not in reasons

@@ -59,7 +59,8 @@ def test_document_manifest_loads():
 
 # --- the document fixture ----------------------------------------------------------------------------------------
 
-def test_document_prd_lints_clean_but_for_the_judged_case(tmp_path):
+def test_document_prd_lints_clean_but_for_the_judged_case(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRD_LINT_CI", "1")  # the fixture's required skill is not installed on a CI runner
     found = _lint(document_prd(tmp_path))
     assert found == []
 
