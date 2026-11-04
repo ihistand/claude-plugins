@@ -8,6 +8,11 @@
 > `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.8.2.
 > **Needs from 0.8.1:** the three interface changes of section 6, built into 0.8.1 before it ships.
+>
+> **Revisions.**
+> - Section 6 change 2 (2026-11-04, from 0.8.1's author, in its spec at 8cf5f26): the three rules
+>   that keep `done` correct: both forms' Done write it, writers keep keys they do not own, and a
+>   later answer removes it.
 
 ## 1. Scope
 
@@ -162,7 +167,14 @@ These three change what 0.8.1's gates mean, so they are built in 0.8.1, before i
 2. **The adoption gate is pending until Done.** It is pending while `.prd-confirm-<area>.json` exists
    and holds no `"done": true`. `prd_confirm.py done <prd dir> <area>` sets it, and is refused (exit 1)
    while any item is open or changed since answered. `prd_gates.py answer adoption:<area> --choice done`
-   passes to it; the per-item answer is unchanged.
+   passes to it; the per-item answer is unchanged. Three rules make this hold (added with 0.8.1's
+   author, 2026-11-04):
+   - the 0.7.1 form's Done, and the inbox's, write `"done": true` through the same function as
+     `prd_confirm.py done`, once no item is open; an answer whose item's fingerprint differs from its
+     current one counts as open;
+   - every writer of the answers file (the form, `prd_confirm.py answer`, `done`, `open`) keeps the keys
+     it does not own (`summaries`, `done`), never rebuilding the file from its own fields alone;
+   - an answer or undo written after `done` removes `done`, so a reopened area is pending again.
 3. **`prd_confirm.py open <prd dir> --area <area> [--summaries F]`** writes the answers file with
    `prd`, `area`, `commit` (HEAD), `summaries` and no answers, and the `.git/info/exclude` line. It
    applies the 0.7.1 summary rules (the summary names its item; at most 400 characters) and refuses an

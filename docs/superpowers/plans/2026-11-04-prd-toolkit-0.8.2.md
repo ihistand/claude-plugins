@@ -94,6 +94,7 @@
   - `idle_minutes` set to a fraction (patch the idle check to 0.05 s): `run` returns 3; SIGTERM from a thread: 3; `finish()`: 0;
   - `assemble` replaces the include and keeps every other line byte for byte; `include_dir` is honoured; a missing include raises `PageError`;
   - `write_json_atomic` with `mode=0o600` leaves a 0600 file and no temporary file.
+  - regression for spec section 6 change 2, through `confirm`'s server after the refactor: an answers file holding `summaries` and `"done": true` keeps `summaries` after a form answer, and loses `done` (the area reopens); the form's Done with no open item writes `"done": true`.
 - [ ] **Step 2:** In `test_confirm_page.py`, read the page through `formserver.assemble(PAGE_FILE)` instead of the raw file; add `test_panel_is_included` (the raw `form.html` has the include line; the assembled one does not). Run the new and changed tests to see them fail.
 - [ ] **Step 3: Implement.** Move the server parts out of `confirm.py`; move the item list, card, keys and Done markup, style and script out of `form.html` into `panel.html`, leaving the include line. `confirm` serves `formserver.assemble(page_path())`.
 - [ ] **Step 4:** Run `test_formserver.py` and every `test_confirm*.py`: all pass, the 0.7.1 ones unchanged. Then CI parity.
@@ -152,7 +153,7 @@
   - a button that needs words, sent without: 400 and nothing written; `correct` without a class: 400;
   - a gate changed between `GET /gates` and the answer (edit its `errors.md` entry): 409, nothing written;
   - an item text holding `<script>alert(1)</script>` comes back from `/gates` as that exact string inside JSON;
-  - the adoption routes: answer an item through `?wt=<second worktree>`, then `done`: the second worktree's answers file holds `"done": true` and the first's is untouched; `done` with an open item: 409;
+  - the adoption routes: answer an item through `?wt=<second worktree>`, then `done`: the second worktree's answers file holds `"done": true` and its `summaries`, and the first's is untouched; `done` with an open item, or with an item changed since answered: 409; an answer after `done` removes `done` and the `adoption:<area>` gate is pending again;
   - a `wt` that is not a worktree: 404;
   - Review Focus 1: the words `"sí", then "no"` with a newline reach the owner's file and the log verbatim, then one ` (form)`; the same body posted twice records once (the second is 409, the gate being gone);
   - Review Focus 2: two threads post the same approval at once: one 200, one 409, one log line;
