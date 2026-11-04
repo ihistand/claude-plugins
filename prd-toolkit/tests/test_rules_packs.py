@@ -48,28 +48,81 @@ def test_rubric_shape(tmp_path, new):
 
 @pytest.mark.parametrize("new", ["", "    threshold: 0\n", "    threshold: 1.5\n", '    threshold: "0.8"\n', "    threshold: true\n"])
 def test_threshold(tmp_path, new):
-    got = _judged(tmp_path, "    threshold: 0.67\n", new)
+    got = _judged(tmp_path, "    threshold: 1.0\n", new)
     assert [f.message for f in got] == ["T-001.2: threshold must be a number in (0, 1]"]
 
 
 @pytest.mark.parametrize("v", ["0", "2.5", "true", '"3"'])
 def test_runs(tmp_path, v):
-    got = _judged(tmp_path, "    threshold: 0.67\n", f"    threshold: 1\n    runs: {v}\n")
+    got = _judged(tmp_path, "    threshold: 1.0\n", f"    threshold: 1\n    runs: {v}\n")
     assert [f.message for f in got] == ["T-001.2: runs must be an integer of at least 1"]
 
 
 def test_runs_and_threshold_bounds_pass(tmp_path):
-    assert _judged(tmp_path, "    threshold: 0.67\n", "    threshold: 1\n    runs: 1\n") == []
+    assert _judged(tmp_path, "    threshold: 1.0\n", "    threshold: 1\n    runs: 1\n") == []
 
 
 def test_judged_case_has_no_output(tmp_path):
-    got = _judged(tmp_path, "    threshold: 0.67\n", "    threshold: 0.67\n    output: {x: y}\n")
+    got = _judged(tmp_path, "    threshold: 1.0\n", "    threshold: 1.0\n    output: {x: y}\n")
     assert [f.message for f in got] == ["T-001.2: a judged case has no expect.output"]
 
 
 def test_missing_rubric_is_not_judged(tmp_path):
     got = _judged(tmp_path, "    " + RUBRIC, "")
     assert [f.rule for f in got] == ["sufficiency"] and "output" in got[0].message
+
+
+R3 = "      - First run shows the command and the output the reader will see\n"
+R4 = "      - Common problems names one fix per problem\n"
+
+
+def _warns(tmp_path, items: str, threshold: str):
+    """judged-case findings, warnings included, for the fixture's T-001.2 with `items` extra rubric lines."""
+    got = _judged(tmp_path, RUBRIC + "    threshold: 1.0\n", RUBRIC + items + f"    threshold: {threshold}\n")
+    return [(f.severity, f.message) for f in got]
+
+
+@pytest.mark.parametrize("items, threshold, n, v, write", [
+    (R3, "0.67", 3, "0.6667", "0.66"),   # 2 of 3 is 0.666..., so 0.67 needs all three
+    (R3 + R4, "0.8", 4, "0.75", "0.75"),  # 3 of 4 is 0.75
+    ("", "0.67", 2, "0.5", "0.5"),        # 1 of 2 is 0.5
+])
+def test_threshold_that_needs_every_item_warns(tmp_path, items, threshold, n, v, write):
+    assert _warns(tmp_path, items, threshold) == [(
+        "warn", f"T-001.2: threshold {threshold} needs all {n} items ({n - 1} of {n} is {v}); "
+                f"write {write} to allow one miss, or 1.0")]
+
+
+@pytest.mark.parametrize("items, threshold", [(R3, "0.66"), (R3, "1.0"), (R3, "1"), (R3 + R4, "0.75"), ("", "0.5")])
+def test_threshold_that_allows_one_miss_or_needs_all_is_silent(tmp_path, items, threshold):
+    assert _warns(tmp_path, items, threshold) == []
+
+
+def test_threshold_warn_leaves_exit_0(tmp_path):
+    root = document_prd(tmp_path)
+    edit(root, "test-cases/install.yaml", RUBRIC + "    threshold: 1.0\n", RUBRIC + R3 + "    threshold: 0.67\n")
+    assert [f.severity for f in lint(root) if f.rule == "judged-case"] == ["warn"]
+    assert [f for f in lint(root, warnings=False) if f.rule == "judged-case"] == []
+
+
+def test_repeated_rubric_item_is_an_error(tmp_path):
+    got = _judged(tmp_path, RUBRIC, RUBRIC + R3 + "      - Each step in Install names one action the reader performs\n")
+    assert [(f.severity, f.message) for f in got] == [("error", "T-001.2: rubric item 4 repeats item 1")]
+
+
+def test_test_refs_pack_kind_needs_its_section_7_row(tmp_path):
+    root = document_prd(tmp_path)
+    edit(root, "prd.md", "| outline | `contracts/outline.yaml` | pack |\n", "")
+    got = sorted({f.message for f in lint(root) if f.rule == "test-refs"})
+    assert got == [f"{t}: target doc:install-guide: contract type outline has no §7 row (Validator pack)" for t in ("T-001.1", "T-001.2")]
+
+
+def test_test_refs_pack_kind_with_its_row_checks_names(tmp_path):
+    root = document_prd(tmp_path)
+    assert [f for f in lint(root) if f.rule == "test-refs"] == []
+    edit(root, "test-cases/install.yaml", "target: doc:install-guide\n  environment: local\n  identity: none\n  preconditions: []\n  input: {reader",
+         "target: doc:nope\n  environment: local\n  identity: none\n  preconditions: []\n  input: {reader")
+    assert [f.message for f in lint(root) if f.rule == "test-refs"] == ["T-001.2: target doc:nope: no outline entry 'nope'"]
 
 
 def _make_judged(root):

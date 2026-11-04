@@ -140,7 +140,7 @@ T-001.2:
     rubric:
       - Each step in Install names one action the reader performs
       - No step relies on a tool that Requirements does not list
-    threshold: 0.67
+    threshold: 1.0
     effects: []
     errors: []
     leaks: none

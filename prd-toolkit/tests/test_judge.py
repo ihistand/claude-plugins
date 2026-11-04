@@ -153,7 +153,7 @@ def test_model_flag_reaches_claude(guide, tmp_path, monkeypatch):
 
 def test_median_of_one_half_one_passes_at_0_8(guide, tmp_path, monkeypatch):
     root, out = guide
-    set_expect(root, "threshold: 0.67", "threshold: 0.8")
+    set_expect(root, "threshold: 1.0", "threshold: 0.8")
     replies(monkeypatch, tmp_path, BOTH, HALF, BOTH)
     r = run(root, out)
     assert r.returncode == 0, r.stderr
@@ -163,7 +163,7 @@ def test_median_of_one_half_one_passes_at_0_8(guide, tmp_path, monkeypatch):
 
 def test_median_of_half_half_one_fails_and_names_the_failed_item(guide, tmp_path, monkeypatch):
     root, out = guide
-    set_expect(root, "threshold: 0.67", "threshold: 0.8")
+    set_expect(root, "threshold: 1.0", "threshold: 0.8")
     replies(monkeypatch, tmp_path, HALF, HALF, BOTH)
     r = run(root, out)
     assert r.returncode == 1, r.stderr
@@ -174,7 +174,7 @@ def test_median_of_half_half_one_fails_and_names_the_failed_item(guide, tmp_path
 
 def test_runs_flag_overrides_runs_in_the_case(guide, tmp_path, monkeypatch):
     root, out = guide
-    set_expect(root, "threshold: 0.67", "threshold: 0.67\n    runs: 3")
+    set_expect(root, "threshold: 1.0", "threshold: 1.0\n    runs: 3")
     replies(monkeypatch, tmp_path, BOTH)
     assert run(root, out, "--runs", "1").returncode == 0
     assert len(calls(tmp_path)) == 1 and len(record(tmp_path)["runs"]) == 1
@@ -185,7 +185,7 @@ def test_runs_default_to_three_and_follow_the_case(guide, tmp_path, monkeypatch)
     replies(monkeypatch, tmp_path, BOTH)
     assert run(root, out).returncode == 0
     assert len(calls(tmp_path)) == 3
-    set_expect(root, "threshold: 0.67", "threshold: 0.67\n    runs: 2")
+    set_expect(root, "threshold: 1.0", "threshold: 1.0\n    runs: 2")
     (tmp_path / "calls.jsonl").unlink()
     assert run(root, out).returncode == 0
     assert len(calls(tmp_path)) == 2
@@ -326,7 +326,7 @@ def test_a_missing_output_file_exits_2(guide, tmp_path):
 
 def test_a_judged_case_lint_would_reject_exits_2(guide):
     root, out = guide
-    set_expect(root, "threshold: 0.67", "threshold: 7")
+    set_expect(root, "threshold: 1.0", "threshold: 7")
     r = run(root, out)
     assert r.returncode == 2 and "threshold" in r.stderr and "prd_lint.py" in r.stderr
 
@@ -382,7 +382,7 @@ def test_the_record_holds_every_field_of_the_spec(guide, tmp_path, monkeypatch):
     assert rec["tid"] == TID
     assert rec["output"] == str(out.resolve())
     assert rec["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
-    assert rec["threshold"] == 0.67
+    assert rec["threshold"] == 1.0
     assert rec["model"] is None
     assert rec["grader"] == "default"
     assert [x["score"] for x in rec["runs"]] == [1.0, 0.5, 1.0]
@@ -404,7 +404,7 @@ def test_judge_returns_a_verdict(guide, tmp_path, monkeypatch):
     root, out = guide
     replies(monkeypatch, tmp_path, BOTH)
     v = judge.judge(model.load(root), TID, out, 1, None, tmp_path / "rec")
-    assert (v.tid, v.threshold, v.median, v.passed, v.grader, v.model) == (TID, 0.67, 1.0, True, "default", None)
+    assert (v.tid, v.threshold, v.median, v.passed, v.grader, v.model) == (TID, 1.0, 1.0, True, "default", None)
     assert v.runs[0].score == 1.0 and [i.quote_found for i in v.runs[0].items] == [True, True]
     assert isinstance(v.runs[0].items[0], judge.Item)
     with pytest.raises(judge.CannotJudge):
