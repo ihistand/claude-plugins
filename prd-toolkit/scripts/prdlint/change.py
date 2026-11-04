@@ -1,7 +1,6 @@
 """The change bookkeeping behind prd_change.py: next IDs and the PRD digest (bump, record and approve join them)."""
 import hashlib
 import re
-import subprocess
 from pathlib import Path
 
 from . import model
@@ -59,10 +58,7 @@ def next_id(prd: model.Prd, kind: str) -> str:
 
 
 def _listed(root: Path) -> list[Path]:
-    """The files under root git would show (tracked or untracked, not ignored); every file when root is not in a repository."""
-    r = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z", "--", "."], cwd=root, capture_output=True)
-    if r.returncode == 0:
-        return [root / p for p in r.stdout.decode("utf-8").split("\0") if p]
+    """Every file under root, found on disk; git is not asked, so an ignored folder still hashes and no repository is needed."""
     return [p for p in root.rglob("*") if p.is_file()]
 
 

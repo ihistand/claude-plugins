@@ -115,24 +115,53 @@ def test_digest_changes_with_status_and_headings(prd):
     assert change.digest(prd) != base
 
 
-def test_digest_covers_git_files_only(prd, tmp_path):
-    root = tmp_path
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    (root / ".gitignore").write_text("scratch.txt\n", encoding="utf-8")
+def _ignored_repo(tmp_path):
+    """A git repo whose .gitignore hides the whole docs/ folder, so only a disk walk can see the PRD."""
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("docs/\n", encoding="utf-8")
+
+
+def test_digest_walks_the_folder_even_when_git_ignores_it(prd, tmp_path):
+    _ignored_repo(tmp_path)
+    base = change.digest(prd)
+    edit(prd, "features/import.md", "### FR-001 Import an orders file", "### FR-001 Import orders")
+    assert change.digest(prd) != base
+    d = change.digest(prd)
+    edit(prd, "test-cases/import.yaml", "inserted: 1, skipped: 0}", "inserted: 2, skipped: 0}")
+    assert change.digest(prd) != d
+    d = change.digest(prd)
+    edit(prd, "contracts/errors.yaml", "IMPORT_EMPTY", "IMPORT_EMPTY_FILE")
+    assert change.digest(prd) != d
+    d = change.digest(prd)
+    with (prd / "test-cases/import.yaml").open("a", encoding="utf-8") as f:
+        f.write("\nT-001.9:\n  ac: AC-001.1\n  level: unit\n")
+    assert change.digest(prd) != d
+
+
+def test_digest_is_the_same_from_any_cwd(prd, tmp_path, monkeypatch):
+    _ignored_repo(tmp_path)
+    monkeypatch.chdir(prd)
+    here = change.digest(prd)
+    monkeypatch.chdir(tmp_path.parent)
+    assert change.digest(prd) == here
+
+
+def test_digest_counts_a_git_ignored_file_inside_the_folder(prd, tmp_path):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("scratch.txt\n", encoding="utf-8")
     base = change.digest(prd)
     (prd / "scratch.txt").write_text("x", encoding="utf-8")
-    assert change.digest(prd) == base
-    (prd / "new.txt").write_text("x", encoding="utf-8")
     assert change.digest(prd) != base
+
+
+def test_digest_skips_pycache_dotfiles_and_keeps_gitkeep(prd):
+    base = change.digest(prd)
     (prd / "__pycache__").mkdir()
     (prd / "__pycache__/a.pyc").write_text("x", encoding="utf-8")
     (prd / ".hidden").write_text("x", encoding="utf-8")
-    d = change.digest(prd)
-    (prd / "__pycache__/a.pyc").write_text("y", encoding="utf-8")
-    (prd / ".hidden").write_text("y", encoding="utf-8")
-    assert change.digest(prd) == d
+    assert change.digest(prd) == base
     (prd / ".gitkeep").write_text("", encoding="utf-8")
-    assert change.digest(prd) != d
+    assert change.digest(prd) != base
 
 
 def test_cli_digest(prd):
