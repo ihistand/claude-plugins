@@ -13,6 +13,10 @@
 > - Section 6 change 2 (2026-11-04, from 0.8.1's author, in its spec at 8cf5f26): the three rules
 >   that keep `done` correct: both forms' Done write it, writers keep keys they do not own, and a
 >   later answer removes it.
+> - Sections 1 and 2 (owner, 2026-11-04): the PRD READMEs are inserted as 0.8.3
+>   (`2026-11-04-prd-toolkit-0.8.3-prd-readmes-design.md`), so best practices are 0.8.4 and
+>   conversion 0.8.5; the retarget refusal names no release number, so renumbering never again
+>   changes shipped text.
 
 ## 1. Scope
 
@@ -45,7 +49,7 @@ It is **proven by** the owner on real work (section 9).
 | A button's words | The button's label is the reply; words are optional for a yes and required for anything else. The reply recorded is `<label>` or `<label>: <words>`, then ` (form)`. Two exceptions: a deploy step's reply is always typed, and adoption keeps its Done (section 5) |
 | Who starts it | Both. The owner may keep one inbox running; a session that reaches a decision reuses a live inbox or starts one, then waits for its gate |
 | A "no" on an approval | A **Request changes** choice on the approval gate, with the owner's words, that blocks the review verdict and commits nothing (section 6) |
-| Release vehicle | 0.8.2, after 0.8.1 merges. Best practices move to 0.8.3 and conversion to 0.8.4. The three interface changes go into 0.8.1 itself |
+| Release vehicle | 0.8.2, after 0.8.1 merges. The PRD READMEs follow as 0.8.3, best practices as 0.8.4 and conversion as 0.8.5. The three interface changes go into 0.8.1 itself |
 | Architecture | `prd_gates.py serve` over a server shared with the 0.7.1 form; answers go through `answer_gate()` in-process, never through a subprocess, so the form cannot bypass a rule the CLI keeps |
 
 ## 2. Components
@@ -60,7 +64,7 @@ It is **proven by** the owner on real work (section 9).
 | `templates/confirm/panel.html` | new | The 0.7.1 item panel (list, card, keys, Done), moved out of `form.html` |
 | `templates/confirm/form.html` | changed | Includes `panel.html`; the page the owner sees is unchanged |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
-| `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names conversion's new number: `retargeting an area is a conversion (prd-toolkit 0.8.4)`, in the skill (both places), its test pin and the eval's expected text |
+| `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
 | `README.md`, `plugin.json`, `marketplace.json`, `web/src/data/plugins.js` | changed | The inbox, the 0.8.2 changelog, version 0.8.2 |
 

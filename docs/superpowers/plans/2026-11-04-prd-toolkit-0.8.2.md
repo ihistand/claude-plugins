@@ -212,7 +212,7 @@ Required skill: `superpowers:writing-skills` (the repo's CLAUDE.md requires it f
   - `deploying-from-prds` and `changing-prds` each gain a Red Flag row for "I'll click Approve / Send in the inbox for them";
   - `testing-from-prds` holds the sign-off rule;
   - no `${CLAUDE_PLUGIN_ROOT}` inside a Bash command;
-  - `REFUSAL` in `test_packs_skills.py` is `retargeting an area is a conversion (prd-toolkit 0.8.4)`, and the skill holds it in both places.
+  - `REFUSAL` in `test_packs_skills.py` is `retargeting an area is a conversion, which a later prd-toolkit release brings`, and the skill holds it in both places, with no `0.8.` release number left in either.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: Write the evals' RED baselines** first (`writing-skills`): run each new eval on the unchanged skills and record in `evals/BASELINE.md` what the session does without the route.
 - [ ] **Step 4: Edit the skills** and the eval expected text for `changing-refuses-retarget`.
