@@ -125,11 +125,16 @@ def _block(prd_root: Path) -> None:
 
 def _commit(repo_root: Path, prd_root: Path, message: str) -> str:
     rel = prd_root.relative_to(repo_root).as_posix()
-    paths = [rel, f":(exclude){rel}/{REVIEW_FILE}"]
+    review = f"{rel}/{REVIEW_FILE}"
+    paths = [rel, f":(exclude){review}"]
     if _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
         paths.append("CLAUDE.md")
-    added = _git(repo_root, "add", "--", *paths)
+    # `git add` exits 1 on a pathspec that names an ignored file, even an exclude one; git skips an ignored verdict anyway
+    ignored = _git(repo_root, "check-ignore", "-q", "--", review).returncode == 0
+    add_paths = [p for p in paths if not (ignored and p.startswith(":(exclude)"))]
+    added = _git(repo_root, "add", "--", *add_paths)
     if added.returncode != 0:
+        _git(repo_root, "reset", "-q", "--", *add_paths)  # a failed add can still have staged some paths
         _fail(f"git add failed: {added.stderr.strip()}")
     with tempfile.TemporaryDirectory(prefix="prd-approve-") as tmp:
         msg = Path(tmp) / "message"

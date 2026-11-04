@@ -222,3 +222,39 @@ def test_a_reply_line_that_looks_like_a_trailer_does_not_become_one(recorded):
     assert git(recorded, "log", "-1", "--format=%(trailers:key=Refs,valueonly)").strip() == "none (no behaviour change)"
     traced = subprocess.run([sys.executable, str(SCRIPTS / "prd_trace.py"), str(recorded / PRD), "--range", "HEAD~1..HEAD"], cwd=recorded, capture_output=True, text=True)
     assert traced.returncode == 0, traced.stdout + traced.stderr
+
+
+def test_the_commit_when_the_verdict_is_git_ignored(recorded):
+    """F-1 (0.8.1 proof): prd_hooks.py ignores `.prd-review.json`; a literal exclude pathspec naming an ignored file made `git add` exit 1."""
+    gi = recorded / ".gitignore"
+    gi.write_text(gi.read_text(encoding="utf-8") + ".prd-review.json\n", encoding="utf-8")
+    git(recorded, "add", ".gitignore")
+    git(recorded, "commit", "-q", "-m", "chore: ignore the review verdict")
+    code, out, err = approve(recorded)
+    assert code == 0, err
+    files = git(recorded, "show", "--name-only", "--format=", "HEAD").split()
+    assert f"{PRD}/prd.md" in files and "CLAUDE.md" in files
+    assert not any(f.endswith(".prd-review.json") for f in files)
+    assert not (recorded / PRD / ".prd-review.json").exists()
+    assert git(recorded, "status", "--porcelain").strip() == ""
+
+
+def test_a_failed_add_leaves_the_index_and_the_tree_as_they_were(recorded, monkeypatch):
+    """F-1 (0.8.1 proof): `git add` can stage some paths and still exit 1; approve must unstage them, as it does for a failed commit."""
+    from prdlint import change_approve
+
+    real = change_approve._git
+
+    def add_then_fail(repo_root, *args):
+        done = real(repo_root, *args)
+        if args and args[0] == "add":
+            return subprocess.CompletedProcess(done.args, 1, done.stdout, "fatal: simulated add failure")
+        return done
+
+    monkeypatch.setattr(change_approve, "_git", add_then_fail)
+    staged = git(recorded, "diff", "--cached", "--name-only")
+    before = snapshot(recorded)
+    code, _, err = approve(recorded)
+    assert code == 1 and err.startswith("refused: git add failed: fatal: simulated add failure"), err
+    assert git(recorded, "diff", "--cached", "--name-only") == staged
+    assert snapshot(recorded) == before
