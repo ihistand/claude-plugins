@@ -264,6 +264,9 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
   - `confirm.validate_answer(item, decision, text, acs)`, shared with the server;
   - CLI `prd_confirm.py answer <prd dir> <area> <item id> --decision <d> --reply "<verbatim>" [--correction "<text>"]`, which prints `answered <item id>` and exits 0, exit 1 refused, exit 2 usage.
   - The record gains a `reply` field; the form ignores fields it does not know.
+  - (Spec §5, gate changes from 0.8.2 §6.) `confirm.mark_done(prd, area, items, repo_root)`, under the same locks: refused (`Refused`) while `open_ids` is not empty, else writes `"done": true`. CLI `prd_confirm.py done <prd dir> <area>`, which prints `done <area>`, exit 1 refused. The form's `/done` calls `mark_done` once no item is open.
+  - `confirm.open_file(prd, area, items, summaries, repo_root)`: writes `{prd, area, commit: HEAD, summaries, answers: {}}` and the exclude line; refuses an existing file and an area with no item; the 0.7.1 summary rules apply. CLI `prd_confirm.py open <prd dir> --area <area> [--summaries F]`, which prints the file's path. `serve` reads `summaries` from the file when `--summaries` is not given.
+  - Every write keeps the keys it does not own (`summaries`, `done`; today `_State.change` rebuilds the dict and drops them), and an answer write removes `done`.
 
 - [ ] **Step 1: Write the failing tests.**
   - The CLI answer on `confirm_fixture` writes the same record shape as the form's save, plus `reply` verbatim (Review Focus 2).
@@ -274,8 +277,11 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
     - both are in the file;
     - repeat 20 times.
   - `status` counts the CLI answer.
+  - `done` is refused while an item is open or changed since answered (fingerprint), then writes `"done": true`; the form's Done writes it too; an answer after `done` removes it.
+  - `open` writes the file with `summaries` and no answers, refuses an existing file (its answers untouched) and an area with no item, and applies the summary rules; `serve` without `--summaries` shows the file's summaries.
+  - A form save and a CLI answer keep `summaries` and `done`.
 - [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.** The server's behaviour is unchanged; `test_confirm*.py` still passes.
+- [ ] **Step 3: Implement.** The server's behaviour is otherwise unchanged; `test_confirm*.py` still passes.
 - [ ] **Step 4: Run the suite** (CI parity).
 - [ ] **Step 5: Commit** `feat(prd-toolkit): prd_confirm.py answer`.
 
@@ -296,9 +302,9 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
 - [ ] **Step 1: Write the failing tests.** Build each kind from a fixture state:
   - `error-class`: a `proposed` entry; a `confirmed` one is absent;
   - `deploy-step`: a run log stopped at a human step, and gone after `prd_deploy.py confirm`;
-  - `adoption`: an `extracted` area with an unanswered item, its `items` listed;
+  - `adoption`: an `extracted` area whose answers file holds no `"done": true`, its open `items` listed and `choices` holding `done`; still listed with every item answered; absent once `done` is written;
   - `signoff`: an acceptance case with no Sign-offs row;
-  - `approval`: a ready verdict whose digest matches, with the last row `; pending`. It is absent when the digest differs (Review Focus 5) and absent after approve.
+  - `approval`: a ready verdict whose digest matches, with the last row `; pending`, `choices` `["approve", "changes"]`. It is absent when the digest differs (Review Focus 5), absent after approve, and absent after `changes` (`ready` false).
   - `--worktrees` lists the `approval` gate of a second worktree, with its path.
   - Text and JSON forms.
 - [ ] **Step 2: Run them to see them fail.**
@@ -321,13 +327,18 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
     - an empty reply;
     - a gate that is gone or whose `question` changed (`refused: the gate changed; list again`), re-listed before passing on;
     - `--choice correct` without `--class`;
-    - an `adoption` answer with no `--item`.
+    - an `adoption` answer with neither `--item` nor `--choice done`;
+    - `approval` `--choice changes` on a gate that is not pending (the changed-gate refusal).
+  - `approval` `--choice approve` (the default) passes to approve. `--choice changes` writes `"owner": {"choice": "changes", "reply": "<verbatim>", "at": "<ISO>"}` into `.prd-review.json`, sets `ready` to `false`, appends `owner: <reply>` to `blockers`, and commits nothing.
+  - `adoption` `--choice done` passes to `prd_confirm.py done <prd dir> <area>`.
   - The `signoff` row is `| <T-id> | <the case's signoff:> | <today> | <result> |`, appended to `testing.md` Sign-offs.
 
 - [ ] **Step 1: Write the failing tests.**
   - Each kind is answered through its owner, and the owner's file shows the reply verbatim (Review Focus 2).
   - A changed gate is refused, and so is an empty reply.
   - A PRD path with a space works end to end for `error-class` and `deploy-step` (Review Focus 4).
+  - `approval` `changes`: writes the verdict, commits nothing (HEAD unchanged, nothing under the PRD folder but `.prd-review.json`), refuses an empty reply, and is refused on a gate that is not pending.
+  - `adoption` `--choice done`: refused while an item is open; then the gate is gone.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run the suite** (CI parity).
