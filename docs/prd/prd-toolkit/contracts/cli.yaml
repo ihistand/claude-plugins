@@ -14,6 +14,7 @@ prd_lint:
     warn_finding: "stdout: <path>:<line>: warn: <rule>: <message>, sorted with the findings (FR-001)"
     rule_name: "stdout, --list-rules: <name> <severity> per line, the severity error or warn"
     pack: "stdout, --list-packs: <name> <version> (<source>), then ' — <description>' when the pack has one (FR-013)"
+    vendored_note: "stderr, --list-packs from a vendored copy: prd_lint: listed from the vendored copy: <names> is/are vendored in .prd-toolkit/packs/, each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs lists every pack on this machine (FR-013)"
     sample: "stdout, --sample-tids: <T-id> <test-case file relative to the folder>"
     usage: "stderr: usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir], one line whatever the terminal width"
     argparse_error: "stderr: usage line, then prd_lint.py: error: <argparse message>"
