@@ -525,9 +525,16 @@ def _id_order(id_: str) -> tuple:
     return (_ID_RANK[kind], *(int(g) for g in m.groups()[1:] if g and g.isdigit()))
 
 
-def _record_ids(items: list[BumpItem]) -> list[str]:
-    """Every requirement ID the items name, once each, in the PRD's natural order (UJ, FR, NFR, AC, T)."""
-    return sorted({i.id for i in items if _REQ_ID.fullmatch(i.id)}, key=_id_order)
+def _record_ids(items: list[BumpItem], *prds: model.Prd) -> list[str]:
+    """Every requirement ID the items name, and the FR or NFR each AC and T-id belongs to, once each, in the PRD's
+    natural order (UJ, FR, NFR, AC, T); a parent is looked up by number in `prds` (the working tree, then the base)."""
+    ids = {i.id for i in items if _REQ_ID.fullmatch(i.id)}
+    blocks = {int(b.id.split("-")[1]): b.id for p in reversed(prds) for b in p.blocks if b.kind in ("FR", "NFR")}
+    for id_ in list(ids):
+        m = re.fullmatch(r"(?:AC|T)-(\d+)\.\d+", id_)
+        if m and int(m.group(1)) in blocks:
+            ids.add(blocks[int(m.group(1))])
+    return sorted(ids, key=_id_order)
 
 
 def _decided(result: Bump, given: str) -> None:
@@ -558,7 +565,8 @@ def _cells_line(cells: list[str]) -> str:
 
 
 def _index_rows(base_md: str, prd: model.Prd, items: list[BumpItem]) -> list[str]:
-    """The §11 rows: the base's rows, with each block the diff names added (approved), retitled or set to removed."""
+    """The §11 rows: the base's rows, with each block the diff names added, retitled or set to removed, and every row's
+    status taken from its block's `Status:` line in the working tree."""
     t = _table_of(base_md, 11)
     rows = [list(r.cells) + [""] * (5 - len(r.cells)) for r in (t.rows if t else [])]
     by_id = {r[0].strip("`"): r for r in rows}
@@ -571,8 +579,12 @@ def _index_rows(base_md: str, prd: model.Prd, items: list[BumpItem]) -> list[str
         elif id_ in by_id and b:
             by_id[id_][1], by_id[id_][3] = b.title, b.file
         elif b and not removed:
-            rows.append([id_, b.title, "approved", b.file, ""])
+            rows.append([id_, b.title, b.status or "approved", b.file, ""])
             by_id[id_] = rows[-1]
+    for row in rows:
+        b = blocks.get(row[0].strip("`"))
+        if b is not None and b.status:
+            row[2] = b.status
     return [_cells_line(r) for r in rows]
 
 
@@ -623,9 +635,10 @@ def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, to
         old = _load_base(repo_root, rel, base, Path(tmp))
         base_md = old.docs["prd.md"]
     version = _bumped(base_md, level)
-    ids = ", ".join(_record_ids(result.items)) or "-"
+    now = model.load(prd_root)
+    ids = ", ".join(_record_ids(result.items, now, old)) or "-"
     row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"
-    _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, model.load(prd_root), result.items))
+    _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, now, result.items))
     return Recorded(version, row)
 
 

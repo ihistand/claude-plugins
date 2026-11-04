@@ -9,7 +9,7 @@ from deploy_fixture import deploy_repo
 from prd_change import main as change_main
 from prd_lint import main as lint_main
 from prdlint import change
-from test_change_bump import PRD, append, expect_change, new_ac, new_block, drop_case
+from test_change_bump import NEW_TEST, PRD, append, expect_change, new_ac, new_block, drop_case
 
 TODAY = "2026-11-04"
 
@@ -99,7 +99,7 @@ def test_minor_record_writes_version_updated_row_and_ids(repo):
     new_ac_with_test(repo / PRD)
     r = rec(repo, text="Repeat lookups")
     assert r.version == "1.1.0"
-    assert r.row == "| 1.1.0 | 2026-11-04 | Repeat lookups; pending | AC-002.3, T-002.3 |"
+    assert r.row == "| 1.1.0 | 2026-11-04 | Repeat lookups; pending | FR-002, AC-002.3, T-002.3 |"
     md = prd_md(repo)
     assert "\nversion: 1.1.0\n" in md and "\nupdated: 2026-11-04\n" in md and "\nstatus: Approved\n" in md
     assert md.rstrip().endswith(r.row)
@@ -120,6 +120,7 @@ def test_ids_are_deduplicated_and_in_natural_order(repo):
 def test_section_11_rows_added_changed_removed(repo):
     prd = repo / PRD
     new_block(prd)
+    edit(prd, "features/api.md", "### FR-009 Count orders\nStatus: proposed", "### FR-009 Count orders\nStatus: approved")
     edit(prd, "features/api.md", "### FR-002 Get an order", "### FR-002 Get one order")
     edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed")
     rec(repo, "major")
@@ -142,6 +143,7 @@ def test_record_twice_gives_the_same_file(repo):
 def test_second_run_replaces_the_row_and_recomputes_section_11(repo):
     prd = repo / PRD
     new_block(prd)
+    edit(prd, "features/api.md", "### FR-009 Count orders\nStatus: proposed", "### FR-009 Count orders\nStatus: approved")
     rec(repo, "minor", text="First words")
     edit(prd, "features/api.md", "### FR-009 Count orders", "### FR-009 Count all orders")
     r = rec(repo, "minor", text="Second words")
@@ -170,7 +172,7 @@ def test_cli_text_and_json(repo):
     assert code == 0, err
     doc = json.loads(out)
     assert doc["kind"] == "change.record" and doc["version"] == "1.1.0"
-    assert doc["row"].startswith("| 1.1.0 | ") and doc["row"].endswith("| Repeat lookups; pending | AC-002.3, T-002.3 |")
+    assert doc["row"].startswith("| 1.1.0 | ") and doc["row"].endswith("| Repeat lookups; pending | FR-002, AC-002.3, T-002.3 |")
     code, out, _ = call("record", str(repo / PRD), "--base", "HEAD", "--bump", "minor", "--change", "Repeat lookups")
     assert code == 0 and out.startswith("1.1.0\n")
 
@@ -194,4 +196,40 @@ def test_change_text_may_not_break_the_table(repo):
 def test_removed_test_case_id_is_listed(repo):
     drop_case(repo / PRD)
     r = rec(repo, "patch")
-    assert r.row.endswith("| T-002.2 |")
+    assert r.row.endswith("| FR-002, T-002.2 |")
+
+
+# --- R16: §11 statuses follow the blocks' Status: lines; R17: the IDs cell names each item's requirement ---
+
+def test_a_revised_block_set_to_approved_is_approved_in_section_11(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", "### FR-002 Get an order\nStatus: verified (since 1.0.0)", "### FR-002 Get an order\nStatus: approved")
+    before = change.digest(prd)
+    rec(repo)
+    md = prd_md(repo)
+    assert "| FR-002 | Get an order | approved | features/api.md | 1.0.0 |\n" in md
+    assert "| FR-003 | Delete an order | verified | features/api.md | 1.0.0 |\n" in md
+    assert lint_code(repo) == 0
+    assert change.digest(prd) == before
+
+
+def test_a_status_only_move_is_synced_to_section_11(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved")
+    rec(repo)
+    md = prd_md(repo)
+    assert "| FR-003 | Delete an order | approved | features/api.md | 1.0.0 |\n" in md
+    assert lint_code(repo) == 0
+
+
+def test_ids_cell_names_the_parent_of_each_ac_and_t_id_once(repo):
+    """Neither block changes outside its ACs and cases, so FR-002 and FR-003 come only from their items."""
+    prd = repo / PRD
+    new_ac(prd)
+    append(prd / "test-cases/api.yaml", NEW_TEST.replace("T-002.3", "T-003.3").replace("AC-002.1", "AC-003.1"))
+    items = change.bump(repo, prd, "HEAD").items
+    assert {i.id for i in items} == {"AC-002.3", "T-003.3"}
+    r = rec(repo, "minor")
+    assert r.row.split("|")[4].strip() == "FR-002, FR-003, AC-002.3, T-003.3"

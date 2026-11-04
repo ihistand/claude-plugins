@@ -27,6 +27,9 @@ def call(*argv):
     return code, out.getvalue(), err.getvalue()
 
 
+AUTHOR_NAME, AUTHOR_EMAIL = "Test Author", "test@example.com"  # the configured identity the commit must carry
+
+
 def git(repo, *args):
     return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True, encoding="utf-8").stdout
 
@@ -37,8 +40,8 @@ def repo(tmp_path, monkeypatch):
 
     monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
     r = deploy_repo(tmp_path)
-    git(r, "config", "user.name", "Ivan Histand")
-    git(r, "config", "user.email", "ihistand@rotoplas.com")
+    git(r, "config", "user.name", AUTHOR_NAME)
+    git(r, "config", "user.email", AUTHOR_EMAIL)
     git(r, "config", "commit.gpgsign", "false")
     return r
 
@@ -169,7 +172,7 @@ def test_the_commit(recorded):
     assert code == 0, err
     sha = git(recorded, "rev-parse", "--short", "HEAD").strip()
     assert out == f"approved orders 1.1.0 {sha}\n"
-    assert git(recorded, "log", "-1", "--format=%an <%ae>").strip() == "Ivan Histand <ihistand@rotoplas.com>"
+    assert git(recorded, "log", "-1", "--format=%an <%ae>").strip() == f"{AUTHOR_NAME} <{AUTHOR_EMAIL}>"
     assert git(recorded, "log", "-1", "--format=%s").strip() == "docs(prd): approve orders 1.1.0"
     body = git(recorded, "log", "-1", "--format=%B")
     assert f'Reply: "{REPLY}"\n' in body, body
