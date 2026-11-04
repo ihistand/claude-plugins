@@ -74,6 +74,7 @@ def test_missing_rubric_is_not_judged(tmp_path):
 
 R3 = "      - First run shows the command and the output the reader will see\n"
 R4 = "      - Common problems names one fix per problem\n"
+R5 = "      - Requirements names the Python version the reader needs\n"
 
 
 def _warns(tmp_path, items: str, threshold: str):
@@ -93,7 +94,8 @@ def test_threshold_that_needs_every_item_warns(tmp_path, items, threshold, n, v,
                 f"write {write} to allow one miss, or 1.0")]
 
 
-@pytest.mark.parametrize("items, threshold", [(R3, "0.66"), (R3, "1.0"), (R3, "1"), (R3 + R4, "0.75"), ("", "0.5")])
+@pytest.mark.parametrize("items, threshold", [(R3, "0.66"), (R3, "1.0"), (R3, "1"), (R3 + R4, "0.75"), ("", "0.5"),
+                                              (R3 + R4 + R5, "0.8")])  # 4 of 5 is 0.8, and the judge passes 0.8 >= 0.8
 def test_threshold_that_allows_one_miss_or_needs_all_is_silent(tmp_path, items, threshold):
     assert _warns(tmp_path, items, threshold) == []
 

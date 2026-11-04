@@ -333,9 +333,10 @@ def sufficiency(prd: Prd):
 
 def _needs_every_item(threshold: float, n: int) -> str | None:
     """Why `threshold` demands all `n` rubric items although it is below 1.0, or None: the score is passed / n, so
-    one miss scores (n-1)/n, and a threshold above that fails it (2 of 3 is 0.666..., below 0.67)."""
+    one miss scores (n-1)/n, and a threshold above that fails it (2 of 3 is 0.666..., below 0.67). The comparison
+    is in floats, as prd_judge.py scores (`sum / len`, pass on `median >= threshold`): 4 of 5 passes 0.8."""
     miss = Fraction(n - 1, n)
-    if not (Fraction(threshold) > miss and threshold < 1.0):
+    if not (threshold > (n - 1) / n and threshold < 1.0):
         return None
     down = Fraction(math.floor(miss * 100), 100)
     return (f"threshold {threshold:.4g} needs all {n} items ({n - 1} of {n} is {float(miss):.4g}); "

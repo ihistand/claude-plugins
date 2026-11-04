@@ -250,16 +250,19 @@ Markdown documents written for people: a user guide, a runbook for humans, a pol
   sections present in order, every `terms` entry used, no banned synonym from §3, relative links
   resolving, word count in range. `judged` (Gate `build`): rubric cases (section 7).
 - **Harness defaults:** HTTP requests, Database access, Browser identity, Persistent environments
-  and Leaks `Not applicable` with reasons; Tools on the runner names `uv` and `claude` (the default
-  grader); Layout `Test roots: `tests/``; Assertions states that a judged test asserts
-  `prd_judge.py`'s exit code and nothing else.
+  and Leaks `Not applicable` with reasons; Tools on the runner names `uv`, `claude` (the default
+  grader) and `.prd-toolkit/prd_judge.py` (`prd_hooks.py install`); Layout `Test roots: `tests/``;
+  Assertions states that a judged test asserts `prd_judge.py`'s exit code and nothing else, and that a
+  checks test parses each document as CommonMark 0.31.2 after NFC, where a section is a level-2 heading
+  whose text equals a `sections` entry, each entry heading exactly one section (final review).
 - **`builder-tests: none`.** No `unit` level: the builder writes the documents (section 9).
 - **Standards:** one proposed row for a Markdown linter on the documents' paths; the user decides it.
 - **`rubrics.md`:** how to write rubric items (one observable claim per item; name the section, term
   or reader action it is about; no "is clear", "reads well", "is good"; 3 to 8 items; a threshold of
   1.0 only when every item is a hard requirement).
 - **`clarify.md`:** audience, the reader's prior knowledge, reading level, tone, length, format
-  conventions, and the output language when it differs from the PRD's.
+  conventions, the Markdown parsing standard (asked up front), and the output language when it differs
+  from the PRD's.
 - **Vocabulary:** empty.
 
 ## 6. PRD languages
