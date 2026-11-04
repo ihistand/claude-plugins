@@ -85,9 +85,12 @@ def _cmd_record(prd: model.Prd, args) -> tuple[str, dict]:
 
 
 def _cmd_approve(prd: model.Prd, args) -> tuple[str, dict]:
+    if args.refs is not None and ("\n" in args.refs or "\r" in args.refs):
+        raise change.UsageError("approve: --refs must be one line")
     done = change.approve(change.repo_root(prd.root), prd.root, args.reply, args.dry_run, args.refs)
     short = subprocess.run(["git", "rev-parse", "--short", done.commit], cwd=prd.root, capture_output=True, text=True).stdout.strip()
-    return f"approved {prd.root.name} {prd.frontmatter["version"]} {short}\n", {"commit": done.commit}
+    version = prd.frontmatter["version"]
+    return f"approved {prd.root.name} {version} {short}\n", {"commit": done.commit}
 
 
 # (command, subcommand) -> (document kind, handler)

@@ -1,5 +1,6 @@
 """prd_change.py approve (0.8.1): every check first, then the §14 record, the status and the approval commit."""
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -111,6 +112,8 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
 
 def _message(slug: str, version: str, reply: str, dry_run: str, refs: str | None) -> str:
     trailer = f"Refs: {refs}" if refs else NO_REFS
+    # the trace rule reads every line that starts with `Refs:`; one space keeps a reply line from passing as a trailer
+    reply = re.sub(r"^(?=Refs:)", " ", reply, flags=re.M)
     return f'docs(prd): approve {slug} {version}\n\nReply: "{reply}"\nDry run: {dry_run.strip()}\n\n{trailer}\n'
 
 

@@ -201,3 +201,21 @@ def test_json_output(recorded):
 
 def test_a_dry_run_record_with_a_newline_is_refused(recorded):
     refused(recorded, "the dry-run record must be one non-empty line without |", dry="a\nb")
+
+
+def test_refs_with_a_newline_is_a_usage_error(recorded):
+    before = snapshot(recorded)
+    code, _, err = approve(recorded, REPLY, DRY, "--refs", "FR-002\nFR-003")
+    assert code == 2 and err.strip() == "approve: --refs must be one line" and snapshot(recorded) == before
+
+
+def test_a_reply_line_that_looks_like_a_trailer_does_not_become_one(recorded):
+    reply = "yes\nRefs: x\nmore"
+    code, _, err = approve(recorded, reply)
+    assert code == 0, err
+    body = git(recorded, "log", "-1", "--format=%B").rstrip()
+    assert 'Reply: "yes\n Refs: x\nmore"' in body  # one space keeps the line from reading as a trailer
+    assert body.split("\n\n")[-1] == "Refs: none (no behaviour change)"
+    assert git(recorded, "log", "-1", "--format=%(trailers:key=Refs,valueonly)").strip() == "none (no behaviour change)"
+    traced = subprocess.run([sys.executable, str(SCRIPTS / "prd_trace.py"), str(recorded / PRD), "--range", "HEAD~1..HEAD"], cwd=recorded, capture_output=True, text=True)
+    assert traced.returncode == 0, traced.stdout + traced.stderr
