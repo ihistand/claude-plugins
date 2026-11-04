@@ -6,6 +6,7 @@
 """The change bookkeeping of a PRD: next IDs, the digest and the version bump. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
 import dataclasses
+import datetime
 import sys
 from pathlib import Path
 
@@ -45,6 +46,12 @@ def _build() -> argparse.ArgumentParser:
     bmp.add_argument("prd_dir")
     bmp.add_argument("--base", required=True, help="the git ref the PRD folder is compared with")
     _flags(bmp, leaf=True)
+    rec = sub.add_parser("record", help="write the version, the changelog row and the index rows for a change")
+    rec.add_argument("prd_dir")
+    rec.add_argument("--base", required=True, help="the git ref the PRD folder is compared with")
+    rec.add_argument("--bump", required=True, choices=change.RECORD_LEVELS, help="the version level")
+    rec.add_argument("--change", required=True, help="the changelog text")
+    _flags(rec, leaf=True)
     return parser
 
 
@@ -65,11 +72,17 @@ def _cmd_bump(prd: model.Prd, args) -> tuple[str, dict]:
     return "".join(lines) + f"level {result.level}\n", payload
 
 
-# (command, subcommand) -> (document kind, handler); the next tasks add record and approve here
+def _cmd_record(prd: model.Prd, args) -> tuple[str, dict]:
+    done = change.record(change.repo_root(prd.root), prd.root, args.base, args.bump, args.change, datetime.date.today().isoformat())
+    return f"{done.version}\n{done.row}\n", dataclasses.asdict(done)
+
+
+# (command, subcommand) -> (document kind, handler); the next task adds approve here
 COMMANDS = {
     ("ids", "next"): ("change.ids", _cmd_ids_next),
     ("digest", None): ("change.digest", _cmd_digest),
     ("bump", None): ("change.bump", _cmd_bump),
+    ("record", None): ("change.record", _cmd_record),
 }
 
 

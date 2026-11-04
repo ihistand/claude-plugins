@@ -502,3 +502,128 @@ def _combine(items: list[BumpItem]) -> str:
     if any(i.level == JUDGMENT for i in items):
         return JUDGMENT
     return max((i.level for i in items), key=LEVELS.index, default="patch")
+
+
+# ---------------------------------------------------------------- record
+
+RECORD_LEVELS = (*LEVELS, "needs-judgment")
+_REQ_ID = re.compile(r"(?:(UJ|FR|NFR)-(\d+)|AC-(\d+)\.(\d+)|T-(\d+)\.(\d+))")
+_ID_RANK = {"UJ": 0, "FR": 1, "NFR": 2, "AC": 3, "T": 4}
+_BLOCK_ID = re.compile(r"(?:UJ|FR|NFR)-\d+")
+_VERSION_LINE = re.compile(r"^version:\s*(\d+)\.(\d+)\.(\d+)\s*$", re.M)
+
+
+@dataclass
+class Recorded:
+    version: str
+    row: str
+
+
+def _id_order(id_: str) -> tuple:
+    m = _REQ_ID.fullmatch(id_)
+    kind = id_.split("-")[0]
+    return (_ID_RANK[kind], *(int(g) for g in m.groups()[1:] if g and g.isdigit()))
+
+
+def _record_ids(items: list[BumpItem]) -> list[str]:
+    """Every requirement ID the items name, once each, in the PRD's natural order (UJ, FR, NFR, AC, T)."""
+    return sorted({i.id for i in items if _REQ_ID.fullmatch(i.id)}, key=_id_order)
+
+
+def _decided(result: Bump, given: str) -> None:
+    """Refuse a `given` level the diff does not allow; judgment items are taken as decided by the caller."""
+    if result.level == JUDGMENT:
+        need = max((i.level for i in result.items if i.level != JUDGMENT), key=LEVELS.index, default="patch")
+    else:
+        need = result.level
+    if LEVELS.index(given) < LEVELS.index(need):
+        raise ChangeError(f"the diff needs {need}, not {given}")
+
+
+def _bumped(base_md: str, level: str) -> str:
+    m = _VERSION_LINE.search(base_md[: base_md.find("\n---", 4)] if base_md.startswith("---") else base_md)
+    if not m:
+        raise UsageError("record: the base prd.md has no frontmatter version")
+    major, minor, patch = (int(g) for g in m.groups())
+    return {"major": f"{major + 1}.0.0", "minor": f"{major}.{minor + 1}.0", "patch": f"{major}.{minor}.{patch + 1}"}[level]
+
+
+def _table_of(text: str, number: int):
+    s = next((s for s in sections(text) if s.number == number), None)
+    return next(iter(tables(s.body)), None) if s else None
+
+
+def _cells_line(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+def _index_rows(base_md: str, prd: model.Prd, items: list[BumpItem]) -> list[str]:
+    """The §11 rows: the base's rows, with each block the diff names added (approved), retitled or set to removed."""
+    t = _table_of(base_md, 11)
+    rows = [list(r.cells) + [""] * (5 - len(r.cells)) for r in (t.rows if t else [])]
+    by_id = {r[0].strip("`"): r for r in rows}
+    blocks = {b.id: b for b in prd.blocks}
+    for id_ in sorted({i.id for i in items if _BLOCK_ID.fullmatch(i.id)}, key=_id_order):
+        removed = next(i for i in items if i.id == id_).change == "removed"
+        b = blocks.get(id_)
+        if id_ in by_id and removed:
+            by_id[id_][2] = "removed"
+        elif id_ in by_id and b:
+            by_id[id_][1], by_id[id_][3] = b.title, b.file
+        elif b and not removed:
+            rows.append([id_, b.title, "approved", b.file, ""])
+            by_id[id_] = rows[-1]
+    return [_cells_line(r) for r in rows]
+
+
+def _replace_rows(lines: list[str], table, new_rows: list[str]) -> None:
+    """Replace a table's body rows in `lines` (0-based list of file lines) with `new_rows`; an empty table gets them after its separator."""
+    if table.rows:
+        lines[table.rows[0].line - 1 : table.rows[-1].line] = new_rows
+    else:
+        lines[table.line + 1 : table.line + 1] = new_rows
+
+
+def _write_prd_md(path: Path, version: str, today: str, row: str, index_rows: list[str]) -> None:
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    log = _table_of(text, 14)
+    if log is None:
+        raise ChangeError("§14 has no changelog table")
+    last = log.rows[-1] if log.rows else None
+    if last is not None and len(last.cells) > 2 and last.cells[0] == version and last.cells[2].endswith("; pending"):
+        lines[last.line - 1] = row
+    elif last is not None:
+        lines.insert(last.line, row)
+    else:
+        lines.insert(log.line + 1, row)
+    idx = _table_of(text, 11)
+    if idx is not None:
+        _replace_rows(lines, idx, index_rows)
+    end = lines.index("---", 1) if lines and lines[0].strip() == "---" and "---" in lines[1:] else 0
+    for key, value in (("version", version), ("updated", today)):
+        at = next((n for n in range(1, end) if lines[n].startswith(f"{key}:")), None)
+        if at is None:
+            raise ChangeError(f"prd.md frontmatter has no {key}:")
+        lines[at] = f"{key}: {value}"
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, today: str) -> Recorded:
+    """Write the version bumped from `base`'s, `updated`, the §14 row (`<text>; pending`) and the §11 rows; run again, it gives the same file."""
+    repo_root, prd_root = Path(repo_root).resolve(), Path(prd_root).resolve()
+    if level == "needs-judgment":
+        raise ChangeError("a needs-judgment bump must be decided first")
+    if "\n" in text or "|" in text or not text.strip():
+        raise ChangeError("the change text must be one non-empty line without |")
+    result = bump(repo_root, prd_root, base)
+    _decided(result, level)
+    rel = prd_root.relative_to(repo_root).as_posix()
+    with tempfile.TemporaryDirectory(prefix="prd-record-") as tmp:
+        old = _load_base(repo_root, rel, base, Path(tmp))
+        base_md = old.docs["prd.md"]
+    version = _bumped(base_md, level)
+    ids = ", ".join(_record_ids(result.items)) or "-"
+    row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"
+    _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, model.load(prd_root), result.items))
+    return Recorded(version, row)
