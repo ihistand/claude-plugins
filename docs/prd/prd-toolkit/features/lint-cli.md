@@ -217,17 +217,28 @@ Traces: cli:prd_lint
 
 ### FR-013 List the packs
 Status: verified
-Source: prd-toolkit/scripts/prd_lint.py:60 @6e9f685
+Source: prd-toolkit/scripts/prd_lint.py:60 @2244187
+  prd-toolkit/scripts/prdlint/packs.py:373 @2244187
 Acceptance (EARS):
-- AC-013.1 When run with `--list-packs`, the lint command shall print every pack on the machine, one
+- AC-013.1 When the plugin's lint command (`prd-toolkit/scripts/prd_lint.py`) is run with
+  `--list-packs`, it shall print every pack on the machine, one
   per line as `<name> <version> (<source>)`, followed by ` — <description>` when the pack has a
   description, and exit 0, whether or not a folder argument is given and without reading it.
-- AC-013.2 The lint command shall list the toolkit's own packs first, with the source `prd-toolkit`,
+- AC-013.2 The plugin's lint command shall list the toolkit's own packs first, with the source `prd-toolkit`,
   then the packs of each installed plugin, each found as `<installPath>/prd-packs/<name>/pack.yaml`
   for every install path the installed-plugins file records for it, with the plugin's
   `<name>@<marketplace>` as the source, in the order of the installed-plugins file; within the
   toolkit and within each plugin, packs print sorted by the name of their folder.
+- AC-013.3 When a vendored copy (`.prd-toolkit/prd_lint.py`) is run with `--list-packs`, it shall
+  list as the toolkit's own packs those vendored in `.prd-toolkit/packs/`, sorted by folder name,
+  each with the source `.prd-toolkit/pack-sources.json` records for its folder, or
+  `source not recorded` when the file records none (a missing or unreadable file records none);
+  then the installed plugins' packs as AC-013.2
+  says; print the one stderr line
+  `prd_lint: listed from the vendored copy: <names> <is or are> vendored in .prd-toolkit/packs/, each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs lists every pack on this machine`,
+  where `<names>` is the vendored packs' names joined by `, ` and ` and ` (or the line's middle reads
+  `no pack is vendored in .prd-toolkit/packs/` when there is none); and exit 0.
 Errors: -
-Edge cases: with no plugin installed only the toolkit's packs `document` and `service` print → AC-013.1; the installed-plugins file is `PRD_PLUGINS_FILE` when it is set, otherwise `~/.claude/plugins/installed_plugins.json` (contracts/config.yaml); a pack manifest that fails its checks is the packs area's (not adopted)
-Tests: T-013.1 [integration], T-013.2 [integration]  (test-cases/lint-cli.yaml)
-Traces: cli:prd_lint; setting PRD_PLUGINS_FILE (contracts/config.yaml)
+Edge cases: with no plugin installed only the toolkit's packs `document` and `service` print → AC-013.1; a vendored copy lists only the packs the PRD's install vendored, by the source it recorded → AC-013.3; the installed-plugins file is `PRD_PLUGINS_FILE` when it is set, otherwise `~/.claude/plugins/installed_plugins.json` (contracts/config.yaml); a pack manifest that fails its checks is the packs area's (not adopted)
+Tests: T-013.1 [integration], T-013.2 [integration], T-013.3 [integration], T-013.4 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; setting PRD_PLUGINS_FILE (contracts/config.yaml); `.prd-toolkit/pack-sources.json`

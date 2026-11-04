@@ -877,3 +877,46 @@ T-013.2:
     effects: []
     errors: []
     leaks: none
+T-013.3:
+  ac: AC-013.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/plugins_none]
+  input:
+    setup:
+      - load fixture repo/vendored into <tmp>/.prd-toolkit (testing.md Fixtures, its check included)
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json
+    cwd: <tmp>
+    command: python <tmp>/.prd-toolkit/prd_lint.py --list-packs
+  expect:
+    output:
+      exit: 0
+      stdout: "service 1.0.0 (prd-toolkit) — Services with an API, a database or events; the PRD of prd-toolkit 0.7.\n"
+      stderr: "prd_lint: listed from the vendored copy: service is vendored in .prd-toolkit/packs/, each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs lists every pack on this machine\n"
+    effects: []
+    errors: []
+    leaks: none
+T-013.4:
+  ac: AC-013.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/plugins_none]
+  input:
+    setup:
+      - load fixture repo/vendored into <tmp>/.prd-toolkit (testing.md Fixtures, its check included)
+      - delete <tmp>/.prd-toolkit/pack-sources.json, after the fixture's check
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_none.json
+    cwd: <tmp>
+    command: python <tmp>/.prd-toolkit/prd_lint.py --list-packs
+  expect:
+    output:
+      exit: 0
+      stdout: "service 1.0.0 (source not recorded) — Services with an API, a database or events; the PRD of prd-toolkit 0.7.\n"
+      stderr: "prd_lint: listed from the vendored copy: service is vendored in .prd-toolkit/packs/, each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs lists every pack on this machine\n"
+    effects: []
+    errors: []
+    leaks: none
