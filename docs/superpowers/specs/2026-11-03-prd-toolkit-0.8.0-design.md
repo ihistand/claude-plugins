@@ -34,6 +34,8 @@
 > - §1, §9, §16 (owner, 2026-11-03): the 0.8 line is renumbered (umbrella Revisions): the machine
 >   interface is 0.8.1, best practices 0.8.2, conversion 0.8.3. The changing-prds refusal names 0.8.3.
 > - §7 T-004.2 example threshold 0.66, not 0.67 (2 of 3 is 0.666…; final review)
+> - §13 P1: the dry-run clause failed on a parsing convention; the document pack now fixes them (owner
+>   accepted 2026-11-03). Rerunning P1 from scratch on the new pack is a 0.8.1 item.
 
 ## 1. Scope
 

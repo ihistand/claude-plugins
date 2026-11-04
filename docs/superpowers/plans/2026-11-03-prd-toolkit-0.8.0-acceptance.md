@@ -30,6 +30,12 @@
 >
 > One toolkit defect (F-2, an eval grader) and four scaffold defects (`doc_repo.py`) were found and fixed on the
 > branch, each test first. F-1 is the known 0.7.x hook defect recorded elsewhere. No F-n touches lint-cli.
+>
+> **Owner decision on P1 (2026-11-03):** the failing dry-run clause is accepted for 0.8.0. The final review
+> traced it to the `document` pack, which fixed no Markdown parsing conventions. The pack's Harness default now
+> fixes them (CommonMark 0.31.2 after NFC, a section is a level-2 heading naming a `sections` entry, once), and its
+> `clarify.md` asks the parsing standard up front. Recorded in the spec's Revisions. **0.8.1 item:** rerun P1 from
+> `doc_repo.py <scratch>/p1 empty` on the new pack.
 
 **Scope.** Everything ran in scratch repositories under the session scratchpad (`<scratch>` =
 `…/scratchpad/proof-0.8/`):
