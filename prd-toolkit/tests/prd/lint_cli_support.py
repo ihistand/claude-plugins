@@ -3,11 +3,14 @@
 Everything here follows docs/prd/prd-toolkit/testing.md (Harness, Fixtures) and the conventions
 at the top of test-cases/lint-cli.yaml.
 """
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 # <repo> is the repository root: prd-toolkit/tests/prd/<this file>.
@@ -32,6 +35,53 @@ NINE = [
     "T-004.1 test-cases/nfr.yaml",
     "T-004.2 test-cases/nfr.yaml",
 ]
+
+
+class VendoredFixtureMismatch(RuntimeError):
+    """The repo/vendored fixture differs from what testing.md's Fixtures table says it holds."""
+
+
+def load_vendored(tmp: Path) -> Path:
+    """Load fixture repo/vendored (testing.md, Fixtures) and run its check.
+
+    Copies <repo>/.prd-toolkit to <tmp>/.prd-toolkit as plain files (a symlink is followed and its
+    target copied), leaving out every __pycache__ folder. Then checks that the only entry of
+    <tmp>/.prd-toolkit/packs/ whose name does not start with `.` is a folder named `service`, and
+    that pack-sources.json, parsed as JSON, equals {"service": "prd-toolkit"}; raises
+    VendoredFixtureMismatch when either differs. Returns <tmp>/.prd-toolkit.
+    """
+    dest = tmp / ".prd-toolkit"
+    shutil.copytree(
+        REPO / ".prd-toolkit",
+        dest,
+        symlinks=False,
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    packs = dest / "packs"
+    visible = sorted(p for p in packs.iterdir() if not p.name.startswith(".")) if packs.is_dir() else []
+    if [p.name for p in visible] != ["service"] or not visible[0].is_dir():
+        raise VendoredFixtureMismatch(
+            f"repo/vendored: packs/ holds {[p.name for p in visible]}, not only the folder 'service'"
+        )
+    try:
+        sources = json.loads((dest / "pack-sources.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise VendoredFixtureMismatch(f"repo/vendored: pack-sources.json unreadable: {exc}") from exc
+    if sources != {"service": "prd-toolkit"}:
+        raise VendoredFixtureMismatch(
+            f"repo/vendored: pack-sources.json is {sources!r}, not {{'service': 'prd-toolkit'}}"
+        )
+    return dest
+
+
+@pytest.fixture(name="vendored")
+def vendored_fixture(tmp_path) -> Path:
+    """Fixture repo/vendored, loaded into <tmp>/.prd-toolkit with its check.
+
+    Its check runs in pytest's setup phase, so a mismatch ends the test as an error, not a failure
+    (testing.md, Fixtures). Returns <tmp>/.prd-toolkit.
+    """
+    return load_vendored(tmp_path)
 
 
 def write_orders(tmp: Path) -> Path:
