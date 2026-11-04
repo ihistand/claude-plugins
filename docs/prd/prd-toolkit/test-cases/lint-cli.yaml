@@ -215,7 +215,7 @@ T-004.1:
     output:
       exit: 2
       stdout: ""
-      stderr: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]\n"
+      stderr: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json] [--interface] [prd_dir]\n"
     effects: []
     errors: []
     leaks: none
@@ -258,7 +258,7 @@ T-004.3:
       each_run:
         exit: 0
         stderr: ""
-        stdout_first_line: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]"
+        stdout_first_line: "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json] [--interface] [prd_dir]"
         stdout_contains: ["Lint a PRD folder.", "skip the checks that need this machine's skills and linters"]
     effects: []
     errors: []
@@ -917,6 +917,164 @@ T-013.4:
       exit: 0
       stdout: "service 1.0.0 (source not recorded) — Services with an API, a database or events; the PRD of prd-toolkit 0.7.\n"
       stderr: "prd_lint: listed from the vendored copy: service is vendored in .prd-toolkit/packs/, each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs lists every pack on this machine\n"
+    effects: []
+    errors: []
+    leaks: none
+T-014.1:
+  ac: AC-014.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M1]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --json docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stderr: ""
+      stdout_json_first_keys: [interface, kind]
+      stdout_json:
+        interface: 1
+        kind: lint
+        prd: orders
+        version: 1.0.0
+        dir: docs/prd/orders
+        findings:
+          - {file: contracts/errors.yaml, line: 41, rule: contracts-valid, severity: error, message: "duplicate key 'FORBIDDEN' (first at line 25, again at line 41)"}
+        errors: 1
+        warnings: 0
+    effects: []
+    errors: []
+    leaks: none
+T-014.2:
+  ac: AC-014.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json --bogus docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      run_1:
+        exit: 2
+        stdout_json: {interface: 1, kind: lint, error: "unrecognized arguments: --bogus"}
+        stderr_first_line_starts: "usage: prd_lint.py"
+        stderr_last_line: "prd_lint.py: error: unrecognized arguments: --bogus"
+      run_2:
+        exit: 2
+        stdout_json: {interface: 1, kind: lint, error: "<resolved tmp>/missing: no prd.md"}
+        stderr: "prd_lint: <resolved tmp>/missing: no prd.md\n"
+    effects: []
+    errors: []
+    leaks: none
+T-014.3:
+  ac: AC-014.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --json=1 docs/prd/orders
+  expect:
+    output:
+      exit: 0
+      stderr: ""
+      stdout_json: {interface: 1, kind: lint, prd: orders, version: 1.0.0, dir: docs/prd/orders, findings: [], errors: 0, warnings: 0}
+    effects: []
+    errors: []
+    leaks: none
+T-014.4:
+  ac: AC-014.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py --json=2 <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      exit: 2
+      stdout_json: {interface: 1, kind: lint, error: "unsupported interface 2; this toolkit speaks 1"}
+      stderr: "prd_lint: unsupported interface 2; this toolkit speaks 1\n"
+    effects: []
+    errors: []
+    leaks: none
+T-014.5:
+  ac: AC-014.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --interface
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --interface <tmp>/missing   # the folder does not exist
+  expect:
+    output:
+      each_run: {exit: 0, stdout: "1\n", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-014.6:
+  ac: AC-014.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json --list-rules
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json --sample-tids 99 docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json --list-packs
+    note: each run prints what the same option prints without --json (T-003.1, T-007.1, T-013.1); the toolkit's own packs list first (AC-013.2)
+  expect:
+    output:
+      run_1: {exit: 0, stderr: "", stdout_first_line: "ac-ears error", stdout_contains_line: "platform-word warn"}
+      run_2: {exit: 0, stderr: "", stdout_contains_line: "T-001.1 test-cases/import.yaml"}
+      run_3: {exit: 0, stderr: "", stdout_first_line: "document 1.0.0 (prd-toolkit) — Markdown documents written for people: a user guide, a runbook for humans, a policy."}
+    effects: []
+    errors: []
+    leaks: none
+T-014.7:
+  ac: AC-014.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0]
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json docs/prd/orders
+      - python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders --json
+    note: with S0 alone the folder lints clean (T-001.1); --json may come before or after the folder
+  expect:
+    output:
+      each_run:
+        exit: 0
+        stderr: ""
+        stdout_json_first_keys: [interface, kind]
+        stdout_json: {interface: 1, kind: lint, prd: orders, version: 1.0.0, dir: docs/prd/orders, findings: [], errors: 0, warnings: 0}
     effects: []
     errors: []
     leaks: none

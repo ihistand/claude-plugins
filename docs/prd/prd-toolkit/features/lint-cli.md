@@ -11,22 +11,23 @@ Flow: 1. run `prd_lint.py` on `docs/prd/<slug>`
 Traces: FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
 
 ### FR-001 Lint a PRD folder and print its findings
-Status: verified
+Status: approved
 Source: prd-toolkit/scripts/prd_lint.py:100 @6e9f685
 Flow: 1. load the folder (prdlint.model.load) → 2. run every registered rule (prdlint.registry.run)
       → 3. print the loader's and the rules' findings, sorted → 4. exit 1 when any is an error, else 0
 Acceptance (EARS):
-- AC-001.1 When prd_lint.py is run on a PRD folder where neither the loader nor any rule reports a
-  finding, the lint command shall print nothing and exit 0.
-- AC-001.2 When the loader or a rule reports a finding of severity `error`, the lint command shall
-  print each finding on its own stdout line, an `error` one as `<path>:<line>: <rule>: <message>`,
-  and exit 1.
+- AC-001.1 When prd_lint.py is run without `--json` on a PRD folder where neither the loader nor
+  any rule reports a finding, the lint command shall print nothing and exit 0.
+- AC-001.2 When prd_lint.py is run without `--json` and the loader or a rule reports a finding of
+  severity `error`, the lint command shall print each finding on its own stdout line, an `error`
+  one as `<path>:<line>: <rule>: <message>`, and exit 1.
 - AC-001.3 The lint command shall print the findings sorted by file path, then line number, then
   rule name.
-- AC-001.4 When a rule reports a finding of severity `warn`, the lint command shall print it on its
-  own stdout line as `<path>:<line>: warn: <rule>: <message>`, in the order of AC-001.3.
+- AC-001.4 When prd_lint.py is run without `--json` and a rule reports a finding of severity
+  `warn`, the lint command shall print it on its own stdout line as
+  `<path>:<line>: warn: <rule>: <message>`, in the order of AC-001.3.
 - AC-001.5 When every finding the loader and the rules report is of severity `warn`, the lint
-  command shall print them and exit 0.
+  command shall print them, as lines or as FR-014's document, and exit 0.
 Errors: -
 Edge cases: a finding from the loader (a duplicate YAML key) and one from a rule are printed alike → AC-001.2; a `warn` finding and an `error` one together exit 1 → AC-001.2; a rule's severity is listed by `--list-rules` → AC-003.1
 Tests: T-001.1 [integration], T-001.2 [integration], T-001.3 [integration], T-001.4 [integration], T-001.5 [integration]  (test-cases/lint-cli.yaml)
@@ -61,12 +62,12 @@ Tests: T-003.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RULES
 
 ### FR-004 Reject a bad command line
-Status: verified
+Status: approved
 Source: prd-toolkit/scripts/prd_lint.py:31 @6e9f685
 Acceptance (EARS):
-- AC-004.1 If none of a folder argument, `--list-rules` and `--list-packs` is given, the lint command
-  shall print its usage on one line to stderr,
-  `usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]`,
+- AC-004.1 If none of a folder argument, `--list-rules`, `--list-packs` and `--interface` is given,
+  the lint command shall print its usage on one line to stderr,
+  `usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json] [--interface] [prd_dir]`,
   whatever the terminal width, and exit 2.
 - AC-004.2 If the command line holds an unknown option or a `--sample-tids` value that is not an
   integer, the lint command shall print argparse's usage and error lines to stderr and exit 2.
@@ -242,3 +243,35 @@ Errors: -
 Edge cases: with no plugin installed only the toolkit's packs `document` and `service` print → AC-013.1; a vendored copy lists only the packs the PRD's install vendored, by the source it recorded → AC-013.3; the installed-plugins file is `PRD_PLUGINS_FILE` when it is set, otherwise `~/.claude/plugins/installed_plugins.json` (contracts/config.yaml); a pack manifest that fails its checks is the packs area's (not adopted)
 Tests: T-013.1 [integration], T-013.2 [integration], T-013.3 [integration], T-013.4 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; setting PRD_PLUGINS_FILE (contracts/config.yaml); `.prd-toolkit/pack-sources.json`
+
+### FR-014 Print the lint result as a JSON document
+Status: approved
+Acceptance (EARS):
+- AC-014.1 When prd_lint.py is run with `--json` on a PRD folder, the lint command shall print on
+  stdout one JSON object on one line, ending in a newline, and nothing else,
+  `{"interface": 1, "kind": "lint", "prd": <prd>, "version": <version>, "dir": <dir>, "findings": [<finding>, …], "errors": <E>, "warnings": <W>}`,
+  its first two keys `interface` and `kind`, where `<prd>` and `<version>` are the `prd` and
+  `version` values of the folder's `prd.md` frontmatter (`null` when absent), `<dir>` is the path
+  prefix FR-002 puts before each finding's file, each `<finding>` is
+  `{"file": <path relative to the folder>, "line": <line>, "rule": <rule>, "severity": "error" or "warn", "message": <message>}`
+  in the order of AC-001.3, `<E>` counts the `error` findings and `<W>` the `warn` ones, and shall
+  exit 1 when `<E>` is above 0, else 0.
+- AC-014.2 If the lint command, run with `--json`, exits 2 because the command line is bad, the
+  folder holds no `prd.md`, or the load or a rule fails, it shall print on stdout one JSON object on
+  one line, ending in a newline, `{"interface": 1, "kind": "lint", "error": <message>}`, where `<message>` is argparse's
+  error message (the text after `prd_lint.py: error: `) for a bad command line and otherwise the
+  first line it prints to stderr without its `prd_lint: ` prefix, and shall print its stderr lines
+  as it does without `--json`.
+- AC-014.3 When the command line holds `--json=1`, the lint command shall behave as with `--json`.
+- AC-014.4 If the command line holds `--json=<N>` with any `<N>` other than `1`, the lint command
+  shall print the AC-014.2 object with the message `unsupported interface <N>; this toolkit speaks 1`,
+  print the one stderr line `prd_lint: unsupported interface <N>; this toolkit speaks 1`, and exit 2
+  without reading the folder.
+- AC-014.5 When run with `--interface`, the lint command shall print `1` on one stdout line and exit
+  0, whether or not a folder argument is given and without reading it.
+- AC-014.6 When `--json` is given with `--list-rules`, `--list-packs` or `--sample-tids`, the lint
+  command shall print the output of FR-003, FR-013 or FR-007 unchanged.
+Errors: -
+Edge cases: `--json` may come before or after the folder argument → AC-014.1; a separate token after `--json` is never read as the interface number, only `--json=<N>` names one → AC-014.3, AC-014.4; a missing Python package exits 2 before the command line is read, so it prints FR-010's stderr text only; the interface number rises only when a field is removed, renamed or retyped (spec 0.8.1 §3)
+Tests: T-014.1 [integration], T-014.2 [integration], T-014.3 [integration], T-014.4 [integration], T-014.5 [integration], T-014.6 [integration], T-014.7 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; `prdlint/interface.py`
