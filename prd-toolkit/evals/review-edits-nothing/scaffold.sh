@@ -15,6 +15,7 @@ python3 -B "$here/record_setup.py" docs/prd/orders change
 uv run --quiet --script "$scripts/prd_change.py" record docs/prd/orders --base HEAD --bump minor \
   --change "an import skips a blank line between rows" >/dev/null
 grep -q '^version: 1\.1\.0$' docs/prd/orders/prd.md
-grep -q 'an import skips a blank line between rows; pending | AC-001.4, T-001.5 |' docs/prd/orders/prd.md
+grep -q '^| FR-001 | Import an orders file | approved | features/import.md | 1.0.0 |$' docs/prd/orders/prd.md
+grep -q 'an import skips a blank line between rows; pending | FR-001, AC-001.4, T-001.5 |' docs/prd/orders/prd.md
 uv run --quiet --script "$scripts/prd_lint.py" docs/prd/orders
 test ! -e docs/prd/orders/.prd-review.json

@@ -58,6 +58,13 @@
 >   `no dry run (unit only)`.
 > - §4 (R12): a reply line that starts with `Refs:` is written into the approve commit body with one
 >   leading space, so the trace never reads it as a trailer.
+> - §4 (R16): `record` writes every §11 row's status from its block's `Status:` line in the working tree,
+>   for every block, not only the changed ones, so a revised block set back to `approved` is `approved`
+>   in §11 too; titles, files and added and removed rows are as before.
+> - §4 (R17): the §14 IDs cell adds the requirement (FR, NFR or UJ) that each AC and T-id item belongs to,
+>   once, in natural order: `FR-001, T-001.3` for a regression case.
+> - §4 (R18): inside a change set `changing-prds` writes no `.prd-review.json`: the change set's one approval
+>   is the only approval, and it replaces each member row's `; pending` with that member's dry-run record.
 
 ## 1. Scope
 

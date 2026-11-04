@@ -98,6 +98,6 @@ def test_spec_revisions_name_each_ruling():
         "`prd_deploy.py confirm <prd dir> --run ID --step N --reply TEXT`",  # deploy argv, adoption items
         '`"items"`',
         "0.8.2 decision-inbox spec §6 (Ivan, 2026-11-04)",           # gate changes
-        "(R7)", "(R8)", "(R9)", "(R11)", "(R12)",
+        "(R7)", "(R8)", "(R9)", "(R11)", "(R12)", "(R16)", "(R17)", "(R18)",
     ):
         assert needle in rev, needle

@@ -173,8 +173,12 @@ Text with no record is a new change set: step 1.
    ```
 
    Then the record write, and in Order each member's approval commit as `changing-prds` step 5
-   makes it (status `In review` to `Approved`, lint `0`, `prd_block.py`, the plans grep, the commit
-   of the PRD folder and CLAUDE.md), its message carrying the trailer too:
+   makes it inside a change set (status `In review` to `Approved`, lint `0`, `prd_block.py`, the
+   plans grep, the commit of the PRD folder and CLAUDE.md). Before that commit, the approval
+   replaces the row's trailing `; pending` with that member's dry-run record: the one its
+   `changing-prds` step 4 reported (`dry run T-…, 0 open questions, …` or
+   `no dry run (<why>)`), never `pending` and never your own words. No `.prd-review.json` is written
+   or committed for a member. Its message carries the trailer too:
    `-m "Refs: none (no behaviour change)" -m "Change-set: <start-prd>/CS-<nnn>"`.
 4. **Build in order.** For each row in Order, once its Waits for holds (a wait `<prd> verified`
    holds when that row is `verified` or `live in` any environment; `<prd> live in <env>` when it is

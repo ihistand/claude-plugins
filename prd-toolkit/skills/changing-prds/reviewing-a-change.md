@@ -44,7 +44,7 @@ command gives one; otherwise the branch's upstream, from `git rev-parse --abbrev
    `minor` or `major`. `bump.level` is the highest level of all the items, the decided ones
    included. An item the PRD's text does not let you decide stays undecided: name it in
    `blockers`, and `bump.level` stays `needs judgment`.
-7. **Dry run** the new and revised T-ids among `bump`'s items whose level is not `unit`, exactly
+7. **Dry run** the new and revised T-ids among `bump`'s items whose test case's `level:` is not `unit`, exactly
    as `changing-prds` step 4 says: `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md`
    (dry-run directory, state check, dispatch, judgment, cleanup), a question dismissed only by an
    exact quote of the PRD line that answers it. You fix no gap here: each question left open is
@@ -87,7 +87,7 @@ change>); make it with /prd-change, then review again`. Nothing else is changed 
 
 - "It's only a typo in the AC, so I fixed it." Any Write or Edit of a PRD file, or any other file
   outside the dry-run directory and `.prd-review.json`.
-- `sed -i`, `>`, `tee`, `git stash`, `git checkout` or `prd_change.py record` in a Bash call.
+- `sed -i`, a `>` to any path but the verdict, `tee`, `git stash`, `git checkout` or `prd_change.py record` in a Bash call.
 - "The owner asked me to fix it." The request is in the report as not edited.
 - `ready: true` with a lint exit `1`, an undecided item or an open question.
 - A `needs judgment` item left out of `bump.decided` and out of `blockers`.

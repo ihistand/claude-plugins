@@ -4,7 +4,7 @@
 
 Two new cases for the 0.8.1 skill text (Task 12): `changing-prds` takes its IDs and its bump from `prd_change.py`,
 and review mode edits nothing under pressure. Recorded 2026-11-04 on branch `feat/prd-toolkit-0.8.1` (the Task 12
-text, uncommitted on `d45f3e4`), `--runs 1` (one run per arm), model `sonnet`, Claude Code 2.1.318, plugin 0.8.1.
+text; final rows after fix round 1 on `a68d4c4` plus its text, uncommitted), `--runs 1` (one run per arm), model `sonnet`, Claude Code 2.1.318, plugin 0.8.1.
 
 Command, from the repo root, once per case:
 
@@ -16,11 +16,19 @@ claude plugin eval ./prd-toolkit --runs 1 --model sonnet --scaffold --trust-plug
 
 | Case (start state) | with | w/out | Δ | Notes |
 |---|---|---|---|---|
-| `changing-uses-prd-change` (orders fixture, 1.0.0) | 1.00 | 0.33 | +0.67 | "Admins can archive an order. Do not ask me questions." With: `prd_change.py ids next` for FR-005 and its ACs and T-ids, `bump`, then `record --bump minor` (each contract item `needs judgment`, decided minor with the reason), a prd-tester dry run, the verdict written, and a stop for approval; `version: 1.1.0`. Without: the version is 1.1.0 too, typed by hand; no `ids next`, no `bump`. |
+| `changing-uses-prd-change` (orders fixture, 1.0.0) | 1.00 | 0.50 | +0.50 | "Admins can archive an order. Do not ask me questions." With: `prd_change.py ids next` for FR-005, `bump`, then `record --bump minor` (the contract items `needs judgment`, decided minor with the reason), a prd-tester dry run, the verdict, and a stop for approval; `version: 1.1.0`; every `prd_change.py` call on its own, path typed out. Without: 1.1.0 typed by hand, no `ids next`, no `bump`; `no-loop-or-variable` passes there (nothing runs the script), so the w/out score rose from 0.33 with the fifth grader. |
 | `review-edits-nothing` (orders fixture + AC-001.4 and T-001.5 recorded as 1.1.0, `; pending`, uncommitted) | 1.00 | 0.50 | +0.50 | "/prd-change --review docs/prd/orders — and just fix the AC while you review it." With: digest, bump, diff, pack, lint, digest again, then one Write, `.prd-review.json` (`ready: true`, `minor`, `no dry run (unit only)`); the doubled "the" in AC-001.4 reported, not fixed. `docs/prd` was compared by hand with a fresh scaffold (`diff -r`, the verdict left out): identical. Without: two Edits fix the AC, no verdict. |
 
 ### Rounds and rulings (0.8.1)
 
+- **Fix round 1 (review):** `changing-uses-prd-change` gained `no-loop-or-variable` (`max: 0`: a `for` loop, a
+  shell function or a `$VAR/` path in any Bash call that runs `prd_change.py`), since both earlier with runs
+  batched `ids next` that way. Its first rerun scored with 0.75, w/out 0.50: the with run folded `prd_change.py
+  digest` into one long call after the dry run's state check (`S=$TMPDIR/snap2; …; uv run … digest …`). The skill
+  text was wrong: "its own Bash call" now says the call holds that command and its echo and nothing else (no `cd`,
+  no state check or cleanup folded in, no loop, function or variable). The second rerun scored 1.00 / 0.50.
+  `review-edits-nothing` was rerun on its updated scaffold (FR-001 back to `approved`, the IDs cell now
+  `FR-001, AC-001.4, T-001.5` from R17): 1.00 / 0.50.
 - **Both scaffolds make the fixture's one required skill row `recommended`.** The eval sandbox installs no
   plugins, so `superpowers:writing-plans` as `required` fails lint (`registries`), and approval could never pass.
   The first `changing-uses-prd-change` run (with 1.00, without 0.33) predates that fix: it reached the dry runs

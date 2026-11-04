@@ -180,3 +180,63 @@ def test_command_routes_review_to_review_mode():
     assert COMMAND.read_text(encoding="utf-8").startswith("---\ndescription: ")
     assert "`--review <dir>`" in t and "skills/changing-prds/reviewing-a-change.md" in t
     assert "Invoke the prd-toolkit:changing-prds skill and follow it exactly" in t
+
+
+# --- fix round 1 (R16 to R18 and the minors) ---
+
+RUN_SET = ROOT / "skills/coordinating-prds/running-a-change-set.md"
+
+
+def red_flags(path: Path) -> str:
+    return flat(between(path.read_text(encoding="utf-8"), "## Red Flags", "## Common Rationalizations"))
+
+
+def test_r16_the_block_status_is_edited_and_record_writes_section_11():
+    s = step(2)
+    assert "in the block's `Status:` line; `record` (step 3) writes the §11 index from it" in s
+    assert "in the block and the index" not in s
+    t = flat(SKILL.read_text(encoding="utf-8"))
+    regression = between(t, "**A regression patch.**", "**A test case or contract corrected")
+    corrected = between(t, "**A test case or contract corrected", "## ID rules")
+    for para in (regression, corrected):
+        assert "returns to `approved` (its `Status:` line; `record` writes its §11 row)" in para, para
+    assert "every §11 row's status from its block's `Status:` line" in step(3)
+
+
+def test_r17_the_ids_cell_names_each_requirement():
+    s = step(3)
+    assert "and the requirement each AC and T-id belongs to" in s
+    assert "When it leaves out a UJ, FR, NFR, AC or T-id step 1 listed" in s
+
+
+def test_r18_no_verdict_inside_a_change_set():
+    s = step(4)
+    assert "Inside a change set (step 2), write no `.prd-review.json`" in s
+    assert "the change set's one approval" in s
+    assert "`.prd-review.json` written inside a change set" in red_flags(SKILL)
+    three = flat(between(RUN_SET.read_text(encoding="utf-8"), "3. **One approval.**", "4. **Build in order.**"))
+    assert "replaces the row's trailing `; pending` with that member's dry-run record" in three
+    assert "`changing-prds` step 4" in three
+
+
+def test_red_flag_for_a_loop_function_or_variable():
+    assert "A loop, a shell function or a variable in a `prd_change.py` call" in red_flags(SKILL)
+
+
+def test_change_text_is_one_line_without_a_pipe_up_front():
+    t = flat(between(SKILL.read_text(encoding="utf-8"), "The bookkeeping, `prd_change.py`", "## The gap rule"))
+    assert "`record --change` takes one line with no `|`" in t
+
+
+def test_review_red_flag_allows_the_verdict_redirect_and_step_7_reads_level():
+    assert "a `>` to any path but the verdict" in red_flags(REVIEW)
+    seven = flat(between(REVIEW.read_text(encoding="utf-8"), "7. **Dry run**", "8. **Write the verdict**"))
+    assert "whose test case's `level:` is not `unit`" in seven
+    assert "whose level is not `unit`" not in seven
+
+
+def test_own_call_means_nothing_else_in_it():
+    t = flat(between(SKILL.read_text(encoding="utf-8"), "The bookkeeping, `prd_change.py`", "## The gap rule"))
+    assert "Its own call holds that command and that echo and nothing else" in t
+    for s in ("no `cd`", "no state check or cleanup folded in", "no loop, no shell function and no variable"):
+        assert s in t, s

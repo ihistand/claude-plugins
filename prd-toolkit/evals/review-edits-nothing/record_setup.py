@@ -1,6 +1,6 @@
 """`base`: the orders fixture's one required skill row made `recommended`, since the eval sandbox has no installed
 plugins and lint would fail on it. `change`: a change edited and not yet approved, a new AC-001.4 (with a doubled
-"the" for the prompt's "just fix the AC") and its unit case T-001.5, the PRD In review."""
+"the" for the prompt's "just fix the AC") and its unit case T-001.5, FR-001 back to approved and the PRD In review."""
 import sys
 from pathlib import Path
 
@@ -25,6 +25,7 @@ sub("features/import.md", "  log `IMPORT_EMPTY` and insert no rows.\n",
 sub("features/import.md", "T-001.4 [acceptance]  (test-cases/import.yaml)",
     "T-001.4 [acceptance], T-001.5 [unit]  (test-cases/import.yaml)")
 sub("prd.md", "status: Approved", "status: In review")
+sub("features/import.md", "### FR-001 Import an orders file\nStatus: live (since 1.0.0)", "### FR-001 Import an orders file\nStatus: approved")
 p = r / "test-cases/import.yaml"
 p.write_text(p.read_text().rstrip("\n") + "\n" + """
 T-001.5:
