@@ -6,7 +6,6 @@
 """The change bookkeeping of a PRD: next IDs, the digest and the version bump. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
 import dataclasses
-import subprocess
 import sys
 from pathlib import Path
 
@@ -60,10 +59,7 @@ def _cmd_digest(prd: model.Prd, args) -> tuple[str, dict]:
 
 
 def _cmd_bump(prd: model.Prd, args) -> tuple[str, dict]:
-    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=prd.root, capture_output=True, text=True)
-    if top.returncode != 0:
-        raise change.UsageError(f"bump: {prd.root} is not in a git repository")
-    result = change.bump(Path(top.stdout.strip()), prd.root, args.base)
+    result = change.bump(change.repo_root(prd.root), prd.root, args.base)
     lines = [f"{i.level} {i.id} {i.file}:{i.line} {i.reason}\n" for i in result.items]
     payload = {"level": result.level, "items": [dataclasses.asdict(i) for i in result.items]}
     return "".join(lines) + f"level {result.level}\n", payload

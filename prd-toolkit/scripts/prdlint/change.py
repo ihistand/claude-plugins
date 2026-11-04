@@ -105,7 +105,7 @@ def digest(prd_root: Path) -> str:
     root = Path(prd_root).resolve()
     prd = model.load(root)
     h = hashlib.sha256()
-    rels = {p.relative_to(root).as_posix(): p for p in _listed(root) if p.is_file()}
+    rels = {p.relative_to(root).as_posix(): p for p in _listed(root)}
     for rel in sorted(r for r in rels if not _skipped(r)):
         content = _normalized_prd_md(prd).encode("utf-8") if rel == "prd.md" else rels[rel].read_bytes()
         h.update(rel.encode("utf-8") + b"\0" + content + b"\0")
@@ -135,7 +135,7 @@ _NEW, _NEW_TEST, _GONE, _GONE_ITEM, _AC_TEXT, _PROSE, _CHANGED_UNDER_SAME, _CHAN
 _BASE_FM_DROP = re.compile(r"^(?:version|updated|status):")
 _FIELD = re.compile(r"^([A-Za-z][\w ()/-]*?):")
 _PROSE_FIELDS = ("Flow", "Edge cases")
-_IGNORED_FIELDS = ("Status", "Source", "Tests", "Acceptance (EARS)", "AC")
+_IGNORED_FIELDS = ("Status", "Source", "Acceptance (EARS)", "AC")
 
 
 @dataclass
@@ -189,14 +189,34 @@ def contract_items(prd: model.Prd) -> dict[str, dict[str, str]]:
         data = prd.yaml.get(rel)
         if rel == "contracts/errors.yaml" and isinstance(data, dict):
             out[rel] = {str(k): _dump(v) for k, v in data.items()}
-        elif rel == "contracts/config.yaml" and isinstance(data, dict):
-            settings = data.get("settings")
-            out[rel] = {str(k): _dump(v) for k, v in (settings if isinstance(settings, dict) else {}).items()}
+        elif rel == "contracts/config.yaml" and isinstance(data, dict) and isinstance(data.get("settings"), dict):
+            out[rel] = {str(k): _dump(v) for k, v in data["settings"].items()}
         elif rel in custom and isinstance(data, dict):
             out[rel] = {str(k): _dump(v) for k, v in data.items()}
         else:
             out[rel] = {rel: _canon((root / rel).read_text(encoding="utf-8", errors="replace"))}
     return out
+
+
+def _contract_lines(prd: model.Prd, items: dict[str, dict[str, str]]) -> dict[str, dict[str, int]]:
+    """file -> item name -> the line its definition starts on: the YAML key's line, else the first line naming it, else 1."""
+    out: dict[str, dict[str, int]] = {}
+    for file, names in items.items():
+        data = prd.yaml.get(file)
+        if isinstance(data, dict) and isinstance(data.get("settings"), dict) and file == "contracts/config.yaml":
+            data = data["settings"]
+        keyed = {str(k): n for k, n in getattr(data, "key_lines", {}).items()}
+        text = (prd.root / file).read_text(encoding="utf-8", errors="replace").lower().split("\n")
+        out[file] = {n: keyed.get(n) or next((i for i, ln in enumerate(text, 1) if n.lower() in ln), 1) for n in names}
+    return out
+
+
+def repo_root(prd_root: Path) -> Path:
+    """The top of the git repository holding `prd_root`; UsageError when it is in none."""
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=prd_root, capture_output=True, text=True)
+    if top.returncode != 0:
+        raise UsageError(f"bump: {prd_root} is not in a git repository")
+    return Path(top.stdout.strip())
 
 
 def _load_base(repo_root: Path, rel: str, base: str, into: Path) -> model.Prd:
@@ -254,6 +274,175 @@ def _block_id_of_ac(ac_id: str) -> str:
     return "AC-" + ac_id[3:].split(".")[0]
 
 
+def _ac_states(old: model.Prd, new: model.Prd) -> dict[str, str]:
+    """AC id -> new | unchanged | changed | removed, from the two PRDs; a wording-only edit is unchanged."""
+    old_acs = {a.id: a for b in old.blocks for a in b.acs}
+    out: dict[str, str] = {}
+    for b in new.blocks:
+        for a in b.acs:
+            before = old_acs.get(a.id)
+            if a.removed:
+                out[a.id] = "removed" if before and not before.removed else "unchanged"
+            elif before is None or before.removed:
+                out[a.id] = "new"
+            else:
+                out[a.id] = "unchanged" if _ac_norm(a.text) == _ac_norm(before.text) else "changed"
+    for a in old_acs.values():
+        if not a.removed and a.id not in out:
+            out[a.id] = "removed"
+    return out
+
+
+@dataclass
+class _Diff:
+    """The two PRDs and the items found so far; the `_diff_*` helpers read it and add to `items`."""
+    old: model.Prd
+    new: model.Prd
+    items: list[BumpItem] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.old_blocks = {b.id: b for b in self.old.blocks}
+        self.new_blocks = {b.id: b for b in self.new.blocks}
+        self.gone = {i for i, b in self.old_blocks.items() if not _removed(b) and (i not in self.new_blocks or _removed(self.new_blocks[i]))}
+        self.fresh = set(self.new_blocks) - set(self.old_blocks)
+        self.ac_state = _ac_states(self.old, self.new)
+        self.block_of_ac = {_block_id_of_ac(a.id): b.id for b in [*self.old.blocks, *self.new.blocks] for a in b.acs}
+
+    def add(self, index: int, id_: str, file: str, line: int, change: str) -> None:
+        reason, level = _rule(index, file)
+        self.items.append(BumpItem(id_, file, line or 1, change, level, reason))
+
+    def covered(self, ac_id: str) -> bool:
+        """Is this AC inside a block that was added or removed, so the block's own item speaks for it?"""
+        block = self.block_of_ac.get(_block_id_of_ac(ac_id))
+        return block in self.gone or block in self.fresh
+
+
+def _diff_blocks(d: _Diff) -> None:
+    """New and removed blocks; for the rest, title, prose and other fields, and each AC."""
+    for i, b in d.new_blocks.items():
+        if i in d.fresh:
+            d.add(_NEW, i, b.file, b.line, "added")
+    for i in sorted(d.gone):
+        d.add(_GONE, i, d.old_blocks[i].file, d.old_blocks[i].line, "removed")
+    old_acs = {a.id: a for b in d.old.blocks for a in b.acs}
+    for b in d.new.blocks:
+        before = d.old_blocks.get(b.id)
+        if before is None or b.id in d.gone or _removed(b):
+            continue
+        if b.title != before.title:
+            d.add(_PROSE, b.id, b.file, b.line, "changed")
+        was, now = _fields(before), _fields(b)
+        for name in sorted(set(was) | set(now)):
+            if name in _IGNORED_FIELDS or was.get(name) == now.get(name):
+                continue
+            d.add(_PROSE if name in _PROSE_FIELDS else _OTHER_FILE, b.id, b.file, b.line, "changed")
+        for a in b.acs:
+            st = d.ac_state.get(a.id)
+            if st == "new":
+                d.add(_NEW, a.id, b.file, a.line, "added")
+            elif st == "changed":
+                d.add(_AC_TEXT, a.id, b.file, a.line, "changed")
+            elif st == "removed":
+                d.add(_GONE, a.id, b.file, a.line, "removed")
+            elif st == "unchanged" and not a.removed and a.text != old_acs[a.id].text:
+                d.add(_PROSE, a.id, b.file, a.line, "changed")
+        kept = {x.id for x in b.acs}
+        for a in before.acs:
+            if not a.removed and a.id not in kept:
+                d.add(_GONE, a.id, before.file, a.line, "removed")
+
+
+def _owner_ac(tc: model.TestCase) -> str:
+    ac = tc.data.get("ac")
+    return ac if isinstance(ac, str) and ac.startswith("AC-") else f"AC-{tc.id[2:].split('.')[0]}.0"
+
+
+def _case_json(tc: model.TestCase) -> str:
+    return json.dumps(tc.data, sort_keys=True, default=str)
+
+
+def _diff_cases(d: _Diff) -> None:
+    """New, changed and removed test cases, each judged by the state of the AC it tests."""
+    old_cases = {t.id: t for t in d.old.test_cases}
+    new_ids = {t.id for t in d.new.test_cases}
+    open_touches = {t for e in d.new.errors_ledger.values() if e.open for t, _ in e.touches}
+    for tc in d.new.test_cases:
+        ac = _owner_ac(tc)
+        if d.covered(ac):
+            continue
+        st = d.ac_state.get(ac, "unchanged")
+        before = old_cases.get(tc.id)
+        if before is None:
+            if st == "new":
+                d.add(_NEW_TEST, tc.id, tc.file, tc.line, "added")
+                continue
+            entry = d.new.errors_ledger.get(str(tc.data.get("known-failing")))
+            cites = (entry is not None and entry.open) or d.block_of_ac.get(_block_id_of_ac(ac)) in open_touches
+            d.add(_REGRESSION if cites and st == "unchanged" else _OTHER_TEST, tc.id, tc.file, tc.line, "added")
+        elif _case_json(tc) != _case_json(before):
+            d.add(_CHANGED_UNDER_CHANGED if st in ("changed", "removed") else _CHANGED_UNDER_SAME, tc.id, tc.file, tc.line, "changed")
+    for tid, tc in old_cases.items():
+        if tid not in new_ids and not d.covered(_owner_ac(tc)):
+            d.add(_OTHER_FILE, tid, tc.file, tc.line, "removed")
+
+
+def _diff_contracts(d: _Diff, was: dict[str, dict[str, str]], was_lines: dict[str, dict[str, int]]) -> None:
+    """Removed, changed and new contract items; `was` is the base side, read while its folder still existed."""
+    now = contract_items(d.new)
+    now_lines = _contract_lines(d.new, now)
+    for file in sorted(set(was) | set(now)):
+        old_items, new_items = was.get(file, {}), now.get(file, {})
+        for name in sorted(set(old_items) | set(new_items)):
+            if name not in new_items:
+                d.add(_GONE_ITEM, name, file, was_lines[file][name], "removed")
+            elif name not in old_items:
+                d.add(_OTHER_FILE, name, file, now_lines[file][name], "added")
+            elif old_items[name] != new_items[name]:
+                d.add(_CHANGED_UNDER_SAME, name, file, now_lines[file][name], "changed")
+
+
+def _preamble(text: str) -> str:
+    return text[: text.find("\n## ")] if "\n## " in text else text
+
+
+def _diff_prd_md(d: _Diff, old_md: str) -> None:
+    """prd.md outside the ignored lines: the glossary is prose; the preamble and any other section are unclassified."""
+    new_md = _normalized_prd_md(d.new, _BASE_FM_DROP)
+    if new_md == old_md:
+        return
+    if _preamble(old_md) != _preamble(new_md):
+        d.add(_OTHER_FILE, "prd.md", "prd.md", 1, "changed")
+    was = {s.number: s for s in sections(old_md) if s.number is not None}
+    now = {s.number: s for s in sections(new_md) if s.number is not None}
+    for n in sorted(set(was) | set(now)):
+        body = [("\n".join(t for _, t in s.body).strip() if s else None) for s in (was.get(n), now.get(n))]
+        if body[0] == body[1]:
+            continue
+        line = next((x.line for x in d.new.sections if x.number == n), 1)
+        if n == 3 and n in was and n in now:
+            d.add(_PROSE, "glossary", "prd.md", line, "changed")
+        else:
+            d.add(_OTHER_FILE, f"section {n}", "prd.md", line, "changed")
+
+
+def _diff_files(d: _Diff, old_files: dict[str, bytes], new_files: dict[str, bytes]) -> None:
+    """Every other changed file, and the text a features or nfr file keeps outside its blocks."""
+    for rel in sorted(set(old_files) | set(new_files)):
+        if re.fullmatch(r"features/[^/]+\.md", rel) or rel == "nfr.md":
+            if _outside_blocks(d.old, rel) != _outside_blocks(d.new, rel):
+                d.add(_OTHER_FILE, rel, rel, 1, "changed")
+        elif _is_classified(rel):
+            continue
+        elif old_files.get(rel) != new_files.get(rel):
+            d.add(_OTHER_FILE, rel, rel, 1, "changed")
+
+
+def _is_classified(rel: str) -> bool:
+    """Files the item-level diffs already cover: prd.md, test cases and the contracts (fixtures excepted)."""
+    return rel == "prd.md" or rel.startswith("test-cases/") or (rel.startswith("contracts/") and not rel.startswith("contracts/fixtures/"))
+
+
 def bump(repo_root: Path, prd_root: Path, base: str) -> Bump:
     """Compare the PRD folder at `base` with the working tree and propose a version level, item by item."""
     repo_root, prd_root = Path(repo_root).resolve(), Path(prd_root).resolve()
@@ -265,133 +454,16 @@ def bump(repo_root: Path, prd_root: Path, base: str) -> Bump:
     with tempfile.TemporaryDirectory(prefix="prd-bump-") as tmp:
         old = _load_base(repo_root, rel, base, Path(tmp))
         old_files = _files(old.root)
-        old_cases = {t.id: t for t in old.test_cases}
         old_contracts = contract_items(old)
+        old_lines = _contract_lines(old, old_contracts)
         old_md = _normalized_prd_md(old, _BASE_FM_DROP)
-    new_files = _files(new.root)
-    items: list[BumpItem] = []
-
-    def add(index: int, id_: str, file: str, line: int, change: str, detail: str = "") -> None:
-        reason, level = _rule(index, detail or file)
-        items.append(BumpItem(id_, file, line, change, level, reason))
-
-    old_blocks = {b.id: b for b in old.blocks}
-    new_blocks = {b.id: b for b in new.blocks}
-    gone_blocks = {i for i, b in old_blocks.items() if not _removed(b) and (i not in new_blocks or _removed(new_blocks[i]))}
-    fresh_blocks = {i for i in new_blocks if i not in old_blocks}
-    for i, b in new_blocks.items():
-        if i in fresh_blocks:
-            add(_NEW, i, b.file, b.line, "added")
-    for i in sorted(gone_blocks):
-        add(_GONE, i, old_blocks[i].file, old_blocks[i].line, "removed")
-    # blocks in both: title, prose fields, unclassified fields; then their ACs
-    old_acs = {a.id: a for b in old.blocks for a in b.acs}
-    ac_state: dict[str, str] = {}
-    for b in new.blocks:
-        for a in b.acs:
-            before = old_acs.get(a.id)
-            if a.removed:
-                ac_state[a.id] = "removed" if before and not before.removed else "unchanged"
-            elif before is None or before.removed:
-                ac_state[a.id] = "new"
-            else:
-                ac_state[a.id] = "unchanged" if _ac_norm(a.text) == _ac_norm(before.text) else "changed"
-    for a in old_acs.values():
-        if not a.removed and a.id not in ac_state:
-            ac_state[a.id] = "removed"
-    for b in new.blocks:
-        before = old_blocks.get(b.id)
-        if before is None or b.id in gone_blocks or _removed(b):
-            continue
-        if b.title != before.title:
-            add(_PROSE, b.id, b.file, b.line, "changed")
-        was, now = _fields(before), _fields(b)
-        for name in sorted(set(was) | set(now)):
-            if name in _IGNORED_FIELDS or was.get(name) == now.get(name):
-                continue
-            if name in _PROSE_FIELDS:
-                add(_PROSE, b.id, b.file, b.line, "changed")
-            else:
-                add(_OTHER_FILE, b.id, b.file, b.line, "changed")
-        for a in b.acs:
-            st = ac_state.get(a.id)
-            if st == "new":
-                add(_NEW, a.id, b.file, a.line, "added")
-            elif st == "changed":
-                add(_AC_TEXT, a.id, b.file, a.line, "changed")
-            elif st == "removed":
-                add(_GONE, a.id, b.file, a.line, "removed")
-            elif st == "unchanged" and not a.removed and a.text != old_acs[a.id].text:
-                add(_PROSE, a.id, b.file, a.line, "changed")
-        for a in before.acs:
-            if not a.removed and a.id not in {x.id for x in b.acs}:
-                add(_GONE, a.id, before.file, a.line, "removed")
-    # test cases
-    def owner(tc: model.TestCase) -> str:
-        ac = tc.data.get("ac")
-        return ac if isinstance(ac, str) and ac.startswith("AC-") else f"AC-{tc.id[2:].split('.')[0]}.0"
-
-    def covered(ac_id: str) -> bool:
-        block = {"AC-" + b.id.split("-")[1]: b.id for b in new.blocks + old.blocks}.get(_block_id_of_ac(ac_id))
-        return block in gone_blocks or block in fresh_blocks
-
-    open_touches = {t for e in new.errors_ledger.values() if e.open for t, _ in e.touches}
-    for tc in new.test_cases:
-        ac = owner(tc)
-        st = ac_state.get(ac, "unchanged")
-        before = old_cases.get(tc.id)
-        if covered(ac):
-            continue
-        if before is None:
-            if st == "new":
-                add(_NEW_TEST, tc.id, tc.file, tc.line, "added")
-                continue
-            ledger = new.errors_ledger.get(str(tc.data.get("known-failing")))
-            block = {"AC-" + b.id.split("-")[1]: b.id for b in new.blocks}.get(_block_id_of_ac(ac))
-            cites = (ledger is not None and ledger.open) or block in open_touches
-            add(_REGRESSION if cites and st == "unchanged" else _OTHER_TEST, tc.id, tc.file, tc.line, "added")
-        elif json.dumps(tc.data, sort_keys=True, default=str) != json.dumps(before.data, sort_keys=True, default=str):
-            add(_CHANGED_UNDER_CHANGED if st in ("changed", "removed") else _CHANGED_UNDER_SAME, tc.id, tc.file, tc.line, "changed")
-    for tid, tc in old_cases.items():
-        if tid not in {t.id for t in new.test_cases} and not covered(owner(tc)):
-            add(_OTHER_FILE, tid, tc.file, tc.line, "removed")
-    # contracts
-    new_contracts = contract_items(new)
-    for file in sorted(set(old_contracts) | set(new_contracts)):
-        was, now = old_contracts.get(file, {}), new_contracts.get(file, {})
-        for name in sorted(set(was) | set(now)):
-            if name not in now:
-                add(_GONE_ITEM, name, file, 0, "removed")
-            elif name not in was:
-                add(_OTHER_FILE, name, file, 0, "added")
-            elif was[name] != now[name]:
-                add(_CHANGED_UNDER_SAME, name, file, 0, "changed")
-    # prd.md: glossary is prose, everything else outside the ignored lines is unclassified
-    new_md = _normalized_prd_md(new, _BASE_FM_DROP)
-    if new_md != old_md:
-        was_s, now_s = {s.number: s for s in sections(old_md)}, {s.number: s for s in sections(new_md)}
-        body = lambda s: "\n".join(t for _, t in s.body).strip() if s else None  # noqa: E731
-        first = lambda text: text[: text.find("\n## ")] if "\n## " in text else text  # noqa: E731
-        if first(old_md) != first(new_md):
-            add(_OTHER_FILE, "prd.md", "prd.md", 1, "changed")
-        for n in sorted(k for k in set(was_s) | set(now_s) if k is not None):
-            if body(was_s.get(n)) == body(now_s.get(n)):
-                continue
-            sec = next((x for x in new.sections if x.number == n), None)
-            line = sec.line if sec else 1
-            if n == 3 and n in was_s and n in now_s:
-                add(_PROSE, "glossary", "prd.md", line, "changed")
-            else:
-                add(_OTHER_FILE, f"section {n}", "prd.md", line, "changed", "prd.md")
-    # every other changed file, and the text a features file keeps outside its blocks
-    handled = lambda r: r == "prd.md" or r.startswith(("test-cases/", "contracts/")) and not r.startswith("contracts/fixtures/")  # noqa: E731
-    for rel_file in sorted(set(old_files) | set(new_files)):
-        if rel_file.endswith(".md") and (re.fullmatch(r"features/[^/]+\.md", rel_file) or rel_file == "nfr.md"):
-            if _outside_blocks(old, rel_file) != _outside_blocks(new, rel_file):
-                add(_OTHER_FILE, rel_file, rel_file, 1, "changed")
-        elif not handled(rel_file) and old_files.get(rel_file) != new_files.get(rel_file):
-            add(_OTHER_FILE, rel_file, rel_file, 1, "changed")
-    return Bump(_combine(items), items)
+    d = _Diff(old, new)
+    _diff_blocks(d)
+    _diff_cases(d)
+    _diff_contracts(d, old_contracts, old_lines)
+    _diff_prd_md(d, old_md)
+    _diff_files(d, old_files, _files(new.root))
+    return Bump(_combine(d.items), d.items)
 
 
 def _combine(items: list[BumpItem]) -> str:

@@ -83,29 +83,66 @@ def ac_and_test_change(prd):
     edit(prd, "test-cases/api.yaml", "status: 404", "status: 410")
 
 
-# rule index in change.BUMP_RULES -> [(mutator, expected id, expected level, expected change)]
+def no_touch_error(prd):
+    append(prd / "errors.md", OPEN_ERROR.replace("Touches: FR-002\n", ""))
+
+
+def kf_test(prd):
+    append(prd / "test-cases/api.yaml", NEW_TEST.replace("  level: integration", "  known-failing: E-002\n  level: integration"))
+
+
+def new_error_code(prd):
+    append(prd / "contracts/errors.yaml", "NEW_CODE:\n  meaning: A new one.\n  status: 400\n")
+
+
+def drop_case(prd):
+    p = prd / "test-cases/api.yaml"
+    p.write_text(re.sub(r"^T-002\.2:\n(?:[ \t]+.*\n|\n)*", "", p.read_text(), flags=re.M), encoding="utf-8")
+
+
+def new_section_line(prd):
+    edit(prd, "prd.md", "  API --> DB\n", "  API --> DB\n  API --> Cache\n")
+
+
+J, MIN, MAJ, PAT = "needs judgment", "minor", "major", "patch"
+# rule index in change.BUMP_RULES -> [(mutator, {every expected item id: level}, overall level, id checked for change and reason, its change)]
 CASES = {
-    0: [(new_ac, "AC-002.3", "minor", "added"), (new_block, "FR-009", "minor", "added")],
-    1: [(new_ac_with_test, "T-002.3", "minor", "added")],
+    0: [(new_ac, {"AC-002.3": MIN}, MIN, "AC-002.3", "added"), (new_block, {"FR-009": MIN}, MIN, "FR-009", "added")],
+    1: [(new_ac_with_test, {"AC-002.3": MIN, "T-002.3": MIN}, MIN, "T-002.3", "added")],
     2: [
-        (lambda p: edit(p, "features/api.md", "- AC-002.2 If the order", "- AC-002.2 (removed in 1.1.0) If the order"), "AC-002.2", "major", "removed"),
-        (lambda p: edit(p, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed"), "FR-003", "major", "removed"),
+        (lambda p: edit(p, "features/api.md", "- AC-002.2 If the order", "- AC-002.2 (removed in 1.1.0) If the order"), {"AC-002.2": MAJ}, MAJ, "AC-002.2", "removed"),
+        (lambda p: edit(p, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed"), {"FR-003": MAJ}, MAJ, "FR-003", "removed"),
     ],
-    3: [(drop_error_code, "IMPORT_EMPTY", "major", "removed")],
-    4: [(ac_text_change, "AC-002.2", "needs judgment", "changed")],
+    3: [(drop_error_code, {"IMPORT_EMPTY": MAJ}, MAJ, "IMPORT_EMPTY", "removed")],
+    4: [(ac_text_change, {"AC-002.2": J}, J, "AC-002.2", "changed")],
     5: [
-        (lambda p: edit(p, "features/api.md", "If the order id does not exist, the API shall respond 404 with error ORDER_NOT_FOUND.", "if the order id does not exist the API shall respond 404, with error ORDER_NOT_FOUND"), "AC-002.2", "patch", "changed"),
-        (lambda p: edit(p, "features/api.md", "### FR-002 Get an order", "### FR-002 Get one order"), "FR-002", "patch", "changed"),
-        (lambda p: edit(p, "features/api.md", "Flow: 1. Caller sends GET", "Flow: 1. A caller sends GET"), "FR-002", "patch", "changed"),
-        (lambda p: edit(p, "features/import.md", "Edge cases: the same key twice", "Edge cases: one key twice"), "FR-001", "patch", "changed"),
-        (lambda p: edit(p, "prd.md", "A customer's request for goods", "A customer's request to buy goods"), "glossary", "patch", "changed"),
+        (lambda p: edit(p, "features/api.md", "If the order id does not exist, the API shall respond 404 with error ORDER_NOT_FOUND.", "if the order id does not exist the API shall respond 404, with error ORDER_NOT_FOUND"), {"AC-002.2": PAT}, PAT, "AC-002.2", "changed"),
+        (lambda p: edit(p, "features/api.md", "### FR-002 Get an order", "### FR-002 Get one order"), {"FR-002": PAT}, PAT, "FR-002", "changed"),
+        (lambda p: edit(p, "features/api.md", "Flow: 1. Caller sends GET", "Flow: 1. A caller sends GET"), {"FR-002": PAT}, PAT, "FR-002", "changed"),
+        (lambda p: edit(p, "features/import.md", "Edge cases: the same key twice", "Edge cases: one key twice"), {"FR-001": PAT}, PAT, "FR-001", "changed"),
+        (lambda p: edit(p, "prd.md", "A customer's request for goods", "A customer's request to buy goods"), {"glossary": PAT}, PAT, "glossary", "changed"),
     ],
-    6: [(expect_change, "T-002.1", "needs judgment", "changed"),
-        (lambda p: edit(p, "contracts/errors.yaml", "status: 404", "status: 410"), "ORDER_NOT_FOUND", "needs judgment", "changed")],
-    7: [(ac_and_test_change, "T-002.2", "major", "changed")],
-    8: [(lambda p: (known_error(p), commit_now(p), regression_test(p)), "T-002.3", "patch", "added")],
-    9: [(regression_test, "T-002.3", "needs judgment", "added")],
-    10: [(lambda p: edit(p, "operations.md", "## Drift", "## Drift\n\nNew words."), "operations.md", "needs judgment", "changed")],
+    6: [(expect_change, {"T-002.1": J}, J, "T-002.1", "changed"),
+        (lambda p: edit(p, "contracts/errors.yaml", "status: 404", "status: 410"), {"ORDER_NOT_FOUND": J}, J, "ORDER_NOT_FOUND", "changed"),
+        (lambda p: edit(p, "contracts/config.yaml", "type: integer", "type: number"), {"IMPORT_BATCH_SIZE": J}, J, "IMPORT_BATCH_SIZE", "changed")],
+    7: [(ac_and_test_change, {"AC-002.2": J, "T-002.2": MAJ}, J, "T-002.2", "changed")],
+    8: [(lambda p: (known_error(p), commit_now(p), regression_test(p)), {"T-002.3": PAT}, PAT, "T-002.3", "added"),
+        (lambda p: (no_touch_error(p), commit_now(p), kf_test(p)), {"T-002.3": PAT}, PAT, "T-002.3", "added")],
+    9: [(regression_test, {"T-002.3": J}, J, "T-002.3", "added"),
+        (lambda p: (no_touch_error(p), commit_now(p), regression_test(p)), {"T-002.3": J}, J, "T-002.3", "added")],
+    10: [
+        (lambda p: edit(p, "operations.md", "## Drift", "## Drift\n\nNew words."), {"operations.md": J}, J, "operations.md", "changed"),
+        (new_error_code, {"NEW_CODE": J}, J, "NEW_CODE", "added"),
+        (drop_case, {"T-002.2": J}, J, "T-002.2", "removed"),
+        (lambda p: append(p / "contracts/fixtures/orders/one_existing.csv", "2,K-1001,1,open,rep-a\n"), {"contracts/fixtures/orders/one_existing.csv": J}, J, "contracts/fixtures/orders/one_existing.csv", "changed"),
+        (lambda p: edit(p, "errors.md", "Recurrence of: -", "Recurrence of: E-009"), {"errors.md": J}, J, "errors.md", "changed"),
+        (lambda p: edit(p, "nfr.md", "Log fields on every line", "Log fields on each line"), {"nfr.md": J}, J, "nfr.md", "changed"),
+        (lambda p: edit(p, "features/api.md", "# API\n", "# API surface\n"), {"features/api.md": J}, J, "features/api.md", "changed"),
+        (lambda p: edit(p, "features/api.md", "Errors: ORDER_NOT_FOUND (contracts", "Errors: ORDER_NOT_FOUND, FORBIDDEN (contracts"), {"FR-002": J}, J, "FR-002", "changed"),
+        (lambda p: edit(p, "features/api.md", "T-002.2 [integration]", "T-002.2 [system]"), {"FR-002": J}, J, "FR-002", "changed"),
+        (lambda p: edit(p, "prd.md", "owner: Sample Owner", "owner: Another Owner"), {"prd.md": J}, J, "prd.md", "changed"),
+        (new_section_line, {"section 4": J}, J, "section 4", "changed"),
+    ],
 }
 PARAMS = [(i, *case) for i, cases in CASES.items() for case in cases]
 
@@ -121,17 +158,18 @@ def test_every_rule_has_a_case():
     assert [lvl for _, lvl in change.BUMP_RULES] == ["minor", "minor", "major", "major", "needs judgment", "patch", "needs judgment", "major", "patch", "needs judgment", "needs judgment"]
 
 
-@pytest.mark.parametrize("index,mutate,item_id,level,kind", PARAMS, ids=[f"rule{p[0]}-{p[3]}" for p in PARAMS])
-def test_each_rule(repo, index, mutate, item_id, level, kind):
+@pytest.mark.parametrize("index,mutate,expected,overall,item_id,kind", PARAMS, ids=[f"rule{p[0]}-{p[4]}" for p in PARAMS])
+def test_each_rule(repo, index, mutate, expected, overall, item_id, kind):
     mutate(repo / PRD)
     doc = run_bump(repo)
-    hits = [i for i in doc["items"] if i["id"] == item_id]
-    assert len(hits) == 1, doc
-    item = hits[0]
-    assert (item["level"], item["change"]) == (level, kind)
-    want = f"unclassified change in {item['file']}" if index == 10 else change.BUMP_RULES[index][0]
+    assert {i["id"]: i["level"] for i in doc["items"]} == expected and len(doc["items"]) == len(expected), doc
+    assert doc["level"] == overall
+    item = next(i for i in doc["items"] if i["id"] == item_id)
+    assert item["change"] == kind
+    want = f"unclassified change in {item['file']}" if expected[item_id] == J and index == 10 else change.BUMP_RULES[index][0]
     assert item["reason"] == want
-    assert item["line"] >= 0 and item["file"]
+    for i in doc["items"]:
+        assert i["line"] > 0 and i["file"], i
 
 
 def test_wording_only_is_patch_and_an_added_word_needs_judgment(repo):
@@ -244,3 +282,20 @@ def test_base_may_be_a_branch_and_the_tree_is_not_touched(repo):
     assert run_bump(repo, "before")["level"] == "minor"
     assert run_bump(repo, "HEAD")["items"] == []
     assert subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout == ""
+
+
+def test_contract_items_of_a_pack_type(prd):
+    from prdlint import model
+
+    edit(prd, "prd.md", "| lookml |", "| widgets | `contracts/widgets.yaml` | `python3 -c \"import sys; sys.exit(0)\"` |\n| lookml |")
+    (prd / "contracts/widgets.yaml").write_text("sprocket:\n  teeth: 12\ncog:\n  teeth: 8\n", encoding="utf-8")
+    items = change.contract_items(model.load(prd))
+    assert set(items["contracts/widgets.yaml"]) == {"sprocket", "cog"}
+
+
+def test_config_without_settings_is_one_whole_file_item(prd):
+    from prdlint import model
+
+    (prd / "contracts/config.yaml").write_text("flags:\n  a: 1\n", encoding="utf-8")
+    items = change.contract_items(model.load(prd))
+    assert set(items["contracts/config.yaml"]) == {"contracts/config.yaml"}
