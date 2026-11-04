@@ -1078,3 +1078,22 @@ T-014.7:
     effects: []
     errors: []
     leaks: none
+T-014.8:
+  ac: AC-014.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: []
+  input:
+    cwd: <tmp>
+    runs:
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --interface --json=2
+      - python <repo>/prd-toolkit/scripts/prd_lint.py --json=2 --interface <tmp>/missing   # the folder does not exist
+    note: --interface wins over an unsupported --json=N, in either order (AC-014.4 does not apply)
+  expect:
+    output:
+      each_run: {exit: 0, stdout: "1\n", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none

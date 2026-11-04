@@ -11,8 +11,8 @@ Flow: 1. run `prd_lint.py` on `docs/prd/<slug>`
 Traces: FR-001, FR-002, FR-003, FR-004, FR-005, FR-006
 
 ### FR-001 Lint a PRD folder and print its findings
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:100 @6e9f685
+Status: built
+Source: prd-toolkit/scripts/prd_lint.py:116 @f19f84c
 Flow: 1. load the folder (prdlint.model.load) → 2. run every registered rule (prdlint.registry.run)
       → 3. print the loader's and the rules' findings, sorted → 4. exit 1 when any is an error, else 0
 Acceptance (EARS):
@@ -62,8 +62,8 @@ Tests: T-003.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RULES
 
 ### FR-004 Reject a bad command line
-Status: approved
-Source: prd-toolkit/scripts/prd_lint.py:31 @6e9f685
+Status: built
+Source: prd-toolkit/scripts/prd_lint.py:59 @f19f84c
 Acceptance (EARS):
 - AC-004.1 If none of a folder argument, `--list-rules`, `--list-packs` and `--interface` is given,
   the lint command shall print its usage on one line to stderr,
@@ -246,6 +246,7 @@ Traces: cli:prd_lint; setting PRD_PLUGINS_FILE (contracts/config.yaml); `.prd-to
 
 ### FR-014 Print the lint result as a JSON document
 Status: approved
+Source: prd-toolkit/scripts/prd_lint.py:42 @f19f84c
 Acceptance (EARS):
 - AC-014.1 When prd_lint.py is run with `--json` on a PRD folder, the lint command shall print on
   stdout one JSON object on one line, ending in a newline, and nothing else,
@@ -263,15 +264,16 @@ Acceptance (EARS):
   first line it prints to stderr without its `prd_lint: ` prefix, and shall print its stderr lines
   as it does without `--json`.
 - AC-014.3 When the command line holds `--json=1`, the lint command shall behave as with `--json`.
-- AC-014.4 If the command line holds `--json=<N>` with any `<N>` other than `1`, the lint command
-  shall print the AC-014.2 object with the message `unsupported interface <N>; this toolkit speaks 1`,
+- AC-014.4 If the command line holds `--json=<N>` with any `<N>` other than `1` and does not hold
+  `--interface`, the lint command shall print the AC-014.2 object with the message `unsupported interface <N>; this toolkit speaks 1`,
   print the one stderr line `prd_lint: unsupported interface <N>; this toolkit speaks 1`, and exit 2
   without reading the folder.
 - AC-014.5 When run with `--interface`, the lint command shall print `1` on one stdout line and exit
-  0, whether or not a folder argument is given and without reading it.
+  0, whether or not a folder argument or a `--json=<N>` is given, without reading the folder and
+  without checking `<N>`.
 - AC-014.6 When `--json` is given with `--list-rules`, `--list-packs` or `--sample-tids`, the lint
   command shall print the output of FR-003, FR-013 or FR-007 unchanged.
 Errors: -
-Edge cases: `--json` may come before or after the folder argument → AC-014.1; a separate token after `--json` is never read as the interface number, only `--json=<N>` names one → AC-014.3, AC-014.4; a missing Python package exits 2 before the command line is read, so it prints FR-010's stderr text only; the interface number rises only when a field is removed, renamed or retyped (spec 0.8.1 §3)
-Tests: T-014.1 [integration], T-014.2 [integration], T-014.3 [integration], T-014.4 [integration], T-014.5 [integration], T-014.6 [integration], T-014.7 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: `--json` may come before or after the folder argument → AC-014.1; a separate token after `--json` is never read as the interface number, only `--json=<N>` names one → AC-014.3, AC-014.4; `--interface` with an unsupported `--json=<N>`, in either order, prints `1` and exits 0 → AC-014.5; a missing Python package exits 2 before the command line is read, so it prints FR-010's stderr text only; the interface number rises only when a field is removed, renamed or retyped (spec 0.8.1 §3)
+Tests: T-014.1 [integration], T-014.2 [integration], T-014.3 [integration], T-014.4 [integration], T-014.5 [integration], T-014.6 [integration], T-014.7 [integration], T-014.8 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/interface.py`

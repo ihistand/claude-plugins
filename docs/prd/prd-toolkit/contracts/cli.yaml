@@ -9,7 +9,7 @@ prd_lint:
     "--ci": "set PRD_LINT_CI=1 before the rules run (FR-008)"
     "--sample-tids N": "integer >= 0; print up to N random non-unit test cases instead of linting (FR-007)"
     "--json": "print the lint result as one JSON document instead of the finding lines; --json=1 is the same, any other --json=N is refused (FR-014)"
-    "--interface": "print the interface number 1; the folder is not read (FR-014)"
+    "--interface": "print the interface number 1; the folder is not read and a --json=N is not checked (FR-014)"
     "-h, --help": "print the help to stdout (FR-004)"
   output:
     finding: "stdout: <path>:<line>: <rule>: <message>, sorted by file, line, rule; <path> per FR-002"
@@ -22,7 +22,7 @@ prd_lint:
     json_document: 'stdout, --json: one line, {"interface": 1, "kind": "lint", "prd", "version", "dir", "findings": [{"file", "line", "rule", "severity", "message"}], "errors", "warnings"} (FR-014)'
     json_error: 'stdout, --json on exit 2: one line, {"interface": 1, "kind": "lint", "error": <message>} (FR-014)'
     interface: "stdout, --interface: 1 (FR-014)"
-    unsupported_interface: "stderr, --json=N with N other than 1: prd_lint: unsupported interface <N>; this toolkit speaks 1 (FR-014)"
+    unsupported_interface: "stderr, --json=N with N other than 1 and no --interface: prd_lint: unsupported interface <N>; this toolkit speaks 1 (FR-014)"
     argparse_error: "stderr: usage line, then prd_lint.py: error: <argparse message>"
     negative_sample: "stderr: prd_lint: --sample-tids N must be >= 0"
     not_a_prd: "stderr: prd_lint: <resolved folder>: no prd.md, optionally followed by ; found <name>; the file name is lowercase prd.md"
@@ -34,7 +34,7 @@ prd_lint:
   exit_codes:
     0: "clean lint or only warnings, --list-rules, --list-packs, --interface, --help, or a sample printed"
     1: "one or more error findings, or --sample-tids with no non-unit test case"
-    2: "usage error, an unsupported --json=N, folder without prd.md, missing dependency, or internal error (load or rule)"
+    2: "usage error, an unsupported --json=N without --interface, folder without prd.md, missing dependency, or internal error (load or rule)"
 prd_publish:
   # Only what lint-cli's FR-010 needs so far; the publish area adds the rest when it is adopted.
   invocation: "uv run --script prd-toolkit/scripts/prd_publish.py <arguments>"
