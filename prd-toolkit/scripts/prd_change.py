@@ -3,8 +3,10 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""The change bookkeeping of a PRD: next IDs and the digest. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
+"""The change bookkeeping of a PRD: next IDs, the digest and the version bump. Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
 import argparse
+import dataclasses
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,6 +42,10 @@ def _build() -> argparse.ArgumentParser:
     dig = sub.add_parser("digest", help="print the SHA-256 digest of the PRD folder")
     dig.add_argument("prd_dir")
     _flags(dig, leaf=True)
+    bmp = sub.add_parser("bump", help="propose patch, minor or major from the diff against a ref")
+    bmp.add_argument("prd_dir")
+    bmp.add_argument("--base", required=True, help="the git ref the PRD folder is compared with")
+    _flags(bmp, leaf=True)
     return parser
 
 
@@ -53,10 +59,21 @@ def _cmd_digest(prd: model.Prd, args) -> tuple[str, dict]:
     return value + "\n", {"digest": value}
 
 
-# (command, subcommand) -> (document kind, handler); the next tasks add bump, record and approve here
+def _cmd_bump(prd: model.Prd, args) -> tuple[str, dict]:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=prd.root, capture_output=True, text=True)
+    if top.returncode != 0:
+        raise change.UsageError(f"bump: {prd.root} is not in a git repository")
+    result = change.bump(Path(top.stdout.strip()), prd.root, args.base)
+    lines = [f"{i.level} {i.id} {i.file}:{i.line} {i.reason}\n" for i in result.items]
+    payload = {"level": result.level, "items": [dataclasses.asdict(i) for i in result.items]}
+    return "".join(lines) + f"level {result.level}\n", payload
+
+
+# (command, subcommand) -> (document kind, handler); the next tasks add record and approve here
 COMMANDS = {
     ("ids", "next"): ("change.ids", _cmd_ids_next),
     ("digest", None): ("change.digest", _cmd_digest),
+    ("bump", None): ("change.bump", _cmd_bump),
 }
 
 
@@ -96,6 +113,9 @@ def _main(argv: list[str]) -> int:
     except change.ChangeError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1
+    except change.UsageError as e:
+        print(e, file=sys.stderr)
+        return 2
     except Exception as e:
         print(f"prd_change: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
