@@ -134,7 +134,8 @@ file overrides it with a `Target:` line.
 
 ### §1 lines
 
-Three bullet lines in `## 1. Metadata & stack` are read for the profile; every other §1 bullet stays prose:
+Two bullet lines in `## 1. Metadata & stack` are read for the profile, `Pack:` and `Output language:`;
+`- Profile:` is the authoring skill's assumption marker, and every other §1 bullet stays prose:
 
 ```
 - Pack: document 1.0.0 (prd-toolkit)
@@ -184,6 +185,7 @@ Lint rule `pack-resolves` reports each of these on the line that holds the fault
 | `pack <name> named at <v1> and <v2>; one version per PRD` | one pack named at two versions |
 | `pack <name> <X.Y.Z> (<source>) not found; looked in: <places>` | no folder resolves |
 | `vendored <name> <v1>, the PRD names <v2>; run prd_hooks.py install` | the vendored copy's version differs from the named one |
+| `vendored <name> has no pack.yaml; run prd_hooks.py install` | a vendored pack folder holds no manifest (it never falls through to another copy) |
 | `pack <name> needs toolkit <range>; this is <version>` | the pack's `toolkit:` range excludes this toolkit |
 | `pack <name>: pack.yaml: <why>` | a manifest that fails its schema, naming the key |
 | `pack <name>: only the service pack may use validator built-in` | `built-in` in another pack |
@@ -368,8 +370,9 @@ T-004.2:
   expect:
     rubric:
       - Each step in Install names one action the reader performs
+      - No step relies on a tool that Requirements does not list
       - First run shows the command and the output the reader will see
-    threshold: 0.67
+    threshold: 0.66
     runs: 3
     errors: []
     leaks: none

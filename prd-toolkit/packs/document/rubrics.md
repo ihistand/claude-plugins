@@ -10,8 +10,11 @@ with a quote from the document.
 - **No judgement words.** Do not write "is clear", "reads well", "is good", "is helpful" or "is
   appropriate". If a reader could disagree about what the item means, split it or sharpen it.
 - **3 to 8 items.** Fewer leaves the case too coarse; more makes one failing run hard to read.
-- **Threshold.** The share of items that must pass. Use 1.0 only when every item is a hard
-  requirement. A lower threshold (0.67 to 0.8) tolerates one soft item failing in a run; the median of
+- **Threshold.** The share of items that must pass: a run's score is passed ÷ items, and the case
+  passes when the median score reaches the threshold. Use 1.0 only when every item is a hard
+  requirement. To tolerate one soft item failing, write (items − 1) ÷ items rounded down to two
+  places: 2 of 3 is 0.666…, so write 0.66 (0.67 needs all three); 3 of 4 is 0.75 (0.8 needs all
+  four). Lint warns (`judged-case`) when a threshold below 1.0 needs every item. The median of
   `runs:` runs decides, so keep `runs:` at 3 or more for any threshold below 1.0.
 - **Language.** Write the items in the PRD's `language:`.
 - **A script check beats a rubric item.** Sections present in order, terms used, word count in range

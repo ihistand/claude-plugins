@@ -33,6 +33,7 @@
 > - §13 P3 (R28): the stub plugin is found through a `PRD_PLUGINS_FILE` list, since discovery does not see `--plugin-dir` plugins.
 > - §1, §9, §16 (owner, 2026-11-03): the 0.8 line is renumbered (umbrella Revisions): the machine
 >   interface is 0.8.1, best practices 0.8.2, conversion 0.8.3. The changing-prds refusal names 0.8.3.
+> - §7 T-004.2 example threshold 0.66, not 0.67 (2 of 3 is 0.666…; final review)
 
 ## 1. Scope
 
@@ -317,7 +318,7 @@ T-004.2:
       - Each step in Install names one action the reader performs
       - No step relies on a tool that Requirements does not list
       - First run shows the command and the output the reader will see
-    threshold: 0.67
+    threshold: 0.66
     runs: 3
     errors: []
     leaks: none

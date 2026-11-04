@@ -305,7 +305,8 @@ Required, not machine-checked:
 A pack is a folder with a `pack.yaml` that adds contract types, target kinds, test levels and defaults to
 a PRD. The built-in `service` pack declares the types above (each `validator: built-in`); the built-in
 `document` pack declares `outline`. A plugin ships a pack in `prd-packs/<name>/`, and a PRD that names it
-gets it vendored into `.prd-toolkit/packs/<name>/` by `prd_hooks.py install`.
+gets it vendored into `.prd-toolkit/packs/<name>/` by `prd_hooks.py install`, which records each one's source in `.prd-toolkit/pack-sources.json`
+(`{"<name>": "<source>"}`). `prd_hooks.py check` reports a vendored pack whose recorded source is not the one the PRD names.
 
 A pack's contract type is a §7 row with the Validator cell `pack`:
 
@@ -316,7 +317,9 @@ A pack's contract type is a §7 row with the Validator cell `pack`:
 Manifest keys: `pack` (the folder name), `version` and `toolkit` (a version range) are required;
 `description`, `contract-types` (`{type, files, validator}`), `target-kinds` (a kind and the type its names
 resolve in), `levels`, `harness`, `standards`, `skills`, `vocabulary`, `builder-tests` (`unit` or `none`),
-`rubrics`, `clarify`, `grader` and `languages` are optional.
+`rubrics`, `clarify`, `grader` and `languages` are optional. `toolkit:` is comma-separated clauses, each an
+operator (`>=`, `>`, `<=`, `<`, `==` or `!=`) and a version `X`, `X.Y` or `X.Y.Z`; every clause must hold.
+`~=` and wildcards (`==0.8.*`) are not accepted.
 
 Lint-checked: the validator command runs from the PRD root with the matching files appended, and exit 0
 passes, as for a custom type. `${PACK}` in a manifest command expands to the pack's folder, after the
@@ -350,6 +353,10 @@ lists of strings; `length`, when present, holds integers with `min-words` at mos
 
 Required, not machine-checked: `audience` names the reader's prior knowledge, and every `terms` entry is in
 the glossary.
+
+How a `checks` test reads a document is the pack's Harness Assertions default: CommonMark 0.31.2 after NFC
+normalization. A section is a level-2 heading whose text equals a `sections` entry, each entry heading
+exactly one section, and it runs to the next level-2 heading; every other comparison of text is exact.
 
 ## components
 

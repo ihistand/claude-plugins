@@ -158,7 +158,7 @@ Otherwise show the map, recommend one area and why, and stop for the user's pick
 
 - Show the area's Boundary and the files it matches; correct it if the user does.
 - **The area's pack.** List the packs, its own Bash call:
-  `uv run --script <scripts>/prd_lint.py --list-packs; echo "prd-list-packs-exit=$?"`. Then propose a pack from the area's Boundary files: Markdown documents written
+  `uv run --script <plugin scripts>/prd_lint.py --list-packs; echo "prd-list-packs-exit=$?"` (`<plugin scripts>` is the plugin's own `scripts` directory as a literal absolute path, even in a repository that has `.prd-toolkit/`: `--list-packs` lists what is on this machine and is not a gate, and a vendored copy lists only the packs it vendored). Then propose a pack from the area's Boundary files: Markdown documents written
   for people (`docs/**/*.md`: a guide, a runbook, a policy) are `document`; code with an API, a
   database or events is `service`; a pack of an installed plugin whose description fits its files
   is that pack. Show the proposal with the files that led to it, and write the area's `Target:`
@@ -394,7 +394,10 @@ files; if a test case changed since, run step 4 again.
    ```
 
    A yes also commits `.prd-toolkit/` and the CI file. Hooks change no code; CI then gates every
-   merge on lint, trace, the standards rows and the build-gate levels.
+   merge on lint, trace, the standards rows and the build-gate levels. An area with any judged case
+   requires the hooks install, not an offer: its judged tests call `.prd-toolkit/prd_judge.py`,
+   which only `prd_hooks.py install` writes. Say so with the approval and run the install; a user
+   who declines it is told that no judged test can run until it is installed. CI stays an offer.
 
 ## When the user pushes
 

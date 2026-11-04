@@ -34,6 +34,8 @@ these rules:
 - A judged case (its `expect` has `rubric:`): the test calls
   `uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>` and must assert exit 0
   and nothing else. You never grade the output yourself, and a request to "just check it" is refused.
+  A missing `.prd-toolkit/prd_judge.py` is an environment problem, not a test failure: its RESULTS
+  line is `<T-id>: fail: environment: .prd-toolkit/prd_judge.py is missing; run prd_hooks.py install`.
 - Run only the testing.md Levels harness commands, and only in a suite. Report RESULTS as one
   line per dispatched T-id: `<T-id>: pass`, `<T-id>: fail: <one line>` or
   `<T-id>: known-failing E-nnn`; anything else goes in a note after the lines.

@@ -48,6 +48,8 @@ describe('plugins data', () => {
     expect(prd.description).toContain('/prd-publish')
     expect(prd.description).toContain('/prd-change-set')
     expect(prd.description).toContain('links PRDs across repositories')
+    expect(prd.description).toContain('packs, languages and judged test cases')
+    expect(prd.description).not.toContain('across repositories, and packs')
     expect(prd.skills.map(k => k.name)).toContain('coordinating-prds')
     expect(prd.skills.map(k => k.name)).toContain('deploying-from-prds')
     expect(prd.skills.map(k => k.name)).toContain('building-from-prds')

@@ -14,9 +14,9 @@ harness:
   Browser identity: "Not applicable: no user interface to log in to"
   Persistent environments: "Not applicable: documents have no persistent environment"
   Leaks: "Not applicable: the documents hold no classified data"
-  Tools on the runner: "`uv` runs the tests and the outline validator; `claude` (Claude Code, signed in) runs the default grader of judged cases."
+  Tools on the runner: "`uv` runs the tests and the outline validator; `claude` (Claude Code, signed in) runs the default grader of judged cases; `.prd-toolkit/prd_judge.py` (written by `prd_hooks.py install`) runs every judged test."
   Layout: "Test roots: `tests/`"
-  Assertions: "A judged test asserts `prd_judge.py`'s exit code and nothing else."
+  Assertions: "A judged test asserts `prd_judge.py`'s exit code and nothing else. A checks test parses each document as CommonMark 0.31.2 after NFC normalization. A section is a level-2 heading whose text equals an entry of the document's `sections`, each entry heading exactly one section, and it runs to the next level-2 heading. Every other comparison of text is exact."
 standards:
   - object: "docs/**/*.md"
     linter: 'npx markdownlint-cli2 "docs/**/*.md"'

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Start state: D5's: scaffolds/doc_repo.py state `built` (FR-010 verified, docs/guide/install.md written), plus
 # a `demo` pack vendored in .prd-toolkit/packs/demo/ (a custom type `deck`, target kind `slides`), so the pack
-# the prompt names resolves and lists (the vendored prd_lint.py --list-packs lists .prd-toolkit/packs/) and the
+# the prompt names resolves and lists (the vendored prd_lint.py --list-packs lists .prd-toolkit/packs/, `demo` as
+# `source not recorded`, since it is copied by hand; the skill lists from the plugin and counts a vendored pack) and the
 # only reason to refuse is the built area. D5 used an installed plugin through PRD_PLUGINS_FILE instead; an
 # eval run cannot set the session's environment.
 set -euo pipefail

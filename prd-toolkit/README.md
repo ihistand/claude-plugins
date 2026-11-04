@@ -64,7 +64,7 @@ uv run --script prd-toolkit/scripts/prd_lint.py docs/prd/<slug> --sample-tids 3
 - Output is one line per violation: `<file>:<line>: <rule>: <message>`.
 - Exit 0 when clean, 1 on violations, 2 on usage, dependency or internal error.
 - Output is `<file>:<line>: warn: <rule>: <message>` for a warning (`platform-word`); the exit code counts errors only.
-- `--list-packs` prints one line per pack, `<name> <version> (<source>) — <description>`: the built-ins first, then the installed plugins' packs.
+- `--list-packs` prints one line per pack, `<name> <version> (<source>) — <description>`: the built-ins first, then the installed plugins' packs. Run from a vendored copy, `--list-packs` lists the packs vendored in `.prd-toolkit/packs/` in place of the built-ins, each with the source `.prd-toolkit/pack-sources.json` records, and a line on stderr says so; the skills always list from the plugin's own copy.
 - `--list-rules` prints the 40 rules and each one's severity. `--sample-tids N` prints up to N randomly chosen T-ids for the authoring
   dry run, one per line with the test-case file that holds it (`T-003.1 test-cases/nfr.yaml`), never a `level: unit` case; it exits 1 with `prd_lint: no non-unit T-ids to sample`
   when the PRD has none.
@@ -508,13 +508,15 @@ and optional rubric and clarify text, a grader and language tables. Two ship wit
 - **`service`** is the PRD of 0.7: an API, a database or events. It is the default, so a PRD that names no
   pack needs no edit.
 - **`document`** is a Markdown document written for people (a guide, a runbook, a policy): the `outline`
-  contract type, `checks` and `judged` levels, and no builder unit tests.
+  contract type, `checks` and `judged` levels, and no builder unit tests. Its checks read each document as
+  CommonMark 0.31.2 after NFC normalization, a section being a level-2 heading that equals a `sections`
+  entry; a PRD that wants another standard writes it in the Harness Assertions slot.
 
 A plugin adds a pack as `prd-packs/<name>/` in its install path. A PRD names its packs in §1 (`- Pack:
 <name> <X.Y.Z> (<source>)`, with `- Output language: <code>` when it differs from `language:`) and, for one
 area, in a `Target:` line of `features/<area>.md`. `prd_hooks.py install` vendors each named pack, and
-`service`, into `.prd-toolkit/packs/<name>/`, and the vendored copy is then the one lint reads; its version
-must equal the named one. `prd_lint.py --list-packs` lists what is installed, one `<name> <version> (<source>) — <description>` line per pack. A `Target:` line may also set an area's output language alone (`Target: output language pt-BR`). A pack's commands may use
+`service`, into `.prd-toolkit/packs/<name>/` and records each one's source in `.prd-toolkit/pack-sources.json`;
+the vendored copy is then the one lint reads, and its version must equal the named one. `prd_lint.py --list-packs` lists what is installed, one `<name> <version> (<source>) — <description>` line per pack. A `Target:` line may also set an area's output language alone (`Target: output language pt-BR`). A pack's commands may use
 `${PACK}` for its own folder. The format is `references/prd-format.md` ("Target profiles") and the manifest
 is `references/contract-types.md` ("pack"). Lint adds `pack-resolves` (a profile line or pack that does
 not resolve) and the warning `platform-word` (a word from the area's pack vocabulary in a requirement).
@@ -525,7 +527,7 @@ Frontmatter `language:` (default `en`) is the language of the PRD's prose. Lint 
 openers, ubiquitous form and vague words from a table, `references/languages/<code>.yaml` in the toolkit
 or `languages/<code>.yaml` in a pack the PRD names. `en` and `es` ship (`es` accepts `Cuando`, `Mientras`,
 `Si` and `Donde`, and `El/La/Los/Las <cosa> deberá`). `en` reproduces 0.7 exactly. A `language:` with no
-table is a `language-table` violation. Labels, IDs, YAML keys and headings stay English.
+table is a `language-table` violation. Field labels, IDs, YAML keys and headings stay English.
 
 ## Judged cases
 
@@ -545,7 +547,12 @@ tools in an empty temporary directory; a pack's `grader:` command replaces it. E
   can still flip between runs, and the record shows every run.
 - Each judged case costs `runs` model calls per suite run, and the runner needs Claude Code signed in (or a
   pack grader). A suite-mode tester that runs a judged level needs network access in its sandbox.
-- PRD languages are `en` and `es` unless a pack adds a table; labels stay English.
+- PRD languages are `en` and `es` unless a pack adds a table; field labels stay English.
+- An `es` NFR states its bound with an English unit for now (`200 ms`, `5 minutes`, not `5 minutos`):
+  units move to the language table in 0.8.1.
+- A headless `claude -p` run of the skills needs Bash permission rules for `echo` (every gate echoes its exit
+  code), `mktemp`, `GIT_INDEX_FILE=` and `sort` (the tester's state snapshot), and `--add-dir` for the user
+  temp directory (`$TMPDIR`), which the tester's snapshot writes to.
 - Documents are Markdown only; another format needs a pack.
 - Pack discovery reads `~/.claude/plugins/installed_plugins.json`, or the file named by the
   `PRD_PLUGINS_FILE` environment variable. A plugin loaded only with `claude --plugin-dir` is not in that
@@ -594,9 +601,10 @@ the user cannot state.
 ## Changelog
 
 - **0.8.0:** Packs, languages and judged test cases.
-  - Packs: the `pack.yaml` manifest, discovery from `.prd-toolkit/packs/`, the toolkit and installed plugins' `prd-packs/<name>/`, a version lock, and two built-in packs, `service` (0.7's behaviour) and `document` (Markdown documents, with the `outline` contract type). `prd_lint.py --list-packs` lists them. A PRD names a pack in §1 (`Pack:`, `Output language:`) and per area in a `Target:` line.
+  - Packs: the `pack.yaml` manifest, discovery from `.prd-toolkit/packs/`, the toolkit and installed plugins' `prd-packs/<name>/`, a version lock, and two built-in packs, `service` (0.7's behaviour) and `document` (Markdown documents, with the `outline` contract type). `prd_hooks.py install` records each vendored pack's source in `.prd-toolkit/pack-sources.json`. `prd_lint.py --list-packs` lists them. A PRD names a pack in §1 (`Pack:`, `Output language:`) and per area in a `Target:` line.
   - Languages: frontmatter `language:` with EARS and vague-word tables for `en` and `es`.
   - Judged cases: `rubric:` and `threshold:` in a test case, scored by `prd_judge.py` (median of runs, quote-checked, recorded in `.prd-judge/`).
+    `judged-case` also refuses a repeated rubric item and warns on a threshold below 1.0 that needs every item (2 of 3 items is 0.666…, so 0.67 needs all three).
   - Lint: severity `warn` (`<file>:<line>: warn: <rule>: <message>`; the exit code counts errors only) and four rules, `language-table`, `pack-resolves`, `judged-case` and the warning `platform-word` (40 in all). The authoring, building, testing and changing skills and the agents use packs, languages and judged cases.
   - The lint command's output changes. `--list-rules` now prints `<name> <severity>` on each line (0.7 printed names only), so anything that parses it must change. `prd_lint.py --list-packs` lists the packs, built-ins first. The usage line is one line whatever the terminal width. The toolkit's own PRD (`docs/prd/prd-toolkit`) is at 2.0.0, with `lint-cli` FR-001, FR-003, FR-004 and the new FR-013 verified.
   - Upgrading from 0.7: re-run `prd_hooks.py install`, which vendors the 0.8.0 scripts and the `service` pack into `.prd-toolkit/` and adds `.prd-judge/` to `.gitignore`. A PRD that adds `language:`, a `Pack:`, `Output language:` or `Target:` line takes a patch bump with the §14 row `format: target profiles (prd-toolkit 0.8)`. No 0.7 PRD needs an edit.

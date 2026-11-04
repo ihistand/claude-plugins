@@ -22,8 +22,11 @@ ERRORS = SKILLS / "handling-errors/SKILL.md"
 
 # --list-packs echoes its own tag (R26): `prd-lint-exit=0` belongs to a lint of the PRD folder, and graders read it
 GATE = '; echo "prd-list-packs-exit=$?"'
-LIST_PACKS = "uv run --script <scripts>/prd_lint.py --list-packs" + GATE
-LIST_PACKS_VENDORED = "uv run --script .prd-toolkit/prd_lint.py --list-packs" + GATE
+# --list-packs always runs from the plugin's own scripts (final review 1a): a vendored copy lists only what it vendored
+LIST_PACKS = "uv run --script <plugin scripts>/prd_lint.py --list-packs" + GATE
+PLUGIN_SCRIPTS = ("`<plugin scripts>` is the plugin's own `scripts` directory as a literal absolute path, even in a "
+                  "repository that has `.prd-toolkit/`: `--list-packs` lists what is on this machine and is not a gate, "
+                  "and a vendored copy lists only the packs it vendored")
 JUDGE = "uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>"
 REFUSAL = "retargeting an area is a conversion (prd-toolkit 0.8.3)"
 
@@ -54,7 +57,7 @@ def phase_row(n: int) -> str:
 def test_authoring_phase_1_lists_packs_as_one_bash_call():
     row = phase_row(1)
     assert f"`{LIST_PACKS}`" in row and "its own Bash call" in row
-    assert f"`{LIST_PACKS_VENDORED}`" in flat(AUTHORING)  # the vendored form, in a repository that has one
+    assert PLUGIN_SCRIPTS in row
     assert "`<name> <version> (<source>) — <description>`" in row
 
 
@@ -132,7 +135,7 @@ def test_authoring_dry_run_may_sample_judged_tids():
 def test_adopting_proposes_a_pack_from_the_boundary():
     s = flat(ADOPTING)
     assert "propose a pack from the area's Boundary files" in s
-    assert f"`{LIST_PACKS}`" in s
+    assert f"`{LIST_PACKS}`" in s and PLUGIN_SCRIPTS in s
     assert "write the area's `Target:` line on the user's confirmation" in s
     assert "`Target: pack <name> <X.Y.Z> (<source>)[, output language <code>]`" in s
 
@@ -220,8 +223,9 @@ def test_builder_agent_fallback_states_the_exception():
 
 def test_changing_lists_packs_before_calling_one_missing():
     s = section(CHANGING, "## Packs and retargeting")
-    assert f"`{LIST_PACKS}`" in s and "its own Bash call" in s
+    assert f"`{LIST_PACKS}`" in s and "its own Bash call" in s and PLUGIN_SCRIPTS in s
     assert "Before you say a pack is missing" in s
+    assert "So does a pack vendored in `.prd-toolkit/packs/<name>/` (its `pack.yaml`), which lint reads before any other copy." in s
 
 
 def test_changing_refuses_a_retarget_verbatim():
@@ -257,6 +261,15 @@ def test_no_list_packs_command_echoes_the_lint_tag():
     assert lines, "no --list-packs command found"
     for name, line in lines:
         assert 'echo "prd-list-packs-exit=$?"' in line and "prd-lint-exit" not in line, (name, line)
+
+
+def test_list_packs_never_runs_the_vendored_copy():
+    """Final review 1a: the vendored prd_lint.py lists only .prd-toolkit/packs/, so `document` goes missing there."""
+    files = sorted(SKILLS.glob("*/*.md")) + sorted((ROOT / "agents").glob("*.md"))
+    lines = [(p.name, line) for p in files for line in p.read_text(encoding="utf-8").splitlines() if "--list-packs;" in line]
+    for name, line in lines:
+        assert "<plugin scripts>/prd_lint.py --list-packs" in line, (name, line)
+        assert ".prd-toolkit/prd_lint.py --list-packs" not in line and "<scripts>/prd_lint.py --list-packs" not in line, (name, line)
 
 
 def test_builder_finds_the_manifest_in_the_three_places():

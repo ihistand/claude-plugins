@@ -47,7 +47,8 @@ nothing below.
 7. **Exact classes.** `code bug`, `spec gap`, `invalid requirement`, `environment` or
    `standard`, in quotes. `code-bug` is a usage error. A `prd_judge.py` exit 2 (a judged case that
    could not be judged: `claude` missing or signed out, two bad grader answers, or the reason its
-   hint names) is proposed as `environment`; its exit 1 is a judged case failing its threshold, a
+   hint names) is proposed as `environment`, and so is a judged test that finds no
+   `.prd-toolkit/prd_judge.py`; its exit 1 is a judged case failing its threshold, a
    failing test like any other.
 8. **Evidence is a file of at most 20 lines** passed as `--evidence-file`: never a secret or a
    value classified `confidential` or `pii`, and never a code fence (it breaks the ledger).
