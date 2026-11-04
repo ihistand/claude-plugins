@@ -5,7 +5,7 @@
 > **Status:** Approved by the owner 2026-11-03
 > **Extends:** `2026-10-29-prd-toolkit-design.md` (the base spec) and the 0.2 to 0.7 addenda
 > (`2026-11-02-prd-toolkit-0.7-design.md` last).
-> **Governs:** the 0.8.0, 0.8.1, 0.8.2 and 0.8.3 specs. Each sub-release has its own spec, plan, build and
+> **Governs:** the 0.8.0, 0.8.1, 0.8.2, 0.8.3 and 0.8.4 specs. Each sub-release has its own spec, plan, build and
 > acceptance record; where one of them and this note disagree, the sub-release spec wins for that
 > release and records the change in its Revisions note.
 
@@ -13,6 +13,9 @@
 > - §4 (owner, 2026-11-03): a machine interface for clients other than Claude Code (JSON output, change
 >   bookkeeping as a script, one way to list and answer pending human decisions) is inserted as 0.8.1.
 >   Best practices move to 0.8.2 and conversion to 0.8.3; their content is unchanged.
+> - §4 (owner, 2026-11-04): a local decision inbox over 0.8.1's gates is inserted as 0.8.2
+>   (`2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md`). Best practices move to 0.8.3 and
+>   conversion to 0.8.4; their content is unchanged.
 
 ## 1. Why
 
@@ -75,12 +78,14 @@ Every sub-release keeps these:
 |---|---|---|
 | **0.8.0** | Target profiles and packs (manifest, discovery, vendoring, lock); built-in `service` and `document` packs; `language:` with EARS and vague-word tables for `en` and `es`; output language; the `judged` case and `prd_judge.py`; lint severity `warn` and the `platform-word` rule | — |
 | **0.8.1** | The machine interface: `--json` on lint, trace and context (status has it); `prd_change.py` (`ids`, `bump`, `record`, `approve`), the change bookkeeping moved out of skill text; `prd_gates.py` (`list`, `answer`) over every pending human decision; a review mode of `changing-prds` that edits nothing and prints one JSON verdict; `interface: 1` in every JSON document | 0.8.0 |
-| **0.8.2** | Best-practice sources: found by Claude and approved by the user, or added by the user; recorded per pack or per PRD; turned into §5 rows or checklist items. Finding, installing or writing a skill or a pack when a PRD needs one, recorded in §6 | 0.8.0 |
-| **0.8.3** | Conversion: retarget an area or a whole PRD to another pack, with the `platform-word` findings as the worklist, contracts and Harness rebuilt, T-ids kept, and the old platform running until the new one is `verified` | 0.8.0, 0.8.2 |
+| **0.8.2** | The decision inbox: `prd_gates.py serve` and `wait`, one local page that lists every pending gate of a PRD across its worktrees and answers each through `answer_gate()`, with the 0.7.1 adoption panel as one of its cards | 0.8.1 |
+| **0.8.3** | Best-practice sources: found by Claude and approved by the user, or added by the user; recorded per pack or per PRD; turned into §5 rows or checklist items. Finding, installing or writing a skill or a pack when a PRD needs one, recorded in §6 | 0.8.0 |
+| **0.8.4** | Conversion: retarget an area or a whole PRD to another pack, with the `platform-word` findings as the worklist, contracts and Harness rebuilt, T-ids kept, and the old platform running until the new one is `verified` | 0.8.0, 0.8.3 |
 
 Spec for 0.8.0: `2026-11-03-prd-toolkit-0.8.0-design.md`. Spec for 0.8.1:
-`2026-11-03-prd-toolkit-0.8.1-design.md`. The 0.8.2 and 0.8.3 specs are written when their turn comes,
-each through its own brainstorm.
+`2026-11-03-prd-toolkit-0.8.1-design.md`. Spec for 0.8.2:
+`2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md`. The 0.8.3 and 0.8.4 specs are written when
+their turn comes, each through its own brainstorm.
 
 ## 5. Related work
 
