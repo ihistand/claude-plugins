@@ -258,7 +258,7 @@ def test_link_parts_say_none_on_a_plain_prd(items):
 def test_areas_part_lists_each_areas_profile(prd_repo, cli, tmp_path):
     code, out, _ = cli(prd_repo / "docs/prd/orders")
     areas = out.split("## Areas\n\n", 1)[1].split("\n\n", 1)[0].splitlines()
-    assert "import: pack service default, output language en" in areas and len(areas) == 2
+    assert "import: pack service (default), output language en" in areas and len(areas) == 2
 
 
 def test_areas_part_names_a_document_pack(tmp_path, cli, monkeypatch):

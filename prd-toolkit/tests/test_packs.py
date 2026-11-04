@@ -311,7 +311,8 @@ def test_toolkit_range_excludes_this_toolkit(prd, tmp_path, monkeypatch):
     ({"harness": {"Lunch": "x"}}, "harness", "pack demo: pack.yaml: harness: 'Lunch' is not a Harness slot"),
     ({"builder_tests": "some"}, "builder-tests", "pack demo: pack.yaml: builder-tests must be unit or none"),
     ({"pack": "other"}, "pack", "pack demo: pack.yaml: pack must equal the folder name demo"),
-    ({"toolkit": "about 0.8"}, "toolkit", "pack demo: pack.yaml: toolkit must be a version range such as >=0.8.0,<0.9"),
+    ({"toolkit": "about 0.8"}, "toolkit", "pack demo: pack.yaml: toolkit must be a version range such as >=0.8.0,<0.9: "
+     "comma-separated clauses of >=, >, <=, <, == or != and a version X, X.Y or X.Y.Z"),
     ({"colour": "blue"}, "colour", "pack demo: pack.yaml: unknown key colour"),
     ({"contract_types": [{"type": "outline"}]}, "contract-types", "pack demo: pack.yaml: contract-types[0] must be a mapping with type, files and validator"),
     ({"target_kinds": {"doc": "outline"}}, "target-kinds", "pack demo: pack.yaml: target-kinds: doc maps to outline, not a contract type of this pack"),

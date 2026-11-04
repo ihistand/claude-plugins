@@ -176,3 +176,87 @@ def test_broken_es_table_is_named_and_unknown_fr_keeps_its_message(tmp_path, ven
     found = _findings(document_prd(tmp_path / "a", language="es"))
     assert [f.rule for f in found] == ["language-table"] and found[0].message.startswith(f"language table {vendored_scripts / 'languages/es.yaml'}: ")
     assert [f.message for f in _findings(document_prd(tmp_path / "b", language="fr"))] == ["language 'fr' has no table"]
+
+
+# --- final review 1b: the vendored copy records each pack's source, and lists it -------------------------------------
+
+def _vendored_list(repo, tmp_path):
+    return subprocess.run([sys.executable, "-B", str(repo / ".prd-toolkit/prd_lint.py"), "--list-packs"], cwd=repo,
+                          capture_output=True, text=True, encoding="utf-8",
+                          env={**os.environ, "PRD_PLUGINS_FILE": str(tmp_path / "none.json")})
+
+
+def test_install_records_each_pack_source(repo, tmp_path, monkeypatch):
+    hooks.install(repo, PRD)
+    sources = repo / ".prd-toolkit/pack-sources.json"
+    assert json.loads(sources.read_text()) == {"document": "prd-toolkit", "service": "prd-toolkit"}
+    with_demo(repo, tmp_path, monkeypatch)
+    hooks.install(repo, PRD)
+    assert json.loads(sources.read_text()) == {"demo": "demo@market", "service": "prd-toolkit"}
+    assert hooks.check(repo, PLUGIN_ROOT, model.load(repo / PRD), PRD) == []
+
+
+def test_vendored_list_prints_the_true_source_and_says_vendored(repo, tmp_path, monkeypatch):
+    with_demo(repo, tmp_path, monkeypatch)
+    hooks.install(repo, PRD)
+    service = packs.load_manifest(PACKS_DIR / "service", "prd-toolkit")
+    r = _vendored_list(repo, tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == ["demo 1.0.0 (demo@market) — one", f"service 1.0.0 (prd-toolkit) — {service.description}"]
+    assert r.stderr == ("prd_lint: listed from the vendored copy: demo and service are vendored in .prd-toolkit/packs/, "
+                        "each with the source it was vendored from; the plugin's own scripts/prd_lint.py --list-packs "
+                        "lists every pack on this machine\n")
+
+
+def test_vendored_list_carries_the_builtins_it_vendored(repo, tmp_path):
+    hooks.install(repo, PRD)
+    r = _vendored_list(repo, tmp_path)
+    assert [line.split(" — ")[0] for line in r.stdout.splitlines()] == ["document 1.0.0 (prd-toolkit)", "service 1.0.0 (prd-toolkit)"]
+    assert "document and service are vendored" in r.stderr
+
+
+def test_vendored_list_without_a_source_record_says_so(repo, tmp_path):
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/pack-sources.json").unlink()
+    r = _vendored_list(repo, tmp_path)
+    assert [line.split(" — ")[0] for line in r.stdout.splitlines()] == ["document 1.0.0 (source not recorded)",
+                                                                         "service 1.0.0 (source not recorded)"]
+
+
+def test_check_reports_a_missing_or_wrong_source_record(repo, tmp_path, monkeypatch):
+    with_demo(repo, tmp_path, monkeypatch)
+    hooks.install(repo, PRD)
+    sources = repo / ".prd-toolkit/pack-sources.json"
+    sources.write_text(json.dumps({"demo": "demo@elsewhere", "service": "prd-toolkit"}))
+    out = hooks.check(repo, PLUGIN_ROOT, model.load(repo / PRD), PRD)
+    assert out == ["packs/demo: vendored from demo@elsewhere, the PRD names demo@market; run prd_hooks.py install"]
+    sources.unlink()
+    out = hooks.check(repo, PLUGIN_ROOT, model.load(repo / PRD), PRD)
+    assert out == [f"packs/{n}: vendored from an unrecorded source, the PRD names {s}; run prd_hooks.py install"
+                   for n, s in (("demo", "demo@market"), ("service", "prd-toolkit"))]
+
+
+def test_vendored_pack_folder_without_a_manifest_is_broken(repo, tmp_path, monkeypatch):
+    """Final review minor: a vendored folder with no pack.yaml never falls through to another copy."""
+    hooks.install(repo, PRD)
+    (repo / ".prd-toolkit/packs/document/pack.yaml").unlink()
+    with pytest.raises(packs.ManifestError) as e:
+        packs.resolve(model.PackRef("document", "1.0.0", "prd-toolkit", "prd.md", 1), repo)
+    assert str(e.value) == "vendored document has no pack.yaml; run prd_hooks.py install"
+    found = [f for f in registry_run(repo / PRD) if f.rule == "pack-resolves"]
+    assert [f.message for f in found] == ["vendored document has no pack.yaml; run prd_hooks.py install"]
+
+
+def registry_run(root):
+    from prdlint import registry
+    return registry.run(model.load(root))
+
+
+def test_vendored_list_with_no_vendored_pack(repo, tmp_path):
+    """A copy vendored by 0.7 has no packs/: the listing says so and still exits 0."""
+    hooks.install(repo, PRD)
+    shutil.rmtree(repo / ".prd-toolkit/packs")
+    r = _vendored_list(repo, tmp_path)
+    assert r.returncode == 0 and r.stdout == ""
+    assert r.stderr == ("prd_lint: listed from the vendored copy: no pack is vendored in .prd-toolkit/packs/; the plugin's own "
+                        "scripts/prd_lint.py --list-packs lists every pack on this machine\n")

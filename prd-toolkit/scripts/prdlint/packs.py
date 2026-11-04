@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from . import languages
-from .hooks import PLUGIN_ROOT, SCRIPTS, VENDOR_DIR, is_plugin, plugin_version
+from .hooks import PACKS_DIR, PLUGIN_ROOT, SCRIPTS, VENDOR_DIR, is_plugin, plugin_version, vendored_sources
 from .model import PackRef, Prd, repo_root
 from .yamlload import load_yaml
 
 MANIFEST = "pack.yaml"
 PLUGIN_PACKS = "prd-packs"  # <installPath>/prd-packs/<name>/ in an installed plugin
 BUILT_IN = "prd-toolkit"  # the source of a built-in pack
+UNRECORDED = "source not recorded"  # a vendored pack with no pack-sources.json entry (vendored before the record)
 SERVICE_DEFAULT = PackRef("service", None, BUILT_IN, "", 0)  # no Pack: line; not locked
 KEYS = ("pack", "version", "toolkit", "description", "contract-types", "target-kinds", "levels", "harness", "standards",
         "skills", "vocabulary", "builder-tests", "rubrics", "clarify", "grader", "languages")
@@ -239,7 +240,8 @@ def load_manifest(folder: Path, source: str) -> Pack:
     except ValueError:
         fits = None
     if fits is None or not isinstance(toolkit, str):
-        bad("toolkit", "toolkit must be a version range such as >=0.8.0,<0.9")
+        bad("toolkit", "toolkit must be a version range such as >=0.8.0,<0.9: "
+                       "comma-separated clauses of >=, >, <=, <, == or != and a version X, X.Y or X.Y.Z")
     if not fits:
         raise ManifestError("toolkit", f"pack {name} needs toolkit {toolkit}; this is {have}")
     if name != "service" and any(ct["validator"] == "built-in" for ct in data.get("contract-types") or []):
@@ -276,6 +278,8 @@ def resolve(ref: PackRef, repo_root: Path, vendored: bool = True) -> Pack:
             if ref.version is not None and have != ref.version:
                 raise PackMismatch(ref.name, have or "(no version)", ref.version)
             return load_manifest(vend, ref.source)
+        if vend.is_dir():  # a vendored folder that lost its manifest never falls through to another copy
+            raise ManifestError(MANIFEST, f"vendored {ref.name} has no {MANIFEST}; run prd_hooks.py install")
         looked.append(f"{vend}/")
     if ref.source == BUILT_IN:
         bases, missing = [toolkit_packs_dir()], None
@@ -368,7 +372,9 @@ def expand(cmd: str, pack: Pack) -> list[str]:
 
 def discover() -> list[Pack]:
     """Every pack on this machine: the toolkit's own, then each installed plugin's prd-packs/, in installed_plugins.json
-    order. A pack.yaml that fails its checks is skipped with a note on stderr."""
+    order. A pack.yaml that fails its checks is skipped with a note on stderr. Run from a vendored copy, the toolkit's
+    own packs are the ones vendored in .prd-toolkit/packs/, each with the source pack-sources.json records for it, and a
+    note on stderr says so."""
     out: list[Pack] = []
     seen: set[tuple] = set()
 
@@ -382,8 +388,20 @@ def discover() -> list[Pack]:
             seen.add((pack.name, pack.version, pack.source))
             out.append(pack)
 
+    vendored = not is_plugin()
+    recorded = vendored_sources(SCRIPTS) if vendored else {}
     for f in sorted(toolkit_packs_dir().glob(f"*/{MANIFEST}")):
-        add(f.parent, BUILT_IN)
+        add(f.parent, recorded.get(f.parent.name, UNRECORDED) if vendored else BUILT_IN)
+    if vendored:
+        names = [p.name for p in out]
+        if names:
+            listed = ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
+            what = (f"{listed} {'are' if len(names) > 1 else 'is'} vendored in {VENDOR_DIR}/{PACKS_DIR}/, "
+                    "each with the source it was vendored from")
+        else:
+            what = f"no pack is vendored in {VENDOR_DIR}/{PACKS_DIR}/"
+        print(f"prd_lint: listed from the vendored copy: {what}; the plugin's own scripts/prd_lint.py --list-packs "
+              "lists every pack on this machine", file=sys.stderr)
     for key, installs in installed_plugins().items():
         for p in _install_paths(installs):
             for f in sorted((p / PLUGIN_PACKS).glob(f"*/{MANIFEST}")):
