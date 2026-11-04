@@ -109,7 +109,7 @@ This task is run by the controller session with the installed prd-toolkit 0.8.0 
   - Expected edits:
     - a new FR-014 with ACs for the document shape, the exit-2 document, `--json=N` and `--interface`;
     - AC-001.1 scoped to a run without `--json`;
-    - AC-004.1 and AC-004.3 with the new one-line usage `usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json [N]] [--interface] [prd_dir]` (take the exact string from argparse after Task 3's flags, `_OneLineUsage` kept);
+    - AC-004.1 and AC-004.3 with the new one-line usage `usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json] [--interface] [prd_dir]` (ledger R1 revised: `--json` is a plain flag; landed in PRD 3.0.0 at 2e51d65);
     - T-004.1 and T-004.3, and `contracts/cli.yaml`'s `invocation` and `usage`;
     - `prd-toolkit/scripts/prdlint/interface.py` added to the lint-cli Boundary.
   - The usage literal changes an AC, so the bump is **major**: 2.1.0 → 3.0.0, with a §14 row naming every changed ID.
