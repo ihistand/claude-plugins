@@ -186,7 +186,7 @@ def test_approval_approve_commits_with_the_reply_verbatim(recorded):
     assert code == 0, err
     assert doc_of(out)["result"]["exit"] == 0
     body = git_out(recorded, "log", "-1", "--format=%B")
-    assert f'Reply: "{REPLY}"' in body or REPLY.strip() in body
+    assert f'Reply: "{REPLY}"\nDry run: {DRY}\n' in body
     assert DRY in body
     assert not (recorded / PRD / ".prd-review.json").exists()
 
@@ -303,17 +303,72 @@ def test_text_mode_prints_the_owners_stdout_and_exits_with_its_code(repo):
     add_errors(repo, entry(3, "code bug"))
     code, out, err = answer(repo / PRD, "error-class:E-003", "yes")
     assert code == 0 and out.strip() and err == ""
-    code, out, err = answer(repo / PRD, "deploy-step:nope:1", "yes")
+
+
+def test_a_gone_gate_exits_1_in_text_mode(repo):
+    assert answer(repo / PRD, "deploy-step:nope:1", "yes")[0] == 1
+
+
+def test_an_owner_refusal_exits_1_with_its_stderr_in_text_and_json_mode(tmp_path):
+    repo, prd, p, items = adopt(tmp_path)  # a live gate, items open: prd_confirm.py done refuses
+    code, out, err = answer(prd, "adoption:notes", "all settled", "--choice", "done")
+    assert code == 1 and out == "" and err.startswith("refused:") and "open" in err
+    code, out, err = answer(prd, "adoption:notes", "all settled", "--choice", "done", "--json")
     assert code == 1
+    doc = doc_of(out)
+    assert doc["gate"] == "adoption:notes" and doc["result"]["exit"] == 1 and doc["result"]["stdout"] == []
+    assert doc["result"]["stderr"][0].startswith("refused:")
+    assert "adoption:notes" in by_id(listed(prd))  # nothing was written
 
 
-def test_an_owner_refusal_exits_1(repo):
+# --- --question ---
+
+def test_question_is_optional_and_a_mismatch_refuses(repo):
+    add_errors(repo, entry(3, "code bug"), entry(4, "code bug"))
+    q = by_id(listed(repo / PRD))["error-class:E-004"]["question"]
+    assert answer(repo / PRD, "error-class:E-003", "yes")[0] == 0  # omitted: accepted
+    assert answer(repo / PRD, "error-class:E-004", "yes", f"--question={q}")[0] == 0  # matching: accepted
+    add_errors(repo, entry(5, "spec gap"))
+    refuse(repo / PRD, "error-class:E-005", "yes", f"--question={q}")  # E-004's question is not E-005's
+    assert "error-class:E-005" in by_id(listed(repo / PRD))
+
+
+# --- flags that do not apply, NUL ---
+
+def test_a_flag_that_does_not_apply_to_the_kind_is_refused(repo):
     add_errors(repo, entry(3, "code bug"))
-    # the entry is confirmed behind the gate's back: the owner refuses ("already confirmed") for a gate that was listed
-    from prdlint import gates
-    orig = gates.list_gates
-    listing = orig(model.load(repo / PRD), repo)
-    assert any(g.id == "error-class:E-003" for g in listing)
-    assert answer(repo / PRD, "error-class:E-003", "first")[0] == 0
-    code, out, err = answer(repo / PRD, "error-class:E-003", "second", "--json")
-    assert code == 1  # gone: refused by gates itself
+    before = snapshot(repo)
+    refuse(repo / PRD, "error-class:E-003", "yes", "--result", "pass", why="refused: --result does not apply to error-class")
+    refuse(repo / PRD, "error-class:E-003", "yes", "--item", "X", why="refused: --item does not apply to error-class")
+    run_id = human_stop(repo)
+    refuse(repo / PRD, f"deploy-step:{run_id}:3", "yes", "--item", "X", why="refused: --item does not apply to deploy-step")
+    refuse(repo / PRD, f"deploy-step:{run_id}:3", "yes", "--class", "spec gap", why="refused: --class does not apply to deploy-step")
+    assert {k: v for k, v in snapshot(repo).items() if "deploys" not in k} == {k: v for k, v in before.items() if "deploys" not in k}
+
+
+def test_a_nul_in_the_reply_correction_or_question_is_refused(repo):
+    add_errors(repo, entry(3, "code bug"))
+    before = snapshot(repo)
+    refuse(repo / PRD, "error-class:E-003", "ye\x00s", why="refused: --reply holds a NUL character")
+    refuse(repo / PRD, "error-class:E-003", "yes", "--question=a\x00b", why="refused: --question holds a NUL character")
+    refuse(repo / PRD, "adoption:notes", "yes", "--correction=a\x00b", why="refused: --correction holds a NUL character")
+    assert snapshot(repo) == before
+
+
+# --- file mode and line endings ---
+
+def test_signoff_keeps_the_mode_and_crlf_of_testing_md(repo):
+    testing = drop_signoff(repo)
+    testing.write_bytes(testing.read_bytes().replace(b"\n", b"\r\n"))
+    testing.chmod(0o640)
+    assert answer(repo / PRD, "signoff:T-001.4", "ok", "--result", "pass")[0] == 0
+    data = testing.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n") and b"| pass |\r\n" in data
+    assert testing.stat().st_mode & 0o777 == 0o640
+
+
+def test_changes_keeps_the_mode_of_the_verdict(recorded):
+    v = recorded / PRD / ".prd-review.json"
+    v.chmod(0o640)
+    assert answer(recorded / PRD, f"approval:{branch(recorded)}", "not yet", "--choice", "changes")[0] == 0
+    assert v.stat().st_mode & 0o777 == 0o640

@@ -46,7 +46,7 @@ def _build() -> argparse.ArgumentParser:
     ans.add_argument("--result", help="signoff: the result, required; --choice, when given, must equal it")
     ans.add_argument("--item", help="adoption: the item the decision answers")
     ans.add_argument("--correction", help="adoption: the corrected text")
-    ans.add_argument("--question", help="the question the client showed; a gate whose question differs is refused")
+    ans.add_argument("--question", help="the question the client showed; a gate whose question differs is refused. Omitting it skips that check (only a gone gate is refused): clients should pass the question they showed")
     _flags(ans, leaf=True)
     return parser
 

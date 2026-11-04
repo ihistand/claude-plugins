@@ -3,6 +3,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -215,6 +216,8 @@ def _atomic_write(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             f.write(text)
+        if path.exists():
+            shutil.copymode(path, tmp)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -293,7 +296,11 @@ def _answer_signoff(prd: Prd, gate: Gate, reply: str, choice: str | None, result
     case = next(tc for tc in prd.test_cases if tc.id == tid)
     row = f"| {tid} | {case.data.get('signoff')} | {datetime.date.today().isoformat()} | {result} |"
     path = Path(prd.root) / "testing.md"
-    _atomic_write(path, _with_signoff_row(path.read_text(encoding="utf-8"), tid, row))
+    with path.open(encoding="utf-8", newline="") as f:  # newline="" keeps CRLF as it is
+        raw = f.read()
+    eol = "\r\n" if "\r\n" in raw else "\n"
+    text = _with_signoff_row(raw.replace("\r\n", "\n"), tid, row)
+    _atomic_write(path, text.replace("\n", eol) if eol != "\n" else text)
     return {"stdout": [row], "exit": 0}
 
 
@@ -318,6 +325,12 @@ def _with_signoff_row(text: str, tid: str, row: str) -> str:
     return "\n".join(lines)
 
 
+# the optional flags each kind takes (`--question` and the reply apply to all)
+FLAGS = {"approval": {"choice"}, "error-class": {"choice", "cls"}, "deploy-step": {"choice"},
+         "adoption": {"choice", "item", "correction"}, "signoff": {"choice", "result"}}
+FLAG_NAMES = {"choice": "--choice", "cls": "--class", "result": "--result", "item": "--item", "correction": "--correction"}
+
+
 ANSWERERS = {"approval": _answer_approval, "error-class": _answer_error_class, "deploy-step": _answer_deploy_step,
              "adoption": _answer_adoption, "signoff": _answer_signoff}
 
@@ -327,8 +340,16 @@ def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | No
     """Pass one reply for one gate to its owner: `{gate, result}`, `result` being the owner's `{stdout, exit}`. Raises Refused."""
     if not isinstance(reply, str) or not reply.strip():
         raise Refused("the reply is empty")
+    for name, value in (("reply", reply), ("correction", correction), ("question", question), ("choice", choice), ("class", cls),
+                        ("result", result), ("item", item)):
+        if value is not None and "\x00" in value:
+            raise Refused(f"--{name} holds a NUL character")
     gate = next((g for g in list_gates(prd, repo_root) if g.id == gate_id), None)
     if gate is None or (question is not None and gate.question != question):
         raise Refused(REFUSED_CHANGED)
+    given = {"choice": choice, "cls": cls, "result": result, "item": item, "correction": correction}
+    for key, value in given.items():
+        if value is not None and key not in FLAGS[gate.kind]:
+            raise Refused(f"{FLAG_NAMES[key]} does not apply to {gate.kind}")
     out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
     return {"gate": gate.id, "result": out}
