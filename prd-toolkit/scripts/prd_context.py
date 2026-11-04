@@ -15,7 +15,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import context, model  # noqa: E402
+from prdlint import context, interface, model  # noqa: E402
 
 
 def _display_root(root: Path) -> str:
@@ -27,17 +27,28 @@ def _display_root(root: Path) -> str:
 
 
 def main(argv: list[str]) -> int:
+    return interface.run(_main, "context", argv)
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_context.py", description="Print the context pack a task needs from a PRD.")
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--area", help="the area slug (features/<area>.md); omit for the repo pack")
     parser.add_argument("--req", metavar="ID[,ID...]", help="only these UJ, FR or NFR blocks, plus the UJs they trace; an E-nnn adds its errors.md entry and the blocks it reaches")
     parser.add_argument("--for", dest="mode", choices=context.MODES, default="decide")
     parser.add_argument("--context", type=int, default=20, metavar="N", help="code lines either side of a Source line (implement)")
-    parser.add_argument("--json", action="store_true", help="print the items as JSON")
+    interface.add_flags(parser)
     try:
         args = parser.parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else 2
+    if args.interface:
+        print(interface.INTERFACE)
+        return 0
+    bad = interface.check_version(args.json)
+    if bad:
+        print(f"prd_context: {bad}", file=sys.stderr)
+        return 2
     if not args.prd_dir:
         parser.print_usage(sys.stderr)
         return 2
@@ -55,7 +66,7 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_context: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
-    sys.stdout.write(context.render_json(items) if args.json else context.render_text(items))
+    sys.stdout.write(context.render_document(prd, args.area, req, args.mode, items) if args.json else context.render_text(items))
     return 1 if any(i.stale for i in items) else 0
 
 

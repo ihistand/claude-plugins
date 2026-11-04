@@ -76,7 +76,9 @@ def test_size_line_matches_the_bytes(ctx):
 def test_json_matches_text_and_runs_are_identical(ctx):
     _, text, _ = pack(ctx, "--area", "api")
     _, js, _ = pack(ctx, "--area", "api", "--json")
-    items = json.loads(js)
+    doc = json.loads(js)
+    assert list(doc)[:2] == ["interface", "kind"] and doc["kind"] == "context"
+    items = [{"part" if k == "title" else k: v for k, v in p.items()} for p in doc["parts"]]
     assert all(set(i) == {"part", "id", "file", "line", "text", "stale"} for i in items)
     # the same items in the same order: the JSON re-renders to the text pack byte for byte
     assert render_text([Item(**i) for i in items]) == text

@@ -446,3 +446,10 @@ def render_text(items: list[Item]) -> str:
 
 def render_json(items: list[Item]) -> str:
     return json.dumps([asdict(i) for i in items], indent=2, ensure_ascii=False) + "\n"
+
+
+def render_document(prd: Prd, area: str | None, req: list[str] | None, mode: str, items: list[Item]) -> str:
+    from . import interface
+    fm = prd.frontmatter
+    parts = [{"title": i.part, "id": i.id, "file": i.file, "line": i.line, "text": i.text, "stale": i.stale} for i in items]
+    return interface.dump("context", {"prd": fm.get("prd"), "mode": mode, "area": area, "ids": list(req or []), "parts": parts})

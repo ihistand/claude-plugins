@@ -15,7 +15,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import model, status  # noqa: E402
+from prdlint import interface, model, status  # noqa: E402
 
 
 def _display_root(root: Path) -> str:
@@ -27,13 +27,24 @@ def _display_root(root: Path) -> str:
 
 
 def main(argv: list[str]) -> int:
+    return interface.run(_main, "status", argv)
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_status.py", description="Print the status report of a PRD.")
     parser.add_argument("prd_dir", nargs="?")
-    parser.add_argument("--json", action="store_true", help="print the rows as JSON")
+    interface.add_flags(parser)
     try:
         args = parser.parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else 2
+    if args.interface:
+        print(interface.INTERFACE)
+        return 0
+    bad = interface.check_version(args.json)
+    if bad:
+        print(f"prd_status: {bad}", file=sys.stderr)
+        return 2
     if not args.prd_dir:
         parser.print_usage(sys.stderr)
         return 2
@@ -49,7 +60,7 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_status: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
-    sys.stdout.write(status.render_json(items) if args.json else status.render_text(items))
+    sys.stdout.write(status.render_document(prd, items) if args.json else status.render_text(items))
     return 0
 
 
