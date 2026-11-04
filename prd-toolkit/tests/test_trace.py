@@ -132,6 +132,40 @@ def test_commit_outside_boundary_needs_no_refs(tmp_path):
     assert trace_rules(prd, "HEAD~1..HEAD") == []
 
 
+def _touch(repo: Path, message: str) -> None:
+    app = repo / "src/notes/app.py"
+    app.write_text("# touched\n" + app.read_text(), encoding="utf-8")
+    commit(repo, message, "src")
+
+
+def test_commit_made_before_the_adoption_map_was_committed_is_not_judged(tmp_path):
+    """A commit is judged by the adoption map in its own tree: before adoption.md was committed no Boundary held."""
+    prd = build(tmp_path)
+    repo = prd.parents[2]
+    _touch(repo, "Before the PRD\n\nRefs: none")  # bad trailer, but no Boundary yet
+    commit(repo, "Adopt notes\n\nRefs: none (no behaviour change)", "docs")
+    _touch(repo, "After the PRD\n\nRefs: none")
+    got = [x.message for x in trace_rules(prd, "HEAD~3..HEAD") if x.rule == "commit-refs"]
+    assert len(got) == 1 and got[0].startswith(f"commit {_sha(repo, 'HEAD')[:8]} touches src/notes/app.py")
+
+
+def test_commit_made_while_its_area_was_not_yet_adopted_is_not_judged(tmp_path):
+    prd = build(tmp_path, adoption="| notes | extracted | `src/**` |")
+    repo = prd.parents[2]
+    commit(repo, "Extract notes\n\nRefs: none (no behaviour change)", "docs")
+    _touch(repo, "While extracted\n\nRefs: none")
+    (prd / "adoption.md").write_text("# Adoption map\n\n" + HEADER + ADOPTED + "\n", encoding="utf-8")
+    commit(repo, "Adopt notes\n\nRefs: none (no behaviour change)", "docs")
+    _touch(repo, "Once adopted\n\nRefs: none")
+    got = [x.message for x in trace_rules(prd, "HEAD~4..HEAD") if x.rule == "commit-refs"]
+    assert len(got) == 1 and got[0].startswith(f"commit {_sha(repo, 'HEAD')[:8]} ")
+
+
+def _sha(repo: Path, rev: str) -> str:
+    import subprocess
+    return subprocess.run(["git", "rev-parse", rev], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
 def test_no_range_skips_commit_refs(tmp_path):
     assert "commit-refs" not in rules(trace_rules(build(tmp_path)))
 
