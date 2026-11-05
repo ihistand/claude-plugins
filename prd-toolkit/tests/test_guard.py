@@ -547,3 +547,9 @@ def test_the_vendored_packs_stay_closed_when_degraded(tmp_path):
     repo = make_repo(tmp_path, testing=None)
     make_pack(repo)
     assert_blocked(call(repo, "Read", file_path=".prd-toolkit/packs/orders/helpers.py"), "read")
+
+
+def test_a_background_output_stays_closed_when_degraded(tmp_path):
+    repo = make_repo(tmp_path, testing=None)
+    tasks = make_tasks(tmp_path)
+    assert_blocked(call(repo, "Read", file_path=str(tasks / "b1x9.output")), "read")

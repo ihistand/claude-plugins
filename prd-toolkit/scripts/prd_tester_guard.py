@@ -231,7 +231,7 @@ class Context:
     def can_read_task_output(self, raw: str) -> bool:
         """Read (and only Read) of `<id>.output` directly in the tasks folder: a symlink or `..` that leaves
         the folder resolves to another parent and fails."""
-        if self.tasks_dir is None:
+        if self.degraded or self.tasks_dir is None:
             return False
         p = (self.cwd / raw).resolve()
         return p.parent == self.tasks_dir and bool(_TASK_OUTPUT.match(p.name))
