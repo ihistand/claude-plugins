@@ -492,7 +492,7 @@ def _outcome(worktree: Path, gate_id: str, line: dict | None) -> dict:
 
 
 def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout: float | None = None, poll: float = 1.0) -> tuple[int, dict]:
-    """0 with the first log line for (worktree, gate) at or after the start; 1 when the gate is not pending (outcome with choice None); 3 on timeout."""
+    """0 with the first log line for (worktree, gate), or for a deploy-step gate from any worktree, at or after the start; 1 when the gate is not pending (outcome with choice None); 3 on timeout."""
     started, begun = _now(), time.monotonic()
     prd_dir = Path(prd_dir)
     here = model.repo_root(prd_dir).resolve()
@@ -501,7 +501,9 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
 
     def found():
         for line in read_log(wt):
-            if line.get("gate") == gate_id and line.get("worktree") == str(wt) and str(line.get("at", "")) >= started:
+            # a deploy step is repo-wide (its run log is in the git common dir): its answer counts from any worktree
+            here = gate_id.startswith("deploy-step:") or line.get("worktree") == str(wt)
+            if line.get("gate") == gate_id and here and str(line.get("at", "")) >= started:
                 return line
         return None
 
@@ -804,14 +806,22 @@ class _Inbox:
             raise Bad(404, str(e)) from None
 
     def listing(self) -> dict:
-        groups = []
+        groups, shown = [], set()
         for wt in worktree_prds(self.root, self.rel):
             root = Path(wt["path"])
             try:
                 prd = model.load(root / self.rel)
-                found = [card(g, prd, root, self.rel) for g in list_gates(prd, root)]
-            except Exception:  # noqa: BLE001 - a worktree removed or broken while listing drops out
+                found = [card(g, prd, root, self.rel) for g in list_gates(prd, root)
+                         if not (g.kind == "deploy-step" and g.id in shown)]  # a run is repo-wide: once, in the first group
+            except (model.NotAPrd, OSError) as e:
+                if isinstance(e, model.NotAPrd) or not (root / self.rel).is_dir():
+                    continue  # the worktree was removed while listing
+                groups.append({**wt, "gates": [], "error": f"{type(e).__name__}: {e}"})
                 continue
+            except Exception as e:  # noqa: BLE001 - a broken gate shows as the group's error, never as no gates
+                groups.append({**wt, "gates": [], "error": f"{type(e).__name__}: {e}"})
+                continue
+            shown |= {g["id"] for g in found if g["kind"] == "deploy-step"}
             groups.append({**wt, "gates": found})
         answers = [ln for ln in read_log(self.root) if ln.get("prd") == self.slug and str(ln.get("at", "")) >= self.started]
         return {"prd": self.slug, "started": self.started, "worktrees": groups, "answers": answers}
@@ -847,11 +857,14 @@ class _Inbox:
         return (400 if code == 1 else 500), {**done, "error": why}  # an owner's refusal is 400, its tool error 500
 
     def done(self, prd: Prd, wt: Path, area: str, routes, body: dict) -> tuple[int, dict]:
-        """Done goes through `answer` (`prd_confirm.py done`), so it is logged; 409 while an item is open or changed."""
+        """Done goes through `answer` (`prd_confirm.py done`) with the question the page showed, so it is logged;
+        400 without the question, 409 while an item is open or changed or when the question changed."""
+        question = body.get("question")
+        if not isinstance(question, str):
+            raise Bad(400, "send the question the page showed; the inbox never answers without it")
         still = routes.items()["open"]
         if still:
             return 409, {"open": still}
-        question = body.get("question") if isinstance(body.get("question"), str) else None
         with self.lock:
             try:
                 done = answer(prd, wt, f"adoption:{area}", "Done (form)", choice="done", question=question, by="form")

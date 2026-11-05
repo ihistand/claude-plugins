@@ -128,6 +128,41 @@ def test_the_approval_gate_carries_the_verdict_the_versions_and_the_diff(inbox):
     assert g["diff_truncated"] is False
 
 
+def test_a_deploy_step_gate_shows_once_in_the_first_group(inbox):
+    gate_id = f"deploy-step:{inbox.run_id}:3"
+    first, second = ({g["id"] for g in grp["gates"]} for grp in inbox.gates()["worktrees"])
+    assert gate_id in first and gate_id not in second
+    assert gate_id in {g.id for g in gates.list_gates(model.load(inbox.second / PRD), inbox.second)}  # still pending there
+
+
+def test_wait_in_the_second_worktree_sees_a_deploy_step_answered_from_the_first(inbox):
+    gate_id, box = f"deploy-step:{inbox.run_id}:3", {}
+
+    def waiting():
+        box["r"] = gates.wait_gate(inbox.repo / PRD, gate_id, worktree=inbox.second, timeout=30, poll=0.05)
+
+    t = threading.Thread(target=waiting)
+    t.start()
+    time.sleep(0.5)
+    status, out = inbox.post(gate_id, "send", "deploy production")
+    assert status == 200, out
+    t.join(40)
+    [line] = inbox.log()
+    assert line["worktree"] == str(inbox.repo)
+    code, outcome = box["r"]
+    assert code == 0 and outcome["reply"] == "deploy production (form)" and outcome["worktree"] == str(inbox.second)
+
+
+def test_a_broken_gate_shows_the_error_and_keeps_the_group(inbox, monkeypatch):
+    def broken(*a, **k):
+        raise ValueError("the verdict cannot be read")
+
+    monkeypatch.setattr(gates, "_approval_card", broken)
+    first, second = inbox.gates()["worktrees"]
+    assert Path(first["path"]) == inbox.repo and first["gates"] == [] and first["error"] == "ValueError: the verdict cannot be read"
+    assert "error" not in second and "error-class:E-003" in {g["id"] for g in second["gates"]}
+
+
 def test_a_diff_over_200_kb_is_cut(inbox):
     from inbox_fixture import verdict
 
@@ -288,6 +323,8 @@ def test_a_signoff_fail_keeps_the_words_in_the_log_and_the_outcome(inbox):
 # --- the adoption routes ---
 
 def adoption(box, verb, root, body=None):
+    if verb == "done" and body is None:  # Done sends the adoption gate's question, as the page shows it
+        body = {"question": box.gate(f"adoption:{AREA}", root)["question"]}
     return box.call(f"/adoption/{AREA}/{verb}?wt={root}", body if body is not None else ({} if verb != "items" else None))
 
 
@@ -327,6 +364,20 @@ def test_adoption_done_is_409_while_an_item_is_open_or_changed(inbox):
     assert status == 409 and out["open"] == ["E-003"]
     assert "done" not in json.loads(confirm.answers_path(inbox.repo, AREA).read_text(encoding="utf-8"))
     assert inbox.log() == []
+
+
+def test_adoption_done_needs_the_question_and_refuses_a_changed_one(inbox):
+    assert adoption(inbox, "answer", inbox.repo, {"id": "E-003", "decision": "intended"})[0] == 200
+    shown = inbox.gate(f"adoption:{AREA}")["question"]
+    before = confirm.answers_path(inbox.repo, AREA).read_bytes()
+    for body in ({}, {"question": None}, {"question": 3}):
+        status, out = adoption(inbox, "done", inbox.repo, body)
+        assert status == 400 and "question" in out["error"], body
+    status, out = adoption(inbox, "done", inbox.repo, {"question": shown + " (old)"})
+    assert status == 409 and out["error"] == "refused: the gate changed; list again"
+    assert confirm.answers_path(inbox.repo, AREA).read_bytes() == before and inbox.log() == []
+    status, out = adoption(inbox, "done", inbox.repo, {"question": shown})
+    assert status == 200 and inbox.log()[0]["reply"] == "Done (form)"
 
 
 def test_adoption_undo_and_bad_answers(inbox):
