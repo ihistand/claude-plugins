@@ -29,6 +29,8 @@
 >   written, from the same adoption.
 > - Section 16 (owner, 2026-11-05): a known-failing case names the failure that counts, and the
 >   checklist asks how each precondition is checked, from the same adoption's dry run.
+> - Section 13 fix 5 (owner, 2026-11-05): the check across commits is 0.8.1's existing `deleted`
+>   finding of `prd_error.py check`, kept as it is, not a new message.
 
 ## 1. Scope
 
@@ -351,9 +353,10 @@ list is unchanged and 0.8.2 still needs no `/prd-change` (section 9).
      or a gap in the numbers:
      `E-012 follows E-010: E-011 is missing; entries are never deleted, restore it from git`.
      The entries must run from E-001 upward with no gap and newest last.
-   - **Fix, across commits.** A gap check cannot see the newest entries dropped. So
-     `prd_error.py check <range>` also reports each `### E-nnn` heading that exists at the range's
-     base and not at its head: `E-014 removed in <range>; entries are never deleted`.
+   - **Across commits, already shipped.** A gap check cannot see the newest entries dropped.
+     0.8.1's `prd_error.py check <range>` already covers that case. It compares the ledger write by
+     write and reports a dropped heading as `errors.md: E-014: deleted`. 0.8.2 keeps that check and
+     its wording, and adds only a test that dropping the newest entry is reported.
    - A PRD that already has a gap restores the entry from git. No migration row is needed.
 
 **Tests** (with the rest of section 8):

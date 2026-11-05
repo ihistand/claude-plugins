@@ -47,6 +47,22 @@
 - **Ruling (plan, spec section 4): worktrees in requests.** Every answer body and adoption request names its worktree by absolute path (`"worktree"` in a body, `?wt=` in a query). The server refuses with 404 a path that is not in `git worktree list --porcelain`, or whose checkout lacks the PRD folder.
 - **Ruling (plan, spec section 5): the approval card's diff.** `.prd-review.json` records no base, so the inbox computes it as the review does by default: `git merge-base HEAD <base>` in that worktree, where `<base>` is the branch's upstream (`@{upstream}`) or else `main`, then `git diff <merge-base> -- <prd dir>`. `/gates` carries it on the approval gate as `diff` (text, capped at 200 KB, with `diff_truncated: true` past that), beside the verdict's `restate`, `touches`, `bump`, `impact` and `dry_run` and the version from → to.
 - **Ruling (plan, spec section 7): sign-off.** No skill writes a Sign-offs row today. `testing-from-prds` gains one rule: a `signoff:` case is answered by its owner, in the inbox or in the chat, and never by the tester or the session.
+- **Order (added 2026-11-05 with sections 13–16).** Run the tasks in this order: 0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 5, 6, 7. Task 8 builds on Task 3's `confirm.AdoptionRoutes` and on `panel.html`, which Tasks 1 and 4 share. Task 6's release text covers Tasks 8–12.
+- **Ruling (plan, spec section 13 fix 5): the check across commits already exists.** 0.8.1's `prd_error.py check <range>` compares the ledger write by write (`errors._structure`) and reports a dropped heading as `errors.md: E-nnn: deleted` (`tests/test_prd_error_check.py::test_deleted`). Task 9 adds no second report. It pins that dropping the *newest* entry is reported, and it keeps the shipped wording. The owner agreed on 2026-11-05, and spec section 13 now says the same.
+- **Ruling (plan, spec section 13 fix 5): the gap messages.** The spec gives the gap form. The rest follows it:
+  - missing IDs are written as `E-011` (one), `E-010, E-011` (two), or `E-001 to E-011` (three or more), with `is` or `are` to match;
+  - a gap gives `E-012 follows E-010: E-011 is missing; entries are never deleted, restore it from git`;
+  - a first entry above E-001 gives `E-012 is the first entry: E-001 to E-011 are missing; entries are never deleted, restore them from git`;
+  - an entry out of order gives `E-010 follows E-012: entries run from E-001 upward, newest last`.
+
+  Each is an `error` finding on the heading line.
+- **Ruling (plan, spec section 13 fix 2): fix without words.** `confirm.validate_answer` refuses a `fix` whose text is blank with `Refused("a fix needs its words: what should it do instead?")`. The form answers 400 and `prd_confirm.py answer` exits 1, as for any `Refused`.
+- **Ruling (plan, spec section 14 fix 2): the dry run's pack.yaml-only limit is skill text.** The guard cannot tell a dry run from a suite, so it allows the whole of `.prd-toolkit/packs/` in every mode but the degraded one. Only the skill limits a dry run to `pack.yaml`.
+- **Ruling (plan, spec section 15): what "uncommitted" and "changed" mean.**
+  - A test file that `git status --porcelain` lists, or that has no commit, is uncommitted, so its T-ids are never stale.
+  - The T-id's entry at the test's commit is looked up across every test-case file of the PRD at that commit, not only the file the T-id is in now. A case moved between files without change is therefore not stale.
+  - An entry absent at that commit is stale.
+- **Ruling (plan, spec section 16): a blank symptom.** A `symptom:` that is not a non-empty string counts as absent. On a `known-failing:` case it gets the warning; on a case without `known-failing:` it gets the error.
 
 ## Review Focus
 
@@ -55,6 +71,14 @@
 3. A worktree removed (`git worktree remove`) while the inbox runs: `GET /gates` drops it and answers 200, never 500. (Task 3)
 4. An inbox started from one worktree is found as live by a session in another worktree of the same repository, because the lock file is in the git common directory. (Task 3)
 5. `wait` started before the log file exists keeps waiting and never crashes on the missing file. (Task 2)
+
+For sections 13–16:
+
+6. A `/ping` with no token or a wrong one answers 403 and does not reset the idle clock, so a stray tab on another form cannot keep a server up. (Task 8)
+7. `--touches " - "` (spaces around the dash) writes `Touches: -`, and `--touches "-, FR-001"` is refused. (Task 9)
+8. A path that resolves outside the `tasks` folder through `..` or a symlink (`tasks/../x.output`, `tasks/link.output` → elsewhere) is blocked, and so is `tasks/sub/<id>.output`. (Task 10)
+9. A test case moved unchanged to another test-case file after its test was committed is not stale. (Task 11)
+10. `symptom: ""` beside `known-failing:` gets the warning, not a pass, so a blank symptom never quiets it. (Task 12)
 
 ---
 
@@ -227,7 +251,12 @@ Required skill: `superpowers:writing-skills` (the repo's CLAUDE.md requires it f
 - Modify: `prd-toolkit/README.md` (the inbox part, the upgrade note of spec section 10, the known limits of section 11, the 0.8.2 changelog entry), `prd-toolkit/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `web/src/data/plugins.js` (version `0.8.2`), the repo's `.prd-toolkit/` (vendor-only snippet)
 - Create: `prd-toolkit/tests/test_release_0_8_2.py` (as `test_release_0_7_1.py`)
 
-- [ ] **Step 1: Write the failing pins:** the three version files say `0.8.2`; the README's commands table lists `prd_gates.py serve` and `wait` with their exit codes; the README names the lock file, the log, the ` (form)` suffix and each known limit; the changelog entry names the 0.8.1 interface additions it relies on and the renumbered refusal text.
+- [ ] **Step 1: Write the failing pins:**
+  - the three version files say `0.8.2`;
+  - the README's commands table lists `prd_gates.py serve` and `wait` with their exit codes, and `prd_build_check.py --stale` with its exit codes;
+  - the README names the lock file, the log, the ` (form)` suffix and each known limit;
+  - the changelog entry names the 0.8.1 interface additions it relies on and the renumbered refusal text;
+  - the changelog entry has one line for each of sections 13–16: the form keepalive and new choice labels, `Touches: -` and the ledger gap check, the tester's new read access, `--stale` and `Rewrite:`, and `symptom:`.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: Write the text; bump the versions; run the vendor-only snippet.**
 - [ ] **Step 4: Run the pins, then CI parity,** then `prd_lint.py docs/prd/prd-toolkit` and `prd_trace.py docs/prd/prd-toolkit --range origin/main..HEAD`, each with `; echo "prd-…-exit=$?"`: both 0.
@@ -241,3 +270,213 @@ Required skill: `superpowers:writing-skills` (the repo's CLAUDE.md requires it f
 - [ ] **Step 2 (Claude):** on `inbox_fixture` copied to the scratchpad, `serve --no-open`, then drive Chrome through the `deploy-step`, `signoff` and `adoption` cards, recording `inbox-deploy-step.gif`, `inbox-signoff.gif`, `inbox-adoption.gif`. Check each owner's file afterwards.
 - [ ] **Step 3 (Ivan):** the next real `/prd-change` on the toolkit's PRD, approved in the inbox after at least one **Request changes** round; one real `/prd-error` class confirmed in the inbox; one gate from each of two sessions or worktrees in one inbox. Claude only points to the inbox and waits; every click is Ivan's.
 - [ ] **Step 4:** Record in the changelog entry what was proven and where (commit SHAs, the GIF names). Commit `docs(prd-toolkit): 0.8.2 proof record`.
+
+---
+
+## Tasks 8–12: spec sections 13–16 (added 2026-11-05)
+
+These run after Task 4 and before Task 5 (the Order line in the Global Constraints). Every task that edits `prd-toolkit/skills/**` or `prd-toolkit/agents/**` follows `superpowers:writing-skills`: record a new eval's RED baseline in `evals/BASELINE.md` before the skill text changes, then run it at 3 runs. A new eval below 3/3 is fixed in the skill text, not in the grader. Each new eval has a `case.yaml`, `prompt.md`, `scaffold.sh` and `graders/`, laid out like `adopting-confirm-headless-fallback/`. None of these tasks touches a lint-cli Boundary file: `test-refs` and `error-entries` live in `prdlint/rules/testcases.py` and `prdlint/rules/errors.py`.
+
+### Task 8: the confirm form's keepalive, choice labels and confirmed bugs (spec section 13, fixes 1–3)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/scripts/prdlint/formserver.py` (`GET /ping`);
+  - `prd-toolkit/scripts/prdlint/confirm.py` (`Item.confirmed`, `_bugs`, `open_ids`, `validate_answer`, the idle report);
+  - `prd-toolkit/scripts/prd_confirm.py` (the idle line);
+  - `prd-toolkit/templates/confirm/panel.html` (labels, the ping, the confirmed state);
+  - `prd-toolkit/skills/adopting-prds/SKILL.md` (applying answers);
+  - `prd-toolkit/tests/test_confirm_server.py`, `test_confirm_items.py`, `test_confirm_page.py`, `test_confirm_cli.py`, `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/adopting-fix-restates-asks/`.
+
+**Interfaces:**
+- Consumes: Task 1's `formserver.Handler` and `run`, Task 3's `confirm.AdoptionRoutes`, and 0.8.1's `model.ErrorEntry.confirmed: tuple[str, str] | None` and `.state`.
+- Produces:
+  - `formserver.Handler` answers `GET /ping?token=<token>` with `200 {"ok": true}` and calls `self.server.touch()`. Only a request with the right token touches. Task 3's `live_inbox` uses the same route.
+  - `confirm.Item.confirmed: str | None = None`, the `Confirmed:` reply of a `bug` item's entry. `_bugs` sets it from `e.confirmed[1]` when `e.state == "confirmed"`.
+  - `confirm.open_ids(items, answers)` never lists an item whose `confirmed` is set. `prd_confirm.py status`, `mark_done` and the adoption gate all read it.
+  - `confirm.run(server)` keeps returning 3 on the idle timeout. `prd_confirm.py serve` then prints to stderr, once, `prd_confirm: stopped after <N> minutes with no page open; <a> of <t> answered, kept in <file>; serve again to go on`:
+    - `<N>` is `--idle-minutes`, as given (`120`, or `0.5`);
+    - `<a>` is `t - len(open_ids(...))` and `<t>` is the item count;
+    - `<file>` is the answers file's name.
+  - The choices on the page:
+    - `{decision: 'intended', label: 'Keep it as it is'}`, words optional;
+    - `{decision: 'fix', label: 'Change it…', placeholder: 'What should it do instead?', needs: true}`;
+    - `{decision: 'answer', label: 'Answer in my own words', needs: true}`.
+
+    The keys and the stored `decision` values are unchanged.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `test_confirm_server.py`:
+    - a server with `idle_minutes` patched small stays up while a thread pings every 0.02 s, and `run` returns 3 within the idle time of the pings stopping;
+    - Review Focus 6: a `/ping` with a wrong token answers 403 and leaves `state.last` as it was;
+    - `POST` a `fix` with empty words: 400, nothing written;
+    - an answers file deleted after every answer, with a bug item whose entry has `Confirmed:`: `GET /items` shows it answered, carrying its `confirmed` reply.
+  - `test_confirm_items.py`:
+    - `status` counts a confirmed entry's item as answered and a proposed entry's item as open, with no answers file;
+    - `mark_done` is not refused for a confirmed one.
+  - `test_confirm_page.py` (assembled page):
+    - the page holds `setInterval` with `60000` and `'/ping'`;
+    - it holds the three new labels, and none of `Yes, intended`, `No, fix it` or `In my own words`;
+    - the `fix` choice has `needs: true`.
+  - `test_confirm_cli.py`:
+    - `answer <area> <id> fix ""` exits 1;
+    - a `serve` run to the idle timeout prints the idle line on stderr with `<a>` and `<t>` filled in.
+- [ ] **Step 2: Run them to see them fail.**
+- [ ] **Step 3: Implement**, to the Interfaces block and the fix-without-words ruling. In `panel.html`, a confirmed bug item renders answered and greyed with its `Confirmed:` reply and no choice keys, under the line `Confirmed in errors.md; change it through /prd-error`.
+- [ ] **Step 4: The skill rule.** First record `adopting-fix-restates-asks`'s RED baseline. Its scaffold is an answers file where one `fix` answer's words restate the item's current behaviour, and the grader passes when the session asks the owner about that one item in the chat and applies no correction for it. Then add to `adopting-prds/SKILL.md`, where answers are applied, this rule: "A `fix` whose words describe the behaviour the item already states is not applied as a correction: ask the owner in the chat, for that one item, whether they meant keep it. Never decide it yourself." Add a pin for the sentence in `test_confirm_cli.py`'s skill pins, or in the file holding `adopting-prds` pins (`git grep -l adopting-prds prd-toolkit/tests`).
+- [ ] **Step 5: Run the tests and the eval at 3 runs; record it in `BASELINE.md`. CI parity.**
+- [ ] **Step 6: Commit** `fix(prd-toolkit): the confirm form stays up while open, clearer choices, confirmed bugs count`.
+
+### Task 9: `Touches: -` and the ledger gap check (spec section 13, fixes 4–5)
+
+**Files:**
+- Modify: `prd-toolkit/scripts/prd_error.py`, `prd-toolkit/scripts/prdlint/errors.py` (`new`, `propose`), `prd-toolkit/scripts/prdlint/rules/errors.py`, `prd-toolkit/references/prd-format.md` (the errors.md part), `prd-toolkit/tests/test_prd_error.py`, `prd-toolkit/tests/test_prd_error_check.py`, and the test file holding `error-entries` cases (`git grep -l '"error-entries"' prd-toolkit/tests`)
+
+**Interfaces:**
+- `prd_error.py` turns `--touches` into a list with `errors.parse_touches(raw: str) -> list[str]`:
+  - an empty string gives `[]`, so no line is written;
+  - `-` alone, after stripping, gives `["-"]`;
+  - `-` together with any ID raises `errors.Refused(["Touches: - cannot be combined with IDs"])`, the class `errors.new` already raises, which takes a list of reasons.
+- `errors.new` and `errors.propose` take `["-"]`: they write `Touches: -` and skip the unknown-ID check.
+- `error-entries` gains, per entry in ledger order, the gap, first-entry and out-of-order findings of the Global Constraints ruling, on the heading line (`ErrorEntry.line`).
+
+- [ ] **Step 1: Write the failing tests.**
+  - `new --touches -` and `propose --touches -` write `Touches: -`, and `--touches -,FR-001` exits 1 with `Touches: - cannot be combined with IDs`.
+  - Review Focus 7: `--touches " - "` writes `Touches: -`, and `--touches "-, FR-001"` is refused.
+  - With no `--touches`, no `Touches:` line is written, as now.
+  - Lint gives each finding of the ruling on these ledgers:
+    - E-001, E-002, E-003 gives none;
+    - E-001, E-003 gives `E-003 follows E-001: E-002 is missing; …`;
+    - E-012 alone gives `E-012 is the first entry: E-001 to E-011 are missing; …restore them from git`;
+    - E-001, E-003, E-002 gives `E-002 follows E-003: entries run from E-001 upward, newest last`;
+    - an `### E-099` heading inside a fenced code block gives none.
+  - `prd_error.py check <base>..<head>` over a commit that drops the newest entry reports `errors.md: E-nnn: deleted`, and over one that only appends reports nothing (the ruling: the wording stays).
+- [ ] **Step 2: Run them to see them fail.**
+- [ ] **Step 3: Implement.** Then, in `prd-format.md`'s errors.md part, add: "Entries run from E-001 upward with no gap, newest last; lint reports a gap or an entry out of order. `Touches: -` means none."
+- [ ] **Step 4: Run them, then `prd_lint.py docs/prd/prd-toolkit` (the toolkit's own ledger must still lint clean), then CI parity.**
+- [ ] **Step 5: Commit** `fix(prd-toolkit): Touches: - from prd_error.py, and lint finds a lost errors.md entry`.
+
+### Task 10: what the tester may read (spec section 14)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/scripts/prd_tester_guard.py`;
+  - `prd-toolkit/skills/testing-from-prds/SKILL.md` (rule 1; suite mode);
+  - `prd-toolkit/agents/prd-tester.md`;
+  - `prd-toolkit/references/prd-format.md` (Harness) and `prd-toolkit/references/contract-types.md` (the pack manifest's `harness`);
+  - `prd-toolkit/tests/test_guard.py`, `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/tester-pack-helper-unstated-asks/`.
+
+**Interfaces:**
+- `Context.tasks_dir: Path | None` is `self.scratch.parent / "tasks"` when `self.scratch` is set and that folder exists, else `None`.
+- `Context.can_read_task_output(raw: str) -> bool` is true only when all of these hold:
+  - the tool is Read;
+  - `(self.cwd / raw).resolve()` has `parent == self.tasks_dir.resolve()`;
+  - its name matches `^[A-Za-z0-9_-]+\.output$`.
+- `check()` calls it before `check_path` for `Read` only.
+- `Context.packs_root: Path | None` is `self.top / ".prd-toolkit" / "packs"` when it is a directory. `read_roots()` adds it when not degraded, and `write_roots()` never does. Read, Glob, Grep and `ls` then reach it through the existing read checks.
+
+- [ ] **Step 1: Write the failing tests** in `test_guard.py`, with a hook input whose `scratchpad_dir` has a sibling `tasks/`:
+  - Read of `tasks/b1x9.output` is allowed;
+  - each of these is blocked:
+    - a Read of `tasks/notes.txt`;
+    - a Glob or Grep with `path` set to `tasks/`;
+    - `ls tasks/`;
+    - a Write to `tasks/b1x9.output`;
+  - Review Focus 8: `tasks/../x.output`, `tasks/sub/b1x9.output`, and a `tasks/l.output` symlink to a file outside `tasks/` are each blocked;
+  - with no sibling `tasks/`, the same Read is blocked;
+  - under `.prd-toolkit/packs/orders/`, Read, Glob, Grep and `ls` are allowed, and a Write is blocked;
+  - a Read of `.prd-toolkit/prd_lint.py` is blocked.
+- [ ] **Step 2: Run them to see them fail. Step 3: Implement the guard. Run the tests, then CI parity.**
+- [ ] **Step 4: The text.** Record `tester-pack-helper-unstated-asks`'s RED baseline first. Its scaffold is a dry run of a case using a pack helper whose result shape no Harness slot states; the grader passes on a QUESTIONS line naming the helper and no HARNESS CHOICES line choosing its shape. Then write:
+  - `testing-from-prds` rule 1: "In a write or a suite you may read the vendored pack's files under `.prd-toolkit/packs/`; in a dry run, only its `pack.yaml`."
+  - suite mode: "A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output."
+  - the agent gets the same two lines.
+  - `prd-format.md` (Harness) and `contract-types.md` (`harness`): "A helper a pack ships is stated in the pack's `harness` (the Assertions or Fixtures slot) with its parameters, their types and the shape of its result. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE."
+
+  Pin each in the file holding `testing-from-prds` pins (`git grep -l testing-from-prds prd-toolkit/tests`).
+- [ ] **Step 5: Run the pins and the eval at 3 runs; record it. CI parity.**
+- [ ] **Step 6: Commit** `fix(prd-toolkit): the tester reads its background output and the vendored packs`.
+
+### Task 11: `prd_build_check.py --stale` and the `Rewrite:` line (spec section 15)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/scripts/prd_build_check.py` and `prd-toolkit/scripts/prdlint/buildcheck.py`;
+  - `prd-toolkit/skills/testing-from-prds/SKILL.md`, `dispatching.md` and `prd-toolkit/agents/prd-tester.md` (the `Rewrite:` line);
+  - `prd-toolkit/skills/building-from-prds/running-a-build.md` and `prd-toolkit/skills/adopting-prds/SKILL.md` step 4 (the caller's `--stale` call);
+  - `prd-toolkit/tests/test_build_check.py`, `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/build-stale-sends-rewrite/`, `prd-toolkit/evals/tester-rewrite-only-that-test/`.
+
+**Interfaces:**
+- Consumes: `trace.citations(prd, repo_root) -> dict[str, list[tuple[str, int]]]` (T-id → citing files), `model.TestCase.data`, `buildcheck._show(root, rev, path)`.
+- Produces:
+  - `buildcheck.stale_findings(prd: Prd, repo_root: Path, tids: list[str]) -> list[str]`, one line per stale T-id in `tids` order: `stale <T-id> <test path>: its test case changed after the test (last changed in <short sha>)`;
+  - for a T-id cited by two committed files, the newer by commit time is judged;
+  - entries are compared as plain parsed YAML (`yaml.safe_load` of each test-case file at the commit, against the working tree's), following the "uncommitted" and "changed" ruling;
+  - CLI `prd_build_check.py <prd dir> --stale --tids <T-ids>`, where `--stale` is a third exclusive mode beside `--diff` and `--results` and needs `--tids`. It exits 0 with nothing stale, 1 with any, and 2 on usage, a bad PRD or a git failure.
+
+- [ ] **Step 1: Write the failing tests** in `test_build_check.py`, on a git fixture with one committed test citing T-001.1:
+  - its case edited after the commit is stale, with the line exactly as above;
+  - unchanged is not stale;
+  - a layout-only change (reindented, keys reordered) is not stale;
+  - a T-id with no test is not stale;
+  - a test with working-tree edits is not stale;
+  - a test that was never committed is not stale;
+  - two citing files: the newer is judged;
+  - Review Focus 9: the case moved unchanged to another test-case file is not stale;
+  - exit codes 0 and 1;
+  - exit 2 for `--stale` without `--tids` and for `--stale` with `--diff`.
+- [ ] **Step 2: Run them to see them fail. Step 3: Implement. Run them, then CI parity.**
+- [ ] **Step 4: The text.** Record both evals' RED baselines first:
+  - `build-stale-sends-rewrite`: a caller whose test case was edited after the test dispatches the suite. The grader passes when the session ran `--stale`, the prompt has `Rewrite: <T-id>` and no `Misread:` for that T-id, and the session edited no test.
+  - `tester-rewrite-only-that-test`: a tester given `Rewrite: <T-id>`. The grader passes when only that test's file changed and its assertions match the current case.
+
+  Then write:
+  - `dispatching.md`'s suite prompt template gains `Rewrite: <T-id>   (suite only; one line per stale T-id)`, with: "A `Rewrite:` line lets the tester rewrite that one test from the case as it now stands. It carries no quote, and the state check allows changes to that test only.";
+  - the tester's skill and the agent: "On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison).";
+  - `running-a-build.md`, before each suite dispatch, and `adopting-prds` step 4, its own Bash call: `uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --stale --tids <T-ids>; echo "prd-build-check-exit=$?"`. Exit 1 adds a `Rewrite:` line per printed T-id, and exit 2 stops the dispatch;
+  - a Red Flag in each of the two caller files: "Editing a test to bring it up to date, or sending `Misread:` for a case you changed".
+
+  Pin each.
+- [ ] **Step 5: Run the pins and both evals at 3 runs; record them. CI parity.**
+- [ ] **Step 6: Commit** `feat(prd-toolkit): prd_build_check.py --stale and the suite's Rewrite: line`.
+
+### Task 12: `symptom:` and the precondition check (spec section 16)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/scripts/prdlint/rules/testcases.py` (`test_refs`);
+  - `prd-toolkit/references/prd-format.md` (the test-case keys);
+  - `prd-toolkit/references/quality-checklist.md`;
+  - `prd-toolkit/skills/testing-from-prds/SKILL.md` ("A known-failing case") and `prd-toolkit/agents/prd-tester.md`;
+  - `prd-toolkit/skills/handling-errors/running-an-error.md` (the regression patch) and `prd-toolkit/skills/adopting-prds/SKILL.md` (a confirmed bug's case);
+  - `prd-toolkit/tests/test_rules_testcases.py`, `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/tester-symptom-strict-marker/`, `prd-toolkit/evals/tester-other-failure-not-known/`.
+
+**Interfaces:**
+- In `test_refs`, after the `known-failing` checks:
+  - a non-blank `symptom:` with no `known-failing:` yields `bad("symptom", "symptom: needs known-failing: on the same case")`;
+  - a `known-failing:` case whose `symptom` is absent or blank yields `Finding(tc.file, _line(tc, "known-failing"), "test-refs", f"{tc.id}: known-failing {kf} names no symptom; any failure would pass as it", severity="warn")`. `bad()` makes errors only, and it already puts the `<T-id>: ` prefix on its messages.
+- Everything that reads `known-failing` is unchanged.
+
+- [ ] **Step 1: Write the failing tests** in `test_rules_testcases.py`:
+  - a symptom without known-failing gives an error;
+  - known-failing without a symptom gives the warning, and `prd_lint.py` exits 0 when that is the only finding;
+  - both on one case is clean;
+  - Review Focus 10: `symptom: ""` beside `known-failing:` gives the warning.
+- [ ] **Step 2: Run them to see them fail. Step 3: Implement. Run them, `prd_lint.py docs/prd/prd-toolkit`, then CI parity.**
+- [ ] **Step 4: The text.** Record both evals' RED baselines first:
+  - `tester-symptom-strict-marker`: a suite tester on a case with `known-failing:` and `symptom:`. The grader passes on a test that checks for the symptom, raises the harness's expected-failure exception, and marks `xfail(strict=True, raises=<it>)`.
+  - `tester-other-failure-not-known`: the same case, with the code failing in another way. The grader passes on `<T-id>: fail: not the known failure: …`.
+
+  Then write:
+  - `prd-format.md`: the `symptom:` key ("optional, beside `known-failing:` only: what the run shows while the bug is open, in plain language, one observable symptom");
+  - the tester's skill and the agent: spec section 16's three tester sentences, verbatim;
+  - `running-an-error.md` and `adopting-prds`: "Write the case's `symptom:` from the entry's Evidence or Diagnosis, never invented; a symptom the entry does not show is a question for the owner.";
+  - `quality-checklist.md`: "Every precondition or state a test case declares names the check that confirms it, or the Harness (Clean state or Fixtures) says how such a precondition is confirmed."
+
+  Pin each.
+- [ ] **Step 5: Run the pins and both evals at 3 runs; record them. CI parity.**
+- [ ] **Step 6: Commit** `feat(prd-toolkit): a known-failing case names its symptom`.
