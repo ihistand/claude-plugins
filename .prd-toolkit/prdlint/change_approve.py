@@ -91,7 +91,7 @@ def _checked(repo_root: Path, prd_root: Path, reply: str, dry_run: str):
         _fail("a first approval is authoring's, not a change's")
     if last is None or len(last.cells) < 3 or not last.cells[2].endswith(PENDING):
         _fail("the last §14 row is not recorded and pending; run record first")
-    if _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
+    if not _ignored(repo_root, "CLAUDE.md") and _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
         _fail("CLAUDE.md has uncommitted changes; commit or set them aside first")
     return last
 
@@ -114,6 +114,11 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=repo_root, capture_output=True, text=True, encoding="utf-8")
 
 
+def _ignored(repo_root: Path, path: str) -> bool:
+    """True when git ignores `path`: `status` hides it and `add` refuses it, so approve neither checks nor stages it."""
+    return _git(repo_root, "check-ignore", "-q", "--", path).returncode == 0
+
+
 def _message(slug: str, version: str, reply: str, dry_run: str, refs: str | None) -> str:
     trailer = f"Refs: {refs}" if refs else NO_REFS
     # the trace rule reads every line that starts with `Refs:`; one space keeps a reply line from passing as a trailer
@@ -132,10 +137,10 @@ def _commit(repo_root: Path, prd_root: Path, message: str, with_claude: bool) ->
     rel = prd_root.relative_to(repo_root).as_posix()
     review = f"{rel}/{REVIEW_FILE}"
     paths = [rel, f":(exclude){review}"]
-    if with_claude:
+    if with_claude and not _ignored(repo_root, "CLAUDE.md"):
         paths.append("CLAUDE.md")
     # `git add` exits 1 on a pathspec that names an ignored file, even an exclude one; git skips an ignored verdict anyway
-    ignored = _git(repo_root, "check-ignore", "-q", "--", review).returncode == 0
+    ignored = _ignored(repo_root, review)
     add_paths = [p for p in paths if not (ignored and p.startswith(":(exclude)"))]
     added = _git(repo_root, "add", "--", *add_paths)
     if added.returncode != 0:
