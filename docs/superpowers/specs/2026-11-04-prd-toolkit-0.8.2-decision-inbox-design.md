@@ -20,6 +20,11 @@
 > - Sections 4 and 5 (2026-11-04, from 0.8.1's spec at 8f557b5): 0.8.1's `answer` refuses a changed
 >   question only when given `--question`, so the inbox always sends the question it showed; its
 >   other refusals are 400; a sign-off's reply lives only in the answer log.
+> - Section 13 (owner, 2026-11-05): five fixes from the first real adoption through the 0.7.1 form (an
+>   orders area of a private pack), added to 0.8.2 because four of them are in the code 0.8.2 already
+>   changes. Sections 1, 2 and 8 name them.
+> - Section 14 (owner, 2026-11-05): three fixes from that adoption's characterization suite, in what
+>   the tester can read and what a pack states about its helpers.
 
 ## 1. Scope
 
@@ -37,7 +42,12 @@ the CLI uses.
 - the shared server `prdlint/formserver.py`, factored out of `prdlint/confirm.py` (section 2);
 - the page `templates/gates/inbox.html`, with one card per gate kind and the 0.7.1 item panel as the
   adoption card (section 5);
-- the skills' new route: point to the inbox, wait, fall back to the chat (section 7).
+- the skills' new route: point to the inbox, wait, fall back to the chat (section 7);
+- five fixes from the first real adoption: the form's idle timeout, the question choices, `status`
+  after the answers file is gone, `prd_error.py new --touches -`, and a lost `errors.md` entry
+  (section 13);
+- three fixes from its characterization suite: a backgrounded run's output, the vendored pack's files,
+  and a pack helper's stated shapes (section 14).
 
 **Success:** a whole `/prd-change` or `/prd-error` cycle runs with no decision typed into the chat,
 and every record still holds the owner's own words for each decision.
@@ -60,12 +70,15 @@ It is **proven by** the owner on real work (section 9).
 | Path (under `prd-toolkit/`) | New or changed | Role |
 |---|---|---|
 | `scripts/prdlint/formserver.py` | new | What both forms share, moved out of `confirm.py`: the `127.0.0.1` bind, the random token (403 without it), the CSP header, the 1 MB body cap, the idle timeout, SIGTERM as a stop, the atomic JSON write (temporary file and `os.replace`), the `.git/info/exclude` line, and page assembly |
-| `scripts/prdlint/confirm.py` | changed | Keeps the adoption items, summaries, fingerprints and answers file; builds its server on `formserver`. 0.7.1 behaviour is unchanged |
+| `scripts/prdlint/confirm.py` | changed | Keeps the adoption items, summaries, fingerprints and answers file; builds its server on `formserver`. 0.7.1 behaviour is unchanged except section 13's fixes 1–3 |
 | `scripts/prdlint/gates.py` (0.8.1) | changed | `answer_gate()` gains `by` (`form` or `cli`, default `cli`) and writes the answer log; new `serve_inbox()` and `wait_gate()` |
 | `scripts/prd_gates.py` (0.8.1) | changed | New subcommands `serve` and `wait` |
 | `templates/gates/inbox.html` | new | The inbox page |
-| `templates/confirm/panel.html` | new | The 0.7.1 item panel (list, card, keys, Done), moved out of `form.html` |
-| `templates/confirm/form.html` | changed | Includes `panel.html`; the page the owner sees is unchanged |
+| `templates/confirm/panel.html` | new | The 0.7.1 item panel (list, card, keys, Done), moved out of `form.html`, with section 13's question choices |
+| `templates/confirm/form.html` | changed | Includes `panel.html`, and asks `/ping` while open (section 13, fix 1); otherwise the page the owner sees is unchanged |
+| `scripts/prd_error.py`, `scripts/prdlint/errors.py`, `scripts/prdlint/rules/errors.py`, `references/prd-format.md` | changed | Section 13, fixes 4 and 5 |
+| `skills/adopting-prds/SKILL.md` | changed | Section 13, fix 2: the new question choices, and a "change" whose words match the current behaviour |
+| `scripts/prd_tester_guard.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `references/contract-types.md` | changed | Section 14: background task output, the vendored packs folder, a shipped helper's stated shapes (with `prd-format.md`) |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
 | `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
@@ -214,7 +227,9 @@ Rules every changed skill states:
 - **`formserver`:** a request without the token gets 403 and changes nothing; the bind is
   `127.0.0.1`; the CSP header is sent; a body over 1 MB is refused; the idle timeout and SIGTERM exit
   3; the include is replaced and an include of a missing file is a tool error.
-- **The 0.7.1 form:** every existing `prd_confirm.py` test passes unchanged. The page check (loads
+- **The 0.7.1 form:** every existing `prd_confirm.py` test passes unchanged, except those section 13
+  changes on purpose (the question labels, and `status` on a confirmed entry), which change with it.
+  Section 13 lists its own tests. The page check (loads
   nothing, no `innerHTML`) runs on the assembled page, for the 0.7.1 form and the inbox.
 - **The inbox**, on a fixture repository with two worktrees: `GET /gates` groups by worktree, and the
   same E-nnn in two branches is two gates; `POST /answer` for each kind calls the owning function with
@@ -271,3 +286,121 @@ By Claude, on a fixture repository driven through Chrome: the `deploy-step`, `si
 - Writing PRD content from the inbox (assumptions, §13 questions); 0.8.1 makes those changes.
 - A suite failure's triage, which is not a 0.8.1 gate kind.
 - A claude.ai Artifact version of the inbox.
+
+## 13. Fixes from the first real adoption
+
+The first owner adoption through the 0.7.1 form (an orders area of a private pack, 2026-11-05, 19
+items) found five faults. The owner added them to 0.8.2 on 2026-11-05. Fixes 1–3 are in
+`confirm.py` and the form, which 0.8.2 already moves onto `formserver`. Fixes 4 and 5 are in
+`prd_error.py` and lint. None touches an adopted area of the toolkit's own PRD: `error-entries`
+belongs to `lint-registries` (not started), and fix 5 adds no rule, so `lint-cli`'s `--list-rules`
+list is unchanged and 0.8.2 still needs no `/prd-change` (section 9).
+
+1. **An open form timed out while the owner was reading.** The first serve ended with exit 3 after
+   120 minutes and no answer saved. The owner restarted it with `--idle-minutes 720`. The cause is
+   that the page makes no request between answers, and only a request resets the idle clock.
+   - **Fix.** The 0.7.1 page asks `GET /ping` (served by `formserver`, as for the inbox) every 60
+     seconds while it is open. The idle timeout then counts from the last page closing, not from the
+     last answer, and the default stays 120 minutes.
+   - On the idle exit, `serve` prints to stderr
+     `prd_confirm: stopped after <N> minutes with no page open; <a> of <t> answered, kept in <file>; serve again to go on`.
+2. **The question choices read ambiguously.** The owner picked "No, fix it" on every question,
+   including ones where the note answered the question or confirmed the current behaviour.
+   - **Fix.** The three choices are renamed. The stored `decision` values and the answers file stay
+     as they are:
+
+     | `decision` | Old label | New label | Words |
+     |---|---|---|---|
+     | `intended` | Yes, intended | **Keep it as it is** | optional |
+     | `fix` | No, fix it | **Change it…** | required ("What should it do instead?") |
+     | `answer` | In my own words | **Answer in my own words** | required |
+
+     Words on `fix` become required, so the skill no longer asks for them in the chat.
+   - **The skill's rule** (`adopting-prds`, applying answers): a `fix` whose words describe the
+     behaviour the item already states is not applied as a correction. The skill asks the owner in
+     the chat, for that one item, whether they meant keep it. It never decides that itself.
+   - The inbox's adoption panel (section 5) uses the same choices.
+3. **`status` counts confirmed bugs as open.** The skill deletes the answers file once every answer
+   is applied. Afterwards, `prd_confirm.py status` lists each bug item whose `errors.md` entry is
+   confirmed but still open as `open` again: 0/5 on the orders area.
+   - **Fix.** A `bug` item whose entry has a well-formed `Confirmed:` line (state `confirmed`) counts
+     as answered, with or without the answers file. This holds in `open_ids`, and so in `status`,
+     `done` and the adoption gate.
+   - The form shows it answered with its `Confirmed:` reply. A change to it goes through
+     `/prd-error`, not the form.
+4. **`prd_error.py new --touches -` is refused** with `Touches: - is not defined in the PRD`, though
+   `prd-format.md` says `-` means none. The session left out `--touches` and wrote `Touches: -` by
+   hand.
+   - **Fix.** On `new` and `propose`, `--touches -` writes `Touches: -`.
+   - `-` together with an ID is refused: `Touches: - cannot be combined with IDs`.
+   - Leaving out `--touches` writes no line, as now.
+5. **Lint cannot see a lost `errors.md` entry that nothing cites.** A session's own write dropped
+   E-001 to E-011. `prd_error.py` was not the cause: a scratch-copy run kept every entry. The
+   entries were restored from HEAD. Entries are never deleted, and `prd_error.py new` numbers them
+   from the highest + 1, so a gap or a missing heading is always a lost record.
+   - **Fix, in the file.** `error-entries` also reports, on the heading line, an entry out of order
+     or a gap in the numbers:
+     `E-012 follows E-010: E-011 is missing; entries are never deleted, restore it from git`.
+     The entries must run from E-001 upward with no gap and newest last.
+   - **Fix, across commits.** A gap check cannot see the newest entries dropped. So
+     `prd_error.py check <range>` also reports each `### E-nnn` heading that exists at the range's
+     base and not at its head: `E-014 removed in <range>; entries are never deleted`.
+   - A PRD that already has a gap restores the entry from git. No migration row is needed.
+
+**Tests** (with the rest of section 8):
+- **Fix 1:** the page asks `/ping` while open (a page test on the assembled page); the server stays
+  up past `--idle-minutes` while pings arrive and exits 3 once they stop; the stderr line.
+- **Fix 2:** the labels on the page; `fix` with no words refused (400 from the form, exit 1 from
+  `prd_confirm.py answer`); an eval in which a `fix` whose note restates the current behaviour gets a
+  chat question, not a correction.
+- **Fix 3:** `status` after the answers file is deleted counts a confirmed entry's item as answered,
+  and a proposed one as open; `done` is not refused for a confirmed one.
+- **Fix 4:** `--touches -` writes `Touches: -` on `new` and `propose`; `-,FR-001` is refused.
+- **Fix 5:** a gap and an out-of-order heading each give the finding; a clean ledger gives none;
+  `check` over a range that drops the newest entry reports it, and over one that only appends reports
+  nothing.
+
+## 14. Fixes from the same adoption's characterization suite
+
+The suite run of the same adoption (2026-11-05) found three faults in what the tester can see. The
+owner added them to 0.8.2 on 2026-11-05. All three are in `prd_tester_guard.py`, the tester's skill and
+the references, none in an adopted area.
+
+1. **A backgrounded harness run cannot be read.** The tester ran the suite with the Bash tool's
+   `run_in_background`, and the guard then blocked the Read of the task's output file. That file is
+   outside the read roots (PRD folders, scratchpad, test roots). The tester fell back to
+   `--junitxml` inside a test root.
+   - **Fix.** The guard allows `Read`, and only `Read`, of a file named `<id>.output` directly in the
+     `tasks` folder beside the hook input's `scratchpad_dir`, where Claude Code writes background
+     task output. `Glob`, `Grep`, `ls` and any write there stay blocked. When there is no
+     `scratchpad_dir`, or the `tasks` folder is not its sibling, nothing more is allowed.
+   - **The skill's rule** (`testing-from-prds`, suite mode): a harness run longer than the Bash
+     tool's timeout runs in the background, and the tester reads its output file. It never reads
+     any other task's output.
+   - **Cost if wrong:** that folder also holds the caller's background tasks. A tester could read a
+     caller's output by guessing its ID, but the IDs are random and the skill forbids it.
+2. **The vendored pack's files cannot be listed.** The tester wanted to confirm that the helpers a
+   pack ships exist, and the guard blocked `ls .prd-toolkit/packs/<name>/`.
+   - **Fix.** The read roots gain the repository's `.prd-toolkit/packs/`, read-only: `Read`, `Glob`,
+     `Grep` and `ls`. A pack is part of the PRD's harness, not the system under test.
+   - The skill's rule 1 names it: in a write or a suite, the tester may read the vendored pack's
+     files; in a dry run, only its `pack.yaml`.
+3. **A pack's shipped helpers had no stated shapes.** The tester asked again and again for the
+   fields of a helper's result and the type of a query helper's parameters. `prd-format.md` makes a
+   helper's internals the tester's HARNESS CHOICES, but a helper the pack ships already exists, so
+   its shapes are not the tester's to choose.
+   - **Fix.** `prd-format.md` (Harness) and `contract-types.md` (the pack manifest) say that a helper a pack ships is stated, in
+     the pack's `harness` (the Assertions or Fixtures slot), with its parameters, their types and
+     the shape of its result. A helper a pack ships whose shapes are not stated is a dry-run
+     question, not a HARNESS CHOICE.
+   - The private pack in that adoption states its own helpers' shapes in its next release. That fix
+     is not in this repository.
+
+**Tests:**
+- **Fix 1:** the guard allows a Read of `<scratchpad parent>/tasks/<id>.output`, and blocks a Glob,
+  a Grep, an `ls`, a write there, a Read of any other file there, and the same Read when the
+  scratchpad has no sibling `tasks` folder.
+- **Fix 2:** the guard allows Read, Glob, Grep and `ls` under `.prd-toolkit/packs/`, and blocks a
+  write there and a Read elsewhere in `.prd-toolkit/`.
+- **Fix 3:** a pinned line in each of the two references; an eval in which a dry-run tester given a pack
+  helper with no stated shape asks a question instead of choosing one.
