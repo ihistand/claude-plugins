@@ -29,6 +29,8 @@
 >   written, from the same adoption.
 > - Section 16 (owner, 2026-11-05): a known-failing case names the failure that counts, and the
 >   checklist asks how each precondition is checked, from the same adoption's dry run.
+> - Section 17 (owner, 2026-11-05): seven fixes from the same adoption's later dry runs, its
+>   first fix build and its first deploy.
 > - Section 13 fix 5 (owner, 2026-11-05): the check across commits is 0.8.1's existing `deleted`
 >   finding of `prd_error.py check`, kept as it is, not a new message.
 
@@ -56,7 +58,9 @@ the CLI uses.
   and a pack helper's stated shapes (section 14);
 - a suite that rewrites a test whose test case changed since the test was written (section 15);
 - a known-failing case that names its symptom, and a checklist item for how a precondition is
-  checked (section 16).
+  checked (section 16);
+- seven fixes from the same adoption's dry runs, its first fix build and its first deploy
+  (section 17).
 
 **Success:** a whole `/prd-change` or `/prd-error` cycle runs with no decision typed into the chat,
 and every record still holds the owner's own words for each decision.
@@ -90,6 +94,11 @@ It is **proven by** the owner on real work (section 9).
 | `scripts/prd_tester_guard.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `references/contract-types.md` | changed | Section 14: background task output, the vendored packs folder, a shipped helper's stated shapes (with `prd-format.md`) |
 | `scripts/prd_build_check.py`, `scripts/prdlint/buildcheck.py`, `skills/testing-from-prds/SKILL.md` and `dispatching.md`, `agents/prd-tester.md`, `skills/building-from-prds/running-a-build.md`, `skills/adopting-prds/SKILL.md` | changed | Section 15: `--stale` and the `Rewrite:` line |
 | `references/prd-format.md`, `scripts/prdlint/rules/testcases.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `skills/handling-errors/`, `skills/adopting-prds/SKILL.md`, `references/quality-checklist.md` | changed | Section 16: `symptom:` and the precondition checklist item |
+| `skills/testing-from-prds/SKILL.md`, `skills/authoring-prds/dry-run-prompt.md`, `agents/prd-tester.md`, `templates/prd/testing.md`, `references/prd-format.md`, `references/quality-checklist.md` | changed | Section 17, fixes 1 and 2: a pack's helpers are imported, never copied; the Leaks slot's traceback rule |
+| `skills/authoring-prds/SKILL.md`, `skills/adopting-prds/SKILL.md` | changed | Section 17, fix 3: a dry run failed only on harness conventions |
+| `templates/claude-block.md`, `scripts/prd_block.py` | changed | Section 17, fix 4: the change rule names the adopted areas |
+| `scripts/prd_deploy.py`, `scripts/prdlint/deploy.py`, `skills/deploying-from-prds/SKILL.md` | changed | Section 17, fix 5: `prd_deploy.py record` for a deploy done by hand |
+| `skills/building-from-prds/running-a-build.md`, `skills/building-from-prds/SKILL.md` | changed | Section 17, fixes 6 and 7: a `verified` with no build-gate test, and the builder's isolation base |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
 | `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
@@ -513,3 +522,98 @@ have prevented.
   accepts only that failure. In another, a test failing in another way is reported `fail: not the
   known failure`.
 - **Fix 2:** the checklist line, pinned.
+
+## 17. Fixes from the adoption's later dry runs, first fix and first deploy
+
+The same adoption needed seven dry runs before one passed. Its first `--fixes` build and its first
+production deploy followed. Every dry-run gap was a harness convention, none a behaviour. The owner
+added these seven fixes to 0.8.2 on 2026-11-05. None touches an adopted area of the toolkit's own
+PRD.
+
+1. **The dry run copied the pack's helpers.** The testing skill tells a dry-run tester to write
+   every helper testing.md names in its dry-run directory, "without looking whether they exist".
+   For a helper the area's pack ships, that writes a copy, and the pack's Harness forbids copies.
+   The tester followed the skill.
+   - **Fix.** `testing-from-prds`, `dry-run-prompt.md` and the agent say that a helper the area's
+     pack ships (stated in the pack's `harness`, section 14 fix 3) is never written. In every mode,
+     a dry run included, the test imports it from the vendored pack, as the Harness says.
+   - Only a helper testing.md names that no pack ships is written, as today.
+   - Its shapes come from the pack's `harness`. An unstated shape is a question, as in section 14.
+2. **A failure report printed classified values.** pytest's default long traceback prints the
+   arguments of each frame, the one that raised included. A helper that held filter values and a
+   query body printed them into the run's output.
+   - **Fix.** The Leaks slot of `templates/prd/testing.md`, and its description in
+     `prd-format.md` (Harness), require a harness to say how a failure report avoids printing the
+     values a test passes:
+     - for pytest, the harness commands carry `--tb=short`, or each helper that takes a value sets
+       `__tracebackhide__ = True`;
+     - another harness names its own equivalent.
+   - `quality-checklist.md` gains the matching item: the Leaks slot says how a failure's
+     traceback is kept free of test values.
+   - This is a template and checklist line, not a lint rule: a harness's flags are not mechanical
+     to judge.
+3. **A dry run failed only on harness conventions, and still took the full loop.** Each failed
+   run went back to `Draft`, through clarify, the mechanical gate and a fresh sample.
+   - **Fix: a harness-only round.** In `authoring-prds` phase 6 and the adoption's dry run, a
+     failed dry run counts as harness-only when every question's answer is an edit to
+     testing.md's `## Harness` and to no other PRD file. A harness-only round goes like this:
+     - the status stays `In review`, with no return to `Draft` and phase 3;
+     - the questions go to the owner in one batch;
+     - the answers are written into the Harness;
+     - lint runs;
+     - phase 6 runs again on a fresh sample, as today.
+   - Any answer that touches another file (an AC, a test case, a contract), or a question the
+     owner answers with a behaviour, makes it a full round, unchanged.
+   - The fresh sample stays. It is the only evidence that the gaps are closed.
+4. **The change rule did not fit a partly adopted PRD.** The CLAUDE.md block says "Every
+   behaviour change starts with `/prd-change`". On a PRD that lists adopted areas, a session read
+   it as covering changes outside them too, where the PRD holds nothing yet.
+   - **Fix.** When the PRD has `Adopted areas:`, `templates/claude-block.md` renders the rule as
+     `Every behaviour change in an adopted area (below) starts with <change rule>; outside them,
+     the PRD does not govern yet`.
+   - A PRD with no adoption keeps today's line.
+   - `prd_block.py` writes it. A repository picks it up on its next `prd_block.py` run, and the
+     release notes say so.
+5. **A deploy done by hand left no record.** The owner promoted the release through the
+   service's own UI, not `/prd-deploy`, so the PRD has no Deployed row for it.
+   - **Fix: `prd_deploy.py record <prd dir> --env <env> --commit <sha> --reply "<owner's words>"`.**
+     - It writes a run log marked `by hand`, holding the commit and the owner's words, and
+       replaces that environment's Deployed row. The Run column names the run log.
+     - It refuses an environment that is not in both Environments tables, and a commit that is
+       not in the repository.
+     - It runs nothing and moves no status. It exits 0, 1 on a refusal, or 2 on usage.
+   - `prd_deploy.py check` accepts a close commit that writes only what that log records.
+   - **The skill** (`deploying-from-prds`): when the owner deployed by hand, record it with
+     `record`, and never write a Deployed row directly. `verified → live` still needs that
+     environment's deploy-gate tests to pass in a suite run after the record. Without one, the
+     row is written and every status stays.
+6. **`verified` with no test of the change.** When every T-id of a block is deploy-gate, the
+   build closes it `verified` without running anything that touches the change. The
+   `built → verified` conditions hold vacuously, as `running-a-build.md` says.
+   - **Fix.** The close report names each such block:
+     `<ID>: verified with no build-gate test; its proof is the deploy gate at /prd-deploy`.
+   - The status rule is unchanged, so areas tested only live still close.
+7. **The isolated builder started from the wrong commit.** The Agent tool's `isolation: worktree`
+   cuts the builder's worktree from the main checkout's HEAD, not from the build branch. A
+   builder dispatched on a side branch (a `--fixes` branch, a feature branch) starts without the
+   branch's PRD changes.
+   - **Fix.** `running-a-build.md` step 3 says it: when the build branch is not the main
+     checkout's HEAD, dispatch the builder without isolation, and take the no-isolation path.
+   - The builder prompt gains a `Base: <sha>` line: the build branch's HEAD at dispatch. The
+     builder's skill gains a first check, `git merge-base --is-ancestor <sha> HEAD`. When it
+     fails, the builder stops with `QUESTIONS: worktree is not on the build branch`.
+
+**Tests:**
+- **Fix 1:** pinned lines in the three texts. In an eval, a dry-run tester on a case using a
+  pack-shipped helper writes no file that defines that helper.
+- **Fix 2:** the template's Leaks slot and the checklist item, pinned.
+- **Fix 3:** pinned lines in `authoring-prds` and `adopting-prds`. In an eval, a dry run whose
+  questions are all Harness conventions keeps the status `In review` and samples afresh.
+- **Fix 4:** `prd_block.py` on a PRD with `Adopted areas:` renders the new line, and on one
+  without renders today's.
+- **Fix 5:** `record` writes the run log and the Deployed row, and replaces an earlier row. It
+  refuses an unknown environment and an unknown commit, and `check` accepts its close commit.
+  The skill's rule, pinned.
+- **Fix 6:** the report line, pinned in `running-a-build.md`.
+- **Fix 7:** the step 3 line and the builder's check, pinned. In an eval, a builder whose
+  worktree lacks the base commit stops with the question.
