@@ -465,3 +465,85 @@ def test_an_interpreter_older_than_3_9_blocks_only_the_tester(monkeypatch, capsy
     assert guard.main() == code
     err = capsys.readouterr().err
     assert ("3.9" in err) == (code == 2), err
+
+
+# ---- what the tester may read: its background output and the vendored packs (0.8.2, section 14) ----
+
+def make_tasks(tmp_path: Path) -> Path:
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "b1x9.output").write_text("1 passed\n")
+    (tasks / "notes.txt").write_text("n\n")
+    return tasks
+
+
+def test_a_backgrounded_runs_output_file_is_readable(tmp_path):
+    repo = make_repo(tmp_path)
+    tasks = make_tasks(tmp_path)
+    assert call(repo, "Read", file_path=str(tasks / "b1x9.output")).returncode == 0
+    assert call(repo, "Read", file_path="../tasks/b1x9.output").returncode == 0
+
+
+def test_only_a_read_of_an_output_file_in_tasks_is_allowed(tmp_path):
+    repo = make_repo(tmp_path)
+    tasks = make_tasks(tmp_path)
+    (tasks / "sub").mkdir()
+    (tasks / "sub/b1x9.output").write_text("x\n")
+    (tmp_path / "x.output").write_text("x\n")
+    (tmp_path / "outside.txt").write_text("x\n")
+    (tasks / "l.output").symlink_to(tmp_path / "outside.txt")
+    assert_blocked(call(repo, "Read", file_path=str(tasks / "notes.txt")), "read")
+    assert_blocked(call(repo, "Read", file_path=str(tasks)), "read")
+    assert_blocked(call(repo, "Glob", path=str(tasks), pattern="*"), "read")
+    assert_blocked(call(repo, "Grep", path=str(tasks), pattern="x"), "read")
+    assert_blocked(bash(repo, f"ls {tasks}"), "read")
+    assert_blocked(bash(repo, f"ls {tasks}/b1x9.output"), "read")
+    assert_blocked(call(repo, "Write", file_path=str(tasks / "b1x9.output"), content="x"), "write")
+    assert_blocked(call(repo, "Edit", file_path=str(tasks / "b1x9.output"), old_string="1", new_string="2"), "write")
+    assert_blocked(call(repo, "Read", file_path=str(tasks / "../x.output")), "read")
+    assert_blocked(call(repo, "Read", file_path=str(tasks / "sub/b1x9.output")), "read")
+    assert_blocked(call(repo, "Read", file_path=str(tasks / "l.output")), "read")  # a symlink out of tasks/
+
+
+def test_an_output_file_is_not_readable_without_a_sibling_tasks_folder(tmp_path):
+    repo = make_repo(tmp_path)
+    assert_blocked(call(repo, "Read", file_path=str(tmp_path / "tasks/b1x9.output")), "read")
+    other = tmp_path / "elsewhere/tasks"
+    other.mkdir(parents=True)
+    (other / "b1x9.output").write_text("x\n")
+    assert_blocked(call(repo, "Read", file_path=str(other / "b1x9.output")), "read")  # not the scratchpad's sibling
+    payload = {"agent_type": "prd-tester", "tool_name": "Read", "cwd": str(repo),
+               "tool_input": {"file_path": str(tmp_path / "tasks/b1x9.output")}}  # no scratchpad_dir
+    make_tasks(tmp_path)
+    assert_blocked(run(payload), "read")
+
+
+def make_pack(repo: Path) -> Path:
+    pack = repo / ".prd-toolkit/packs/orders"
+    pack.mkdir(parents=True)
+    (pack / "pack.yaml").write_text("pack: orders\n")
+    (pack / "helpers.py").write_text("def h(): ...\n")
+    (repo / ".prd-toolkit/prd_lint.py").write_text("x = 1\n")
+    return pack
+
+
+def test_the_vendored_packs_are_read_only_and_nothing_else_of_prd_toolkit(tmp_path):
+    repo = make_repo(tmp_path)
+    pack = make_pack(repo)
+    assert call(repo, "Read", file_path=".prd-toolkit/packs/orders/helpers.py").returncode == 0
+    assert call(repo, "Glob", path=".prd-toolkit/packs/orders", pattern="*.py").returncode == 0
+    assert call(repo, "Grep", path=".prd-toolkit/packs/orders", pattern="def").returncode == 0
+    assert bash(repo, "ls .prd-toolkit/packs/orders/").returncode == 0
+    assert bash(repo, "ls .prd-toolkit/packs").returncode == 0
+    assert_blocked(call(repo, "Write", file_path=str(pack / "new.py"), content="x"), "write")
+    assert_blocked(call(repo, "Edit", file_path=str(pack / "helpers.py"), old_string="h", new_string="g"), "write")
+    assert_blocked(bash(repo, "mkdir .prd-toolkit/packs/orders/sub"), "write")
+    assert_blocked(call(repo, "Read", file_path=".prd-toolkit/prd_lint.py"), "read")
+    assert_blocked(call(repo, "Glob", path=".prd-toolkit", pattern="*"), "read")
+    assert_blocked(bash(repo, "ls .prd-toolkit"), "read")
+
+
+def test_the_vendored_packs_stay_closed_when_degraded(tmp_path):
+    repo = make_repo(tmp_path, testing=None)
+    make_pack(repo)
+    assert_blocked(call(repo, "Read", file_path=".prd-toolkit/packs/orders/helpers.py"), "read")

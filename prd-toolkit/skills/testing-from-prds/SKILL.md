@@ -54,6 +54,7 @@ into your report.
    dry-run directory; do not list or read the test roots. In a suite, you may also read the
    helpers testing.md names and the test files that cite one of your T-ids (for example
    `tests/conftest.py`, and a test whose docstring holds `@prd T-…`), plus the files you write; a write reads the same.
+   In a write or a suite you may read the vendored pack's files under `.prd-toolkit/packs/`; in a dry run, only its `pack.yaml`.
    Never `src/`, other tests, README, CLAUDE.md, git history, memory or the environment. Not "a peek", not "only the signature",
    not by `cat`, `python -c`, `grep` or a test that prints the source. Always give Glob and Grep a
    `path` inside the PRD folder or your directory.
@@ -77,6 +78,7 @@ into your report.
    QUESTIONS (what you needed, and which file should have said it) and carry on.
 6. Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
    never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those.
+7. **Background runs (suite mode).** A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output. The `tasks` folder also holds the caller's background tasks; the guard lets you read only an `<id>.output` file there.
 
 ## Citations
 
@@ -97,7 +99,7 @@ If they do not exist yet, write them yourself, to match what testing.md says abo
 dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a
 suite, in the test roots. A detail testing.md leaves open about a
 helper's own internals (a method signature, a return value, a default such as following
-redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. Anything else the
+redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. A helper a pack ships already exists, so its parameters and the shape of its result are not yours to choose. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. Record the question, call the helper as testing.md names it, and do not write a stand-in for it that decides its shapes. Anything else the
 PRD does not tell you is a question: behaviour, payloads, status codes, error codes, fixture
 contents, environments, identities, or a convention testing.md should state.
 

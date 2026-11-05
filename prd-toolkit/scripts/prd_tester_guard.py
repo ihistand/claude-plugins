@@ -29,6 +29,7 @@ _MARKER = re.compile(r"\[NEEDS CLARIFICATION:[^\]]*\]")
 _BACKTICKED = re.compile(r"`([^`]+)`")
 _ITEM_LIST = re.compile(r"\s*(`[^`]+`(?:\s*,\s*`[^`]+`)*)")
 _OP_CHARS = set("();<>|&")
+_TASK_OUTPUT = re.compile(r"^[A-Za-z0-9_-]+\.output$")
 
 
 class Block(Exception):
@@ -132,7 +133,7 @@ def parse_harness_commands(text: str) -> list[list[str]]:
 # ---- roots ----
 
 class Context:
-    """Read roots are PRD + scratch + test roots; write roots are scratch + test roots only, so the
+    """Read roots are PRD + scratch + test roots + the vendored packs (outside degraded mode); write roots are scratch + test roots only, so the
     tester can never edit the PRD (and with it its own policy)."""
 
     def __init__(self, data: dict):
@@ -152,6 +153,12 @@ class Context:
             p = (self.cwd / sp).resolve()
             if len(p.parts) > 1:
                 self.scratch = p
+        # Claude Code writes a background task's output in the `tasks` folder beside the scratchpad.
+        tasks = self.scratch.parent / "tasks" if self.scratch else None
+        self.tasks_dir: Path | None = tasks.resolve() if tasks and tasks.is_dir() else None
+        # The vendored packs are part of the PRD's harness; a symlink out of the repository is no pack folder.
+        packs = (self.top / ".prd-toolkit" / "packs").resolve()
+        self.packs_root: Path | None = packs if packs.is_dir() and packs.is_relative_to(self.top) else None
 
     def _toplevel(self) -> Path:
         try:
@@ -206,7 +213,8 @@ class Context:
     def read_roots(self) -> list[Path]:
         if self.degraded:
             return self.prd_roots
-        return self.prd_roots + ([self.scratch] if self.scratch else []) + self.test_roots
+        return (self.prd_roots + ([self.scratch] if self.scratch else []) + self.test_roots
+                + ([self.packs_root] if self.packs_root else []))
 
     def write_roots(self) -> list[Path]:
         if self.degraded:
@@ -219,6 +227,14 @@ class Context:
 
     def can_read(self, raw: str) -> bool:
         return self.inside(raw, self.read_roots())
+
+    def can_read_task_output(self, raw: str) -> bool:
+        """Read (and only Read) of `<id>.output` directly in the tasks folder: a symlink or `..` that leaves
+        the folder resolves to another parent and fails."""
+        if self.tasks_dir is None:
+            return False
+        p = (self.cwd / raw).resolve()
+        return p.parent == self.tasks_dir and bool(_TASK_OUTPUT.match(p.name))
 
     def can_write(self, raw: str) -> bool:
         return self.inside(raw, self.write_roots())
@@ -404,8 +420,12 @@ def check(data: dict) -> None:
         pat = ti.get("pattern") if tool == "Glob" else None
         if isinstance(pat, str) and (pat.startswith(("/", "~")) or ".." in pat.split("/")):
             raise ctx.deny("read")
+    elif tool == "Read":
+        fp = ti.get("file_path")
+        if not (isinstance(fp, str) and fp and ctx.can_read_task_output(fp)):
+            check_path(ctx, fp, "read")
     else:
-        check_path(ctx, ti.get("file_path"), "read" if tool == "Read" else "write")
+        check_path(ctx, ti.get("file_path"), "write")
 
 
 def is_tester(agent_type: object) -> bool:

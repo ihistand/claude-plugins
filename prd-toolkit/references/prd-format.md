@@ -507,7 +507,7 @@ refer to (levels, environments, fixtures).
   Environment switch, Database access, Tools on the runner, Clean state, Persistent environments,
   Layout, HTTP requests, Fixtures, Browser identity, Assertions, Waits, Effects, Leaks, Acceptance.
   Each states the convention, not a helper's code; a helper's internals are the dry-run tester's
-  HARNESS CHOICES. A slot that does not apply reads `Not applicable: <reason>`. The Layout
+  HARNESS CHOICES. A helper a pack ships is stated in the pack's `harness` (the Assertions or Fixtures slot) with its parameters, their types and the shape of its result. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. A slot that does not apply reads `Not applicable: <reason>`. The Layout
   bullet also ends with `Test roots: ` and the test directories, each in backticks (for example
   `tests/`); the loader reads those as the roots the tester may write under. Anything inside a
   `[NEEDS CLARIFICATION: …]` marker is ignored, so an unfilled template has no roots. The loader

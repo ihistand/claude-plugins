@@ -20,6 +20,27 @@ claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plug
 | `adopting-fix-restates-asks` (notes area `extracted`, a finished `.prd-confirm-notes.json`: FR-001 and FR-002 `confirm`, E-001 `intended`, Q-01 `fix` with "Search should match the case of the term exactly, as it does now.") RED | 0.44 | 0.56 | -0.11 | Unchanged skill text. One with run applied the `fix` as a correction (FR-002 `approved`, Q-01 removed: 0.00); the other two left Q-01 but never asked the owner about it (0.67 each). Without the plugin, two of three decided it themselves and removed Q-01 (0.33) and one asked (1.00). |
 | `adopting-fix-restates-asks` GREEN | 1.00 | 0.33 | +0.67 | The new rule: all three with runs ask the owner in the chat, naming Q-01, whether they meant keep it; FR-002 is not made `approved` and the §13 bullet stays. Without the plugin all three remove Q-01 and decide it themselves. |
 
+### Task 10: `tester-pack-helper-unstated-asks` (spec section 14 fix 3)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 10's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts, plus the new case
+directory); GREEN on the worktree. Same command form as above with `--case 'tester-pack-helper-unstated-asks'`.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `tester-pack-helper-unstated-asks` (notes area `confirmed`; a vendored made-up pack `ledger` ships `stored_notes`; testing.md's Assertions slot says T-001.1's effect is checked with it; no slot states its parameters or result) RED | 0.67 | 0.56 | +0.11 | Unchanged text. All three with runs put the helper under QUESTIONS and also wrote a stand-in `stored_notes` in the dry-run directory, with its parameters and result chosen under HARNESS CHOICES (grader `no-harness-choice-for-the-helper-shape` failed 3 of 3). |
+| `tester-pack-helper-unstated-asks` GREEN | 1.00 | 0.44 | +0.56 | All three: the helper is a QUESTION (import path, signature, result shape), "No helper was written", the test calls it as testing.md names it. |
+
+- **Graders:** `tester-dispatched`, `questions-name-the-helper` (QUESTIONS section names `stored_notes`),
+  `no-harness-choice-for-the-helper-shape` (no HARNESS CHOICES line in which `stored_notes` takes or returns anything).
+- **Grader round:** the first form of the last grader failed on any HARNESS CHOICES mention of `stored_notes`, so it
+  also failed a run that said "no stand-in was written". It now needs a shape word on the same line. RED was re-run
+  on it (the row above); the first RED, on the looser grader, also scored with 0.67.
+- **Text round:** the two lines the brief gives (`testing-from-prds` rule 1 and suite rule 7, the agent) and the
+  `harness` sentence in `prd-format.md` and `contract-types.md` did not change the run (GREEN 0.67, with runs still
+  wrote the stand-in). The skill's Gaps section and the agent now say a shipped helper's shapes are a question and
+  that no stand-in decides them.
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply
