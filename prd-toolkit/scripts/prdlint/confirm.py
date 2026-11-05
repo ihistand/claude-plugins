@@ -51,6 +51,7 @@ class Item:
     fingerprint: str = ""
     where: str = ""
     related: list[str] = field(default_factory=list)  # a requirement's open E-nnn entries that touch it
+    confirmed: str | None = None  # a bug's `Confirmed:` reply in errors.md: the item counts as answered
 
 
 def _fp(text: str) -> str:
@@ -120,7 +121,8 @@ def _bugs(prd: Prd, root: Path, area: str, ids: set[str], cache: dict) -> list[I
             continue
         served = "\n".join(lines[e.line - 1 : e.end]).rstrip()
         cites = _excerpts(root, e.detected, cache)
-        out.append(Item(e.id, "bug", e.title, served, [], [c[3] for c in cites], _fp(served), "errors.md"))
+        out.append(Item(e.id, "bug", e.title, served, [], [c[3] for c in cites], _fp(served), "errors.md",
+                        confirmed=e.confirmed[1] if e.state == "confirmed" and e.confirmed else None))
     return out
 
 
@@ -326,9 +328,11 @@ def save_answers(path: Path, data: dict) -> None:
 
 
 def open_ids(items: list[Item], answers: dict) -> list[str]:
-    """Items with no answer, or whose answer was given to a different text (its fingerprint differs)."""
+    """Items with no answer, or whose answer was given to a different text (its fingerprint differs).
+    A bug whose errors.md entry holds `Confirmed:` is answered, with or without an answers file."""
     saved = answers.get("answers", {}) if isinstance(answers, dict) else {}
-    return [i.id for i in items if not isinstance(saved.get(i.id), dict) or saved[i.id].get("fingerprint") != i.fingerprint]
+    return [i.id for i in items if i.confirmed is None
+            and (not isinstance(saved.get(i.id), dict) or saved[i.id].get("fingerprint") != i.fingerprint)]
 
 
 def ensure_excluded(repo_root: Path) -> None:
@@ -385,6 +389,8 @@ def validate_answer(item: Item, decision: Any, text: Any, acs: Any) -> tuple[str
         raise Refused(f"unknown decision {decision!r}")
     if decision not in ALLOWED[item.kind]:
         raise Refused(f"decision {decision} is not allowed for a {item.kind}")
+    if item.confirmed is not None:
+        raise Refused(f"{item.id} is confirmed in errors.md; change it through /prd-error")
     if text is not None and not isinstance(text, str):
         raise Refused("text must be a string")
     text = (text or "").strip()
@@ -400,6 +406,8 @@ def validate_answer(item: Item, decision: Any, text: Any, acs: Any) -> tuple[str
     if decision == "correct":
         if not text and not acs:
             raise Refused("correct needs text or an edited AC")
+    elif decision == "fix" and not text:
+        raise Refused("a fix needs its words: what should it do instead?")
     elif decision in REQUIRES_TEXT and not text:
         raise Refused(f"{decision} needs text")
     return text, acs

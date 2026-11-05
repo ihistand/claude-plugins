@@ -78,9 +78,22 @@ def _serve_items(prd, args) -> int:
                 webbrowser.open(f"http://127.0.0.1:{server.server_address[1]}/?token={token}")
             except Exception:
                 pass
-        return confirm.run(server)
+        code = confirm.run(server)
+        if server.end == "idle":
+            _say_idle(args, items, model.repo_root(prd.root))
+        return code
     finally:
         server.server_close()
+
+
+def _say_idle(args, items, root: Path) -> None:
+    try:
+        left = len(confirm.open_ids(items, confirm.load_answers(confirm.answers_path(root, args.area))))
+    except confirm.Refused:
+        left = len(items)
+    print(f"prd_confirm: stopped after {args.idle_minutes:g} minutes with no page open; {len(items) - left} of "
+          f"{len(items)} answered, kept in {confirm.answers_path(root, args.area).name}; serve again to go on",
+          file=sys.stderr)
 
 
 def _write_command(prd, args) -> int:

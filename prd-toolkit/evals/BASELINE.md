@@ -1,5 +1,38 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.2 baseline
+
+One new case for the 0.8.2 skill text (Task 8, spec section 13 fix 2): a `fix` answer whose words restate what the
+item already says is asked about, never decided. Recorded 2026-11-05 on branch `feat/prd-toolkit-0.8.2`
+(uncommitted until Task 8's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318, plugin 0.8.1 (the manifest
+bump is Task 6). RED is the same case on the unchanged `adopting-prds` text; GREEN is the case on the Task 8 text.
+
+Command, from the repo root:
+
+```
+claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plugin --no-publish -j 4 --keep-temp \
+  --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" \
+  --case 'adopting-fix-restates-asks' --json <out>.json
+```
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `adopting-fix-restates-asks` (notes area `extracted`, a finished `.prd-confirm-notes.json`: FR-001 and FR-002 `confirm`, E-001 `intended`, Q-01 `fix` with "Search should match the case of the term exactly, as it does now.") RED | 0.44 | 0.56 | -0.11 | Unchanged skill text. One with run applied the `fix` as a correction (FR-002 `approved`, Q-01 removed: 0.00); the other two left Q-01 but never asked the owner about it (0.67 each). Without the plugin, two of three decided it themselves and removed Q-01 (0.33) and one asked (1.00). |
+| `adopting-fix-restates-asks` GREEN | 1.00 | 0.33 | +0.67 | The new rule: all three with runs ask the owner in the chat, naming Q-01, whether they meant keep it; FR-002 is not made `approved` and the §13 bullet stays. Without the plugin all three remove Q-01 and decide it themselves. |
+
+### Rounds and rulings (0.8.2)
+
+- **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply
+  the answers". The prompt now starts "Take the notes area of docs/prd/notes/ through the confirmation step of its
+  adoption", as `adopting-confirm-headless-fallback` does. The RED and GREEN rows are both on that prompt.
+- **`asks-the-owner-about-q-01` was first written with an inline `(?is)`**, which a JavaScript regex rejects (the grader
+  threw, so it failed in every run, GREEN included). It now uses `flags: i` and lookaheads.
+- **Graders:** `asks-the-owner-about-q-01` (the last message names Q-01 and asks a question about meaning or keeping
+  it), `no-correction-for-fr-002` (FR-002 never `approved`), `q-01-stays-open` (the §13 bullet is still there),
+  `skill-fired` (with arm only).
+- **Scaffold:** `notes_repo.py extracted`, a §13 bullet Q-01 committed, then `prd_confirm.py open`, `answer` x4 and
+  `done` write the answers file, so its fingerprints are the real ones. The file stays untracked.
+
 ## 0.8.1 baseline
 
 Two new cases for the 0.8.1 skill text (Task 12): `changing-prds` takes its IDs and its bump from `prd_change.py`,

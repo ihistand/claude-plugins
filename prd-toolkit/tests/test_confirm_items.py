@@ -316,3 +316,63 @@ def test_punctuated_and_prefixed_identifiers_name_their_keys(tmp_path):
     got = ids(prd)
     for k in ("NOTES_LIMIT", "MAX_ROWS", "orders_daily"):
         assert f"config.yaml:{k}.owner" in got, k
+
+
+# ---- 0.8.2: a confirmed bug counts as answered ----
+
+def classify(prd, confirmed):
+    """E-001 classified `code bug`, with a `Confirmed:` line when `confirmed`."""
+    f = prd / "errors.md"
+    t = f.read_text(encoding="utf-8").replace("Classification: unclassified", "Classification: code bug", 1)
+    if confirmed:
+        t = t.replace("Classification: code bug\n", 'Classification: code bug\nConfirmed: 2026-11-05, "yes, a bug"\n', 1)
+    f.write_text(t, encoding="utf-8")
+
+
+def test_a_confirmed_entry_is_answered_and_a_proposed_one_is_open(tmp_path):
+    repo, prd, _ = build(tmp_path)
+    classify(prd, confirmed=False)
+    proposed = by_id(confirm.build_items(model.load(prd), "notes"))["E-001"]
+    assert proposed.confirmed is None
+    assert "E-001" in confirm.open_ids([proposed], {})
+    classify(prd, confirmed=True)
+    items = confirm.build_items(model.load(prd), "notes")
+    bug = by_id(items)["E-001"]
+    assert bug.confirmed == "yes, a bug"
+    assert "E-001" not in confirm.open_ids(items, {})
+    assert "E-001" not in confirm.open_ids(items, {"answers": {}})
+
+
+def test_status_counts_a_confirmed_entry_with_no_answers_file(tmp_path):
+    from test_confirm_cli import run
+    repo, prd, _ = build(tmp_path)
+    classify(prd, confirmed=False)
+    r = run("status", str(prd), "--area", "notes")
+    assert r.stdout.splitlines()[0] == "0/5" and "open E-001" in r.stdout
+    classify(prd, confirmed=True)
+    r = run("status", str(prd), "--area", "notes")
+    assert r.stdout.splitlines()[0] == "1/5" and "open E-001" not in r.stdout
+
+
+def test_done_is_not_refused_for_a_confirmed_entry(tmp_path):
+    repo, prd, _ = build(tmp_path)
+    classify(prd, confirmed=True)
+    p = model.load(prd)
+    items = confirm.build_items(p, "notes")
+    for i in items:
+        if i.id != "E-001":
+            d = {"requirement": "confirm", "question": "intended", "marker": "answer"}[i.kind]
+            confirm.record_answer(p, "notes", i.id, d, "ops", None, repo)
+    assert confirm.mark_done(p, "notes", items, repo)["done"] is True
+
+
+def test_a_fix_needs_its_words(tmp_path):
+    repo, prd, items = build(tmp_path)
+    p = model.load(prd)
+    for words in ("", "   "):
+        with pytest.raises(confirm.Refused, match="a fix needs its words: what should it do instead"):
+            confirm.validate_answer(by_id(items)["Q-01"], "fix", words, None)
+    with pytest.raises(confirm.Refused, match="a fix needs its words"):
+        confirm.validate_answer(by_id(items)["Q-01"], "fix", None, None)
+    assert confirm.validate_answer(by_id(items)["Q-01"], "fix", " keep none ", None) == ("keep none", {})
+    assert confirm.validate_answer(by_id(items)["Q-01"], "intended", "", None) == ("", {})

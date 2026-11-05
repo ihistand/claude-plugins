@@ -279,3 +279,26 @@ def test_a_bind_failure_other_than_in_use_names_its_reason(tmp_path, monkeypatch
     monkeypatch.setattr(confirm, "make_server", in_use)
     assert prd_confirm.main(["serve", str(prd), "--area", "notes", "--no-open", "--port", "80"]) == 2
     assert capsys.readouterr().err.strip() == "prd_confirm: port 80 is in use"
+
+
+# ---- 0.8.2 ----
+
+def test_answer_fix_with_no_words_exits_1(tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    r = run("answer", str(prd), "notes", "Q-01", "--decision", "fix", "--reply", "x", "--correction", " ")
+    assert r.returncode == 1 and "refused:" in r.stderr
+    r = run("answer", str(prd), "notes", "Q-01", "--decision", "fix", "--reply", "")
+    assert r.returncode == 1 and not confirm.answers_path(repo, "notes").exists()
+
+
+def test_the_idle_stop_says_how_far_the_owner_got(tmp_path, procs):
+    repo, prd = make_confirm_repo(tmp_path)
+    items = confirm.build_items(model.load(prd), "notes")
+    answers = {i.id: {"decision": "confirm", "fingerprint": i.fingerprint} for i in items[:2]}
+    confirm.save_answers(confirm.answers_path(repo, "notes"), {"area": "notes", "answers": answers})
+    p = serve(procs, prd, "--idle-minutes", "0.01")
+    assert URL.match(first_line(p))
+    assert p.wait(WAIT) == 3
+    err = p.stderr.read()
+    assert err.splitlines() == ["prd_confirm: stopped after 0.01 minutes with no page open; 2 of 5 answered, "
+                                "kept in .prd-confirm-notes.json; serve again to go on"]

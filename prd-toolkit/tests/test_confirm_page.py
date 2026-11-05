@@ -108,7 +108,7 @@ def test_names_every_request_and_decision():
 def test_labels_and_states():
     text = page()
     for label in ("Confirm", "Correct…", "It's a bug…", "Someone else decides…", "Real bug — it should…",
-                  "Intended — keep it", "Yes, intended", "No, fix it", "In my own words", "Answer",
+                  "Intended — keep it", "Keep it as it is", "Change it…", "Answer in my own words", "Answer",
                   "Show the code", "edit the criteria", "What should it do instead?", "Who decides?",
                   "Requirements", "Bugs", "Questions", "Settings", " of ", "Change", "Undo", "Done",
                   "changed since you answered", "you can close this tab", "resumes where you left off"):
@@ -214,7 +214,7 @@ const fixed = { shell: new El(), list: new El(), card: new El(), end: new El() }
 const item = { id: 'FR-001', kind: 'requirement', title: 't', text: 't', acs: [], excerpts: [], where: 'w', summary: null };
 const listing = { area: 'notes', items: [item], answers: { 'FR-001': { decision: 'confirm' } }, open: [], changed: [] };
 const ctx = {
-  console, URLSearchParams, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
+  console, URLSearchParams, setInterval: () => 0, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
   document: { title: '', createElement: () => new El(), createTextNode: (t) => ({ t }),
               getElementById: (id) => fixed[id] || null, addEventListener() {} },
   fetch: async (path) => {
@@ -289,7 +289,7 @@ RELATED_RUN = DONE_RUN.split("const ctx = {")[0].replace(
     "acs: [], excerpts: [], where: 'w', summary: null",
     "acs: [], excerpts: [], where: 'w', summary: null, related: ['E-001', '<b>E-002</b>']") + r"""
 const ctx = {
-  console, URLSearchParams, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
+  console, URLSearchParams, setInterval: () => 0, location: { search: '?token=abc' }, window: { matchMedia: () => ({ matches: false }) },
   document: { title: '', createElement: () => new El(), createTextNode: (t) => ({ t }),
               getElementById: (id) => fixed[id] || null, addEventListener() {} },
   fetch: async () => ({ status: 200, json: async () => listing }),
@@ -332,5 +332,32 @@ def test_every_text_box_has_a_hint():
     assert actions.count("hint: BUG_HINT") == 2
     for kind in ("question", "marker"):
         assert re.search(r"const NOTE_HINT = \{[^}]*" + kind + ":", js), kind
-    assert "With No, say what it should do instead" in js and "answer both" in js
+    assert "Change it needs what it should do instead" in js and "answer both" in js
     assert "NOTE_HINT[it.kind]" in js[js.index("function decideView"):js.index("function boxView")]
+
+
+# ---- 0.8.2 ----
+
+def test_the_page_pings_every_minute_outside_the_inbox():
+    js = scripts()
+    assert "setInterval" in js and "60000" in js and "'/ping'" in js
+    guard = re.search(r"if \(!HOST\) \{\s*(?://[^\n]*\n\s*)*setInterval\(", js)
+    assert guard, "the ping must run only outside the inbox host"
+
+
+def test_the_choice_labels_say_what_they_do():
+    text = page()
+    for label in ("Keep it as it is", "Change it…", "Answer in my own words", "What should it do instead?"):
+        assert label in text, label
+    for old in ("Yes, intended", "No, fix it", "In my own words"):
+        assert old not in text.replace("Answer in my own words", ""), old
+    js = scripts()
+    fix = re.search(r"\{ decision: 'fix'[^\n]*\n?[^\n]*\}", js).group(0)
+    assert "needs: true" in fix
+    assert "decision: 'intended', label: 'Keep it as it is'" in js
+
+
+def test_a_confirmed_bug_shows_its_reply_and_no_choice_keys():
+    js = scripts()
+    assert "Confirmed in errors.md; change it through /prd-error" in js
+    assert "it.confirmed" in js

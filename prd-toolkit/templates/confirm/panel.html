@@ -149,20 +149,21 @@ const ACTIONS = {
       prompt: 'Who decides?', hint: WHO },
   ],
   question: [
-    { decision: 'intended', label: 'Yes, intended', key: 'c', icon: '✓', saved: 'Yes, intended', note: true },
-    { decision: 'fix', label: 'No, fix it', key: 'r', icon: '✎', saved: 'No, fix it', note: true },
-    { decision: 'answer', label: 'In my own words', icon: '✎', saved: 'In my own words', note: true, needs: true },
+    { decision: 'intended', label: 'Keep it as it is', key: 'c', icon: '✓', saved: 'Keep it as it is', note: true },
+    { decision: 'fix', label: 'Change it…', key: 'r', icon: '✎', saved: 'Change it', note: true, needs: true,
+      placeholder: 'What should it do instead?' },
+    { decision: 'answer', label: 'Answer in my own words', icon: '✎', saved: 'Answer in my own words', note: true, needs: true },
   ],
   marker: [
     { decision: 'answer', label: 'Answer', icon: '✓', saved: 'Answered', note: true, needs: true, primary: true },
   ],
 };
 const NOTE_PROMPT = {
-  question: 'Your answer in your own words, or a note to go with Yes or No (optional for those two)',
+  question: 'Your answer in your own words, what it should do instead, or a note to go with Keep it as it is (optional there)',
   marker: 'What should the value be?',
 };
 const NOTE_HINT = {
-  question: 'Yes or No needs no note. With No, say what it should do instead, or you are asked in the chat. If the question asks two things, answer both.',
+  question: 'Keep it as it is needs no note. Change it needs what it should do instead. If the question asks two things, answer both.',
   marker: 'The value as it should be written in the contract.',
 };
 const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, ended: null, notice: '' };
@@ -189,6 +190,7 @@ function h(tag, props, ...kids) {
 const has = (obj, key) => !!obj && Object.prototype.hasOwnProperty.call(obj, key);
 const cur = () => S.order[S.cur];
 const isOpen = (id) => S.data.open.includes(id);
+const confirmedBy = (it) => (typeof it.confirmed === 'string' ? it.confirmed : null);
 const isChanged = (id) => S.data.changed.includes(id);
 const savedFor = (id) => (has(S.data.answers, id) ? S.data.answers[id] : null);
 const actionFor = (kind, decision) => (ACTIONS[kind] || []).find((a) => a.decision === decision);
@@ -200,6 +202,7 @@ function draft(id) {
 }
 
 function stateOf(it) {
+  if (confirmedBy(it) !== null) return { icon: '✓', cls: 'done', label: 'confirmed in errors.md' };
   if (isChanged(it.id)) return { icon: '⟳', cls: 'changed', label: 'changed since you answered' };
   if (isOpen(it.id)) return { icon: '·', cls: 'open', label: 'open' };
   const a = savedFor(it.id);
@@ -361,7 +364,8 @@ function pick(it, a) {
     return;
   }
   if (a.note && a.needs && !d.text.trim()) {
-    d.error = it.kind === 'marker' ? 'Type the value first.' : 'Type your answer first, or choose Yes or No.';
+    d.error = it.kind === 'marker' ? 'Type the value first.'
+      : a.decision === 'fix' ? 'Say what it should do instead.' : 'Type your answer first, or choose Keep it as it is.';
     render();
     focusId('note');
     return;
@@ -521,12 +525,16 @@ function cardView() {
       h('summary', {}, 'Show the code', it.excerpts.length > 1 ? ` (${it.excerpts.length} places)` : ''),
       it.excerpts.map((x) => h('pre', { class: 'code', text: x }))));
   }
-  if (isChanged(it.id) && saved) {
+  if (confirmedBy(it) !== null) {
+    out.push(h('section', { class: 'confirmed' }, h('h3', { text: 'Your answer' }),
+      h('div', { class: 'saved' }, h('div', { class: 'decision', text: '✓ Confirmed' }), h('p', { class: 'said', text: it.confirmed })),
+      h('p', { class: 'hint', text: 'Confirmed in errors.md; change it through /prd-error' })));
+  } else if (isChanged(it.id) && saved) {
     out.push(h('div', { class: 'notice warn', role: 'status' },
       h('strong', { text: '⟳ This item changed since you answered.' }), ' Your earlier answer is below; answer it again.',
       savedView(it, saved)));
   }
-  if (saved && !deciding(it.id)) {
+  if (saved && !deciding(it.id) && confirmedBy(it) === null) {
     out.push(h('section', {}, h('h3', { text: 'Your answer' }), savedView(it, saved),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn', disabled: S.busy, events: { click: () => change(it) } }, 'Change'),
@@ -550,8 +558,8 @@ function savedView(it, a) {
   return box;
 }
 
-function textarea(id, value, onInput, rows, extra) {
-  return h('textarea', { id, rows: rows || 3, class: extra, value,
+function textarea(id, value, onInput, rows, extra, placeholder) {
+  return h('textarea', { id, rows: rows || 3, class: extra, value, placeholder,
     events: { input: (e) => { onInput(e.target.value); clearError(); } } });
 }
 
@@ -569,7 +577,8 @@ function decideView(it, d) {
   if (changing) out.append(h('h3', { text: 'Change your answer' }));
   if (acts.some((a) => a.note)) {
     out.append(h('label', { class: 'prompt', for: 'note', text: NOTE_PROMPT[it.kind] }),
-      textarea('note', d.text, (v) => { d.text = v; }, it.kind === 'marker' ? 2 : 3));
+      textarea('note', d.text, (v) => { d.text = v; }, it.kind === 'marker' ? 2 : 3, undefined,
+        (acts.find((a) => a.placeholder) || {}).placeholder));
     if (NOTE_HINT[it.kind]) out.append(h('p', { class: 'hint', text: NOTE_HINT[it.kind] }));
   }
   const row = h('div', { class: 'actions' });
@@ -667,5 +676,9 @@ document.addEventListener('keydown', (e) => {
   pick(it, a);
 });
 
-if (!HOST) { if (TOKEN) load(); else end('forbidden'); }
+if (!HOST) {
+  // Only a request resets the server's idle clock, so an open page asks every minute while the owner reads.
+  setInterval(() => { if (TOKEN && !S.ended) call('GET', '/ping'); }, 60000);
+  if (TOKEN) load(); else end('forbidden');
+}
 </script>

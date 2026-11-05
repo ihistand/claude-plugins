@@ -354,7 +354,8 @@ def test_intended_on_a_question_and_ask_on_an_entry_have_their_own_instruction()
 def test_each_field_of_an_answer_is_named():
     f = form_part()
     assert ("`text` is the intended behaviour for `correct` and `bug`, the person for `ask`, the answer for a "
-            "question's `answer`, the value for a marker's `answer`, and an optional note for `intended` and `fix`") in f
+            "question's `answer`, the value for a marker's `answer`, an optional note for `intended`, and what it "
+            "should do instead for `fix`") in f
     assert "`acs` (`correct` only) maps an AC ID to its full new text, which replaces that AC verbatim" in f
     after = f.split("exit `0`", 1)[1].split("exit `3`", 1)[0]
     assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
@@ -408,11 +409,11 @@ def test_the_summaries_file_is_deleted_on_exit_two_and_on_a_fallback():
     assert "delete `.prd-confirm-<area>-summaries.json` and take the fallbacks" in two
 
 
-def test_fix_with_no_note_asks_and_every_question_answer_removes_its_bullet():
+def test_fix_is_a_correction_and_every_question_answer_removes_its_bullet():
     f = form_part()
-    assert ("when `fix` carries no note and the intended behaviour is not evident from the question, ask the owner "
-            "for it in the chat, for that one item") in f
-    assert "`answer`, `fix` and `intended` on a question each remove the §13 bullet" in f
+    assert "`fix` on a question: the requirement it blocks becomes a correction to what `text` says" in f
+    assert "`answer`, a `fix` that is applied and `intended` on a question each remove the §13 bullet" in f
+    assert "Leave that item's §13 bullet in place until they answer" in f
 
 
 def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
@@ -420,3 +421,12 @@ def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
     assert "re-read the output until the `url=` line appears" in f
     assert "never poll for the exit and never sleep" in f
     assert "never poll it and never sleep" not in f
+
+
+# ---- 0.8.2: a fix that restates the item ----
+
+def test_a_fix_that_restates_the_item_is_asked_about_never_decided():
+    f = " ".join(form_part().split())
+    assert ("A `fix` whose words describe the behaviour the item already states is not applied as a correction: "
+            "ask the owner in the chat, for that one item, whether they meant keep it. Never decide it yourself.") in f
+    assert "refuse a `fix` without words" in f

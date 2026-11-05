@@ -248,7 +248,8 @@ never poll for the exit and never sleep. Then by its exit code:
   serve again or a fallback below. Apply the answers of the other items, and write each into the
   PRD as soon as you apply it, by its `decision`. `text` is the intended behaviour for `correct`
   and `bug`, the person for `ask`, the answer for a question's `answer`, the value for a marker's
-  `answer`, and an optional note for `intended` and `fix`. `acs` (`correct` only) maps an AC ID to
+  `answer`, an optional note for `intended`, and what it should do instead for `fix` (the form
+  and `prd_confirm.py answer` refuse a `fix` without words). `acs` (`correct` only) maps an AC ID to
   its full new text, which replaces that AC verbatim. Each answer also records the item's `where`
   and `served` text: find a marker by its `served` line in the contract file that `where` names.
   - `confirm`: status `live (since <version>)`, the §11 row `live` with that Since.
@@ -275,8 +276,10 @@ never poll for the exit and never sleep. Then by its exit code:
     of the requirement the bullet names, with the owner's note as the answer, and remove the §13
     bullet; it is not a correction.
   - `answer` on a question: the answer goes into the PRD. `fix` on a question: the requirement it
-    blocks becomes a correction; when `fix` carries no note and the intended behaviour is not
-    evident from the question, ask the owner for it in the chat, for that one item. `answer`, `fix`
+    blocks becomes a correction to what `text` says. A `fix` whose words describe the behaviour the
+    item already states is not applied as a correction: ask the owner in the chat, for that one
+    item, whether they meant keep it. Never decide it yourself. Leave that item's §13 bullet in
+    place until they answer, and apply the other items as usual. `answer`, a `fix` that is applied
     and `intended` on a question each remove the §13 bullet. `answer` on a marker: the value
     replaces the marker.
 

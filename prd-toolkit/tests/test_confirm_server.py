@@ -133,7 +133,8 @@ def test_required_text(live):
     assert lv.json("/answer", {"id": "FR-002", "decision": "ask", "text": ""})[0] == 400
     assert lv.json("/answer", {"id": "FR-002", "decision": "bug"})[0] == 400
     assert lv.json("/answer", {"id": "Q-01", "decision": "answer"})[0] == 400
-    assert lv.json("/answer", {"id": "Q-01", "decision": "fix"})[0] == 200
+    assert lv.json("/answer", {"id": "Q-01", "decision": "fix"})[0] == 400
+    assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "text": "none"})[0] == 200
     assert lv.json("/answer", {"id": "config.yaml:NOTES_LIMIT.owner", "decision": "answer", "text": "ops"})[0] == 200
 
 
@@ -168,7 +169,7 @@ def answer_all(lv):
     for i in lv.items:
         d = {"requirement": "confirm", "bug": "intended", "question": "fix", "marker": "answer"}[i.kind]
         body = {"id": i.id, "decision": d}
-        if d == "answer":
+        if d in ("answer", "fix"):
             body["text"] = "ops"
         assert lv.json("/answer", body)[0] == 200
 
@@ -231,7 +232,7 @@ def test_second_server_does_not_drop_answers(live, tmp_path):
     second = Live(tmp_path, repo=(lv.repo, lv.prd))
     try:
         assert second.json("/answer", {"id": "FR-002", "decision": "confirm"})[0] == 200
-        assert lv.json("/answer", {"id": "Q-01", "decision": "fix"})[0] == 200
+        assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "text": "none"})[0] == 200
     finally:
         second.stop()
     assert set(json.loads(lv.file.read_text())["answers"]) == {"FR-001", "FR-002", "Q-01"}
@@ -435,7 +436,7 @@ def test_acs_only_with_correct(live):
         body = {"id": "FR-001", "decision": decision, "text": "t", "acs": {"AC-001.1": "new"}}
         status, out = lv.json("/answer", body)
         assert status == 400 and "error" in out, decision
-    assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "acs": {}})[0] == 400
+    assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "text": "t", "acs": {}})[0] == 400
     assert not lv.file.exists()
 
 
@@ -465,3 +466,54 @@ def test_page_sends_a_content_security_policy(live):
         assert r.headers["Content-Security-Policy"] == (
             "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
             "base-uri 'none'; form-action 'none'")
+
+
+# ---- 0.8.2: keepalive, a fix needs words, a confirmed bug is answered ----
+# (a wrong-token /ping is 403 and leaves server.last: tests/test_formserver.py::test_ping_is_200_with_the_token_and_403_without_touching)
+
+def test_pings_keep_the_server_up_and_it_stops_when_they_stop(live):
+    lv = live(idle_minutes=0.03)  # 1.8 s
+    stop = threading.Event()
+
+    def ping():
+        while not stop.is_set():
+            lv.call("/ping")
+            time.sleep(0.02)
+
+    t = threading.Thread(target=ping)
+    t.start()
+    time.sleep(3)  # longer than the idle time
+    assert lv.thread.is_alive() and lv.code == []
+    stop.set()
+    t.join()
+    began = time.monotonic()
+    lv.thread.join(10)
+    assert lv.code == [3] and time.monotonic() - began < 5
+
+
+def test_a_fix_without_words_is_400_and_writes_nothing(live):
+    lv = live()
+    for body in ({"id": "Q-01", "decision": "fix"}, {"id": "Q-01", "decision": "fix", "text": "  "}):
+        status, out = lv.json("/answer", body)
+        assert status == 400 and "a fix needs its words" in out["error"]
+    assert not lv.file.exists()
+    assert lv.json("/answer", {"id": "Q-01", "decision": "fix", "text": "keep none"})[0] == 200
+
+
+def test_a_confirmed_bug_is_answered_with_no_answers_file(live, tmp_path):
+    repo, prd = make_confirm_repo(tmp_path)
+    f = prd / "errors.md"
+    f.write_text(f.read_text(encoding="utf-8").replace(
+        "Classification: unclassified", 'Classification: code bug\nConfirmed: 2026-11-05, "yes, a bug"', 1), encoding="utf-8")
+    lv = live(repo=(repo, prd))
+    for i in lv.items:
+        if i.id != "E-001":
+            body = {"id": i.id, "decision": {"requirement": "confirm", "question": "intended", "marker": "answer"}[i.kind]}
+            if body["decision"] == "answer":
+                body["text"] = "ops"
+            assert lv.json("/answer", body)[0] == 200
+    lv.file.unlink()  # the skill deletes the file once every answer is applied
+    status, out = lv.json("/items")
+    bug = next(i for i in out["items"] if i["id"] == "E-001")
+    assert status == 200 and bug["confirmed"] == "yes, a bug" and "E-001" not in out["open"]
+    assert lv.json("/answer", {"id": "E-001", "decision": "intended"})[0] == 400
