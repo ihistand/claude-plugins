@@ -44,7 +44,7 @@ The bookkeeping, `prd_change.py`: the next free IDs, the version bump, the §14 
 approval commit are the script's work, never yours. Each `prd_change.py` command below is its own
 Bash call that ends `; echo "prd-change-exit=$?"`. Its own call holds that command and that echo
 and nothing else: no `cd` or other command chained before it or after it, no state check or
-cleanup folded in, no loop, no shell function and no variable; the script path is typed out. The `prd-change-exit=` value is the gate: `0` done, `1` refused, `2` usage or internal error. On `1` the line after `refused:` names
+cleanup folded in, no loop, no shell function and no variable in the path; the script path is typed out. The `prd-change-exit=` value is the gate: `0` done, `1` refused, `2` usage or internal error. On `1` the line after `refused:` names
 what to fix; fix that and run the command again, never work around it. On `2` fix the command.
 `record --change` takes one line with no `|`: it becomes a §14 table cell.
 
@@ -311,7 +311,7 @@ so you count instead of it.
    the dry-run record in place of the row's `pending` (the one hand edit of a row `record` wrote),
    set the status `Approved`, check the
    `prd-lint-exit=` value is `0`, rerun `uv run --script <scripts>/prd_block.py docs/prd/<slug>`,
-   delete `.prd-review.json` and make the commit `running-a-change-set.md` step 3 gives.
+   delete any stale `.prd-review.json` and make the commit `running-a-change-set.md` step 3 gives.
    Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs
    (map an AC, test case or error code to its requirement): hand off
@@ -359,7 +359,8 @@ so you count instead of it.
 - "That would make this a major bump (1.0.0 → 2.0.0), and FR-010 would go back to `approved`."
   (Observed, of a built area.) A retarget planned as a change. Refuse it with the conversion line.
 - "The next free number is obviously FR-005." Any ID that no `ids next` call printed.
-- A `version:`, `updated:`, §14 row or §11 row typed by hand, or an edit to a row `record` wrote.
+- A `version:`, `updated:`, §14 row or §11 row typed by hand, or an edit to a row `record` wrote
+  (inside a change set, the dry-run record in place of its `pending` is the one hand edit step 5 allows).
 - "`record` refused minor, so I'll write 1.1.0 myself." Any way round a `refused:` line.
 - `--bump` set to the lowest level because the result said `needs judgment`.
 - A `--reply` that is your own text, a summary of the user's words, or the request that started

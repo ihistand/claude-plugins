@@ -240,3 +240,23 @@ def test_own_call_means_nothing_else_in_it():
     assert "Its own call holds that command and that echo and nothing else" in t
     for s in ("no `cd`", "no state check or cleanup folded in", "no loop, no shell function and no variable"):
         assert s in t, s
+
+
+# --- final review: three wording fixes ---
+
+def test_the_variable_rule_is_about_the_path():
+    t = flat(between(SKILL.read_text(encoding="utf-8"), "The bookkeeping, `prd_change.py`", "## The gap rule"))
+    assert "no loop, no shell function and no variable in the path; the script path is typed out" in t
+
+
+def test_the_hand_edit_red_flag_carries_the_change_set_carve_out():
+    flags = red_flags(SKILL)
+    assert ("A `version:`, `updated:`, §14 row or §11 row typed by hand, or an edit to a row `record` wrote "
+            "(inside a change set, the dry-run record in place of its `pending` is the one hand edit step 5 allows)") in flags
+    assert "(the one hand edit of a row `record` wrote)" in step(5)
+
+
+def test_the_change_set_deletes_any_stale_verdict():
+    s = step(5)
+    assert "delete any stale `.prd-review.json`" in s
+    assert "delete `.prd-review.json`" not in s

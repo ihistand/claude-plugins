@@ -65,6 +65,14 @@
 >   once, in natural order: `FR-001, T-001.3` for a regression case.
 > - §4 (R18): inside a change set `changing-prds` writes no `.prd-review.json`: the change set's one approval
 >   is the only approval, and it replaces each member row's `; pending` with that member's dry-run record.
+> - §5 (R19): `answer` on an `error-class` or `signoff` gate commits the owner's write itself, by path only,
+>   with the message the toolkit's skills use (`docs(prd): confirm E-nnn` with `Refs: E-nnn`;
+>   `docs(prd): sign off <T-id>` with `Refs:` the case's requirement), so a ledger edit never reaches the
+>   next change's bump or approval commit. An owner's non-zero exit commits nothing; a failed commit exits 1
+>   with git's error and leaves the write in the tree.
+> - §4 (R20): `approve` refuses while `CLAUDE.md` has uncommitted changes
+>   (`refused: CLAUDE.md has uncommitted changes; commit or set them aside first`), and stages `CLAUDE.md`
+>   only when `prd_block.py` changed its bytes.
 
 ## 1. Scope
 
@@ -222,6 +230,14 @@ is at most 20 lines and holds no secret or classified value (the `errors.md` Evi
 - It prints the owning script's result as `{"interface": 1, "kind": "gates.answer", "gate": …,
   "result": {"stdout": [<lines>], "exit": <N>}}` (plus `"stderr": [<lines>]` when the owner
   printed any), and exits with the owner's exit code. `signoff` records no reply: the Sign-offs row has no column for it.
+- **An `error-class` or `signoff` answer commits the owner's write** (R19), by path only
+  (`git commit -- <path>`, never `-a` or `-A`, so other staged work stays staged): `errors.md` as
+  `docs(prd): confirm E-nnn` with `Refs: E-nnn` (`handling-errors`' confirm commit), `testing.md` as
+  `docs(prd): sign off <T-id>` with `Refs: <the case's requirement>`. An owner that exits non-zero
+  commits nothing. When the commit fails (a hook rejects it), `answer` exits 1, with
+  `git commit failed: <git's message>` added to `result.stderr`, and the owner's write stays in the tree
+  for the user. The other kinds commit nothing here: `approve` makes its own commit, and `changes`, an
+  adoption answer and a deploy confirm write untracked state.
 - **The approval gate has two choices** (from the 0.8.2 decision-inbox spec §6, Ivan 2026-11-04).
   `prd_gates.py answer <prd dir> approval:<branch> --choice approve|changes --reply "<verbatim>"`,
   `approve` the default. `changes` needs a reply that is not empty. It writes

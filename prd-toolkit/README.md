@@ -604,7 +604,13 @@ Sign-offs row) and prints `{"interface": 1, "kind": "gates.answer", "gate", "res
 question changed is refused, `refused: the gate changed; list again`, exit 1. The approval gate's
 choices are `approve` (the default) and `changes`: `--choice changes` writes the owner's reply into
 the verdict, sets `ready` to false and commits nothing, so only a new review after an edit makes the
-gate pending again. An adoption area stays pending until `--choice done`. Beside the form,
+gate pending again. An adoption area stays pending until `--choice done`. An answer to an
+error-class or sign-off gate commits the owner's write itself, by path only, so other staged work
+stays staged: `errors.md` as `docs(prd): confirm E-nnn` (`Refs: E-nnn`), `testing.md` as
+`docs(prd): sign off <T-id>` (`Refs:` the case's requirement). When that commit fails (a hook rejects
+it), `answer` exits 1 with git's error in `result.stderr`, and the write stays in the tree. To answer
+a `--worktrees` approval gate, run `answer` on that worktree's PRD folder: the gate's `path` (the
+worktree) joined with the PRD's path in the repository. Beside the form,
 `prd_confirm.py answer` (one item), `prd_confirm.py open` (a new answers file) and
 `prd_confirm.py done` (the area finished) write the 0.7.1 answers file, under its lock.
 
@@ -620,6 +626,12 @@ gate pending again. An adoption area stays pending until `--choice done`. Beside
 - Inside a change set the member approvals are committed by `coordinating-prds`, not by
   `prd_change.py approve`, whose commit carries no `Change-set:` trailer.
 - An approval is trusted to be the owner's, as `prd_error.py confirm` is.
+- A client that narrows `Bash` to prefix rules (such as `Bash(uv run:*)`) needs the `Write` tool, or plain
+  `Bash`, for review mode to write `.prd-review.json`: under prefix rules Claude Code refuses the heredoc
+  the review writes it with.
+- The `document` pack's parsing default (CommonMark after NFC) does not settle what text the checks compare
+  (plain or source text, word boundaries, how nested blocks and list items join, inline HTML). The 0.8.1
+  acceptance run's Spanish guide failed its dry-run clause on that; the rule is a spec line for a later release.
 
 ## Known limits (0.8.0)
 
@@ -686,7 +698,7 @@ the user cannot state.
   - `prd_change.py` (`ids next`, `bump`, `record`, `digest`, `approve`): `changing-prds` takes its IDs, version bump, §14 and §11 rows and approval commit from it instead of working them out by hand, and its Version rule carries the script's bump table.
   - `/prd-change --review <dir>`: review mode edits nothing and writes the verdict `.prd-review.json`, which `approve` checks.
   - `prd_gates.py list` and `answer`: every pending approval, error class, deploy step, adoption area and sign-off in one shape, each answer passed to the script that owns it. `prd_confirm.py` gains `answer`, `open` and `done`, and the adoption gate stays pending until `done`.
-  - Upgrading from 0.8.0: re-run `prd_hooks.py install`, which vendors `prd_change.py` and `prd_gates.py` into `.prd-toolkit/` and adds `.prd-review.json` to `.gitignore`; `changing-prds` stops on a vendored copy without `prd_change.py`. No PRD needs an edit.
+  - Upgrading from 0.8.0: re-run `prd_hooks.py install`, which vendors `prd_change.py` and `prd_gates.py` into `.prd-toolkit/` and adds `.prd-review.json` to `.gitignore` (commit `.gitignore` along with `.prd-toolkit/`); `changing-prds` stops on a vendored copy without `prd_change.py`. No PRD needs an edit.
 - **0.8.0:** Packs, languages and judged test cases.
   - Packs: the `pack.yaml` manifest, discovery from `.prd-toolkit/packs/`, the toolkit and installed plugins' `prd-packs/<name>/`, a version lock, and two built-in packs, `service` (0.7's behaviour) and `document` (Markdown documents, with the `outline` contract type). `prd_hooks.py install` records each vendored pack's source in `.prd-toolkit/pack-sources.json`. `prd_lint.py --list-packs` lists them. A PRD names a pack in §1 (`Pack:`, `Output language:`) and per area in a `Target:` line.
   - Languages: frontmatter `language:` with EARS and vague-word tables for `en` and `es`.

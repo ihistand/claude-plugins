@@ -101,3 +101,44 @@ def test_spec_revisions_name_each_ruling():
         "(R7)", "(R8)", "(R9)", "(R11)", "(R12)", "(R16)", "(R17)", "(R18)",
     ):
         assert needle in rev, needle
+
+
+# --- final review: R19, the --worktrees answer, O-1, .gitignore, the document pack, the descriptions ---
+
+def test_readme_answer_commits_and_the_worktrees_gate():
+    m = flat(section(README, "Machine interface"))
+    for needle in ("commits the owner's write itself", "`docs(prd): confirm E-nnn`", "`Refs: E-nnn`",
+                   "`docs(prd): sign off <T-id>`", "by path only", "other staged work stays staged",
+                   "exits 1 with git's error in `result.stderr`", "the write stays in the tree",
+                   "To answer a `--worktrees` approval gate, run `answer` on that worktree's PRD folder",
+                   "the gate's `path`"):
+        assert needle in m, needle
+
+
+def test_readme_known_limits_name_o1_and_the_document_pack():
+    k = flat(section(README, "Known limits (0.8.1)"))
+    for needle in ("A client that narrows `Bash`", "needs the `Write` tool, or plain `Bash`",
+                   "The `document` pack's parsing default", "does not settle what text the checks compare",
+                   "failed its dry-run clause", "a spec line for a later release"):
+        assert needle in k, needle
+
+
+def test_upgrade_note_commits_gitignore_with_the_vendored_copy():
+    c = section(README, "Changelog")
+    e = flat(c[c.index("- **0.8.1:**"):c.index("- **0.8.0:**")])
+    assert "commit `.gitignore` along with `.prd-toolkit/`" in e
+
+
+def test_spec_answer_commits_and_revision_r19():
+    answer = flat(SPEC[SPEC.index("### `answer`"):SPEC.index("### `prd_confirm.py answer`")])
+    for needle in ("commits the owner's write", "`git commit -- <path>`", "`docs(prd): confirm E-nnn`",
+                   "`docs(prd): sign off <T-id>`", "commits nothing", "exits 1", "`result.stderr`"):
+        assert needle in answer, needle
+    head = SPEC[:SPEC.index("## 1. Scope")]
+    rev = flat(re.sub(r"^> ?", "", head, flags=re.M))
+    assert "(R19)" in rev and "(R20)" in rev
+
+
+def test_descriptions_name_the_machine_interface():
+    plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
+    assert "a machine interface (JSON scripts for changes and gates)" in plugin["description"]
