@@ -112,3 +112,28 @@ def test_script_parses(tmp_path):
     src.write_text(scripts(), encoding="utf-8")
     out = subprocess.run(["node", "--check", str(src)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
+
+
+HARNESS = r"""
+class N { constructor(t) { this.tag = t; this.kids = []; this.attrs = {}; this.dataset = {}; this.textContent = ''; }
+  append(...k) { for (const x of k) this.kids.push(typeof x === 'string' ? { tag: '#t', text: x, kids: [] } : x); }
+  setAttribute(k, v) { this.attrs[k] = v; } addEventListener() {}
+  get text() { return this.textContent + this.kids.map((k) => (k.tag === '#t' ? k.text : k.text)).join(''); } }
+global.window = { addEventListener() {}, PANEL_HOST: {} };
+global.document = { addEventListener() {}, createElement: (t) => new N(t), createTextNode: (s) => ({ tag: '#t', text: s, kids: [] }), body: new N('body') };
+global.location = { search: '?token=x', hash: '' };
+const walk = (n, out) => { if (n.tag === 'button') out.push(n.text); (n.kids || []).forEach((k) => walk(k, out)); return out; };
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_each_button_reads_its_label_once(tmp_path):
+    js = (HARNESS + scripts().replace("'use strict';", "") + r"""
+const spec = { prompt: 'p', buttons: [{ key: 'approve', label: 'Approve' }, { key: 'changes', label: 'Request changes…', needs: true }] };
+console.log(JSON.stringify(walk(answerBox({ key: 'k', g: { id: 'x' }, wt: { path: '/w' } }, spec), [])));
+""")
+    src = tmp_path / "labels.js"
+    src.write_text(js, encoding="utf-8")
+    out = subprocess.run(["node", str(src)], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == '["Approve","Request changes…"]'

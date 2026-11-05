@@ -416,7 +416,7 @@ function answerBox(entry, spec) {
   const row = h('div', { class: 'actions' });
   for (const b of spec.buttons) {
     row.append(h('button', {
-      type: 'button', class: `btn${b.primary ? ' primary' : ''}`, text: b.label, disabled: d.busy,
+      type: 'button', class: `btn${b.primary ? ' primary' : ''}`, disabled: d.busy,
       events: {
         click: () => {
           const name = b.label.replace(/…$/, '');
