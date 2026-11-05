@@ -383,3 +383,25 @@ Fixture PRDs `greet`, `orders` and `notes`.
 - Principles or getting-started steps as required parts, or as numbered sections of `prd.md`.
 - Requirement statuses in the README; `/prd-status` gives them.
 - More than one PRD in `CLAUDE.md`'s block.
+
+## 16. Backlog: deploy fixes from the first private-pack deploy
+
+The owner put these four on 0.8.3's backlog on 2026-11-05. They come from the first full
+change, build and deploy loop on a private pack, where a service's own UI does part of each
+deploy. They are not designed yet: each becomes a section and plan tasks before the 0.8.3 build,
+or moves to a later release.
+
+1. **Human steps done in one pass.** The owner did three consecutive human steps in one UI
+   session, before the run asked for the first. The run still asked for each reply in turn, which
+   took three extra round-trips. `prd_deploy.py confirm` could take a range of consecutive human
+   steps when the owner's reply names each one.
+2. **An error found mid-run.** Recording an `errors.md` entry during a run moves HEAD, and a
+   moved HEAD blocks `resume`, so the entry had to wait for the close. `prd_error.py new` could
+   leave its write uncommitted while a run is open, to be committed with the run's close.
+3. **A `tests` step's timeout.** A live suite took 609 seconds against the 600-second default,
+   so every `run` and `resume` needed `--timeout`. A `tests` step could declare its own timeout in
+   the runbook, or `prd_deploy.py` could read one from testing.md's Levels.
+4. **A close on the wrong branch.** The close commit lands on whatever branch ran the deploy.
+   Where deploying means merging to an environment's branch and promoting in a UI, the close
+   still needs a second push. `prd_deploy.py` could report `the close is on <branch>, not
+   <the environment's branch>`.
