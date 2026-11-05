@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages. Version 0.8.0.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it. Version 0.8.1.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -16,7 +16,8 @@ for 0.5 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.5-design.md](../docs/su
 for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md),
 for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md),
 for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md),
-and for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md).
+for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md),
+and for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md).
 
 ## Install
 
@@ -36,7 +37,7 @@ install hint and exits 2.
 |---|---|---|
 | `/prd-new [slug]` | `prd-toolkit:authoring-prds` | Interview to a PRD folder `docs/prd/<slug>/`, lint it, dry-run it with prd-tester, approve it, install the CLAUDE.md block |
 | `/prd-adopt [area]` | `prd-toolkit:adopting-prds` | Bring an existing repo under a PRD one area at a time, from the code, with the user's word on each requirement |
-| `/prd-change <description>` | `prd-toolkit:changing-prds` | Change the PRD first, with new IDs and a version bump, before any code |
+| `/prd-change <description>` | `prd-toolkit:changing-prds` | Change the PRD first, with new IDs and a version bump, before any code; `prd_change.py` keeps the books. `/prd-change --review <dir>` reviews a change, edits nothing and writes one JSON verdict (see Machine interface) |
 | `/prd-context [area] [IDs] [implement]` | `prd_context.py` | Print the focused context pack for one task: the decide pack, or with `implement` the implement pack |
 | `/prd-build <area> <IDs>` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works in its own worktree while `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
 | `/prd-status` | `prd_status.py` | Show where each requirement stands, and the version each environment runs |
@@ -541,6 +542,98 @@ tools in an empty temporary directory; a pack's `grader:` command replaces it. E
 `.prd-judge/<T-id>.json` (git-ignored by `prd_hooks.py install`). The tester writes the test that calls
 `prd_judge.py`; it never grades. Lint adds `judged-case`.
 
+## Machine interface
+
+A client other than Claude Code (an editor, a desktop app, a CI dashboard, another agent harness)
+calls the repository's vendored scripts in `.prd-toolkit/` and reads JSON. It never links toolkit
+code.
+
+**JSON output.** `prd_lint.py`, `prd_trace.py`, `prd_status.py`, `prd_context.py`, `prd_change.py`
+and `prd_gates.py` take `--json` (or `--json=1`) and print one object on stdout, `interface` and
+`kind` first: `{"interface": 1, "kind": "lint", "prd": …, "version": …, "dir": …, "findings":
+[{"file", "line", "rule", "severity", "message"}], "errors": N, "warnings": N}`. Exit codes are the
+text mode's: `0` ok, `1` violations or refused, `2` usage or internal error. On exit 2 the document
+is `{"interface": 1, "kind": …, "error": "<first stderr line>"}`, an argparse error included; any
+other `--json=N` exits 2 with `unsupported interface <N>; this toolkit speaks 1`. `--interface`
+prints the number alone. Within one `interface` number a field may be added, never removed or renamed.
+
+**The change bookkeeping.** `prd_change.py` works on the PRD folder it is given, in any checkout or
+worktree; it never switches branches or pushes.
+
+```
+uv run --script .prd-toolkit/prd_change.py ids next docs/prd/<slug> <FR|NFR|UJ|AC-<nnn>|T-<nnn>>
+uv run --script .prd-toolkit/prd_change.py bump docs/prd/<slug> --base HEAD
+uv run --script .prd-toolkit/prd_change.py record docs/prd/<slug> --base HEAD --bump <patch|minor|major> --change "<text>"
+uv run --script .prd-toolkit/prd_change.py digest docs/prd/<slug>
+uv run --script .prd-toolkit/prd_change.py approve docs/prd/<slug> --reply "<verbatim>" --dry-run "<record>" [--refs "<IDs>, E-nnn"]
+```
+
+- `prd_change.py ids next` prints the next free ID by `prd-format.md` decision 6, removed IDs and
+  §14-only T-ids counted; a UJ has two digits.
+- `prd_change.py bump` compares the folder at `--base` with the working tree and prints each changed
+  item with its level, `patch`, `minor`, `major` or `needs judgment`, by the table in
+  `changing-prds`' Version rule. A model (review mode) or a person decides a `needs judgment` item.
+- `prd_change.py record` writes the version, `updated`, the §14 row (`<change>; pending`, so its
+  Change cell ends `; pending`) and the §11 rows. It refuses a level below what the diff needs,
+  and `needs-judgment` as a level; run again, it replaces its own pending row. It never changes the
+  digest.
+- `prd_change.py digest` prints the SHA-256 of the folder, leaving out what `record` writes and
+  `.prd-review.json`.
+- `prd_change.py approve` refuses unless `.prd-review.json` is ready and its digest matches, lint
+  passes, the dry-run record is given (`no dry run (unit only)` for a unit-only change) and the last
+  §14 row is pending, and `CLAUDE.md` has no uncommitted changes (an ignored `CLAUDE.md` is skipped). It then writes the record, sets the status `Approved`, runs `prd_block.py` and
+  commits `docs(prd): approve <slug> <version>` with `Reply: "…"` in the body, and deletes the verdict.
+
+**Review mode.** `/prd-change --review <dir>` edits nothing (only the tester's dry-run directory and
+the verdict): it restates the change, runs `prd_links.py impact` when `links.md` has Consumers,
+decides each `needs judgment` item, dry-runs the new and revised non-unit T-ids through `prd-tester`,
+and writes `.prd-review.json` in the PRD folder: `{"interface": 1, "kind": "review", "head",
+"digest", "restate", "touches", "impact", "bump": {"level", "decided"}, "dry_run", "ready",
+"blockers"}`. Run it headless as `claude -p "/prd-change --review <dir>" --output-format json` with
+the plugin loaded and the tools `Read`, `Grep`, `Glob`, `Bash` and `Agent`. The order a client runs: `bump`, then the review, then `record` at the level the verdict gives, then lint and trace; `record` does not change the digest, so the verdict stays valid.
+
+**Pending decisions.** `prd_gates.py list <prd dir> [--worktrees] --json` prints every decision a
+person owes, in one shape (`id`, `kind`, `title`, `question`, `evidence`, `choices`, `source`): an
+approval (`approval:<branch>`), an error class (`error-class:E-nnn`), a deploy step
+(`deploy-step:<run id>:<step>`), an adoption area (`adoption:<area>`, with its open `items`) and a
+sign-off (`signoff:<T-id>`). `prd_gates.py answer <prd dir> <gate id> --reply "<verbatim>"
+--question "<the question shown>"` passes the answer to the script that owns it (`prd_change.py
+approve`, `prd_error.py confirm`, `prd_deploy.py confirm`, `prd_confirm.py answer` or `done`, the
+Sign-offs row) and prints `{"interface": 1, "kind": "gates.answer", "gate", "result": {"stdout",
+"exit"}}`. Every client passes `--question`, the text it showed: a gate that is gone or whose
+question changed is refused, `refused: the gate changed; list again`, exit 1. The approval gate's
+choices are `approve` (the default) and `changes`: `--choice changes` writes the owner's reply into
+the verdict, sets `ready` to false and commits nothing, so only a new review after an edit makes the
+gate pending again. An adoption area stays pending until `--choice done`. An answer to an
+error-class or sign-off gate commits the owner's write itself, by path only, so other staged work
+stays staged: `errors.md` as `docs(prd): confirm E-nnn` (`Refs: E-nnn`), `testing.md` as
+`docs(prd): sign off <T-id>` (`Refs:` the case's requirement). When that commit fails (a hook rejects
+it), `answer` exits 1 with git's error in `result.stderr`, and the write stays in the tree. Such an answer
+changes the PRD folder's digest, so a pending approval gate is withdrawn until a new review. To answer
+a `--worktrees` approval gate, run `answer` on that worktree's PRD folder: the gate's `path` (the
+worktree) joined with the PRD's path in the repository. Beside the form,
+`prd_confirm.py answer` (one item), `prd_confirm.py open` (a new answers file) and
+`prd_confirm.py done` (the area finished) write the 0.7.1 answers file, under its lock.
+
+## Known limits (0.8.1)
+
+- `bump`'s wording rule is conservative: an AC is "reworded" only when it is equal after lowercasing,
+  removing punctuation and collapsing whitespace, so most rewordings come out `needs judgment` for a
+  model or a person to decide.
+- Review mode's "edit nothing" is held by instruction; a headless client also limits its tools.
+- `prd_gates.py answer` without `--question` refuses only a gone gate, not a changed one.
+- A refusal in JSON mode (exit 1) prints its text on stderr, and stdout is empty; only exit 2 prints
+  an error document.
+- Inside a change set the member approvals are committed by `coordinating-prds`, not by
+  `prd_change.py approve`, whose commit carries no `Change-set:` trailer.
+- An approval is trusted to be the owner's, as `prd_error.py confirm` is.
+- A client that narrows `Bash` to prefix rules (such as `Bash(uv run:*)`) needs the `Write` tool, or plain
+  `Bash`, for review mode to write `.prd-review.json`: under prefix rules Claude Code refuses the heredoc
+  the review writes it with.
+- The `document` pack's parsing default (CommonMark after NFC) does not settle what text the checks compare
+  (plain or source text, word boundaries, how nested blocks and list items join, inline HTML). The 0.8.1
+  acceptance run's Spanish guide failed its dry-run clause on that; the rule is a spec line for a later release.
+
 ## Known limits (0.8.0)
 
 - Judged cases are not deterministic: the median of three runs damps a flip, but a case near its threshold
@@ -600,6 +693,13 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.1:** The machine interface: JSON output, the change bookkeeping as code, one list of pending decisions and a review mode.
+  - `--json` and `--interface` on `prd_lint.py`, `prd_trace.py`, `prd_status.py`, `prd_context.py`, `prd_change.py` and `prd_gates.py`; every document starts `{"interface": 1, "kind": …}` (see Machine interface). The toolkit's own PRD is at 4.0.0, with `lint-cli` FR-014 (lint `--json` and `--interface`) verified and FR-001 and FR-004 revised for them.
+  - A break: in 0.8.0 `prd_status.py --json` and `prd_context.py --json` printed a bare JSON list. In 0.8.1 they print a wrapped document, `{"interface": 1, "kind": …}` (the status items under `items`, the context pack's parts under `parts`, one entry per item), so anything that parses them must change.
+  - `prd_change.py` (`ids next`, `bump`, `record`, `digest`, `approve`): `changing-prds` takes its IDs, version bump, §14 and §11 rows and approval commit from it instead of working them out by hand, and its Version rule carries the script's bump table.
+  - `/prd-change --review <dir>`: review mode edits nothing and writes the verdict `.prd-review.json`, which `approve` checks.
+  - `prd_gates.py list` and `answer`: every pending approval, error class, deploy step, adoption area and sign-off in one shape, each answer passed to the script that owns it. `prd_confirm.py` gains `answer`, `open` and `done`, and the adoption gate stays pending until `done`.
+  - Upgrading from 0.8.0: re-run `prd_hooks.py install`, which vendors `prd_change.py` and `prd_gates.py` into `.prd-toolkit/` and adds `.prd-review.json` to `.gitignore` (commit `.gitignore` along with `.prd-toolkit/`); `changing-prds` stops on a vendored copy without `prd_change.py`. No PRD needs an edit.
 - **0.8.0:** Packs, languages and judged test cases.
   - Packs: the `pack.yaml` manifest, discovery from `.prd-toolkit/packs/`, the toolkit and installed plugins' `prd-packs/<name>/`, a version lock, and two built-in packs, `service` (0.7's behaviour) and `document` (Markdown documents, with the `outline` contract type). `prd_hooks.py install` records each vendored pack's source in `.prd-toolkit/pack-sources.json`. `prd_lint.py --list-packs` lists them. A PRD names a pack in §1 (`Pack:`, `Output language:`) and per area in a `Target:` line.
   - Languages: frontmatter `language:` with EARS and vague-word tables for `en` and `es`.
@@ -711,7 +811,7 @@ The exact syntax lint parses is `references/prd-format.md`. The starting files a
 uv run --directory prd-toolkit pytest -q
 ```
 
-The plugin eval: run the command recorded in `evals/BASELINE.md` (0.2 baseline). The `--scaffold`
+The plugin eval: run the command recorded in `evals/BASELINE.md` (0.2 baseline; the 0.8.0 and 0.8.1 sections run one case at a time). The `--scaffold`
 flag is required by the scaffolded cases, `Agent` lets the caller dispatch `prd-tester`, and the
 pypi grants let `prd_lint.py` fetch its dependencies under the Bash sandbox:
 

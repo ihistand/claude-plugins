@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 VENDOR_DIR = ".prd-toolkit"
-VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py", "prd_judge.py")
+VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py", "prd_judge.py", "prd_change.py", "prd_gates.py")
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
@@ -20,6 +20,7 @@ LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit
 PACKS_DIR = "packs"  # .prd-toolkit/packs/<name>/
 PACK_SOURCES = "pack-sources.json"  # .prd-toolkit/pack-sources.json: {"<pack name>": "<source>"} of each vendored pack
 RECORD_DIR = ".prd-judge/"
+REVIEW_FILE = ".prd-review.json"  # the review verdict review mode or the changing-prds skill writes; never committed
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
@@ -117,13 +118,15 @@ def _pack_tree(folder: Path) -> dict[str, bytes]:
 
 
 def _ignore_record(repo_root: Path) -> None:
-    """Append `.prd-judge/` to the root .gitignore once."""
+    """Append `.prd-judge/` and `.prd-review.json` to the root .gitignore, each once."""
     path = repo_root / ".gitignore"
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    if RECORD_DIR in (ln.strip() for ln in text.splitlines()):
+    have = {ln.strip() for ln in text.splitlines()}
+    missing = [e for e in (RECORD_DIR, REVIEW_FILE) if e not in have]
+    if not missing:
         return
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text + ("" if not text or text.endswith("\n") else "\n") + RECORD_DIR + "\n")
+        f.write(text + ("" if not text or text.endswith("\n") else "\n") + "".join(e + "\n" for e in missing))
 
 
 def _git(repo_root: Path, *args: str) -> str:

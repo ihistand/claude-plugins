@@ -39,7 +39,7 @@ describe('plugins data', () => {
   it('prd-toolkit has 10 commands', () => {
     const prd = plugins.find(p => p.id === 'prd-toolkit')
     expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy', '/prd-error', '/prd-publish', '/prd-change-set'])
-    expect(prd.version).toBe('0.8.0')
+    expect(prd.version).toBe('0.8.1')
     expect(prd.description).toContain('/prd-context')
     expect(prd.description).toContain('/prd-build')
     expect(prd.description).toContain('/prd-status')
@@ -68,6 +68,10 @@ describe('plugins data', () => {
     expect(urls.some(u => u.endsWith('/2026-10-30-prd-toolkit-0.3-design.md'))).toBe(true)
     expect(urls.some(u => u.endsWith('/2026-10-31-prd-toolkit-0.4-design.md'))).toBe(true)
     expect(urls.some(u => u.endsWith('/2026-11-01-prd-toolkit-0.5-design.md'))).toBe(true)
+    expect(urls.some(u => u.endsWith('/2026-11-03-prd-toolkit-0.8.1-design.md'))).toBe(true)
+    const change = prd.commands.find(c => c.name === '/prd-change')
+    expect(change.workflow).toContain('prd_change.py')
+    expect(change.workflow).toContain('--review')
   })
 
   it('plugin ids match known routes', () => {

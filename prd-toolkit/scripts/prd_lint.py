@@ -17,7 +17,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import model, registry  # noqa: E402
+from prdlint import interface, model, registry  # noqa: E402
 
 
 def _display_root(root: Path) -> str:
@@ -40,12 +40,26 @@ class _OneLineUsage(argparse.HelpFormatter):
 
 
 def main(argv: list[str]) -> int:
+    argv, asked = interface.split_argv(argv)
+    if "--interface" in argv:
+        print(interface.INTERFACE)
+        return 0
+    problem = interface.check_version(asked)
+    if problem:
+        print(f"prd_lint: {problem}", file=sys.stderr)
+        sys.stdout.write(interface.error("lint", problem))
+        return 2
+    return interface.run(_main, "lint", argv)
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_lint.py", description="Lint a PRD folder.", formatter_class=_OneLineUsage)
     parser.add_argument("prd_dir", nargs="?")
     parser.add_argument("--list-rules", action="store_true")
     parser.add_argument("--list-packs", action="store_true", help="print every pack on this machine, built-ins first")
     parser.add_argument("--ci", action="store_true", help="skip the checks that need this machine's skills and linters")
     parser.add_argument("--sample-tids", type=int, metavar="N")
+    interface.add_flags(parser)
     try:
         args = parser.parse_args(argv)
     except SystemExit as e:
@@ -105,6 +119,17 @@ def main(argv: list[str]) -> int:
         print(f"prd_lint: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     prefix = _display_root(prd.root)
+    if args.json:
+        errors = sum(1 for f in findings if f.severity != "warn")
+        sys.stdout.write(interface.dump("lint", {
+            "prd": prd.frontmatter.get("prd"),
+            "version": prd.frontmatter.get("version"),
+            "dir": prefix,
+            "findings": [{"file": f.file, "line": f.line, "rule": f.rule, "severity": "warn" if f.severity == "warn" else "error", "message": f.message} for f in findings],
+            "errors": errors,
+            "warnings": len(findings) - errors,
+        }))
+        return 1 if errors else 0
     for f in findings:
         print(f"{os.path.join(prefix, f.file)}:{f.line}: {'warn: ' if f.severity == 'warn' else ''}{f.rule}: {f.message}" if prefix != "." else str(f))
     return 1 if any(f.severity != "warn" for f in findings) else 0

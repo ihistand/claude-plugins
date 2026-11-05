@@ -7,3 +7,4 @@ __pycache__/
 .venv/
 prd-toolkit/evals/results/
 .prd-judge/
+.prd-review.json

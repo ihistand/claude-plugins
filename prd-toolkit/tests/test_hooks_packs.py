@@ -93,16 +93,16 @@ def test_check_reports_a_hand_edited_vendored_manifest(repo):
     assert "packs/document: differs from prd-toolkit 1.0.0; run prd_hooks.py install" in out
 
 
-def test_gitignore_gains_prd_judge_once(repo):
+def test_gitignore_gains_prd_judge_and_review_once(repo):
     (repo / ".gitignore").write_text("build/")
     hooks.install(repo, PRD)
     hooks.install(repo, PRD)
-    assert (repo / ".gitignore").read_text() == "build/\n.prd-judge/\n"
+    assert (repo / ".gitignore").read_text() == "build/\n.prd-judge/\n.prd-review.json\n"
 
 
 def test_gitignore_is_created(repo):
     hooks.install(repo, PRD)
-    assert (repo / ".gitignore").read_text() == ".prd-judge/\n"
+    assert (repo / ".gitignore").read_text() == ".prd-judge/\n.prd-review.json\n"
 
 
 def test_a_pack_no_longer_named_is_removed_and_service_stays(repo, tmp_path, monkeypatch):

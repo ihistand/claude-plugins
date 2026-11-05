@@ -21,7 +21,7 @@ RULES = [
 ]
 
 # AC-004.1: the one-line usage.
-USAGE = "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [prd_dir]"
+USAGE = "usage: prd_lint.py [-h] [--list-rules] [--list-packs] [--ci] [--sample-tids N] [--json] [--interface] [prd_dir]"
 
 
 def test_t003_1_list_rules(tmp_path):

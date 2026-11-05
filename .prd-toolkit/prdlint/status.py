@@ -181,3 +181,9 @@ def render_text(items: list[StatusItem]) -> str:
 
 def render_json(items: list[StatusItem]) -> str:
     return json.dumps([asdict(i) for i in items], indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def render_document(prd, items: list[StatusItem]) -> str:
+    from . import interface
+    fm = prd.frontmatter
+    return interface.dump("status", {"prd": fm.get("prd"), "version": fm.get("version"), "items": [asdict(i) for i in items]})

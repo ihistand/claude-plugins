@@ -95,7 +95,9 @@ def test_json_matches_text_and_is_deterministic(prd_repo, cli):
     a, b = cli(prd_dir, "--json"), cli(prd_dir, "--json")
     expected = [(i.part, i.id) for i in status.build_status(model.load(prd_dir), prd_repo)]
     assert a[1] == b[1] and a[1].endswith("\n")
-    assert [(x["part"], x["id"]) for x in json.loads(a[1])] == expected
+    doc = json.loads(a[1])
+    assert doc["kind"] == "status" and doc["interface"] == 1
+    assert [(x["part"], x["id"]) for x in doc["items"]] == expected
 
 
 def test_usage_error_prints_nothing(tmp_path, cli):
