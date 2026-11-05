@@ -137,3 +137,19 @@ console.log(JSON.stringify(walk(answerBox({ key: 'k', g: { id: 'x' }, wt: { path
     out = subprocess.run(["node", str(src)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == '["Approve","Request changes…"]'
+
+
+def test_the_host_is_set_before_the_panel_script_reads_it():
+    text = page()
+    assert text.index("window.PANEL_HOST = {") < text.index("const HOST = window.PANEL_HOST")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_the_panel_sees_the_host_when_the_scripts_run_in_page_order(tmp_path):
+    js = (HARNESS.replace("PANEL_HOST: {}", "") + "\n".join(re.findall(r"<script>(.*?)</script>", page(), re.S)).replace("'use strict';", "")
+          + "\nconsole.log(HOST !== null && HOST === window.PANEL_HOST);\n")
+    src = tmp_path / "order.js"
+    src.write_text(js, encoding="utf-8")
+    out = subprocess.run(["node", str(src)], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "true"

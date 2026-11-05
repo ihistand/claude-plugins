@@ -54,13 +54,11 @@
 </header>
 <div id="inbox-root"><p class="muted">Loading the gates…</p></div>
 <div class="end" id="inbox-end" role="alert" hidden></div>
-<div id="panel-host" hidden>
-<!-- include: panel.html -->
-</div>
 <script>
 'use strict';
 // The inbox builds its page from /gates every 5 seconds; every piece of gate text goes in through textContent.
-// It uses the panel's helpers (h, TOKEN, openPanel) and starts once the whole page is parsed.
+// It runs before the panel's script, which reads window.PANEL_HOST once; it uses the panel's helpers (h, TOKEN, openPanel)
+// and starts once the whole page is parsed.
 const KIND_LABEL = { approval: 'Approval', 'error-class': 'Error class', 'deploy-step': 'Deploy step', signoff: 'Sign-off', adoption: 'Adoption' };
 const CLASSES = ['code bug', 'spec gap', 'invalid requirement', 'environment', 'standard'];
 const FOLD = 5;
@@ -467,5 +465,8 @@ window.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('hashchange', () => { I.hashSeen = ''; applyHash(); });
 });
 </script>
+<div id="panel-host" hidden>
+<!-- include: panel.html -->
+</div>
 </body>
 </html>
