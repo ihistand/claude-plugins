@@ -27,6 +27,8 @@
 >   the tester can read and what a pack states about its helpers.
 > - Section 15 (owner, 2026-11-05): a suite rewrites a test whose test case changed after it was
 >   written, from the same adoption.
+> - Section 16 (owner, 2026-11-05): a known-failing case names the failure that counts, and the
+>   checklist asks how each precondition is checked, from the same adoption's dry run.
 
 ## 1. Scope
 
@@ -50,7 +52,9 @@ the CLI uses.
   (section 13);
 - three fixes from its characterization suite: a backgrounded run's output, the vendored pack's files,
   and a pack helper's stated shapes (section 14);
-- a suite that rewrites a test whose test case changed since the test was written (section 15).
+- a suite that rewrites a test whose test case changed since the test was written (section 15);
+- a known-failing case that names its symptom, and a checklist item for how a precondition is
+  checked (section 16).
 
 **Success:** a whole `/prd-change` or `/prd-error` cycle runs with no decision typed into the chat,
 and every record still holds the owner's own words for each decision.
@@ -83,6 +87,7 @@ It is **proven by** the owner on real work (section 9).
 | `skills/adopting-prds/SKILL.md` | changed | Section 13, fix 2: the new question choices, and a "change" whose words match the current behaviour |
 | `scripts/prd_tester_guard.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `references/contract-types.md` | changed | Section 14: background task output, the vendored packs folder, a shipped helper's stated shapes (with `prd-format.md`) |
 | `scripts/prd_build_check.py`, `scripts/prdlint/buildcheck.py`, `skills/testing-from-prds/SKILL.md` and `dispatching.md`, `agents/prd-tester.md`, `skills/building-from-prds/running-a-build.md`, `skills/adopting-prds/SKILL.md` | changed | Section 15: `--stale` and the `Rewrite:` line |
+| `references/prd-format.md`, `scripts/prdlint/rules/testcases.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `skills/handling-errors/`, `skills/adopting-prds/SKILL.md`, `references/quality-checklist.md` | changed | Section 16: `symptom:` and the precondition checklist item |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
 | `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
@@ -453,3 +458,55 @@ None of this touches an adopted area of the toolkit's own PRD.
 - **Evals:** a caller that edited a case before the suite dispatches it with `Rewrite:`, not
   `Misread:`, and edits no test itself; a tester given `Rewrite:` rewrites that test from the
   current case and changes no other test.
+
+## 16. A known-failing case names its failure
+
+The same adoption's first dry run failed on two questions that the toolkit, not the PRD, should
+have prevented.
+
+1. **"Fails as its entry describes" had nothing to compare against.** A case marked
+   `known-failing: E-nnn` counts as expected whenever its test fails, for any reason. So a test broken
+   in some other way passes for the known bug. The session worked around it with a YAML comment on
+   each such line: `# counts only when …; any other failure is a fail`.
+   - **Fix: a `symptom:` key.** A test case may add `symptom: "<what the run shows while the bug is
+     open>"` beside `known-failing:`. It is plain language, observable, and a single symptom.
+   - A separate key, not text inside `known-failing:`, because lint, trace, the context pack,
+     `prd_error.py` and `prd_change.py` all compare the `known-failing` value with an entry ID.
+   - **Lint** (`test-refs`, no new rule):
+     - `symptom:` without `known-failing:` is an error.
+     - A `known-failing:` case with no `symptom:` gets a `warn` finding:
+       `T-043.2: known-failing E-014 names no symptom; any failure would pass as it`.
+     - It is a warning, not an error, so a PRD written before 0.8.2 still lints clean (the exit code
+       counts errors only). It needs no edit and no migration row.
+   - **The tester** (`testing-from-prds`, the agent): on a case with `symptom:`, the test treats only
+     that symptom as the expected failure. It checks for the symptom and, when it sees it, raises
+     the harness's own expected-failure exception.
+     - The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the
+       harness's equivalent, recorded under HARNESS CHOICES.
+     - Any other failure reports `<T-id>: fail: not the known failure: <one line>`.
+     - A case with no `symptom:` keeps today's rule.
+   - **The writers.** Each skill that adds a `known-failing:` line also writes its `symptom:`, from
+     the entry's Evidence or Diagnosis, never invented:
+     - `handling-errors`, in a regression patch;
+     - `adopting-prds`, for a confirmed bug's case.
+
+     A symptom that the entry does not show is a question for the owner.
+2. **A test case's precondition did not say how it is checked.** The private pack gives its cases a
+   state, which its Harness says "is checked by the count or total it names", but a case's state named
+   no count. The toolkit has the same gap for any precondition a test must confirm before it acts.
+   - **Fix.** `quality-checklist.md` gains an item: every precondition or state a test case declares
+     either names the check that confirms it, or the Harness (Clean state or Fixtures) says how such
+     a precondition is confirmed.
+   - The authoring and adopting skills run the checklist, so the gap is asked about before the dry
+     run, not during it. This is a checklist line, not a lint rule, because a check's wording is not
+     mechanical.
+
+**Tests:**
+- **Fix 1, lint:** `symptom:` without `known-failing:` is an error; a `known-failing:` case without
+  `symptom:` is a warning, and the exit code stays 0 when it is the only finding; a case with both is
+  clean.
+- **Fix 1, skills:** pinned lines in the tester's skill, the agent, `handling-errors` and
+  `adopting-prds`. In an eval, a suite tester on a case with `symptom:` writes a test whose marker
+  accepts only that failure. In another, a test failing in another way is reported `fail: not the
+  known failure`.
+- **Fix 2:** the checklist line, pinned.
