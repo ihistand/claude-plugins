@@ -597,7 +597,10 @@ def _replace_rows(lines: list[str], table, new_rows: list[str]) -> None:
 
 
 def _write_prd_md(path: Path, version: str, today: str, row: str, index_rows: list[str]) -> None:
-    text = path.read_text(encoding="utf-8")
+    """Write the row, the §11 rows, `version` and `updated`; the file's line ending (LF or CRLF) is kept."""
+    raw = path.read_bytes().decode("utf-8")
+    eol = "\r\n" if "\r\n" in raw else "\n"
+    text = raw.replace("\r\n", "\n")
     lines = text.split("\n")
     log = _table_of(text, 14)
     if log is None:
@@ -618,7 +621,7 @@ def _write_prd_md(path: Path, version: str, today: str, row: str, index_rows: li
         if at is None:
             raise ChangeError(f"prd.md frontmatter has no {key}:")
         lines[at] = f"{key}: {value}"
-    path.write_text("\n".join(lines), encoding="utf-8")
+    path.write_bytes(eol.join(lines).encode("utf-8"))
 
 
 def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, today: str) -> Recorded:

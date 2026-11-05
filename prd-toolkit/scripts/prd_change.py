@@ -103,8 +103,12 @@ COMMANDS = {
 }
 
 
+# the error document's kind, from the subcommand an argv pre-pass finds; `change` when none parses
+KINDS = {"ids": "change.ids", **{cmd: kind for (cmd, _), (kind, _h) in COMMANDS.items() if cmd != "ids"}}
+
+
 def main(argv: list[str]) -> int:
-    return interface.run(_main, "change", argv)
+    return interface.run(_main, interface.subcommand_kind(argv, KINDS, "change"), argv)
 
 
 def _main(argv: list[str]) -> int:

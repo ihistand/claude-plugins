@@ -233,3 +233,24 @@ def test_ids_cell_names_the_parent_of_each_ac_and_t_id_once(repo):
     assert {i.id for i in items} == {"AC-002.3", "T-003.3"}
     r = rec(repo, "minor")
     assert r.row.split("|")[4].strip() == "FR-002, FR-003, AC-002.3, T-003.3"
+
+
+def test_record_keeps_a_crlf_prd_md_crlf(repo):
+    new_ac_with_test(repo / PRD)
+    md = repo / PRD / "prd.md"
+    md.write_bytes(md.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    done = rec(repo)
+    data = md.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n")
+    assert (done.row + "\r\n").encode() in data and b"\r\nversion: 1.1.0\r\n" in data
+
+
+def test_a_usage_error_document_takes_its_kind_from_the_subcommand(repo):
+    code, out, err = call("bump", str(repo / PRD), "--base", "nope", "--json")
+    assert code == 2 and json.loads(out) == {"interface": 1, "kind": "change.bump", "error": f"bump: nope has no {PRD}"}
+    code, out, _ = call("record", str(repo / PRD), "--base", "HEAD", "--json")  # argparse: --bump and --change missing
+    assert code == 2 and json.loads(out)["kind"] == "change.record"
+    code, out, _ = call("ids", "next", str(repo / PRD), "--json")
+    assert code == 2 and json.loads(out)["kind"] == "change.ids"
+    code, out, _ = call("--json", "--bogus")  # no subcommand parses: the script's kind
+    assert code == 2 and json.loads(out)["kind"] == "change"

@@ -258,3 +258,57 @@ def test_a_failed_add_leaves_the_index_and_the_tree_as_they_were(recorded, monke
     assert code == 1 and err.startswith("refused: git add failed: fatal: simulated add failure"), err
     assert git(recorded, "diff", "--cached", "--name-only") == staged
     assert snapshot(recorded) == before
+
+
+# --- R20: CLAUDE.md is committed only when prd_block changed it, and a dirty one is refused ---
+
+def commit_claude_block(repo):
+    """CLAUDE.md as prd_block writes it for the recorded version, committed: the next block run leaves it as it is."""
+    from prdlint import change_approve
+
+    change_approve._block(repo / PRD)
+    git(repo, "add", "CLAUDE.md")
+    git(repo, "commit", "-q", "-m", "docs: the PRD block")
+
+
+def test_a_dirty_claude_md_is_refused_and_every_file_stays(recorded):
+    claude = recorded / "CLAUDE.md"
+    claude.write_text("# My notes\n", encoding="utf-8")  # untracked counts as uncommitted
+    refused(recorded, "CLAUDE.md has uncommitted changes; commit or set them aside first")
+    commit_claude_block(recorded)
+    claude.write_text(claude.read_text(encoding="utf-8") + "\nMY UNRELATED NOTE\n", encoding="utf-8")
+    refused(recorded, "CLAUDE.md has uncommitted changes; commit or set them aside first")
+
+
+def test_a_clean_claude_md_that_prd_block_changes_is_committed(recorded):
+    claude = recorded / "CLAUDE.md"
+    claude.write_text("# Notes\n", encoding="utf-8")
+    git(recorded, "add", "CLAUDE.md")
+    git(recorded, "commit", "-q", "-m", "docs: notes")
+    code, _, err = approve(recorded)
+    assert code == 0, err
+    assert "CLAUDE.md" in git(recorded, "show", "--name-only", "--format=", "HEAD").split()
+    assert "## Product requirements" in git(recorded, "show", "HEAD:CLAUDE.md")
+    assert git(recorded, "status", "--porcelain").strip() == ""
+
+
+def test_a_clean_claude_md_that_prd_block_leaves_alone_is_not_in_the_commit(recorded):
+    commit_claude_block(recorded)
+    code, _, err = approve(recorded)
+    assert code == 0, err
+    files = git(recorded, "show", "--name-only", "--format=", "HEAD").split()
+    assert "CLAUDE.md" not in files and f"{PRD}/prd.md" in files
+    assert git(recorded, "status", "--porcelain").strip() == ""
+
+
+# --- line endings ---
+
+def test_approve_keeps_a_crlf_prd_md_crlf(recorded):
+    md = recorded / PRD / "prd.md"
+    md.write_bytes(md.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    verdict(recorded)
+    code, _, err = approve(recorded)
+    assert code == 0, err
+    data = md.read_bytes()
+    assert data.count(b"\n") == data.count(b"\r\n")
+    assert b"\r\nstatus: Approved\r\n" in data and f"Repeat lookups; {DRY} | FR-002, AC-002.3, T-002.3 |\r\n".encode() in data and b"; pending" not in data

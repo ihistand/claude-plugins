@@ -46,16 +46,25 @@ def check_version(value: str | None) -> str | None:
     return f"unsupported interface {value}; this toolkit speaks {INTERFACE}"
 
 
+def subcommand_kind(argv: list[str], kinds: dict[str, str], fallback: str) -> str:
+    """The document kind of the first non-option argument when it names a subcommand in `kinds`, else `fallback`."""
+    first = next((a for a in argv if not a.startswith("-")), None)
+    return kinds.get(first, fallback)
+
+
 def run(main_text: Callable[[list[str]], int], kind: str, argv: list[str]) -> int:
-    """Call main_text; when JSON is wanted, turn an exit-2 path into the error document. Stderr keeps its text."""
+    """Call main_text; when JSON is wanted, turn an exit-2 path into the error document. Stderr keeps its text.
+
+    When main_text already printed a document on stdout (an owner's exit 2 passed through), no second one is added."""
     if not wants_json(argv):
         return main_text(argv)
-    captured = io.StringIO()
-    with contextlib.redirect_stderr(captured):
+    captured, printed = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stderr(captured), contextlib.redirect_stdout(printed):
         code = main_text(argv)
     text = captured.getvalue()
     sys.stderr.write(text)
-    if code == 2:
+    sys.stdout.write(printed.getvalue())
+    if code == 2 and not printed.getvalue().strip():
         lines = [ln for ln in text.strip().splitlines() if ln.strip()]
         pick = next((ln for ln in lines if re.match(r"^prd_\w+\.py: error: ", ln)), lines[0] if lines else "usage error")
         message = _PREFIX.sub("", pick)

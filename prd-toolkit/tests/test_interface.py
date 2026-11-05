@@ -73,7 +73,7 @@ def test_unsupported_version_is_an_error_document(kind, prd):
 def test_argparse_failure_with_json_is_an_error_document(kind, prd):
     code, out, err = call(MAINS[kind], str(prd), "--json", "--bogus")
     doc = json.loads(out)
-    assert code == 2 and err and doc["kind"] == kind and doc["error"].startswith("unrecognized arguments: --bogus") or "--bogus" in doc["error"]
+    assert code == 2 and err and doc["kind"] == kind and (doc["error"].startswith("unrecognized arguments: --bogus") or "--bogus" in doc["error"])
     assert not doc["error"].startswith(("usage:", "prd_"))
 
 

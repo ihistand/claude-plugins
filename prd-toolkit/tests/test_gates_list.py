@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from confirm_fixture import make_confirm_repo
 from prd_gates import main as gates_main
 from prdlint import change, confirm, deploy, gates, model
@@ -230,3 +231,42 @@ def test_usage_errors_exit_2_with_a_json_error(tmp_path):
 def test_gate_dataclass_shape():
     g = gates.Gate("a", "approval", "t", "q", [], ["x"], "s")
     assert g.path is None and g.items is None
+
+
+# --- final review: a verdict of the wrong shape is no gate, never a crash ---
+
+MALFORMED = [
+    {"touches": None}, {"touches": "AC-002.3"}, {"touches": 5}, {"touches": {"a": 1}},
+    {"dry_run": "dry run"}, {"dry_run": ["x"]}, {"dry_run": None}, {"dry_run": {"record": 5}},
+    {"restate": 5}, {"restate": ["r"]}, {"blockers": "none"}, {"digest": 5}, {"impact": []}, {"bump": "minor"},
+    {"head": 1}, {"kind": 1}, {"interface": "1"}, {"owner": "me"},
+]
+
+
+def _write_verdict(recorded, over, drop=()):
+    verdict(recorded, **over)
+    path = recorded / PRD / ".prd-review.json"
+    v = json.loads(path.read_text(encoding="utf-8"))
+    for key in drop:
+        v.pop(key)
+    path.write_text(json.dumps(v), encoding="utf-8")
+
+
+def test_a_well_formed_verdict_beside_an_error_entry_is_two_gates(recorded):
+    errors = recorded / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8") + entry(3, "code bug"), encoding="utf-8")
+    _write_verdict(recorded, {})
+    assert [g["kind"] for g in listed(recorded / PRD)] == ["approval", "error-class"]
+
+
+@pytest.mark.parametrize("over,drop", [(o, ()) for o in MALFORMED] + [({}, ("touches",)), ({}, ("dry_run",))],
+                         ids=[next(iter(o)) + "=" + repr(next(iter(o.values()))) for o in MALFORMED] + ["touches-missing", "dry_run-missing"])
+def test_a_verdict_of_the_wrong_shape_is_no_gate_and_the_others_stay(recorded, over, drop):
+    errors = recorded / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8") + entry(3, "code bug"), encoding="utf-8")
+    _write_verdict(recorded, over, drop)
+    code, out, err = call("list", str(recorded / PRD), "--json")
+    assert code == 0, err
+    assert [g["id"] for g in json.loads(out)["gates"]] == ["error-class:E-003"]
+    code, out, err = call("list", str(recorded / PRD))
+    assert code == 0 and out.startswith("error-class:E-003 "), (out, err)

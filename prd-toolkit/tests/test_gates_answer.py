@@ -372,3 +372,132 @@ def test_changes_keeps_the_mode_of_the_verdict(recorded):
     v.chmod(0o640)
     assert answer(recorded / PRD, f"approval:{branch(recorded)}", "not yet", "--choice", "changes")[0] == 0
     assert v.stat().st_mode & 0o777 == 0o640
+
+
+# --- final review: one JSON document, the error document's kind ---
+
+def test_an_owner_exit_2_prints_exactly_one_json_document(repo):
+    add_errors(repo, entry(3, "code bug"))
+    code, out, err = answer(repo / PRD, "error-class:E-003", "it is X", "--choice", "correct", "--class", "no such class", "--json")
+    assert code == 2
+    assert len([ln for ln in out.splitlines() if ln.strip()]) == 1, out
+    doc = doc_of(out)
+    assert doc["result"]["exit"] == 2 and doc["result"]["stderr"]
+
+
+def test_a_usage_error_of_answer_is_a_gates_answer_error_document(repo):
+    code, out, err = call("answer", str(repo / PRD), "error-class:E-003", "--json")  # no --reply
+    assert code == 2 and err
+    doc = json.loads(out)
+    assert doc["kind"] == "gates.answer" and "--reply" in doc["error"]
+    code, out, _ = call("--json", "--bogus")  # no subcommand parses: the script's kind
+    assert code == 2 and json.loads(out)["kind"] == "gates"
+
+
+# --- R19: answer commits the owner's write to errors.md or testing.md ---
+
+def commit_all(repo, message="wip"):
+    git_out(repo, "add", "--", ".")
+    git_out(repo, "commit", "-q", "-m", message)
+
+
+def test_error_class_answer_commits_errors_md_with_the_confirm_message(repo):
+    add_errors(repo, entry(3, "code bug"))
+    commit_all(repo, "docs(prd): propose E-003")
+    head = git_out(repo, "rev-parse", "HEAD").strip()
+    code, out, err = answer(repo / PRD, "error-class:E-003", QUOTED, "--json")
+    assert code == 0, err
+    assert git_out(repo, "status", "--porcelain").strip() == ""
+    assert git_out(repo, "rev-parse", "HEAD~1").strip() == head
+    assert git_out(repo, "log", "-1", "--format=%B").strip() == "docs(prd): confirm E-003\n\nRefs: E-003"
+    assert git_out(repo, "show", "--name-only", "--format=", "HEAD").split() == [f"{PRD}/errors.md"]
+    assert f', "{QUOTED}"\n' in git_out(repo, "show", f"HEAD:{PRD}/errors.md")
+
+
+def test_signoff_answer_commits_testing_md_with_the_signoff_message(repo):
+    drop_signoff(repo)
+    commit_all(repo, "test: drop the sign-off")
+    code, out, err = answer(repo / PRD, "signoff:T-001.4", "ok", "--result", "pass")
+    assert code == 0, err
+    assert git_out(repo, "status", "--porcelain").strip() == ""
+    assert git_out(repo, "log", "-1", "--format=%B").strip() == "docs(prd): sign off T-001.4\n\nRefs: FR-001"
+    assert git_out(repo, "show", "--name-only", "--format=", "HEAD").split() == [f"{PRD}/testing.md"]
+
+
+def test_the_answer_commit_leaves_other_staged_and_unstaged_work_alone(repo):
+    add_errors(repo, entry(3, "code bug"))
+    commit_all(repo)
+    (repo / "staged.txt").write_text("mine\n", encoding="utf-8")
+    git_out(repo, "add", "staged.txt")
+    (repo / "tools/gate.sh").write_text((repo / "tools/gate.sh").read_text(encoding="utf-8") + "# local\n", encoding="utf-8")
+    assert answer(repo / PRD, "error-class:E-003", "yes")[0] == 0
+    assert git_out(repo, "show", "--name-only", "--format=", "HEAD").split() == [f"{PRD}/errors.md"]
+    assert git_out(repo, "diff", "--cached", "--name-only").split() == ["staged.txt"]
+    assert git_out(repo, "diff", "--name-only").split() == ["tools/gate.sh"]
+
+
+def test_an_owner_that_fails_commits_nothing(repo):
+    add_errors(repo, entry(3, "code bug"))
+    commit_all(repo)
+    head = git_out(repo, "rev-parse", "HEAD")
+    assert answer(repo / PRD, "error-class:E-003", "x", "--choice", "correct", "--class", "no such class")[0] == 2
+    assert git_out(repo, "rev-parse", "HEAD") == head and git_out(repo, "status", "--porcelain").strip() == ""
+
+
+def test_a_rejected_commit_exits_1_with_the_git_error_and_keeps_the_write(repo):
+    add_errors(repo, entry(3, "code bug"))
+    commit_all(repo)
+    head = git_out(repo, "rev-parse", "HEAD")
+    hook = repo / ".git/hooks/pre-commit"
+    hook.write_text("#!/bin/sh\necho 'hook says no' >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    code, out, err = answer(repo / PRD, "error-class:E-003", QUOTED, "--json")
+    assert code == 1
+    doc = doc_of(out)
+    assert doc["result"]["exit"] == 1 and any("hook says no" in ln for ln in doc["result"]["stderr"])
+    assert git_out(repo, "rev-parse", "HEAD") == head
+    assert f', "{QUOTED}"\n' in (repo / PRD / "errors.md").read_text(encoding="utf-8")  # the owner's write stays
+    assert git_out(repo, "diff", "--cached", "--name-only").strip() == ""
+    code, out, err = answer(repo / PRD, "error-class:E-003", "again")  # text mode: the gate is gone now
+    assert code == 1
+
+
+def test_a_rejected_commit_in_text_mode_prints_the_git_error_on_stderr(repo):
+    drop_signoff(repo)
+    commit_all(repo)
+    hook = repo / ".git/hooks/pre-commit"
+    hook.write_text("#!/bin/sh\necho 'hook says no' >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    code, out, err = answer(repo / PRD, "signoff:T-001.4", "ok", "--result", "pass")
+    assert code == 1 and "git commit failed" in err and "hook says no" in err
+    assert "| pass |" in (repo / PRD / "testing.md").read_text(encoding="utf-8")
+
+
+def test_the_ledger_edit_does_not_reach_the_next_change(recorded):
+    """R19: once the answer is committed, the next change's bump sees no errors.md item and its approve commits no ledger edit."""
+    repo = recorded
+    add_errors(repo, entry(3, "code bug"))
+    git_out(repo, "add", "--", f"{PRD}/errors.md")
+    git_out(repo, "commit", "-q", "-m", "docs(prd): propose E-003", "--", f"{PRD}/errors.md")
+    from test_change_approve import verdict
+    verdict(repo)
+    assert answer(repo / PRD, "error-class:E-003", "yes")[0] == 0
+    assert git_out(repo, "diff", "HEAD", "--name-only", "--", f"{PRD}/errors.md").strip() == ""
+    from prdlint import change
+    items = change.bump(repo, repo / PRD, "HEAD").items
+    assert not [i for i in items if i.file == "errors.md"]
+    verdict(repo)  # the confirm edited the PRD folder, so the review is made again
+    before = [g for g in listed(repo / PRD) if g["kind"] == "approval"]
+    assert before
+    code, _, err = answer(repo / PRD, f"approval:{branch(repo)}", "yes")
+    assert code == 0, err
+    assert f"{PRD}/errors.md" not in git_out(repo, "show", "--name-only", "--format=", "HEAD").split()
+
+
+# --- adoption: --item with --choice done ---
+
+def test_adoption_done_refuses_an_item(tmp_path):
+    repo, prd, p, items = adopt(tmp_path)
+    before = confirm.answers_path(repo, "notes").read_bytes()
+    refuse(prd, "adoption:notes", "ok", "--item", items[0].id, "--choice", "done", why="refused: --item does not apply to --choice done")
+    assert confirm.answers_path(repo, "notes").read_bytes() == before

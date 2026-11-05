@@ -68,7 +68,7 @@ def _non_unit(prd_root: Path, last) -> list[str]:
     return [t for t in tids if t in levels and levels[t] != "unit"]
 
 
-def _checked(prd_root: Path, reply: str, dry_run: str):
+def _checked(repo_root: Path, prd_root: Path, reply: str, dry_run: str):
     """Run every check, write nothing; return the last §14 row."""
     from . import change
 
@@ -91,11 +91,15 @@ def _checked(prd_root: Path, reply: str, dry_run: str):
         _fail("a first approval is authoring's, not a change's")
     if last is None or len(last.cells) < 3 or not last.cells[2].endswith(PENDING):
         _fail("the last §14 row is not recorded and pending; run record first")
+    if _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
+        _fail("CLAUDE.md has uncommitted changes; commit or set them aside first")
     return last
 
 
 def _approved_text(text: str, last, dry_run: str) -> str:
-    lines = text.split("\n")
+    """The row's `pending` replaced by the record and the status Approved; the file's line ending (LF or CRLF) is kept."""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    lines = text.replace("\r\n", "\n").split("\n")
     row = lines[last.line - 1]
     at = row.rfind(PENDING)
     lines[last.line - 1] = f"{row[:at]}; {dry_run.strip()}{row[at + len(PENDING):]}"
@@ -103,7 +107,7 @@ def _approved_text(text: str, last, dry_run: str) -> str:
     for n in range(1, end):
         if lines[n].startswith("status:"):
             lines[n] = "status: Approved"
-    return "\n".join(lines)
+    return eol.join(lines)
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -123,11 +127,12 @@ def _block(prd_root: Path) -> None:
         _fail(f"prd_block failed: {run.stderr.strip()}")
 
 
-def _commit(repo_root: Path, prd_root: Path, message: str) -> str:
+def _commit(repo_root: Path, prd_root: Path, message: str, with_claude: bool) -> str:
+    """Commit the PRD folder (never its verdict), and CLAUDE.md when `with_claude` (prd_block changed its bytes)."""
     rel = prd_root.relative_to(repo_root).as_posix()
     review = f"{rel}/{REVIEW_FILE}"
     paths = [rel, f":(exclude){review}"]
-    if _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
+    if with_claude:
         paths.append("CLAUDE.md")
     # `git add` exits 1 on a pathspec that names an ignored file, even an exclude one; git skips an ignored verdict anyway
     ignored = _git(repo_root, "check-ignore", "-q", "--", review).returncode == 0
@@ -149,15 +154,16 @@ def _commit(repo_root: Path, prd_root: Path, message: str) -> str:
 def approve(repo_root: Path, prd_root: Path, reply: str, dry_run: str, refs: str | None = None) -> Approved:
     """Approve the recorded change: all checks, then the row, status, CLAUDE.md block, commit and removal of the verdict."""
     repo_root, prd_root = Path(repo_root).resolve(), Path(prd_root).resolve()
-    last = _checked(prd_root, reply, dry_run)
+    last = _checked(repo_root, prd_root, reply, dry_run)
     md_path, claude = prd_root / "prd.md", repo_root / "CLAUDE.md"
     old_md = md_path.read_bytes()
     old_claude = claude.read_bytes() if claude.exists() else None
     version = last.cells[0]
     try:
-        md_path.write_text(_approved_text(old_md.decode("utf-8"), last, dry_run), encoding="utf-8")
+        md_path.write_bytes(_approved_text(old_md.decode("utf-8"), last, dry_run).encode("utf-8"))
         _block(prd_root)
-        sha = _commit(repo_root, prd_root, _message(prd_root.name, version, reply, dry_run, refs))
+        changed = (claude.read_bytes() if claude.exists() else None) != old_claude
+        sha = _commit(repo_root, prd_root, _message(prd_root.name, version, reply, dry_run, refs), changed)
     except BaseException:
         md_path.write_bytes(old_md)
         if old_claude is None:
