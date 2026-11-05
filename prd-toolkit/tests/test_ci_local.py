@@ -61,7 +61,7 @@ def test_job_subset_and_all_pass_exits_zero(tmp_path):
     r = run(tmp_path, "HEAD", jobs="good")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "ci-local: good pass" in r.stdout
-    assert "bad" not in r.stdout
+    assert "ci-local: bad" not in r.stdout  # a bare "bad" can be part of the base SHA the good job echoes
 
 
 def run_wf(tmp_path, text, *args, script=SCRIPT):
@@ -121,3 +121,12 @@ def test_substitution_is_the_merge_base_not_the_base(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     assert f"got={fork}" in r.stdout
     assert main_head not in r.stdout
+
+
+def test_each_job_gets_its_own_fresh_home(tmp_path):
+    wf = ("jobs:\n  writer:\n    steps:\n      - run: 'touch \"$HOME/left-by-writer\" && ls -A \"$HOME\"'\n"
+          "  reader:\n    steps:\n      - run: 'test -z \"$(ls -A \"$HOME\")\" && echo reader-home-empty'\n")
+    r = run_wf(tmp_path, wf, "HEAD")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ci-local: writer pass" in r.stdout and "ci-local: reader pass" in r.stdout
+    assert "reader-home-empty" in r.stdout

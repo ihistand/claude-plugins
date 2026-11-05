@@ -6,8 +6,9 @@
 # of the checkout this script sits in. Each job's steps run as one bash script
 # with `set -e`, so the first failing step fails the job.
 #
-# CI parity: jobs get a fresh empty HOME (so nothing under the real ~/.claude
-# or other dotfiles leaks in) and a clean environment. Only PATH, TMPDIR, LANG,
+# CI parity: each job gets its own fresh empty HOME (so nothing under the real ~/.claude
+# or other dotfiles leaks in, and nothing one job writes there reaches the next)
+# and a clean environment. Only PATH, TMPDIR, LANG,
 # UV_CACHE_DIR (default $HOME/.cache/uv) and npm_config_cache (default ~/.npm)
 # of the real environment are kept, so runs stay fast.
 #
@@ -34,7 +35,7 @@ npm_cache=${npm_config_cache:-$real_home/.npm}
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir "$work/home" "$work/jobs"
+mkdir "$work/jobs"
 
 # One <job>.sh per job, in workflow order; stdout lists the job names.
 BASE_SHA=$base_sha OUT_DIR=$work/jobs WORKFLOW=$workflow JOBS=${CI_LOCAL_JOBS:-} \
@@ -81,7 +82,8 @@ results=()
 failed=0
 while IFS= read -r job; do
   echo "ci-local: $job running"
-  if env -i HOME="$work/home" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
+  home=$(mktemp -d "$work/home.XXXXXX")
+  if env -i HOME="$home" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-en_US.UTF-8}" \
        UV_CACHE_DIR="$uv_cache" npm_config_cache="$npm_cache" \
        bash "$work/jobs/$job.sh" </dev/null; then
     results+=("ci-local: $job pass")
