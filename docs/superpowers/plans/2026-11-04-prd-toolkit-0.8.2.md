@@ -47,7 +47,7 @@
 - **Ruling (plan, spec section 4): worktrees in requests.** Every answer body and adoption request names its worktree by absolute path (`"worktree"` in a body, `?wt=` in a query). The server refuses with 404 a path that is not in `git worktree list --porcelain`, or whose checkout lacks the PRD folder.
 - **Ruling (plan, spec section 5): the approval card's diff.** `.prd-review.json` records no base, so the inbox computes it as the review does by default: `git merge-base HEAD <base>` in that worktree, where `<base>` is the branch's upstream (`@{upstream}`) or else `main`, then `git diff <merge-base> -- <prd dir>`. `/gates` carries it on the approval gate as `diff` (text, capped at 200 KB, with `diff_truncated: true` past that), beside the verdict's `restate`, `touches`, `bump`, `impact` and `dry_run` and the version from → to.
 - **Ruling (plan, spec section 7): sign-off.** No skill writes a Sign-offs row today. `testing-from-prds` gains one rule: a `signoff:` case is answered by its owner, in the inbox or in the chat, and never by the tester or the session.
-- **Order (added 2026-11-05 with sections 13–16).** Run the tasks in this order: 0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 5, 6, 7. Task 8 builds on Task 3's `confirm.AdoptionRoutes` and on `panel.html`, which Tasks 1 and 4 share. Task 6's release text covers Tasks 8–12.
+- **Order (added 2026-11-05 with sections 13–17).** Run the tasks in this order: 0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 5, 6, 7. Task 8 builds on Task 3's `confirm.AdoptionRoutes` and on `panel.html`, which Tasks 1 and 4 share. Task 6's release text covers Tasks 8–16.
 - **Ruling (plan, spec section 13 fix 5): the check across commits already exists.** 0.8.1's `prd_error.py check <range>` compares the ledger write by write (`errors._structure`) and reports a dropped heading as `errors.md: E-nnn: deleted` (`tests/test_prd_error_check.py::test_deleted`). Task 9 adds no second report. It pins that dropping the *newest* entry is reported, and it keeps the shipped wording. The owner agreed on 2026-11-05, and spec section 13 now says the same.
 - **Ruling (plan, spec section 13 fix 5): the gap messages.** The spec gives the gap form. The rest follows it:
   - missing IDs are written as `E-011` (one), `E-010, E-011` (two), or `E-001 to E-011` (three or more), with `is` or `are` to match;
@@ -62,6 +62,21 @@
   - A test file that `git status --porcelain` lists, or that has no commit, is uncommitted, so its T-ids are never stale.
   - The T-id's entry at the test's commit is looked up across every test-case file of the PRD at that commit, not only the file the T-id is in now. A case moved between files without change is therefore not stale.
   - An entry absent at that commit is stale.
+- **Ruling (plan, spec section 17 fix 4): the block's change line.** `templates/claude-block.md`'s line `- Every behaviour change starts with {{change_rule}}.` becomes `- {{change_line}}`. `prd_block.render_block` fills it in one of four ways:
+  - a PRD with no adoption (`prd.adoption is None`) gets today's sentence, `Every behaviour change starts with <rule>.`;
+  - a PRD with adoption, whatever its areas' states, gets `Every behaviour change in an adopted area (below) starts with <rule>; outside them, the PRD does not govern yet.`;
+  - `<rule>` is today's `CHANGE_RULE`, or `CHANGE_RULE_LINKED` when `links.md` exists, so both linked variants keep the change-set clause.
+- **Ruling (plan, spec section 17 fix 5): `record`'s log and what `check` accepts.**
+  - `record` reserves a run ID with `deploy.new_run_id(repo_root, <env>)`, then writes two lines.
+    - A header `{"kind": "header", "by": "hand", "run", "head": <repo HEAD now>, "commit": <the deployed commit, full>, "prd", "runbook", "version": <prd.md's version at the deployed commit>, "until": <env>, "started"}`.
+    - One record `{"kind": "hand", "env", "commit", "reply": <verbatim>, "at"}`.
+  - It then replaces the environment's Deployed row with `| <env> | <version> | <commit[:7]> | <run date> | <run id> |`, creating `## Deployed` with its header row at the end of operations.md when the section is missing.
+  - The file is left uncommitted. The skill commits it as the close.
+  - `close_findings`, on a log whose header has `"by": "hand"`:
+    - it treats the hand record's env as the only finished one;
+    - it checks the row's commit against the header's `commit`, not `head`;
+    - it reports any `Status:` change as `a by-hand record moves no status`.
+  - So in 0.8.2 a hand-deployed `verified` block stays `verified` until the next `/prd-deploy` run's tests step passes on that environment. The owner agreed on 2026-11-05, and spec section 17 fix 5 now says the same.
 - **Ruling (plan, spec section 16): a blank symptom.** A `symptom:` that is not a non-empty string counts as absent. On a `known-failing:` case it gets the warning; on a case without `known-failing:` it gets the error.
 
 ## Review Focus
@@ -79,6 +94,14 @@ For sections 13–16:
 8. A path that resolves outside the `tasks` folder through `..` or a symlink (`tasks/../x.output`, `tasks/link.output` → elsewhere) is blocked, and so is `tasks/sub/<id>.output`. (Task 10)
 9. A test case moved unchanged to another test-case file after its test was committed is not stale. (Task 11)
 10. `symptom: ""` beside `known-failing:` gets the warning, not a pass, so a blank symptom never quiets it. (Task 12)
+
+For section 17:
+
+11. A `record --reply` holding double quotes, a newline and non-ASCII reaches the log verbatim, and the Deployed row holds no part of it. (Task 15)
+12. `record` on an environment that has a row replaces only that row; a second `record` in the same second gets its own run ID. (Task 15)
+13. `record --commit` given a short SHA or a tag resolves to the full commit; an ambiguous short SHA is refused as unknown. (Task 15)
+14. A PRD with `Adopted areas:` but none adopted yet (`none yet`) still gets the adopted-area change line. (Task 14)
+15. A linked PRD with adoption keeps the change-set clause inside the adopted-area line. (Task 14)
 
 ---
 
@@ -256,7 +279,8 @@ Required skill: `superpowers:writing-skills` (the repo's CLAUDE.md requires it f
   - the README's commands table lists `prd_gates.py serve` and `wait` with their exit codes, and `prd_build_check.py --stale` with its exit codes;
   - the README names the lock file, the log, the ` (form)` suffix and each known limit;
   - the changelog entry names the 0.8.1 interface additions it relies on and the renumbered refusal text;
-  - the changelog entry has one line for each of sections 13–16: the form keepalive and new choice labels, `Touches: -` and the ledger gap check, the tester's new read access, `--stale` and `Rewrite:`, and `symptom:`.
+  - the changelog entry has one line for each of sections 13–16: the form keepalive and new choice labels, `Touches: -` and the ledger gap check, the tester's new read access, `--stale` and `Rewrite:`, and `symptom:`;
+  - the commands table lists `prd_deploy.py record` with its exit codes, and the changelog entry has a line per section 17 fix. The upgrade note says to rerun `prd_block.py` to pick up the new change line.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: Write the text; bump the versions; run the vendor-only snippet.**
 - [ ] **Step 4: Run the pins, then CI parity,** then `prd_lint.py docs/prd/prd-toolkit` and `prd_trace.py docs/prd/prd-toolkit --range origin/main..HEAD`, each with `; echo "prd-…-exit=$?"`: both 0.
@@ -480,3 +504,141 @@ These run after Task 4 and before Task 5 (the Order line in the Global Constrain
   Pin each.
 - [ ] **Step 5: Run the pins and both evals at 3 runs; record them. CI parity.**
 - [ ] **Step 6: Commit** `feat(prd-toolkit): a known-failing case names its symptom`.
+
+---
+
+## Tasks 13–16: spec section 17 (added 2026-11-05)
+
+These run after Task 12 and before Task 5 (the Order line). The rules opening Tasks 8–12 hold here too: `writing-skills` for skill and agent text, RED baselines first, evals at 3 runs, and no lint-cli Boundary file.
+
+### Task 13: the dry run's helpers, the Leaks slot, and a harness-only round (spec section 17, fixes 1–3)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/skills/testing-from-prds/SKILL.md` (the helpers paragraph);
+  - `prd-toolkit/skills/authoring-prds/dry-run-prompt.md` (its helpers paragraph) and `prd-toolkit/agents/prd-tester.md`;
+  - `prd-toolkit/templates/prd/testing.md` (the Leaks slot) and `prd-toolkit/references/prd-format.md` (Harness, the Leaks description);
+  - `prd-toolkit/references/quality-checklist.md`;
+  - `prd-toolkit/skills/authoring-prds/SKILL.md` (phase 6's failed dry run) and `prd-toolkit/skills/adopting-prds/SKILL.md` (its dry run);
+  - the files holding pins for these texts (`git grep -l` each file name under `prd-toolkit/tests`), `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/dry-run-imports-pack-helper/`, `prd-toolkit/evals/authoring-harness-only-round/`.
+
+- [ ] **Step 1: Record both RED baselines.**
+  - `dry-run-imports-pack-helper`: a dry run of a case using a helper the vendored pack ships and states in its `harness`. The grader passes when no file in the dry-run directory defines that helper, and the test imports it from `.prd-toolkit/packs/<name>/`.
+  - `authoring-harness-only-round`: a PRD `In review` whose last dry-run report has two questions, both answered by a Harness convention the owner gives in the prompt. The grader passes when the status is still `In review`, only testing.md's `## Harness` changed, and the session dispatched phase 6 on a sample that is not the failed run's.
+- [ ] **Step 2: Write the failing pins.**
+  - The helpers paragraph in the skill, the dry-run prompt and the agent holds: "A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says." The old "always write them in your dry-run directory, without looking whether they exist" stays only for a helper no pack ships.
+  - The template's Leaks slot and `prd-format.md` hold: "Say how a failure report avoids printing the values a test passes: for pytest, the harness commands carry `--tb=short`, or each helper that takes a value sets `__tracebackhide__ = True`; another harness names its own equivalent."
+  - `quality-checklist.md` holds: "The Leaks slot says how a failure's traceback is kept free of test values."
+  - `authoring-prds` (beside "A failed dry run is a gap") and `adopting-prds` hold spec section 17 fix 3's harness-only round. The pins check four phrases: "harness-only", "stays `In review`", "in one batch" and "on a fresh sample". The full-round sentence stays.
+
+  Run them to see them fail.
+- [ ] **Step 3: Write the text. Run the pins, then both evals at 3 runs; record them. CI parity.**
+- [ ] **Step 4: Commit** `docs(prd-toolkit): dry runs import a pack's helpers, the Leaks traceback rule, a harness-only round`.
+
+### Task 14: the CLAUDE.md block's change line (spec section 17, fix 4)
+
+**Files:**
+- Modify: `prd-toolkit/templates/claude-block.md`, `prd-toolkit/scripts/prd_block.py`, the tests that render the block (`test_adoption_file.py`, `test_hooks_install.py`; `git grep -l render_block prd-toolkit/tests` for the rest), and the repo's own `CLAUDE.md` (regenerated) and `.prd-toolkit/` (vendor-only snippet)
+
+**Interfaces:**
+- `prd_block.change_line(prd: model.Prd) -> str` returns the sentence per the Global Constraints ruling, with no leading `- ` and no trailing newline.
+- `render_block` fills `{{change_line}}` and no longer fills `{{change_rule}}`.
+
+- [ ] **Step 1: Write the failing tests.**
+  - A PRD with no adoption renders `- Every behaviour change starts with `/prd-change` (`prd-toolkit:changing-prds`), before code.`, byte for byte as 0.8.1 did.
+  - A PRD with an adopted area renders `- Every behaviour change in an adopted area (below) starts with `/prd-change` (`prd-toolkit:changing-prds`), before code; outside them, the PRD does not govern yet.`
+  - Review Focus 14: adoption with no area adopted yet gives the same line.
+  - Review Focus 15: a linked PRD with adoption gives the line with `CHANGE_RULE_LINKED` inside it.
+  - The rendered block has no `{{`.
+- [ ] **Step 2: Run them to see them fail. Step 3: Implement. Run them.**
+- [ ] **Step 4:** Run `uv run --script prd-toolkit/scripts/prd_block.py docs/prd/prd-toolkit`; the repo's CLAUDE.md now shows the adopted-area line. Then run the vendor-only snippet. Then `uv run --script .prd-toolkit/prd_hooks.py check --ci docs/prd/prd-toolkit` prints nothing. Then CI parity.
+- [ ] **Step 5: Commit** `feat(prd-toolkit): the CLAUDE.md change rule names the adopted areas`, with `CLAUDE.md` and `.prd-toolkit/` staged by path.
+
+### Task 15: `prd_deploy.py record` (spec section 17, fix 5)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/scripts/prd_deploy.py` (the `record` subcommand) and `prd-toolkit/scripts/prdlint/deploy.py` (`record`, the row writer, `close_findings` on a by-hand log);
+  - `prd-toolkit/skills/deploying-from-prds/SKILL.md`;
+  - `prd-toolkit/tests/test_deploy_check.py`, `prd-toolkit/tests/test_deploying_skill.py`, `evals/BASELINE.md`.
+- Create: `prd-toolkit/tests/test_deploy_record.py`, `prd-toolkit/evals/deploy-by-hand-records/`.
+
+**Interfaces:**
+- Consumes: `deploy.new_run_id`, `deploy.append`, `deploy.prd_rel`, `deploy.runbook_hash`, `deploy.Refused`, `deploy.close_findings`, `model.Prd.operations.deployed`, and the Environments tables `runbook-env` reads (`prdlint/rules/registries.py`).
+- Produces:
+  - `deploy.record(prd: Prd, repo_root: Path, env: str, commit: str, reply: str) -> str` returns the run ID and does what the Global Constraints ruling says. Its refusals:
+    - `deploy.Refused("environment <env> is not in both Environments tables")`;
+    - `deploy.Refused("commit <commit> is not in the repository")`, after `git rev-parse --verify --end-of-options <commit>^{commit}` fails;
+    - `deploy.Refused("the reply is empty")` for a blank reply.
+  - `deploy.write_deployed_row(prd: Prd, env: str, version: str, commit7: str, date: str, run_id: str) -> None`.
+  - CLI `prd_deploy.py record <prd dir> --env ENV --commit SHA --reply TEXT`: prints `run=<id>`, then exits 0. It exits 1 on a refusal (`prd_deploy: <message>` on stderr) and 2 on usage.
+
+- [ ] **Step 1: Write the failing tests** in `test_deploy_record.py`, on `test_deploy.py`'s repository fixture:
+  - `record` writes the two log lines and the row, and a later `record` on the same env replaces it;
+  - Review Focus 12: other environments' rows are untouched, and two records in one second get two run IDs;
+  - the row's version is the PRD version at the deployed commit, not at HEAD;
+  - an unknown environment and an unknown commit are each refused, with nothing written;
+  - Review Focus 13: a tag and a short SHA resolve, and an ambiguous short SHA is refused;
+  - Review Focus 11: the reply with quotes, a newline and non-ASCII reaches the log verbatim;
+  - the CLI's exit codes 0, 1 and 2.
+
+  In `test_deploy_check.py`:
+  - the close commit of a `record` (operations.md's row only) gives no finding;
+  - the same commit also moving a `Status:` line gives `a by-hand record moves no status`;
+  - a row whose commit is not the record's gives the commit finding.
+- [ ] **Step 2: Run them to see them fail. Step 3: Implement. Run them, every `test_deploy*.py`, then CI parity.**
+- [ ] **Step 4: The skill.** First record `deploy-by-hand-records`'s RED baseline. Its scaffold: the owner says they promoted the release through the service's own UI and names the commit. The grader passes when the session ran `prd_deploy.py record`, wrote no Deployed row by hand, moved no status, and said a later `/prd-deploy` run moves `verified → live`.
+
+  Then add to `deploying-from-prds`:
+  - "A deploy the owner did by hand is recorded with `uv run --script <scripts>/prd_deploy.py record docs/prd/<slug> --env <env> --commit <sha> --reply "<the owner's words>"`, its own Bash call; commit its row as the close and run `prd_deploy.py check` on it.";
+  - "Never write a Deployed row yourself.";
+  - "A by-hand record moves no status: `verified → live` waits for a `/prd-deploy` run whose tests pass on that environment.";
+  - a Red Flag row: "I'll add the Deployed row myself, since they already deployed it".
+
+  Pin each in `test_deploying_skill.py`.
+- [ ] **Step 5: Run the pins and the eval at 3 runs; record it. CI parity.**
+- [ ] **Step 6: Commit** `feat(prd-toolkit): prd_deploy.py record for a deploy done by hand`.
+
+### Task 16: a `verified` with no build-gate test, and the round branch (spec section 17, fixes 6–7)
+
+**Files:**
+- Modify:
+  - `prd-toolkit/skills/building-from-prds/running-a-build.md`: step 3's dispatch, the builder prompt, step 4's builder check, the failed-round and merge text, and the close report. Every "with worktree isolation" or "without worktree isolation" branch becomes the round-branch path;
+  - `prd-toolkit/skills/building-from-prds/SKILL.md` (the builder's prompt block, a first check before rule 1, and the caller's Red Flags) and `prd-toolkit/agents/prd-builder.md`;
+  - the tests holding `building-from-prds` pins (`git grep -l running-a-build prd-toolkit/tests`), `evals/BASELINE.md`.
+- Create: `prd-toolkit/evals/builder-checks-branch/`, `prd-toolkit/evals/build-round-branch/`.
+
+**Interfaces:**
+- **The round branch.** It is `prd-round/<area>-<n>`, where `<n>` is the round number counted from 1 for the build (a `--fixes` build too). An existing branch of that name takes the next free `<n>`.
+- **The round, in order**, each step its own Bash call:
+  1. `git status --porcelain --untracked-files=all` prints nothing;
+  2. `git switch -c prd-round/<area>-<n>`;
+  3. dispatch `prd-toolkit:prd-builder` with no `isolation`;
+  4. `git switch <build branch>`;
+  5. `prd_build_check.py --diff <Base>..prd-round/<area>-<n>`;
+  6. when it passes, `git merge --ff-only prd-round/<area>-<n>`, then `git branch -d prd-round/<area>-<n>`.
+- **A failed round** (a failed check, a UNIT failure, a stop) merges nothing. Its branch is kept and named in the report, and the next round cuts a new branch from the unchanged build branch.
+- **The tester's `write` dispatch** follows the merged round, never in the same message as the builder.
+- **The builder prompt** gains two lines after `Scripts:`, `Base: <sha>` and `Branch: prd-round/<area>-<n>`.
+
+- [ ] **Step 1: Record both RED baselines.**
+  - `builder-checks-branch`: a builder prompt whose `Branch:` is not the current branch, or whose `Base:` is not in HEAD. The grader passes when the builder changed no file and reported `QUESTIONS: worktree is not on the build branch`.
+  - `build-round-branch`: a caller on a side branch running `/prd-build`. The grader passes on these:
+    - no Agent call with `isolation`;
+    - a `git switch -c prd-round/` before the builder dispatch;
+    - the `--diff` check on that branch;
+    - a `--ff-only` merge;
+    - the tester dispatched after the merge.
+- [ ] **Step 2: Write the failing pins.**
+  - The round steps above, in `running-a-build.md` step 3.
+  - In step 3's dispatch, the sentence "Never dispatch the builder with `isolation: worktree`: it cuts from the main checkout's HEAD, not from the build branch."
+  - The two prompt lines, in both files.
+  - The builder's first check, in the skill and the agent: "Run `git merge-base --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash call; if the first fails or the second is not the `Branch:` line, change nothing and report `QUESTIONS: worktree is not on the build branch`."
+  - The close report line `<ID>: verified with no build-gate test; its proof is the deploy gate at /prd-deploy`, per block whose IDs have no unit and no build-gate T-id.
+  - A caller Red Flag: "Dispatching the builder with `isolation: worktree`, or letting it commit on the build branch".
+  - No "without worktree isolation" text left in `running-a-build.md`.
+
+  Run them to see them fail.
+- [ ] **Step 3: Write the text. Run the pins and both evals at 3 runs; record them.** Rerun `builder-stays-out-of-prd`, `builder-document-no-unit`, `build-close-no-bump` and `build-gap-stops` at 3 runs each, because the prompt and the dispatch changed. CI parity.
+- [ ] **Step 4: Commit** `docs(prd-toolkit): every builder round runs on a round branch; the close names a verified block with no build-gate test`.

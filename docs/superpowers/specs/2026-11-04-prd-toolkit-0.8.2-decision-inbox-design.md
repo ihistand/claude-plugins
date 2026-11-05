@@ -31,6 +31,9 @@
 >   checklist asks how each precondition is checked, from the same adoption's dry run.
 > - Section 17 (owner, 2026-11-05): seven fixes from the same adoption's later dry runs, its
 >   first fix build and its first deploy.
+> - Section 17 fixes 5 and 7 (owner, 2026-11-05): a by-hand record moves no status, and `live`
+>   waits for the next `/prd-deploy`; every builder round runs on a round branch the caller cuts,
+>   in place of the Agent tool's isolation.
 > - Section 13 fix 5 (owner, 2026-11-05): the check across commits is 0.8.1's existing `deleted`
 >   finding of `prd_error.py check`, kept as it is, not a new message.
 
@@ -98,7 +101,7 @@ It is **proven by** the owner on real work (section 9).
 | `skills/authoring-prds/SKILL.md`, `skills/adopting-prds/SKILL.md` | changed | Section 17, fix 3: a dry run failed only on harness conventions |
 | `templates/claude-block.md`, `scripts/prd_block.py` | changed | Section 17, fix 4: the change rule names the adopted areas |
 | `scripts/prd_deploy.py`, `scripts/prdlint/deploy.py`, `skills/deploying-from-prds/SKILL.md` | changed | Section 17, fix 5: `prd_deploy.py record` for a deploy done by hand |
-| `skills/building-from-prds/running-a-build.md`, `skills/building-from-prds/SKILL.md` | changed | Section 17, fixes 6 and 7: a `verified` with no build-gate test, and the builder's isolation base |
+| `skills/building-from-prds/running-a-build.md`, `skills/building-from-prds/SKILL.md`, `agents/prd-builder.md` | changed | Section 17, fixes 6 and 7: a `verified` with no build-gate test, and the caller's round branch for every builder round |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
 | `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
@@ -585,23 +588,43 @@ PRD.
    - `prd_deploy.py check` accepts a close commit that writes only what that log records.
    - **The skill** (`deploying-from-prds`): when the owner deployed by hand, record it with
      `record`, and never write a Deployed row directly. `verified → live` still needs that
-     environment's deploy-gate tests to pass in a suite run after the record. Without one, the
-     row is written and every status stays.
+     environment's deploy-gate tests to pass, which only a later `/prd-deploy` run's tests step
+     gives. A by-hand record moves no status, and `check` refuses a status change in its close.
 6. **`verified` with no test of the change.** When every T-id of a block is deploy-gate, the
    build closes it `verified` without running anything that touches the change. The
    `built → verified` conditions hold vacuously, as `running-a-build.md` says.
    - **Fix.** The close report names each such block:
      `<ID>: verified with no build-gate test; its proof is the deploy gate at /prd-deploy`.
    - The status rule is unchanged, so areas tested only live still close.
-7. **The isolated builder started from the wrong commit.** The Agent tool's `isolation: worktree`
-   cuts the builder's worktree from the main checkout's HEAD, not from the build branch. A
-   builder dispatched on a side branch (a `--fixes` branch, a feature branch) starts without the
-   branch's PRD changes.
-   - **Fix.** `running-a-build.md` step 3 says it: when the build branch is not the main
-     checkout's HEAD, dispatch the builder without isolation, and take the no-isolation path.
-   - The builder prompt gains a `Base: <sha>` line: the build branch's HEAD at dispatch. The
-     builder's skill gains a first check, `git merge-base --is-ancestor <sha> HEAD`. When it
-     fails, the builder stops with `QUESTIONS: worktree is not on the build branch`.
+7. **The builder's round had no merge gate, or the wrong base.** The Agent tool's `isolation:
+   worktree` cuts the builder's worktree from the main checkout's HEAD, not from the build branch.
+   A builder dispatched that way on a side branch (a `--fixes` branch, a feature branch) starts
+   without the branch's PRD changes. The way around it, a builder without isolation, commits
+   straight onto the build branch. That path has no merge to gate: `--diff` catches only PRD and
+   test edits, and a bad round is already on the branch.
+   - **Fix: every builder round runs on a round branch the caller makes.** `running-a-build.md`
+     step 3 no longer uses the Agent tool's isolation for the builder:
+     1. With the build worktree clean (step 2's snapshot), the caller runs
+        `git switch -c prd-round/<area>-<n>`, cutting a round branch from the build branch's
+        HEAD in the build worktree itself.
+     2. The caller dispatches the builder there, with no isolation. The builder prompt gains
+        `Base: <sha>` (the build branch's HEAD) and `Branch: prd-round/<area>-<n>`.
+     3. After the report, the caller runs step 4's builder check on `<sha>..prd-round/<area>-<n>`.
+     4. Then `git switch <build branch>`.
+     5. When the check passes, `git merge --ff-only prd-round/<area>-<n>` is the merge, and the
+        round branch is deleted with `git branch -d`.
+     6. A failed round merges nothing. Its branch is kept and listed in the report, as an isolated
+        round's was, never deleted with `-D`.
+   - The tester is dispatched after the builder's round merges, as the no-isolation path already
+     did: both work in one worktree.
+   - The builder's skill gains a first check:
+     - `git merge-base --is-ancestor <sha> HEAD`;
+     - `git branch --show-current` equal to the `Branch:` line.
+
+     When either fails, the builder changes nothing and reports
+     `QUESTIONS: worktree is not on the build branch`.
+   - The cwd stays the build worktree throughout, so the harness commands run where testing.md
+     expects them to.
 
 **Tests:**
 - **Fix 1:** pinned lines in the three texts. In an eval, a dry-run tester on a case using a
@@ -615,5 +638,7 @@ PRD.
   refuses an unknown environment and an unknown commit, and `check` accepts its close commit.
   The skill's rule, pinned.
 - **Fix 6:** the report line, pinned in `running-a-build.md`.
-- **Fix 7:** the step 3 line and the builder's check, pinned. In an eval, a builder whose
-  worktree lacks the base commit stops with the question.
+- **Fix 7:** the round-branch steps in `running-a-build.md` and the builder's check, pinned. In an
+  eval, a builder whose branch is not the `Branch:` line, or whose HEAD lacks `Base:`, stops with
+  the question. In another, a caller on a side branch cuts a round branch, merges it with
+  `--ff-only` after the check, and uses no Agent isolation.
