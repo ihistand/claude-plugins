@@ -1,27 +1,23 @@
 """The items an adoption area asks its owner to confirm: requirements, bugs, questions and markers."""
 import hashlib
-import hmac
 import json
 import os
 import re
 import secrets
 import subprocess
-import tempfile
 import threading
-import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
 
 try:
     import fcntl
 except ImportError:  # no cross-process lock off POSIX; the in-process lock and the atomic replace remain
     fcntl = None
 
+from . import formserver
 from .model import _MARKER, Prd, ReqBlock, _field_lines, repo_root
 
 SUMMARY_MAX = 400
@@ -296,9 +292,8 @@ def load_summaries(path: Path, items: list[Item], area: str) -> dict[str, str]:
 REQUIRES_TEXT = {"correct", "bug", "ask", "answer"}  # `correct` is also satisfied by a non-empty `acs`
 ALLOWED = {"requirement": {"confirm", "correct", "bug", "ask"}, "bug": {"bug", "intended", "ask"},
            "question": {"intended", "fix", "answer"}, "marker": {"answer"}}
-MAX_BODY = 1024 * 1024
-CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; "
-       "base-uri 'none'; form-action 'none'")
+MAX_BODY = formserver.MAX_BODY  # re-exported: the server parts live in formserver
+CSP = formserver.CSP
 EXCLUDE_LINE = "/.prd-confirm-*.json"
 
 
@@ -327,21 +322,7 @@ def load_answers(path: Path) -> dict:
 
 def save_answers(path: Path, data: dict) -> None:
     """Rewrite the whole file through a temporary file in the same folder, then os.replace."""
-    path = Path(path)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f"{path.stem}.tmp-", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    formserver.write_json_atomic(path, data)
 
 
 def open_ids(items: list[Item], answers: dict) -> list[str]:
@@ -352,21 +333,7 @@ def open_ids(items: list[Item], answers: dict) -> list[str]:
 
 def ensure_excluded(repo_root: Path) -> None:
     """Add `/.prd-confirm-*.json` to the common git dir's info/exclude, once."""
-    try:
-        out = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo_root, capture_output=True, text=True,
-                             encoding="utf-8", timeout=30, check=True).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return
-    common = Path(out)
-    if not common.is_absolute():
-        common = Path(repo_root) / common
-    exclude = common / "info" / "exclude"
-    exclude.parent.mkdir(parents=True, exist_ok=True)
-    text = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
-    if EXCLUDE_LINE in text.splitlines():
-        return
-    with exclude.open("a", encoding="utf-8") as f:
-        f.write(("" if not text or text.endswith("\n") else "\n") + EXCLUDE_LINE + "\n")
+    formserver.ensure_excluded(repo_root, EXCLUDE_LINE)
 
 
 _WRITE_LOCK = threading.Lock()  # one writer at a time in this process; the directory flock covers other processes
@@ -508,27 +475,28 @@ def open_file(prd: Prd, area: str, items: list[Item], summaries: dict, repo_root
     return path
 
 
-class _Bad(Exception):
-    def __init__(self, status: int, why: str):
-        super().__init__(why)
-        self.status, self.why = status, why
-
-
 class _State:
     """Everything a request needs; every write to the answers file goes through `_mutate`, `_store` or `mark_done`."""
 
-    def __init__(self, prd: Prd, area: str, items: list[Item], summaries: dict, page: str, token: str,
-                 idle_minutes: float, request_timeout: float):
-        self.prd, self.area, self.items, self.summaries, self.page, self.token = prd, area, items, summaries, page, token
-        self.request_timeout = request_timeout
+    def __init__(self, prd: Prd, area: str, items: list[Item], summaries: dict, page: str):
+        self.prd, self.area, self.items, self.summaries, self.page = prd, area, items, summaries, page
+        self.server: formserver.Server | None = None
         self.by_id = {i.id: i for i in items}
         self.root = repo_root(prd.root)
         self.path = answers_path(self.root, area)
-        self.idle_seconds = idle_minutes * 60
-        self.last = time.monotonic()
-        self.end: str | None = None
+        self._end: str | None = None
         self.head = _head(self.root)
         load_answers(self.path)  # a corrupt file refuses the server before anything is served
+
+    @property
+    def end(self) -> str | None:
+        return self.server.end if self.server is not None else self._end
+
+    @end.setter
+    def end(self, value: str | None) -> None:
+        self._end = value
+        if self.server is not None:
+            self.server.end = value
 
     def snapshot(self) -> dict:
         with _WRITE_LOCK:
@@ -537,18 +505,18 @@ class _State:
     def answer(self, body: dict) -> dict:
         iid = body.get("id")
         if not isinstance(iid, str) or iid not in self.by_id:
-            raise _Bad(400, f"unknown item {iid!r}")
+            raise formserver.Bad(400, f"unknown item {iid!r}")
         item = self.by_id[iid]
         try:
             text, acs = validate_answer(item, body.get("decision"), body.get("text"), body.get("acs"))
         except Refused as e:
-            raise _Bad(400, str(e)) from e
+            raise formserver.Bad(400, str(e)) from e
         return _store(self.prd, self.area, self.root, item, _entry(item, body["decision"], text, acs), self.head)
 
     def undo(self, body: dict) -> dict:
         iid = body.get("id")
         if not isinstance(iid, str) or iid not in self.by_id:
-            raise _Bad(400, f"unknown item {iid!r}")
+            raise formserver.Bad(400, f"unknown item {iid!r}")
 
         def apply(data: dict) -> None:
             data["answers"].pop(iid, None)
@@ -574,159 +542,51 @@ class _State:
                 "changed": changed}
 
 
-def _handler(state: _State) -> type[BaseHTTPRequestHandler]:
-    class Handler(BaseHTTPRequestHandler):
-        protocol_version = "HTTP/1.0"
-        timeout = state.request_timeout  # a stalled client frees its thread
-
-        def log_message(self, *args) -> None:  # no per-request log
-            pass
-
-        def _send(self, status: int, body: bytes, ctype: str, csp: bool = False) -> None:
-            self.send_response(status)
-            self.send_header("Content-Type", ctype)
-            if csp:
-                self.send_header("Content-Security-Policy", CSP)
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _json(self, status: int, obj: Any) -> None:
-            self._send(status, json.dumps(obj).encode("utf-8"), "application/json; charset=utf-8")
-
-        def _authorized(self, query: dict, header: bool) -> bool:
-            given = (query.get("token") or [""])[0]
-            if not given and header:
-                given = self.headers.get("X-Prd-Token", "")
-            return hmac.compare_digest(given.encode("utf-8"), state.token.encode("utf-8"))
-
-        def _body(self) -> dict:
-            raw = self.headers.get("Content-Length")
+def _handler(state: _State) -> type[formserver.Handler]:
+    class Handler(formserver.Handler):
+        def route(self, method: str, route: str, query: dict) -> None:
             try:
-                n = int(raw) if raw is not None else -1
-            except ValueError:
-                n = -1
-            if n < 0:
-                raise _Bad(400, "a POST needs a Content-Length")
-            if n > MAX_BODY:
-                left = n
-                try:
-                    while left > 0:  # read it off the wire so the client sees the reply, not a reset
-                        chunk = self.rfile.read(min(65536, left))
-                        if not chunk:
-                            break
-                        left -= len(chunk)
-                except OSError:
-                    pass
-                raise _Bad(413, "request body is over 1 MB")
-            try:
-                data = self.rfile.read(n)
-            except OSError:  # timed out waiting for the rest of the body
-                raise _Bad(408, "request timed out") from None
-            if len(data) < n:
-                raise _Bad(400, "body is shorter than its Content-Length")
-            try:
-                obj = json.loads(data.decode("utf-8") or "{}")
-            except ValueError:
-                raise _Bad(400, "body is not JSON") from None
-            if not isinstance(obj, dict):
-                raise _Bad(400, "body must be a JSON object")
-            return obj
+                self._route(method, route)
+            except Refused as e:
+                self.send_json(500, {"error": str(e)})
 
         def _route(self, method: str, route: str) -> None:
             if method == "GET" and route == "/":
-                self._send(200, state.page.encode("utf-8"), "text/html; charset=utf-8", csp=True)
+                self.send_page(state.page)
             elif method == "GET" and route == "/items":
-                self._json(200, state.listing())
+                self.send_json(200, state.listing())
             elif method == "POST" and route in ("/answer", "/undo"):
-                body = self._body()
+                body = self.body_json()
                 data = state.answer(body) if route == "/answer" else state.undo(body)
-                self._json(200, {"open": open_ids(state.items, data)})
+                self.send_json(200, {"open": open_ids(state.items, data)})
             elif method == "POST" and route == "/done":
-                self._body()
+                self.body_json()
                 pending = state.finish()
                 if pending:
-                    self._json(409, {"open": pending})
+                    self.send_json(409, {"open": pending})
                 else:
-                    self._json(200, {"open": []})
+                    self.send_json(200, {"open": []})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
             else:
-                raise _Bad(404, "no such request")
-
-        def _handle(self, method: str) -> None:
-            parts = urlsplit(self.path)
-            query = parse_qs(parts.query)
-            route = parts.path
-            try:
-                if not self._authorized(query, header=route != "/"):
-                    raise _Bad(403, "missing or wrong token")
-                state.last = time.monotonic()  # only an authorized request keeps the server alive
-                self._route(method, route)
-            except _Bad as e:
-                self._json(e.status, {"error": e.why})
-            except Refused as e:
-                self._json(500, {"error": str(e)})
-            except (BrokenPipeError, ConnectionError):
-                pass
-            except Exception:  # noqa: BLE001 - nothing may reset the connection or print a traceback
-                self._json(500, {"error": "internal error"})
-
-        def do_GET(self) -> None:
-            self._handle("GET")
-
-        def do_POST(self) -> None:
-            self._handle("POST")
+                raise formserver.Bad(404, "no such request")
 
     return Handler
 
 
-class _Server(ThreadingHTTPServer):
-    daemon_threads = True
-    request_queue_size = 128  # a burst of browser requests must not be reset
-
-    def handle_error(self, request, client_address) -> None:  # never a traceback on the owner's terminal
-        pass
-
-    def __init__(self, address: tuple[str, int], state: _State):
-        self.state = state
-        super().__init__(address, _handler(state))
-
-
 def make_server(prd: Prd, area: str, items: list[Item], summaries: dict, page: str, port: int = 0,
-                idle_minutes: float = 120, request_timeout: float = 30) -> tuple[ThreadingHTTPServer, str]:
+                idle_minutes: float = 120, request_timeout: float = 30) -> tuple[formserver.Server, str]:
     """A server bound to 127.0.0.1 only, and its token. Raises OSError when `port` is in use, and Refused
     when the answers file exists but is not valid."""
-    token = secrets.token_hex(32)
-    state = _State(prd, area, items, summaries, page, token, idle_minutes, request_timeout)
-    return _Server(("127.0.0.1", port), state), token
+    state = _State(prd, area, items, summaries, page)
+    server, token = formserver.make_server(_handler(state), port, idle_minutes, state,
+                                           token=secrets.token_hex(32), request_timeout=request_timeout)  # 64 hex, as in 0.7.1
+    state.server = server
+    return server, token
 
 
-def run(server: ThreadingHTTPServer) -> int:
+def run(server: formserver.Server) -> int:
     """Serve until Done (0), Ctrl-C or the idle timeout (3)."""
-    if not isinstance(server, _Server):
-        raise TypeError("run() takes a server made by make_server")
-    state = server.state
-    stop = threading.Event()
-
-    def watch() -> None:
-        while not stop.wait(0.05):
-            if time.monotonic() - state.last > state.idle_seconds:
-                state.end = "idle"
-                server.shutdown()
-                return
-
-    state.last = time.monotonic()
-    watcher = threading.Thread(target=watch, daemon=True)
-    watcher.start()
-    try:
-        server.serve_forever(poll_interval=0.05)
-    except KeyboardInterrupt:
-        state.end = "interrupted"
-    finally:
-        stop.set()
-        watcher.join(5)
-    return 0 if state.end == "done" else 3
+    return formserver.run(server)
 
 
 def page_path() -> Path:

@@ -9,14 +9,21 @@ from pathlib import Path
 
 import pytest
 from confirm_fixture import make_confirm_repo
-from prdlint import confirm, model
+from prdlint import confirm, formserver, model
 
 PAGE_FILE = Path(__file__).parent.parent / "templates/confirm/form.html"
 HOSTILE = "<script>alert(1)</script>"
 
 
 def page() -> str:
-    return PAGE_FILE.read_text(encoding="utf-8")
+    return formserver.assemble(PAGE_FILE)
+
+
+def test_panel_is_included():
+    raw = PAGE_FILE.read_text(encoding="utf-8")
+    assert "<!-- include: panel.html -->" in raw.splitlines()
+    assert "<script>" not in raw and "<!-- include:" not in page()
+    assert "<script>" in page()
 
 
 def scripts() -> str:
@@ -151,7 +158,7 @@ def test_served_page_is_the_file_and_items_are_json_text(tmp_path):
         with urllib.request.urlopen(f"{base}/?token={token}", timeout=10) as r:
             body = r.read()
             assert r.headers["Content-Type"].startswith("text/html")
-        assert body == PAGE_FILE.read_bytes()
+        assert body == page().encode("utf-8")
         assert b"alert(1)" not in body
         req = urllib.request.Request(base + "/items", headers={"X-Prd-Token": token})
         with urllib.request.urlopen(req, timeout=10) as r:

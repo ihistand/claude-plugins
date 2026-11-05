@@ -14,6 +14,7 @@ VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "p
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
+CONFIRM_PANEL = "confirm/panel.html"
 CONFIRM_PAGE = "confirm/form.html"  # templates/confirm/form.html in the plugin, .prd-toolkit/confirm/form.html vendored
 JUDGE_DIR = "judge"  # templates/judge/ in the plugin, .prd-toolkit/judge/ vendored
 LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit/languages/ vendored
@@ -72,6 +73,7 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
     files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
+    files[CONFIRM_PANEL] = templates.parent / CONFIRM_PANEL  # form.html includes it
     for f in sorted((templates.parent / JUDGE_DIR).rglob("*")):
         if f.is_file():
             files[f"{JUDGE_DIR}/{f.relative_to(templates.parent / JUDGE_DIR).as_posix()}"] = f

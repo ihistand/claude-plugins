@@ -19,7 +19,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import confirm, model  # noqa: E402
+from prdlint import confirm, formserver, model  # noqa: E402
 
 
 def _fail(message: str) -> int:
@@ -64,8 +64,8 @@ def _serve_items(prd, args) -> int:
         except confirm.Refused as e:
             raise confirm.Refused(f"the summaries saved in the answers file {where} are not valid: {e}; fix or remove them") from e
     try:
-        page = confirm.page_path().read_text(encoding="utf-8")
-    except OSError as e:
+        page = formserver.assemble(confirm.page_path())
+    except (OSError, formserver.PageError) as e:
         return _fail(f"cannot read the form page: {e}")
     try:
         server, token = confirm.make_server(prd, args.area, items, summaries, page, port=args.port or 0, idle_minutes=args.idle_minutes)

@@ -103,7 +103,8 @@ def test_serve_excludes_the_answers_file_and_page_is_served(tmp_path, procs):
     p = serve(procs, prd)
     m = URL.match(first_line(p))
     with urllib.request.urlopen(f"http://127.0.0.1:{m.group(1)}/?token={m.group(2)}", timeout=WAIT) as r:
-        assert b"<title>" in r.read()
+        body = r.read()
+    assert b"<title>" in body and b"<script>" in body and b"<!-- include:" not in body  # the panel is assembled in
     assert confirm.EXCLUDE_LINE in (repo / ".git/info/exclude").read_text().splitlines()
 
 
