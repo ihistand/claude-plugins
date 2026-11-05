@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable
 
 INTERFACE = 1
-_PREFIX = re.compile(r"^(?:prd_\w+(?:\.py)?): (?:error: )?")
+_PREFIX = re.compile(r"^(?:prd_\w+(?:\.py)?(?: \w[\w-]*)?): (?:error: )?")
 
 
 def dump(kind: str, payload: dict) -> str:
@@ -66,7 +66,7 @@ def run(main_text: Callable[[list[str]], int], kind: str, argv: list[str]) -> in
     sys.stdout.write(printed.getvalue())
     if code == 2 and not printed.getvalue().strip():
         lines = [ln for ln in text.strip().splitlines() if ln.strip()]
-        pick = next((ln for ln in lines if re.match(r"^prd_\w+\.py: error: ", ln)), lines[0] if lines else "usage error")
+        pick = next((ln for ln in lines if re.match(r"^prd_\w+\.py(?: \w[\w-]*)?: error: ", ln)), lines[0] if lines else "usage error")
         message = _PREFIX.sub("", pick)
         sys.stdout.write(error(kind, message))
     return code

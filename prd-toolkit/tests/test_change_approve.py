@@ -312,3 +312,15 @@ def test_approve_keeps_a_crlf_prd_md_crlf(recorded):
     data = md.read_bytes()
     assert data.count(b"\n") == data.count(b"\r\n")
     assert b"\r\nstatus: Approved\r\n" in data and f"Repeat lookups; {DRY} | FR-002, AC-002.3, T-002.3 |\r\n".encode() in data and b"; pending" not in data
+
+
+def test_an_ignored_claude_md_is_neither_refused_nor_staged(recorded):
+    gi = recorded / ".gitignore"
+    gi.write_text((gi.read_text(encoding="utf-8") if gi.exists() else "") + "CLAUDE.md\n", encoding="utf-8")
+    git(recorded, "add", ".gitignore")
+    git(recorded, "commit", "-q", "-m", "ignore CLAUDE.md")
+    verdict(recorded)
+    (recorded / "CLAUDE.md").write_text("# mine\n", encoding="utf-8")
+    code, _, err = approve(recorded)
+    assert code == 0, err
+    assert "CLAUDE.md" not in git(recorded, "show", "--name-only", "--format=", "HEAD").split()

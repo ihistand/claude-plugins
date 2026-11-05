@@ -130,3 +130,12 @@ def test_context_parts_follow_the_text_pack(ctx):
             titles.append(p["title"])
     assert titles == [h[3:] for h in text.splitlines() if h.startswith("## ")]
     assert json.loads(pack(ctx, "--json")[1])["area"] is None
+
+
+def test_a_subcommand_usage_error_is_the_error_document_not_the_usage_line(tmp_path):
+    from prd_gates import main as gates_main
+
+    code, out, err = call(gates_main, "answer", str(tmp_path), "x", "--json")
+    doc = json.loads(out)
+    assert code == 2 and not doc["error"].startswith("usage:") and "--reply" in doc["error"], doc
+    assert not doc["error"].startswith("prd_")
