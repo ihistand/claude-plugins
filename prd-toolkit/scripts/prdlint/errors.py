@@ -85,6 +85,14 @@ def _check_class(cls: str) -> None:
         raise ValueError(f"class must be one of {', '.join(c for c in CLASSES if c != 'unclassified')}; got {cls!r}")
 
 
+def parse_touches(raw: str) -> list[str]:
+    """`--touches` as a list: [] for none given, ["-"] for "none", else the IDs; "-" with IDs is refused."""
+    items = [t.strip() for t in raw.split(",") if t.strip()]
+    if "-" in items and items != ["-"]:
+        raise Refused(["Touches: - cannot be combined with IDs"])
+    return items
+
+
 def new(prd: Prd, title: str, source: str, touches: list[str], evidence: list[str], today: date) -> str:
     title, source = _one(title), _one(source)
     if not title or not source:
@@ -92,7 +100,7 @@ def new(prd: Prd, title: str, source: str, touches: list[str], evidence: list[st
     _no_fence("--title", title)
     reasons = []
     known = {b.id for b in prd.blocks}
-    unknown = [t for t in touches if t not in known]
+    unknown = [t for t in touches if t != "-" and t not in known]
     if unknown:
         reasons.append(f"Touches: {', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} not defined in the PRD")
     evidence = [ln.rstrip() for ln in evidence]
@@ -137,7 +145,7 @@ def propose(prd: Prd, eid: str, cls: str, diagnosis: str, recurrence: str | None
         raise Refused([f"{eid} is {e.state}; its class is settled" if e.state == "confirmed" else f"{eid} is resolved"])
     if recurrence is not None and recurrence not in _errors_ledger(text):
         raise Refused([f"Recurrence of: {recurrence} is not an entry"])
-    unknown = [t for t in touches or [] if t not in {b.id for b in prd.blocks}]
+    unknown = [t for t in touches or [] if t != "-" and t not in {b.id for b in prd.blocks}]
     if unknown:
         raise Refused([f"Touches: {', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} not defined in the PRD"])
     text = _set(text, eid, "Classification", cls)

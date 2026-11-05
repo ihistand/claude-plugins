@@ -625,6 +625,8 @@ or `pii`. `Classification:` is one of `code bug`, `spec gap`, `invalid requireme
 or `Confirmed:`, an unknown class, an `Evidence:` over 20 lines, a `Recurrence of:` that names no
 entry, and a `Confirmed:` on an `unclassified` entry.
 
+Entries run from E-001 upward with no gap, newest last; lint reports a gap or an entry out of order. `Touches: -` means none.
+
 The **state** of an entry is derived from its lines and never written:
 
 | State | Lines |

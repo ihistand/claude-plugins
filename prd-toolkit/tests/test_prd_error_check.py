@@ -419,3 +419,15 @@ def test_merge_that_changes_code_and_cites_an_unconfirmed_entry(repo):
     git(repo, "merge", "-q", "--no-ff", "-m", "Merge side\n\nRefs: E-002", "side")
     merge = sha(repo)[:8]
     assert check(repo, base) == [pre() + f"commit {merge} changes code and cites E-002, which was not confirmed at that commit"]
+
+
+def test_dropping_the_newest_entry_is_reported(repo):
+    base = start(repo, entry(2), entry(3, title="Other"))
+    put(repo, ledger(entry(2)))
+    assert check(repo, base) == [pre("E-003") + "deleted"]
+
+
+def test_appending_reports_nothing(repo):
+    base = start(repo, entry(2))
+    put(repo, ledger(entry(2), entry(3, title="Other")))
+    assert check(repo, base) == []

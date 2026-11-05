@@ -41,9 +41,14 @@ def refuse(prd, gate, reply, *extra, why="refused: the gate changed; list again"
     assert code == 1 and out == "" and err.strip() == why, (code, out, err)
 
 
+E002_FILLER = '\n### E-002 Fixture entry keeping the ledger without a gap\nDetected: 2026-11-04, test fixture\nClassification: code bug\nResolution: not a defect: fixture filler\n'
+
+
 def add_errors(repo, *entries):
     errors = repo / PRD / "errors.md"
-    errors.write_text(errors.read_text(encoding="utf-8") + "".join(entries), encoding="utf-8")
+    text = errors.read_text(encoding="utf-8")
+    filler = "" if "### E-002 " in text else E002_FILLER  # the ledger runs without a gap
+    errors.write_text(text + filler + "".join(entries), encoding="utf-8")
 
 
 def branch(repo):

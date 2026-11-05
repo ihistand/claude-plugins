@@ -25,6 +25,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 SCRIPT = "<script>alert(1)</script>"
 DRY = "dry run T-002.3, 0 open questions, 1 dismissed by quote"
 ADOPTION = "# Adoption map\n\n| Area | State | Boundary |\n|---|---|---|\n| import | extracted | `src/import/**` |\n"
+E002 = '\n### E-002 Fixture entry keeping the ledger without a gap\nDetected: 2026-11-04, test fixture\nClassification: code bug\nResolution: not a defect: fixture filler\n'
 E003 = f"""
 ### E-003 Importer reads the wrong key
 Detected: 2026-11-04, test failure in T-001.3
@@ -77,7 +78,7 @@ def make_inbox_repo(tmp_path: Path) -> dict:
     prd = repo / PRD
     (prd / "adoption.md").write_text(ADOPTION, encoding="utf-8")
     edit(prd, "prd.md", "Not applicable: new project.", "See adoption.md.")
-    (prd / "errors.md").write_text((prd / "errors.md").read_text(encoding="utf-8") + E003, encoding="utf-8")
+    (prd / "errors.md").write_text((prd / "errors.md").read_text(encoding="utf-8") + E002 + E003, encoding="utf-8")
     testing = prd / "testing.md"
     testing.write_text(testing.read_text(encoding="utf-8").replace("| T-001.4 | Sample Owner | 2026-10-29 | pass |\n", ""), encoding="utf-8")
     git(repo, "add", PRD)
