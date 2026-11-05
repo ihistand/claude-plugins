@@ -128,6 +128,17 @@ def test_the_approval_gate_carries_the_verdict_the_versions_and_the_diff(inbox):
     assert g["diff_truncated"] is False
 
 
+def test_the_cards_of_the_other_kinds_carry_the_fields_the_page_renders(inbox):
+    e = inbox.gate("error-class:E-003")
+    assert e["class"] == "code bug" and e["diagnosis"] == "wrong key"
+    d = inbox.gate(f"deploy-step:{inbox.run_id}:3")
+    assert (d["run"], d["step"]) == (inbox.run_id, 3)
+    assert d["env"] == "production" and d["actor"] == "human" and d["do"] and "check" in d
+    s = inbox.gate("signoff:T-001.4")
+    assert s["tid"] == "T-001.4" and s["owner"] and "input" in s and "expect" in s
+    assert inbox.gate(f"adoption:{AREA}")["area"] == AREA
+
+
 def test_a_deploy_step_gate_shows_once_in_the_first_group(inbox):
     gate_id = f"deploy-step:{inbox.run_id}:3"
     first, second = ({g["id"] for g in grp["gates"]} for grp in inbox.gates()["worktrees"])

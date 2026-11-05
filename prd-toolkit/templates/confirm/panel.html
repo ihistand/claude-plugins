@@ -124,6 +124,8 @@ textarea.edited { background: var(--edited); border-color: var(--warn); }
 <script>
 'use strict';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
+// The decision inbox embeds this panel: it sets window.PANEL_HOST before this script ({ endpoint, question, active, onEnd }).
+const HOST = window.PANEL_HOST || null;
 const GROUPS = [['requirement', 'Requirements'], ['bug', 'Bugs'], ['question', 'Questions'], ['marker', 'Settings']];
 const KIND_NAME = { requirement: 'Requirement', bug: 'Apparent bug', question: 'Open question', marker: 'Missing setting' };
 const WHO = 'A role or a name, and anything they should know.';
@@ -208,7 +210,7 @@ function stateOf(it) {
 async function call(method, path, body) {
   let res;
   try {
-    res = await fetch(path, {
+    res = await fetch(HOST ? HOST.endpoint(path) : path, {
       method, cache: 'no-store',
       headers: { 'X-Prd-Token': TOKEN, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -245,7 +247,7 @@ async function load() {
   const at = S.order.findIndex((it) => it.id === keep);
   if (at >= 0) S.cur = at;
   else { const first = S.order.findIndex((it) => isOpen(it.id)); S.cur = first >= 0 ? first : 0; }
-  document.title = `Confirm ${S.data.area}`;
+  if (!HOST) document.title = `Confirm ${S.data.area}`;
   render();
   return true;
 }
@@ -272,7 +274,17 @@ function go(i, focusCard = true) {
 
 function end(kind) {
   S.ended = kind;
+  if (HOST) { HOST.onEnd(kind); return; }
   render();
+}
+
+// The inbox opens the panel on one area: start from nothing, then load that area's items.
+function openPanel() {
+  Object.assign(S, { data: null, order: [], cur: 0, busy: false, ended: null, notice: '' });
+  S.drafts.clear(); S.changing.clear();
+  document.getElementById('shell').hidden = false;
+  document.getElementById('end').hidden = true;
+  return load();
 }
 
 // --- answers ---------------------------------------------------------------------------------------------
@@ -378,7 +390,7 @@ function submitBox(it) {
 async function finish() {
   if (S.busy) return;
   S.busy = true; render();
-  const r = await call('POST', '/done', {});
+  const r = await call('POST', '/done', HOST ? { question: HOST.question } : {});
   S.busy = false;
   if (!r) return;
   if (r.status === 200) { end('done'); return; }
@@ -623,7 +635,7 @@ function criteriaView(it, d) {
 // --- keys ------------------------------------------------------------------------------------------------
 
 document.addEventListener('keydown', (e) => {
-  if (S.ended || !S.data || !cur()) return;
+  if (S.ended || !S.data || !cur() || (HOST && !HOST.active())) return;
   const it = cur();
   const t = e.target;
   const typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable);
@@ -655,5 +667,5 @@ document.addEventListener('keydown', (e) => {
   pick(it, a);
 });
 
-if (TOKEN) load(); else end('forbidden');
+if (!HOST) { if (TOKEN) load(); else end('forbidden'); }
 </script>

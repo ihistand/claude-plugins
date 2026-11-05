@@ -363,3 +363,13 @@ def test_vendors_prd_gates(repo):
     assert hooks.check(repo, PLUGIN_ROOT) == []
     (repo / ".prd-toolkit/prd_gates.py").unlink()
     assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/prd_gates.py is missing"]
+
+
+def test_vendors_the_inbox_page(repo):
+    files = hooks._source_files(hooks.SCRIPTS, hooks.PLUGIN_ROOT / "templates/hooks")
+    assert "gates/inbox.html" in files
+    hooks.install(repo, PRD)
+    assert (repo / ".prd-toolkit/gates/inbox.html").read_bytes() == (PLUGIN_ROOT / "templates/gates/inbox.html").read_bytes()
+    assert hooks.check(repo, PLUGIN_ROOT) == []
+    (repo / ".prd-toolkit/gates/inbox.html").write_text("old\n")
+    assert hooks.check(repo, PLUGIN_ROOT) == [".prd-toolkit/gates/inbox.html differs from the plugin copy"]
