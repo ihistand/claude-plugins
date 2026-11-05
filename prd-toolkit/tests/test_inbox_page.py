@@ -147,9 +147,20 @@ def test_the_host_is_set_before_the_panel_script_reads_it():
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_the_panel_sees_the_host_when_the_scripts_run_in_page_order(tmp_path):
     js = (HARNESS.replace("PANEL_HOST: {}", "") + "\n".join(re.findall(r"<script>(.*?)</script>", page(), re.S)).replace("'use strict';", "")
-          + "\nconsole.log(HOST !== null && HOST === window.PANEL_HOST);\n")
+          + """
+const card = gateCard({ key: 'k', g: { id: 'signoff:T-1', kind: 'signoff', title: 't', question: 'q', evidence: [] }, wt: { path: '/w', branch: 'b' } }, new Map());
+console.log(HOST !== null && HOST === window.PANEL_HOST, card.tag, typeof card.append);
+""")
     src = tmp_path / "order.js"
     src.write_text(js, encoding="utf-8")
     out = subprocess.run(["node", str(src)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
-    assert out.stdout.strip() == "true"
+    assert out.stdout.strip() == "true section function"  # an element, not a string or the panel's cardView
+
+
+def test_the_two_scripts_share_no_top_level_name():
+    inbox, panel = (re.findall(r"^(?:async )?function (\w+)|^(?:const|let|var|class) (\w+)", js, re.M)
+                    for js in re.findall(r"<script>(.*?)</script>", page(), re.S))  # page order: inbox, panel
+    names = lambda found: {a or b for a, b in found}  # noqa: E731
+    assert names(inbox) and names(panel)
+    assert names(inbox) & names(panel) == set()

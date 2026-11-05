@@ -195,7 +195,7 @@ function draw() {
     kids.push(h('h2', { class: 'gwt' }, wt.branch || 'HEAD', h('span', { class: 'muted', text: wt.path })));
     if (wt.error) kids.push(h('p', { class: 'error', text: `This worktree could not be read: ${wt.error}` }));
     for (const entry of entries) {
-      const card = cardView(entry, slots);
+      const card = gateCard(entry, slots);
       I.cards.set(entry.key, card);
       kids.push(card);
     }
@@ -236,7 +236,7 @@ function applyHash() {
   if (hit.g.kind === 'adoption' && !hit.gone) openAdoption(hit); else draw();
 }
 
-function cardView(entry, slots) {
+function gateCard(entry, slots) {
   const g = entry.g;
   const card = h('section', { class: `gcard${entry.gone ? ' gone' : ''}${entry.key === I.targetKey ? ' target' : ''}`, 'data-key': entry.key },
     h('div', { class: 'ghead' },
