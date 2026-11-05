@@ -25,6 +25,8 @@
 >   changes. Sections 1, 2 and 8 name them.
 > - Section 14 (owner, 2026-11-05): three fixes from that adoption's characterization suite, in what
 >   the tester can read and what a pack states about its helpers.
+> - Section 15 (owner, 2026-11-05): a suite rewrites a test whose test case changed after it was
+>   written, from the same adoption.
 
 ## 1. Scope
 
@@ -47,7 +49,8 @@ the CLI uses.
   after the answers file is gone, `prd_error.py new --touches -`, and a lost `errors.md` entry
   (section 13);
 - three fixes from its characterization suite: a backgrounded run's output, the vendored pack's files,
-  and a pack helper's stated shapes (section 14).
+  and a pack helper's stated shapes (section 14);
+- a suite that rewrites a test whose test case changed since the test was written (section 15).
 
 **Success:** a whole `/prd-change` or `/prd-error` cycle runs with no decision typed into the chat,
 and every record still holds the owner's own words for each decision.
@@ -79,6 +82,7 @@ It is **proven by** the owner on real work (section 9).
 | `scripts/prd_error.py`, `scripts/prdlint/errors.py`, `scripts/prdlint/rules/errors.py`, `references/prd-format.md` | changed | Section 13, fixes 4 and 5 |
 | `skills/adopting-prds/SKILL.md` | changed | Section 13, fix 2: the new question choices, and a "change" whose words match the current behaviour |
 | `scripts/prd_tester_guard.py`, `skills/testing-from-prds/SKILL.md`, `agents/prd-tester.md`, `references/contract-types.md` | changed | Section 14: background task output, the vendored packs folder, a shipped helper's stated shapes (with `prd-format.md`) |
+| `scripts/prd_build_check.py`, `scripts/prdlint/buildcheck.py`, `skills/testing-from-prds/SKILL.md` and `dispatching.md`, `agents/prd-tester.md`, `skills/building-from-prds/running-a-build.md`, `skills/adopting-prds/SKILL.md` | changed | Section 15: `--stale` and the `Rewrite:` line |
 | `scripts/prdlint/hooks.py` | changed | Vendors `templates/gates/` with `confirm/` |
 | `skills/changing-prds/SKILL.md`, `tests/test_packs_skills.py`, `evals/` (`changing-refuses-retarget`) | changed | The 0.8.0 retarget refusal names no release number: `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both places), its test pin and the eval's expected text |
 | `skills/changing-prds/SKILL.md`, `skills/handling-errors/running-an-error.md`, `skills/deploying-from-prds/SKILL.md`, `skills/adopting-prds/SKILL.md`, `skills/testing-from-prds/SKILL.md` | changed | The route at each decision (section 7) |
@@ -404,3 +408,48 @@ the references, none in an adopted area.
   write there and a Read elsewhere in `.prd-toolkit/`.
 - **Fix 3:** a pinned line in each of the two references; an eval in which a dry-run tester given a pack
   helper with no stated shape asks a question instead of choosing one.
+
+## 15. A changed test case gets its test rewritten
+
+In the same adoption, the owner corrected the SQL of two test cases (T-045.1, T-045.2) after their
+tests were written. The next suite still ran the old tests, and they failed. A suite revises a test
+only on a `Misread:` line, so only a test-misread round fixed them. The tester cannot notice on its
+own: it never reads git history (rule 1), so it cannot tell that a case changed after its test.
+
+- **`prd_build_check.py --stale <prd dir> --tids <T-ids>`.** For each dispatched T-id that a
+  committed test file cites, it compares that T-id's test-case entry at two points: the last commit
+  that changed the test file, and the working tree. The entries are compared as parsed YAML, so a
+  change of layout alone is not stale.
+  - It prints one line per T-id whose entry differs:
+    `stale <T-id> <test path>: its test case changed after the test (last changed in <sha>)`.
+  - It exits 0 when there is none, 1 when there is any, and 2 on a usage or tool error.
+  - A T-id with no test, or whose test file is not committed yet, is never stale. A missing test is
+    a write's job, and an uncommitted one is being written now.
+- **The `Rewrite:` line.** A suite prompt gains one optional `Rewrite: <T-id>` line per stale T-id.
+  - On it, the tester rewrites that one test from the test case as it now stands, then runs it.
+    Every value still comes from the PRD. Rule 2's limits hold: no `skip`, no `xfail` and no looser
+    comparison.
+  - Unlike `Misread:`, it carries no quote: the whole current case is the brief.
+- **The caller.** Before every suite dispatch, the caller runs `--stale` with the suite's T-ids, as
+  its own Bash call, and adds a `Rewrite:` line for each stale one. This holds in
+  `running-a-build.md` and in `adopting-prds` step 4, where the case above happened.
+  - The suite round's state check then allows changes to those tests only, as it does for a
+    misread round.
+  - `--stale` exit 2 stops the dispatch. It is a tool error, never "nothing stale".
+  - **The caller never edits a test** to bring it up to date, and never sends a `Misread:` line in
+    place of a `Rewrite:` one. A misread is the tester's error, read against an unchanged case.
+- **Why a script and not the tester.** The rule must not depend on the caller remembering which
+  cases it edited, and the tester has no way to see it. `--stale` judges from git and the working
+  tree alone.
+
+None of this touches an adopted area of the toolkit's own PRD.
+
+**Tests:**
+- **`--stale`:** a case changed after its test's last commit is stale; one unchanged, or changed
+  only in layout, is not; a T-id with no test or an uncommitted test is not; two test files citing
+  one T-id are judged by the newer; exit codes 0, 1 and 2.
+- **The skills:** pinned lines for the `Rewrite:` line in the tester's skill, the agent and
+  `dispatching.md`, and for the caller's `--stale` step in `running-a-build.md` and `adopting-prds`.
+- **Evals:** a caller that edited a case before the suite dispatches it with `Rewrite:`, not
+  `Misread:`, and edits no test itself; a tester given `Rewrite:` rewrites that test from the
+  current case and changes no other test.
