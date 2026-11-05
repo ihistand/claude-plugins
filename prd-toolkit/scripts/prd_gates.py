@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""The pending human decisions of a PRD (`list`) and one reply for one of them (`answer`). Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
+"""The pending human decisions of a PRD (`list`), one reply for one of them (`answer`) and a wait for its answer (`wait`). Exit 0 done, 1 refused, 3 wait timed out, 2 usage, dependency or internal error."""
 import argparse
 import sys
 from pathlib import Path
@@ -48,6 +48,13 @@ def _build() -> argparse.ArgumentParser:
     ans.add_argument("--correction", help="adoption: the corrected text")
     ans.add_argument("--question", help="the question the client showed; a gate whose question differs is refused. Omitting it skips that check (only a gone gate is refused): clients should pass the question they showed")
     _flags(ans, leaf=True)
+    wt = sub.add_parser("wait", help="block until the owner answers one gate, then print the outcome",
+                        description="Start it before giving the owner the URL. Exit 0 answered, 1 the gate is not pending (choice null), 3 timed out.")
+    wt.add_argument("prd_dir")
+    wt.add_argument("gate")
+    wt.add_argument("--worktree", help="the worktree whose gate it is (default: the PRD's own)")
+    wt.add_argument("--timeout", type=float, help="seconds to wait (default: until answered)")
+    _flags(wt, leaf=True)
     return parser
 
 
@@ -61,7 +68,12 @@ def _cmd_list(prd: model.Prd, args) -> tuple[str, dict]:
     return "".join(f"{g.id} {g.title}\n" for g in found), {"prd": prd.frontmatter.get("prd", prd.root.name), "gates": [g.to_dict() for g in found]}
 
 
-COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer)}
+def _cmd_wait(prd: model.Prd, args) -> tuple[str, dict]:
+    code, outcome = gates.wait_gate(prd.root, args.gate, Path(args.worktree) if args.worktree else None, args.timeout)
+    return str(code), outcome
+
+
+COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer), "wait": ("gates.outcome", _cmd_wait)}
 
 
 def main(argv: list[str]) -> int:
@@ -104,6 +116,13 @@ def _main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_gates: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if args.cmd == "wait":
+        code = int(text)
+        if code == 3:
+            print(f"prd_gates: timed out waiting for {args.gate}", file=sys.stderr)
+        else:
+            sys.stdout.write(interface.dump(kind, payload))
+        return code
     if args.cmd == "answer":
         owner = payload["result"]
         if args.json:

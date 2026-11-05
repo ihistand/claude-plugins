@@ -1,5 +1,6 @@
 """prd_gates.py list and answer (0.8.1): every pending human decision of a PRD, in one shape, and one reply passed to its owner."""
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -411,8 +413,10 @@ ANSWERERS = {"approval": _answer_approval, "error-class": _answer_error_class, "
 
 
 def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | None = None, cls: str | None = None,
-           result: str | None = None, item: str | None = None, correction: str | None = None, question: str | None = None) -> dict:
-    """Pass one reply for one gate to its owner: `{gate, result}`, `result` being the owner's `{stdout, exit}`. Raises Refused."""
+           result: str | None = None, item: str | None = None, correction: str | None = None, question: str | None = None,
+           by: str = "cli") -> dict:
+    """Pass one reply for one gate to its owner: `{gate, result}`, `result` being the owner's `{stdout, exit}`. Raises Refused.
+    After the owner exits 0 one line goes to the answer log (an adoption's per-item answers excepted: only its `done`)."""
     if not isinstance(reply, str) or not reply.strip():
         raise Refused("the reply is empty")
     for name, value in (("reply", reply), ("correction", correction), ("question", question), ("choice", choice), ("class", cls),
@@ -427,4 +431,103 @@ def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | No
         if value is not None and key not in FLAGS[gate.kind]:
             raise Refused(f"{FLAG_NAMES[key]} does not apply to {gate.kind}")
     out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
+    if out.get("exit") == 0 and not (gate.kind == "adoption" and choice != "done"):
+        logged = choice or {"approval": "approve", "error-class": "confirm", "signoff": result}.get(gate.kind)
+        _append_log(Path(repo_root), prd, gate.id, logged, reply, by)
     return {"gate": gate.id, "result": out}
+
+
+# --- the answer log: one line per accepted answer, in the git common dir shared by every worktree ---
+
+LOG_NAME = "prd-gates-log.jsonl"
+
+
+def common_dir(repo_root: Path) -> Path:
+    out = _git(Path(repo_root), "rev-parse", "--git-common-dir").strip()
+    return (Path(repo_root) / out).resolve()
+
+
+def log_path(repo_root: Path) -> Path:
+    return common_dir(repo_root) / LOG_NAME
+
+
+def read_log(repo_root: Path) -> list[dict]:
+    try:
+        text = log_path(repo_root).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    lines = []
+    for raw in text.splitlines():
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(doc, dict):
+            lines.append(doc)
+    return lines
+
+
+def _now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _append_log(repo_root: Path, prd: Prd, gate_id: str, choice: str | None, reply: str, by: str) -> None:
+    line = {"at": _now(), "prd": prd.frontmatter.get("prd", Path(prd.root).name), "worktree": str(Path(repo_root).resolve()),
+            "gate": gate_id, "choice": choice, "reply": reply, "by": by}
+    with log_path(repo_root).open("a", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+            f.flush()
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+# --- wait: block until the owner answers one gate (in the form or the chat) ---
+
+GRACE = 1.0  # a gate leaves the list a moment before its log line is written
+
+
+def _outcome(worktree: Path, gate_id: str, line: dict | None) -> dict:
+    line = line or {}
+    return {"gate": gate_id, "worktree": str(worktree), "choice": line.get("choice"), "reply": line.get("reply"),
+            "by": line.get("by"), "at": line.get("at")}
+
+
+def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout: float | None = None, poll: float = 1.0) -> tuple[int, dict]:
+    """0 with the first log line for (worktree, gate) at or after the start; 1 when the gate is not pending (outcome with choice None); 3 on timeout."""
+    started, begun = _now(), time.monotonic()
+    prd_dir = Path(prd_dir)
+    here = model.repo_root(prd_dir).resolve()
+    wt = Path(worktree).resolve() if worktree else here
+    root = wt / prd_dir.resolve().relative_to(here)
+
+    def found():
+        for line in read_log(wt):
+            if line.get("gate") == gate_id and line.get("worktree") == str(wt) and str(line.get("at", "")) >= started:
+                return line
+        return None
+
+    def pending():
+        try:
+            return any(g.id == gate_id for g in list_gates(model.load(root), wt))
+        except Exception:
+            return False
+
+    if not pending():
+        return 1, _outcome(wt, gate_id, None)
+    while True:
+        line = found()
+        if line:
+            return 0, _outcome(wt, gate_id, line)
+        if not pending():
+            end = time.monotonic() + GRACE
+            while time.monotonic() < end:
+                line = found()
+                if line:
+                    return 0, _outcome(wt, gate_id, line)
+                time.sleep(0.05)
+            return 1, _outcome(wt, gate_id, None)
+        if timeout is not None and time.monotonic() - begun >= timeout:
+            return 3, {}
+        time.sleep(poll)
