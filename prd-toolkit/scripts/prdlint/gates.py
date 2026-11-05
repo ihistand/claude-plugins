@@ -515,7 +515,8 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
             return False
 
     if not pending():
-        return 1, _outcome(wt, gate_id, None)
+        line = found()  # an answer that landed since `started` still counts
+        return (0, _outcome(wt, gate_id, line)) if line else (1, _outcome(wt, gate_id, None))
     while True:
         line = found()
         if line:

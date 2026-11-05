@@ -127,9 +127,18 @@ def test_log_line_shape_and_a_junk_line_is_skipped(repo):
 def test_cli_wait_prints_one_outcome_document(repo):
     add_errors(repo, entry(3, "code bug"))
     answer(repo, "error-class:E-003", "yes")  # answered before: exit 1, still a document
+    time.sleep(1.1)
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         code = gates_main(["wait", str(repo / PRD), "error-class:E-003"])
     doc = json.loads(out.getvalue())
     assert code == 1 and list(doc)[:2] == ["interface", "kind"] and doc["kind"] == "gates.outcome"
     assert list(doc)[2:] == ["gate", "worktree", "choice", "reply", "by", "at"]
+
+
+def test_an_answer_in_the_same_second_as_the_start_is_returned(repo, monkeypatch):
+    add_errors(repo, entry(3, "code bug"))
+    monkeypatch.setattr(gates, "_now", lambda: "2026-11-05T12:00:00Z")
+    answer(repo, "error-class:E-003", "just before")
+    code, out = gates.wait_gate(repo / PRD, "error-class:E-003", poll=0.05)
+    assert code == 0 and out["reply"] == "just before"
