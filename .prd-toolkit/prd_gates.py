@@ -65,7 +65,8 @@ COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer
 
 
 def main(argv: list[str]) -> int:
-    return interface.run(_main, "gates", argv)
+    """The error document's kind comes from the subcommand an argv pre-pass finds; `gates` when none parses."""
+    return interface.run(_main, interface.subcommand_kind(argv, {cmd: kind for cmd, (kind, _h) in COMMANDS.items()}, "gates"), argv)
 
 
 def _main(argv: list[str]) -> int:

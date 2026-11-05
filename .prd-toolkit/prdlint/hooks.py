@@ -20,7 +20,7 @@ LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit
 PACKS_DIR = "packs"  # .prd-toolkit/packs/<name>/
 PACK_SOURCES = "pack-sources.json"  # .prd-toolkit/pack-sources.json: {"<pack name>": "<source>"} of each vendored pack
 RECORD_DIR = ".prd-judge/"
-REVIEW_FILE = ".prd-review.json"  # the review verdict the prd-review agent writes; never committed
+REVIEW_FILE = ".prd-review.json"  # the review verdict review mode or the changing-prds skill writes; never committed
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 

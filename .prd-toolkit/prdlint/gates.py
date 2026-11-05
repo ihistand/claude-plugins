@@ -55,8 +55,26 @@ def _last_row(prd: Prd):
     return table.rows[-1] if table and table.rows else None
 
 
+# the verdict keys `list` reads or a client may, with the type each must have; `touches` and `dry_run` are required
+VERDICT_TYPES = {"interface": int, "kind": str, "head": str, "digest": str, "restate": str, "touches": list, "impact": dict,
+                 "bump": dict, "dry_run": dict, "ready": bool, "blockers": list, "owner": dict}
+VERDICT_REQUIRED = ("digest", "touches", "dry_run", "ready")
+
+
+def verdict_shape_ok(verdict) -> bool:
+    """True when the verdict is an object whose known keys have their types; a wrong shape is no gate, as invalid JSON is."""
+    if not isinstance(verdict, dict) or any(k not in verdict for k in VERDICT_REQUIRED):
+        return False
+    for key, kind in VERDICT_TYPES.items():
+        value = verdict.get(key)
+        if key in verdict and (not isinstance(value, kind) or (kind is int and isinstance(value, bool))):
+            return False
+    record = verdict["dry_run"].get("record")
+    return record is None or isinstance(record, str)
+
+
 def approval_gate(prd_root: Path, branch: str, path: str | None = None) -> Gate | None:
-    """Pending when a ready verdict's digest equals the PRD's and the last §14 row ends `; pending`."""
+    """Pending when a ready verdict of the right shape has the PRD's digest and the last §14 row ends `; pending`."""
     from .change import digest
 
     verdict_path = Path(prd_root) / REVIEW_FILE
@@ -64,16 +82,17 @@ def approval_gate(prd_root: Path, branch: str, path: str | None = None) -> Gate 
         verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(verdict, dict) or verdict.get("ready") is not True or verdict.get("digest") != digest(prd_root):
+    if not verdict_shape_ok(verdict) or verdict["ready"] is not True or verdict["digest"] != digest(prd_root):
         return None
     prd = model.load(Path(prd_root))
     last = _last_row(prd)
     if last is None or len(last.cells) < 3 or not last.cells[2].endswith(PENDING):
         return None
     slug, version = prd.frontmatter.get("prd", Path(prd_root).name), last.cells[0]
-    record = (verdict.get("dry_run") or {}).get("record")
-    evidence = [str(x) for x in (record,) if x] + [f"touches: {', '.join(map(str, verdict['touches']))}"] * bool(verdict.get("touches"))
-    restate = str(verdict.get("restate") or last.cells[2][:-len(PENDING)])
+    record = verdict["dry_run"].get("record")
+    touches = [str(t) for t in verdict["touches"]]
+    evidence = ([record] if record else []) + ([f"touches: {', '.join(touches)}"] if touches else [])
+    restate = verdict.get("restate") or last.cells[2][:-len(PENDING)]
     return Gate(f"approval:{branch}", "approval", f"Approve {slug} {version}", f"{restate} Approve it, or send it back with changes?",
                 evidence[:MAX_EVIDENCE], ["approve", "changes"], REVIEW_FILE, path=path)
 
@@ -224,6 +243,57 @@ def _atomic_write(path: Path, text: str) -> None:
         raise
 
 
+def _relpath(repo_root: Path, path: Path) -> str:
+    return Path(path).resolve().relative_to(Path(repo_root).resolve()).as_posix()
+
+
+def _commit_write(repo_root: Path, rel: str, message: str) -> str | None:
+    """R19: commit the owner's write to one file by path only (`git commit -- <path>`), so other staged work stays staged.
+
+    Returns None when committed, else the git error; on an error the write stays in the tree and nothing stays staged."""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=repo_root, capture_output=True, text=True, encoding="utf-8")
+
+    added = False
+    if git("ls-files", "--error-unmatch", "--", rel).returncode != 0:  # an untracked ledger: `commit -- <path>` needs it known
+        run = git("add", "--", rel)
+        if run.returncode != 0:
+            return (run.stderr or run.stdout).strip() or f"git add exited {run.returncode}"
+        added = True
+    with tempfile.TemporaryDirectory(prefix="prd-gates-") as tmp:
+        msg = Path(tmp) / "message"
+        msg.write_text(message, encoding="utf-8")
+        run = git("commit", "-q", "--cleanup=verbatim", "-F", str(msg), "--", rel)
+    if run.returncode != 0:
+        if added:
+            git("rm", "-q", "--cached", "--", rel)
+        return (run.stderr or run.stdout).strip() or f"git commit exited {run.returncode}"
+    return None
+
+
+def _committed(out: dict, repo_root: Path, path: Path, message: str) -> dict:
+    """Commit the owner's write when the owner exited 0; a failed commit makes the result exit 1 with git's error on stderr."""
+    if out["exit"] != 0:
+        return out
+    failed = _commit_write(repo_root, _relpath(repo_root, path), message)
+    if failed is None:
+        return out
+    return {**out, "exit": 1, "stderr": [*out.get("stderr", []), *f"git commit failed: {failed}".splitlines()]}
+
+
+def _requirement_of(prd: Prd, tid: str) -> str:
+    """The FR or NFR a T-id belongs to: the block that lists it, else the block numbered like its AC; the T-id when neither."""
+    from .change import _owner_ac
+
+    blocks = [b for b in prd.blocks if b.kind in ("FR", "NFR")]
+    listed_in = next((b.id for b in blocks if tid in {t[0] for t in b.tests}), None)
+    if listed_in:
+        return listed_in
+    case = next((tc for tc in prd.test_cases if tc.id == tid), None)
+    m = re.fullmatch(r"AC-(\d+)\.\d+", _owner_ac(case)) if case else None
+    return next((b.id for b in blocks if m and int(b.id.split("-")[1]) == int(m.group(1))), tid)
+
+
 def _pick(gate: Gate, choice: str | None, default: str) -> str:
     choice = choice or default
     if choice not in gate.choices:
@@ -249,14 +319,17 @@ def _answer_approval(prd: Prd, gate: Gate, reply: str, choice: str | None, **_) 
     return _run("prd_change.py", "approve", str(root), f"--reply={reply}", f"--dry-run={record}")
 
 
-def _answer_error_class(prd: Prd, gate: Gate, reply: str, choice: str | None, cls: str | None, **_) -> dict:
+def _answer_error_class(prd: Prd, gate: Gate, reply: str, choice: str | None, cls: str | None, repo_root: Path, **_) -> dict:
     choice = _pick(gate, choice, "confirm")
     if choice == "correct" and not cls:
         raise Refused("--choice correct needs --class")
     if choice == "confirm" and cls:
         raise Refused("--class goes with --choice correct")
     extra = [f"--class={cls}"] if choice == "correct" else []
-    return _run("prd_error.py", "confirm", str(prd.root), gate.id.split(":", 1)[1], f"--reply={reply}", *extra)
+    eid = gate.id.split(":", 1)[1]
+    out = _run("prd_error.py", "confirm", str(prd.root), eid, f"--reply={reply}", *extra)
+    # handling-errors' confirm commit (running-an-error.md step 4), errors.md alone
+    return _committed(out, repo_root, Path(prd.root) / "errors.md", f"docs(prd): confirm {eid}\n\nRefs: {eid}\n")
 
 
 def _answer_deploy_step(prd: Prd, gate: Gate, reply: str, choice: str | None, **_) -> dict:
@@ -268,6 +341,8 @@ def _answer_deploy_step(prd: Prd, gate: Gate, reply: str, choice: str | None, **
 def _answer_adoption(prd: Prd, gate: Gate, reply: str, choice: str | None, item: str | None, correction: str | None, repo_root: Path, **_) -> dict:
     area = gate.id.split(":", 1)[1]
     if choice == "done":
+        if item is not None:
+            raise Refused("--item does not apply to --choice done")
         return _run("prd_confirm.py", "done", str(prd.root), area)
     if not item or not choice:
         raise Refused("an adoption answer needs --item with --choice, or --choice done")
@@ -284,7 +359,7 @@ def _answer_adoption(prd: Prd, gate: Gate, reply: str, choice: str | None, item:
     return _run("prd_confirm.py", "answer", str(prd.root), area, item, "--decision", choice, f"--reply={reply}", *extra)
 
 
-def _answer_signoff(prd: Prd, gate: Gate, reply: str, choice: str | None, result: str | None, **_) -> dict:
+def _answer_signoff(prd: Prd, gate: Gate, reply: str, choice: str | None, result: str | None, repo_root: Path, **_) -> dict:
     """`--result` is required and is the sign-off; `--choice`, when given, must equal it."""
     if result is None:
         raise Refused("signoff needs --result pass|fail")
@@ -301,7 +376,7 @@ def _answer_signoff(prd: Prd, gate: Gate, reply: str, choice: str | None, result
     eol = "\r\n" if "\r\n" in raw else "\n"
     text = _with_signoff_row(raw.replace("\r\n", "\n"), tid, row)
     _atomic_write(path, text.replace("\n", eol) if eol != "\n" else text)
-    return {"stdout": [row], "exit": 0}
+    return _committed({"stdout": [row], "exit": 0}, repo_root, path, f"docs(prd): sign off {tid}\n\nRefs: {_requirement_of(prd, tid)}\n")
 
 
 def _with_signoff_row(text: str, tid: str, row: str) -> str:
