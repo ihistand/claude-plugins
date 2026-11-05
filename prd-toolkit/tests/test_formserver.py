@@ -185,3 +185,14 @@ def test_confirm_form_answer_keeps_summaries_and_reopens_done(tmp_path):
         server.shutdown()
         t.join(10)
         server.server_close()
+
+
+def test_ping_is_200_with_the_token_and_403_without_touching(live):
+    server, token, base, state, *_ = live
+    status, body, _ = fetch(f"{base}/ping?token={token}")
+    assert status == 200 and json.loads(body) == {"ok": True} and state.hits == 0
+    server.last = before = server.last - 30
+    assert fetch(f"{base}/ping")[0] == 403 and fetch(f"{base}/ping?token=wrong")[0] == 403
+    assert server.last == before
+    fetch(f"{base}/ping?token={token}")
+    assert server.last > before

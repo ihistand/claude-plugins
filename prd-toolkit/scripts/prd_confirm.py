@@ -57,12 +57,7 @@ def _serve_items(prd, args) -> int:
     if args.summaries:
         summaries = confirm.load_summaries(Path(args.summaries), items, args.area)
     else:  # the file `open` wrote carries them
-        saved = confirm.load_answers(confirm.answers_path(model.repo_root(prd.root), args.area)).get("summaries")
-        where = confirm.answers_path(model.repo_root(prd.root), args.area).name
-        try:
-            summaries = confirm.check_summaries(saved, items, args.area, f"summaries in {where}") if saved else {}
-        except confirm.Refused as e:
-            raise confirm.Refused(f"the summaries saved in the answers file {where} are not valid: {e}; fix or remove them") from e
+        summaries = confirm.saved_summaries(items, args.area, model.repo_root(prd.root))
     try:
         page = formserver.assemble(confirm.page_path())
     except (OSError, formserver.PageError) as e:

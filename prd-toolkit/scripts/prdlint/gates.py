@@ -1,18 +1,24 @@
-"""prd_gates.py list and answer (0.8.1): every pending human decision of a PRD, in one shape, and one reply passed to its owner."""
+"""prd_gates.py list, answer, wait and serve: every pending human decision of a PRD in one shape, one reply passed to its
+owner, the answer log, and the decision inbox that answers them in the browser."""
 import datetime
 import fcntl
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import urllib.parse
+import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from . import confirm, deploy, model
+from . import confirm, deploy, formserver, model
+from .formserver import Bad
 from .model import Prd
 
 REVIEW_FILE = ".prd-review.json"
@@ -108,16 +114,7 @@ def _approval(prd: Prd, repo_root: Path, worktrees: bool) -> list[Gate]:
     if not worktrees:
         return found
     rel = prd.root.resolve().relative_to(here)
-    paths, current = [], {}
-    for line in _git(repo_root, "worktree", "list", "--porcelain").splitlines() + [""]:
-        if not line:
-            if current.get("worktree"):
-                paths.append(current)
-            current = {}
-        else:
-            key, _, value = line.partition(" ")
-            current[key] = value
-    for wt in paths:
+    for wt in _worktree_entries(repo_root):
         root = Path(wt["worktree"]).resolve()
         if root == here or "bare" in wt:
             continue
@@ -532,3 +529,418 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
         if timeout is not None and time.monotonic() - begun >= timeout:
             return 3, {}
         time.sleep(poll)
+
+
+# --- the decision inbox: the reply a button gives, the worktrees, the lock file and the server ---
+
+FORM = " (form)"
+# (kind, button) -> (label in the reply, words required, the keywords for `answer`); a deploy step's reply is its words alone
+BUTTONS = {
+    ("approval", "approve"): ("Approve", False, {"choice": "approve"}),
+    ("approval", "changes"): ("Request changes", True, {"choice": "changes"}),
+    ("error-class", "confirm"): ("Confirm the class", False, {"choice": "confirm"}),
+    ("error-class", "correct"): ("Correct it to {cls}", True, {"choice": "correct"}),
+    ("deploy-step", "send"): (None, True, {}),
+    ("signoff", "pass"): ("Pass", False, {"result": "pass"}),
+    ("signoff", "fail"): ("Fail", True, {"result": "fail"}),
+}
+
+
+class NeedsWords(Refused):
+    """A button that needs the owner's words, or a class, sent without them: nothing ran."""
+
+
+def build_reply(kind: str, button: str, words: str, cls: str | None = None) -> tuple[str, dict]:
+    """The reply a button gives (`<label>`, or `<label>: <words>`, then ` (form)`; a deploy step's words alone, then
+    ` (form)`) and the keyword arguments for `answer`. Words lose their leading and trailing whitespace only."""
+    if (kind, button) not in BUTTONS:
+        raise Refused(f"a {kind} gate has no button {button!r}")
+    label, needs, kwargs = BUTTONS[(kind, button)]
+    words = (words or "").strip()
+    if needs and not words:
+        raise NeedsWords(f"{(label or 'Send reply').format(cls='…')} needs your words")
+    kwargs = dict(kwargs)
+    if button == "correct":
+        cls = (cls or "").strip()
+        if not cls:
+            raise NeedsWords("Correct it to… needs a class")
+        if cls not in model.CLASSES or cls == "unclassified":
+            raise Refused(f"class must be one of {', '.join(c for c in model.CLASSES if c != 'unclassified')}; got {cls!r}")
+        label, kwargs["cls"] = label.format(cls=cls), cls
+    if label is None:
+        return words + FORM, kwargs
+    return (f"{label}: {words}" if words else label) + FORM, kwargs
+
+
+def _worktree_entries(repo_root: Path) -> list[dict]:
+    """`git worktree list --porcelain`, one dict per entry (`worktree`, `branch`, `bare`, ...)."""
+    entries, current = [], {}
+    for line in _git(repo_root, "worktree", "list", "--porcelain").splitlines() + [""]:
+        if not line:
+            if current.get("worktree"):
+                entries.append(current)
+            current = {}
+        else:
+            key, _, value = line.partition(" ")
+            current[key] = value
+    return entries
+
+
+def worktree_prds(repo_root: Path, prd_rel: str) -> list[dict]:
+    """`{"path", "branch"}` for each worktree whose checkout holds `prd_rel`, the worktree of `repo_root` first."""
+    here = str(Path(repo_root).resolve())
+    out = []
+    for wt in _worktree_entries(Path(repo_root)):
+        root = Path(wt["worktree"]).resolve()
+        if "bare" in wt or not (root / prd_rel / "prd.md").is_file():
+            continue
+        out.append({"path": str(root), "branch": wt.get("branch", "").removeprefix("refs/heads/") or "HEAD"})
+    return sorted(out, key=lambda w: w["path"] != here)
+
+
+INBOX_PREFIX = "prd-inbox-"
+PING_TIMEOUT = 2.0
+
+
+class InboxLive(Refused):
+    """An inbox for this PRD is already serving."""
+
+    def __init__(self, url: str):
+        super().__init__(f"an inbox is already serving at {url}")
+        self.url = url
+
+
+def inbox_path(repo_root: Path, slug: str) -> Path:
+    return common_dir(repo_root) / f"{INBOX_PREFIX}{slug}.json"
+
+
+def inbox_url(record: dict) -> str:
+    return f"http://127.0.0.1:{record['port']}/?token={record['token']}"
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _ping(port: int, token: str) -> bool:
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # never through a proxy
+    url = f"http://127.0.0.1:{port}/ping?{urllib.parse.urlencode({'token': token})}"
+    try:
+        with opener.open(url, timeout=PING_TIMEOUT) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001 - refused, reset, 403, timeout: not live
+        return False
+
+
+def _drop(path: Path, raw: bytes) -> None:
+    """Delete the lock file read as `raw`, never one written since."""
+    try:
+        if path.read_bytes() == raw:
+            path.unlink()
+    except OSError:
+        pass
+
+
+def live_inbox(repo_root: Path, slug: str) -> dict | None:
+    """The lock file's record when its PID runs and `GET /ping` with its token answers 200 within 2 s; otherwise the
+    file is deleted and None returned."""
+    path = inbox_path(repo_root, slug)
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        rec = json.loads(raw)
+    except ValueError:
+        rec = None
+    shaped = (isinstance(rec, dict) and all(isinstance(rec.get(k), int) and not isinstance(rec.get(k), bool) and rec[k] > 0
+                                            for k in ("pid", "port")) and isinstance(rec.get("token"), str))
+    if shaped and _alive(rec["pid"]) and _ping(rec["port"], rec["token"]):
+        return rec
+    _drop(path, raw)
+    return None
+
+
+def _claim(path: Path, record: dict, repo_root: Path, slug: str) -> None:
+    """Write the lock file (mode 0600) only where none is; a live one refuses (InboxLive), a dead one is replaced."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{INBOX_PREFIX}", suffix=".tmp")  # mkstemp creates it 0600
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+        os.chmod(tmp, 0o600)
+        for _ in range(3):
+            try:
+                os.link(tmp, path)  # atomic, and fails when the file exists: two inboxes never both start
+                return
+            except FileExistsError:
+                live = live_inbox(repo_root, slug)
+                if live:
+                    raise InboxLive(inbox_url(live)) from None
+        raise Refused(f"cannot write {path.name}")
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
+def _release(path: Path, token: str) -> None:
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(rec, dict) and rec.get("token") == token and rec.get("pid") == os.getpid():
+            path.unlink()
+    except (OSError, ValueError):
+        pass
+
+
+INBOX_PAGE = "gates/inbox.html"  # templates/gates/inbox.html in the plugin, .prd-toolkit/gates/inbox.html vendored
+PLACEHOLDER = ('<!doctype html><html><head><meta charset="utf-8"><title>Decision inbox</title></head><body>'
+               "<p>The inbox page is not installed. This inbox answers GET /gates and POST /answer.</p></body></html>")
+DIFF_MAX = 200 * 1024
+
+
+def inbox_page_path() -> tuple[Path, Path]:
+    """The inbox page and the folder its include (`panel.html`) is read from: the plugin's templates, or the vendored copies."""
+    from . import hooks
+
+    if hooks.is_plugin():
+        return hooks.PLUGIN_ROOT / "templates" / INBOX_PAGE, hooks.PLUGIN_ROOT / "templates" / "confirm"
+    return hooks.SCRIPTS / INBOX_PAGE, hooks.SCRIPTS / "confirm"
+
+
+def _inbox_page() -> str:
+    page, include_dir = inbox_page_path()
+    return formserver.assemble(page, include_dir) if page.is_file() else PLACEHOLDER
+
+
+def _git_text(cwd: Path, *args: str) -> str:
+    run = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return run.stdout if run.returncode == 0 else ""
+
+
+def _diff_base(root: Path) -> str | None:
+    """The review's default base: `git merge-base HEAD <upstream, else main>`."""
+    upstream = _git_text(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}").strip()
+    for target in ([upstream] if upstream else []) + ["main"]:
+        base = _git_text(root, "merge-base", "HEAD", target).strip()
+        if base:
+            return base
+    return None
+
+
+def _version_at(root: Path, rev: str, rel: str) -> str | None:
+    text = _git_text(root, "show", f"{rev}:{rel}/prd.md")
+    front = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+    m = re.search(r"^version:[ \t]*(\S+)", front.group(1), re.M) if front else None
+    return m.group(1).strip("'\"") if m else None
+
+
+def _approval_card(prd: Prd, root: Path, rel: str) -> dict:
+    verdict = json.loads((Path(prd.root) / REVIEW_FILE).read_text(encoding="utf-8"))
+    out = {k: verdict.get(k) for k in ("restate", "touches", "bump", "impact", "dry_run")}
+    base = _diff_base(root)
+    diff = _git_text(root, "diff", "--no-color", "--no-ext-diff", base or "HEAD", "--", rel)
+    raw = diff.encode("utf-8")
+    out["diff_truncated"] = len(raw) > DIFF_MAX
+    out["diff"] = raw[:DIFF_MAX].decode("utf-8", "ignore") if out["diff_truncated"] else diff
+    out["version"] = {"from": _version_at(root, base or "HEAD", rel), "to": prd.frontmatter.get("version")}
+    return out
+
+
+def _plain(value):
+    """A YAML value as plain JSON types."""
+    return json.loads(json.dumps(value, default=str))
+
+
+def card(gate: Gate, prd: Prd, root: Path, rel: str) -> dict:
+    """The gate as `/gates` serves it: its fields, then what its kind's card shows (spec section 5)."""
+    out = gate.to_dict()
+    key = gate.id.split(":", 1)[1]
+    if gate.kind == "approval":
+        out.update(_approval_card(prd, root, rel))
+    elif gate.kind == "error-class":
+        e = prd.errors_ledger.get(key)
+        out.update({"class": e.classification, "diagnosis": e.diagnosis} if e else {})
+    elif gate.kind == "deploy-step":
+        run_id, n = key.rsplit(":", 1)
+        step = next((s for s in prd.operations.steps if str(s.number) == n), None)
+        out.update({"run": run_id, "step": int(n), "env": step.env if step else None, "actor": step.actor if step else None,
+                    "do": step.labels.get("Do", ("", 0))[0] if step else "", "check": step.labels.get("Check", ("", 0))[0] if step else ""})
+    elif gate.kind == "signoff":
+        tc = next((t for t in prd.test_cases if t.id == key), None)
+        data = tc.data if tc else {}
+        out.update({"tid": key, "owner": data.get("signoff"), "input": _plain(data.get("input")), "expect": _plain(data.get("expect"))})
+    elif gate.kind == "adoption":
+        out["area"] = key
+    return out
+
+
+class _Inbox:
+    """One inbox run: the PRD folder (`rel`) in every worktree of the repository of `root`."""
+
+    def __init__(self, root: Path, rel: str, slug: str, page: str, started: str):
+        self.root, self.rel, self.slug, self.page, self.started = root, rel, slug, page, started
+        self.lock = threading.Lock()  # one answer at a time: a second answer to a gate re-lists after the first
+
+    def worktree(self, raw) -> Path:
+        if not isinstance(raw, str) or not raw:
+            raise Bad(400, "name the worktree by its absolute path")
+        known = {w["path"] for w in worktree_prds(self.root, self.rel)}
+        path = Path(raw)
+        resolved = str(path.resolve()) if path.is_absolute() else None
+        if resolved not in known:
+            raise Bad(404, f"{raw} is not a worktree of this repository holding {self.rel}")
+        return Path(resolved)
+
+    def load(self, wt: Path) -> Prd:
+        try:
+            return model.load(wt / self.rel)
+        except model.NotAPrd as e:
+            raise Bad(404, str(e)) from None
+
+    def listing(self) -> dict:
+        groups = []
+        for wt in worktree_prds(self.root, self.rel):
+            root = Path(wt["path"])
+            try:
+                prd = model.load(root / self.rel)
+                found = [card(g, prd, root, self.rel) for g in list_gates(prd, root)]
+            except Exception:  # noqa: BLE001 - a worktree removed or broken while listing drops out
+                continue
+            groups.append({**wt, "gates": found})
+        answers = [ln for ln in read_log(self.root) if ln.get("prd") == self.slug and str(ln.get("at", "")) >= self.started]
+        return {"prd": self.slug, "started": self.started, "worktrees": groups, "answers": answers}
+
+    def answer(self, body: dict) -> tuple[int, dict]:
+        wt = self.worktree(body.get("worktree"))
+        gate_id, question, words, cls = body.get("gate"), body.get("question"), body.get("words"), body.get("class")
+        button = body.get("choice") if body.get("choice") is not None else body.get("result")
+        if not isinstance(gate_id, str) or not gate_id:
+            raise Bad(400, "name the gate")
+        if not isinstance(question, str):
+            raise Bad(400, "send the question the page showed; the inbox never answers without it")
+        if words is not None and not isinstance(words, str) or cls is not None and not isinstance(cls, str):
+            raise Bad(400, "words and class must be text")
+        if not isinstance(button, str):
+            raise Bad(400, "send the button: choice")
+        with self.lock:
+            prd = self.load(wt)
+            gate = next((g for g in list_gates(prd, wt) if g.id == gate_id), None)
+            if gate is None:
+                raise Bad(409, f"refused: {REFUSED_CHANGED}")
+            if gate.kind == "adoption":
+                raise Bad(400, "an adoption gate is answered item by item, then Done, through /adoption/<area>/")
+            try:
+                reply, kwargs = build_reply(gate.kind, button, words or "", cls)
+                done = answer(prd, wt, gate_id, reply, question=question, by="form", **kwargs)
+            except Refused as e:
+                raise Bad(409 if str(e) == REFUSED_CHANGED else 400, f"refused: {e}") from None
+        code = done["result"]["exit"]
+        if code == 0:
+            return 200, done
+        why = "\n".join(done["result"].get("stderr") or done["result"]["stdout"]) or f"the owner exited {code}"
+        return (400 if code == 1 else 500), {**done, "error": why}  # an owner's refusal is 400, its tool error 500
+
+    def done(self, prd: Prd, wt: Path, area: str, routes, body: dict) -> tuple[int, dict]:
+        """Done goes through `answer` (`prd_confirm.py done`), so it is logged; 409 while an item is open or changed."""
+        still = routes.items()["open"]
+        if still:
+            return 409, {"open": still}
+        question = body.get("question") if isinstance(body.get("question"), str) else None
+        with self.lock:
+            try:
+                done = answer(prd, wt, f"adoption:{area}", "Done (form)", choice="done", question=question, by="form")
+            except Refused as e:
+                return 409, {"open": [], "error": f"refused: {e}"}
+        if done["result"]["exit"] != 0:
+            return 409, {"open": confirm.AdoptionRoutes(self.load(wt), area, wt).items()["open"], **done}
+        return 200, {"open": []}
+
+
+def _inbox_handler(state: _Inbox) -> type[formserver.Handler]:
+    adoption = re.compile(r"^/adoption/([^/]+)/(items|answer|undo|done)$")
+
+    class Handler(formserver.Handler):
+        def route(self, method: str, route: str, query: dict) -> None:
+            body = self.body_json() if method == "POST" else None
+            m = adoption.match(route)
+            if method == "GET" and route == "/":
+                self.send_page(state.page)
+            elif method == "GET" and route == "/gates":
+                self.send_json(200, state.listing())
+            elif method == "POST" and route == "/answer":
+                self.send_json(*state.answer(body))
+            elif m and (method == "GET") == (m.group(2) == "items"):
+                self.adoption(m.group(1), m.group(2), query, body)
+            else:
+                raise Bad(404, "no such request")
+
+        def adoption(self, area: str, verb: str, query: dict, body: dict | None) -> None:
+            raw = (query.get("wt") or [None])[0]
+            if raw is None:
+                raise Bad(400, "name the worktree: ?wt=<absolute path>")
+            wt = state.worktree(raw)
+            prd = state.load(wt)
+            if not any(r.area == area for r in prd.adoption or []):
+                raise Bad(404, f"area {area} is not in adoption.md")
+            if not confirm.answers_path(wt, area).is_file():
+                raise Bad(404, f"area {area} has no answers file in {wt}")
+            try:
+                routes = confirm.AdoptionRoutes(prd, area, wt)
+                if verb == "items":
+                    self.send_json(200, routes.items())
+                elif verb == "done":
+                    self.send_json(*state.done(prd, wt, area, routes, body))
+                else:
+                    self.send_json(200, routes.answer(body) if verb == "answer" else routes.undo(body))
+            except confirm.Refused as e:
+                self.send_json(confirm.refused_status(e), confirm.refused_body(e))
+
+    return Handler
+
+
+def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120):
+    """The inbox server for the PRD at `prd_dir`, bound to 127.0.0.1, and its token. Writes the lock file (mode 0600),
+    which is deleted when `formserver.run` returns or the server is closed. Raises InboxLive, OSError (port in use),
+    formserver.PageError, model.NotAPrd."""
+    class InboxServer(formserver.Server):
+        lock_path: Path | None = None
+
+        def serve_forever(self, poll_interval: float = 0.5) -> None:
+            try:
+                super().serve_forever(poll_interval)
+            finally:
+                self.release()
+
+        def server_close(self) -> None:
+            self.release()
+            super().server_close()
+
+        def release(self) -> None:
+            if self.lock_path is not None:
+                _release(self.lock_path, self.token)
+                self.lock_path = None
+
+    prd = model.load(Path(prd_dir))
+    root = model.repo_root(prd.root).resolve()
+    rel = prd.root.resolve().relative_to(root).as_posix()
+    slug = prd.frontmatter.get("prd", prd.root.name)
+    live = live_inbox(root, slug)
+    if live:
+        raise InboxLive(inbox_url(live))
+    state = _Inbox(root, rel, slug, _inbox_page(), _now())
+    token = secrets.token_urlsafe(24)
+    server = InboxServer(("127.0.0.1", port), _inbox_handler(state), token, idle_minutes, state)
+    path = inbox_path(root, slug)
+    try:
+        _claim(path, {"pid": os.getpid(), "port": server.server_address[1], "token": token, "started": state.started, "prd": slug}, root, slug)
+    except BaseException:
+        server.server_close()
+        raise
+    server.lock_path = path
+    return server, token
