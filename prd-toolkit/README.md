@@ -581,7 +581,7 @@ uv run --script .prd-toolkit/prd_change.py approve docs/prd/<slug> --reply "<ver
   `.prd-review.json`.
 - `prd_change.py approve` refuses unless `.prd-review.json` is ready and its digest matches, lint
   passes, the dry-run record is given (`no dry run (unit only)` for a unit-only change) and the last
-  §14 row is pending. It then writes the record, sets the status `Approved`, runs `prd_block.py` and
+  §14 row is pending, and `CLAUDE.md` has no uncommitted changes (an ignored `CLAUDE.md` is skipped). It then writes the record, sets the status `Approved`, runs `prd_block.py` and
   commits `docs(prd): approve <slug> <version>` with `Reply: "…"` in the body, and deletes the verdict.
 
 **Review mode.** `/prd-change --review <dir>` edits nothing (only the tester's dry-run directory and
@@ -608,7 +608,8 @@ gate pending again. An adoption area stays pending until `--choice done`. An ans
 error-class or sign-off gate commits the owner's write itself, by path only, so other staged work
 stays staged: `errors.md` as `docs(prd): confirm E-nnn` (`Refs: E-nnn`), `testing.md` as
 `docs(prd): sign off <T-id>` (`Refs:` the case's requirement). When that commit fails (a hook rejects
-it), `answer` exits 1 with git's error in `result.stderr`, and the write stays in the tree. To answer
+it), `answer` exits 1 with git's error in `result.stderr`, and the write stays in the tree. Such an answer
+changes the PRD folder's digest, so a pending approval gate is withdrawn until a new review. To answer
 a `--worktrees` approval gate, run `answer` on that worktree's PRD folder: the gate's `path` (the
 worktree) joined with the PRD's path in the repository. Beside the form,
 `prd_confirm.py answer` (one item), `prd_confirm.py open` (a new answers file) and

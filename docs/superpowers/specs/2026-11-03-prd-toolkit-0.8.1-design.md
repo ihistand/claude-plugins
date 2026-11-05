@@ -72,7 +72,9 @@
 >   with git's error and leaves the write in the tree.
 > - §4 (R20): `approve` refuses while `CLAUDE.md` has uncommitted changes
 >   (`refused: CLAUDE.md has uncommitted changes; commit or set them aside first`), and stages `CLAUDE.md`
->   only when `prd_block.py` changed its bytes.
+>   only when `prd_block.py` changed its bytes. A `CLAUDE.md` that git ignores is neither checked nor staged.
+> - §5 (R21): answering an `error-class` or `signoff` gate changes the PRD folder's digest, so a pending
+>   approval gate is withdrawn until a new review.
 
 ## 1. Scope
 
@@ -176,8 +178,10 @@ decides those in review mode (section 6); a client shows them as a decision.
 `bump` prints `{level, items: [{id, file, line, change, level, reason}]}`. `record` refuses
 `--bump` lower than `bump`'s level (`refused: the diff needs major, not minor`), and refuses
 `needs judgment` as a level. `approve` refuses when `.prd-review.json` is missing, not `ready`, or its `digest` differs from `digest`'s; while lint exits 1, while the §14 row's dry-run record
-is `pending` and the change adds or revises a non-unit T-id, and on a PRD whose §14 holds no row at
-1.0.0 or above (a first approval is authoring's, not a change's).
+is `pending` and the change adds or revises a non-unit T-id, on a PRD whose §14 holds no row at
+1.0.0 or above (a first approval is authoring's, not a change's), and while `CLAUDE.md` has uncommitted
+changes (`refused: CLAUDE.md has uncommitted changes; commit or set them aside first`); a `CLAUDE.md` that
+git ignores is skipped.
 
 `changing-prds` steps 2 and 3 call `ids next` for each new ID and `bump` then `record` for the
 version; step 5 calls `approve`. The skill's Version rule table stays as the reference text for the
@@ -227,6 +231,8 @@ is at most 20 lines and holds no secret or classified value (the `errors.md` Evi
   again`), exit 1. `--question` is optional; without it only a gone gate is refused, so every client
   (the skills, the 0.8.2 inbox) passes the question it showed. A flag that does not apply to the
   gate's kind, and a NUL in any text, are refused too.
+- Answering an `error-class` or `signoff` gate changes the PRD folder's digest, so a pending approval
+  gate is withdrawn until a new review.
 - It prints the owning script's result as `{"interface": 1, "kind": "gates.answer", "gate": …,
   "result": {"stdout": [<lines>], "exit": <N>}}` (plus `"stderr": [<lines>]` when the owner
   printed any), and exits with the owner's exit code. `signoff` records no reply: the Sign-offs row has no column for it.
