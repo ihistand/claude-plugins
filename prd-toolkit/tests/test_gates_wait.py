@@ -347,3 +347,17 @@ def test_wait_removes_its_marker_on_exit_1_and_exit_3(repo):
     errors.write_text(errors.read_text(encoding="utf-8").replace("E-003", "E-099"), encoding="utf-8")
     t.join(25)
     assert box["r"][0] == 1 and not path.exists()
+
+
+def test_a_marker_that_cannot_be_written_never_breaks_wait(repo):
+    # round 1: the marker folder's name is taken by a file, so the marker cannot be written; wait runs on without it
+    add_errors(repo, entry(3, "code bug"))
+    gate = "error-class:E-003"
+    blocker = gates.common_dir(repo) / "prd-gates-waiting"
+    blocker.write_text("not a folder\n", encoding="utf-8")
+    t, box = waiting(repo, gate, timeout=20)
+    assert "r" not in box  # still waiting, not failed
+    answer(repo, gate, "yes")
+    t.join(25)
+    code, out = box["r"]
+    assert code == 0 and out["reply"] == "yes" and blocker.read_text(encoding="utf-8") == "not a folder\n"

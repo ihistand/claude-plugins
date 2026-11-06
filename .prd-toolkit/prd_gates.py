@@ -95,7 +95,8 @@ def _stop(signum, frame) -> None:
 # a `serve --gate` standing by behind a live inbox (spec section 18): it looks once every STANDBY_POLL seconds; once its gate
 # is no longer pending it waits STANDBY_LINGER seconds (longer than `wait`'s GRACE, so `wait` reports first) and exits 1; when
 # the bind of a takeover fails, a live inbox appearing within TAKEOVER_SETTLE seconds (most often another standby that bound
-# the port first and is claiming the lock) is stood behind, and anything else is exit 2
+# the port first and is claiming the lock), or the URL it holds answering, is stood behind, and anything else is exit 2.
+# A standby lives at most --idle-minutes, counted from when it began standing by, and then exits 3 as an idle inbox does.
 STANDBY_POLL = 1.0
 STANDBY_LINGER = 5.0
 TAKEOVER_SETTLE = 3.0
@@ -168,8 +169,11 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
     """Stand by behind the live inbox `record` names; take it over at its port, with its token, when it stops."""
     repo_root = model.repo_root(prd.root)
     slug = prd.frontmatter.get("prd", prd.root.name)
+    until = time.monotonic() + args.idle_minutes * 60  # an orphaned standby's pings would keep a live inbox from idling out
     while True:
         time.sleep(STANDBY_POLL)
+        if time.monotonic() >= until:
+            return 3
         if not _pending(prd, repo_root, args.gate):
             time.sleep(STANDBY_LINGER)
             print(f"prd_gates: {args.gate} is not pending", file=sys.stderr, flush=True)
@@ -177,6 +181,10 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
         live = gates.live_inbox(repo_root, slug)
         if live or record is None:
             record = live or record
+            continue
+        try:
+            model.load(prd.root)  # a PRD that cannot be read this moment is no port problem: look again next time
+        except Exception:  # noqa: BLE001 - as _pending treats it
             continue
         try:
             server, token = gates.make_inbox(prd.root, port=record["port"], idle_minutes=args.idle_minutes, token=record["token"])
@@ -190,22 +198,27 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
             print(f"prd_gates: cannot start the inbox: {e}", file=sys.stderr)
             return 2
         except OSError as e:
-            other = _settled(repo_root, slug)
+            other = _settled(repo_root, slug, record)
             if other:
                 record = other
                 continue
             print(f"prd_gates: cannot take over the inbox at port {record['port']}: {e.strerror or e}", file=sys.stderr, flush=True)
             return 2
+        except Exception:  # noqa: BLE001 - the PRD failed to load inside make_inbox (it changed since the look above)
+            continue
         return _run_inbox(server, token, args, browser=False)
 
 
-def _settled(repo_root: Path, slug: str) -> dict | None:
-    """A live inbox within TAKEOVER_SETTLE seconds, or None: most often another standby that bound the port first."""
+def _settled(repo_root: Path, slug: str, record: dict) -> dict | None:
+    """A live inbox within TAKEOVER_SETTLE seconds, or None: most often another standby that bound the port first. The URL
+    `record` names answering /ping also counts (an inbox serves it, though a slow ping dropped its lock)."""
     end = time.monotonic() + TAKEOVER_SETTLE
     while True:
         live = gates.live_inbox(repo_root, slug)
         if live:
             return live
+        if gates._ping(record["port"], record["token"]):
+            return record
         if time.monotonic() >= end:
             return None
         time.sleep(0.1)

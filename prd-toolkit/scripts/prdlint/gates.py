@@ -602,11 +602,18 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
     here = model.repo_root(prd_dir).resolve()
     wt = Path(worktree).resolve() if worktree else here
     root = wt / prd_dir.resolve().relative_to(here)
-    marker = _mark_waiting(wt, gate_id)
+    try:
+        marker = _mark_waiting(wt, gate_id)
+    except OSError:  # the marker only informs the inbox: a wait without one runs as before it existed
+        marker = None
     try:
         return _wait(root, wt, gate_id, started, begun, timeout, poll)
     finally:
-        marker.unlink(missing_ok=True)
+        if marker is not None:
+            try:
+                marker.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _wait(root: Path, wt: Path, gate_id: str, started: str, begun: float, timeout: float | None, poll: float) -> tuple[int, dict]:

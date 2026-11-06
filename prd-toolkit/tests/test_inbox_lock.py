@@ -217,8 +217,9 @@ HOOK = ("import sys; sys.path.insert(0, sys.argv.pop(1)); import prd_gates; "
 class Standby:
     """`prd_gates.py serve --no-open --gate <id>` through HOOK; its stdout and stderr lines are collected as they come."""
 
-    def __init__(self, prd_dir, gate=GATE, timing="0.2,1.5,1.0"):
-        self.proc = subprocess.Popen([sys.executable, "-c", HOOK, str(SCRIPTS), timing, "serve", str(prd_dir), "--no-open", "--gate", gate],
+    def __init__(self, prd_dir, gate=GATE, timing="0.2,1.5,1.0", extra=()):
+        self.proc = subprocess.Popen([sys.executable, "-c", HOOK, str(SCRIPTS), timing, "serve", str(prd_dir), "--no-open", "--gate", gate,
+                                      *extra],
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
         self.out, self.err = [], []
         self.readers = [threading.Thread(target=self._read, args=(s, box), daemon=True)
@@ -325,6 +326,12 @@ def test_two_standbys_one_takes_over_the_other_stands_by(made, serving, standby)
     assert won.out == [f"url={a.url}#gate={GATE}"] and lost.out == []
     assert won.proc.poll() is None and lost.proc.poll() is None
     assert len(lost.err) == 1  # the already-serving line only
+    # round 1: the hand-off chains: the winner stops, and the other takes over at the same URL in its turn
+    assert won.stop() == 3
+    assert lost.until(lambda: lost.out), (lost.err, lost.proc.poll())
+    assert lost.out == [f"url={a.url}#gate={GATE}"]
+    assert ping(rec["port"], rec["token"]) == 200 and lock(repo)["pid"] == lost.proc.pid
+    assert lost.proc.poll() is None
 
 
 def test_standby_exits_1_after_the_linger_once_its_gate_is_answered(made, serving, standby):
@@ -373,3 +380,55 @@ def test_sigterm_while_standing_by_exits_3(made, serving, standby):
     standing_by(b, a.url)
     assert b.stop() == 3 and b.out == []
     assert lock(made["repo"])["pid"] == a.proc.pid  # the inbox it stood behind is untouched
+
+
+# --- fix round 1: a standby's lifetime bound, the settle on its URL, a PRD that fails to load ---
+
+def test_a_standby_stops_after_its_idle_bound_as_an_idle_inbox_does(made, serving, standby):
+    # an idle inbox (serve --idle-minutes) prints no line of its own and exits 3; a standby bounded the same way does too
+    a = serving(made["repo"] / PRD)
+    b = standby(made["repo"] / PRD, extra=("--idle-minutes", "0.03"))
+    assert b.until(lambda: b.err)
+    begun = time.monotonic()
+    assert b.proc.wait(20) == 3
+    assert time.monotonic() - begun >= 1.0  # about 1.8 s of standing by, not at once
+    assert b.until(lambda: not any(r.is_alive() for r in b.readers))
+    assert b.err == [f"prd_gates: an inbox is already serving at {a.url}"] and b.out == []
+    assert a.proc.poll() is None and lock(made["repo"])["pid"] == a.proc.pid
+
+
+def test_a_standby_whose_url_still_answers_keeps_standing_by(made, standby):
+    # the inbox serves on, but its lock is gone (as when a slow ping dropped it): the bind fails, and the URL answers
+    repo = made["repo"]
+    server, token = gates.make_inbox(repo / PRD)
+    port = server.server_address[1]
+    t = threading.Thread(target=formserver.run, args=(server,))
+    t.start()
+    try:
+        b = standby(repo / PRD)
+        standing_by(b, f"http://127.0.0.1:{port}/?token={token}")
+        gates.inbox_path(repo, "orders").unlink()
+        time.sleep(3.0)  # several ticks, each past the 1 s settle time
+        assert b.proc.poll() is None and b.out == [] and len(b.err) == 1
+    finally:
+        server.shutdown()
+        t.join(10)
+        server.server_close()
+
+
+def test_a_takeover_while_the_prd_fails_to_load_keeps_standing_by(made, serving, standby):
+    repo = made["repo"]
+    a = serving(repo / PRD)
+    b = standby(repo / PRD)
+    standing_by(b, a.url)
+    prd_md = repo / PRD / "prd.md"
+    moved = prd_md.with_name("prd.md.away")
+    prd_md.rename(moved)
+    try:
+        assert a.stop() == 3
+        time.sleep(2.0)  # several takeover attempts, each with no PRD to load
+        assert b.proc.poll() is None and b.out == [] and len(b.err) == 1, b.err
+    finally:
+        moved.rename(prd_md)
+    assert b.until(lambda: b.out), (b.err, b.proc.poll())  # the next look takes over
+    assert b.out == [f"url={a.url}#gate={GATE}"]

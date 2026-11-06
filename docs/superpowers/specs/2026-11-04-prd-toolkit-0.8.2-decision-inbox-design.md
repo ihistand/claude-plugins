@@ -673,11 +673,14 @@ The real two-session proof of the inbox found two faults.
     `url=<the same url>#gate=<id>` on stdout, opens no browser, and from then on runs as any `serve`
     does (until Ctrl-C, SIGTERM or the idle time; it does not exit when its own gate is answered).
   - Another standby that won the lock (`InboxLive`), or that holds the port while it claims the lock
-    (the bind fails, and a live inbox appears there within `TAKEOVER_SETTLE`, 3 s): it goes on
-    standing by, behind that one.
+    (the bind fails, and a live inbox appears there within `TAKEOVER_SETTLE`, 3 s, or the URL it holds
+    answers `/ping`): it goes on standing by, behind that one. A PRD that fails to load at the takeover
+    is looked at again on the next poll, as the pending check treats it.
   - The port held by anything else: `prd_gates: cannot take over the inbox at port <N>: <reason>`,
     exit 2.
-- SIGTERM or Ctrl-C while standing by: exit 3, as a serving inbox does. `serve` still never exits 0.
+- SIGTERM or Ctrl-C while standing by: exit 3, as a serving inbox does. A standby lives at most `--idle-minutes`,
+  counted from when it began standing by, and then exits 3 as an idle inbox does (its pings would otherwise keep a live
+  inbox from idling out); a takeover's serve runs its own idle timer. `serve` still never exits 0.
 - `make_inbox` takes `token=`. The lock file, the token, mode 0600, `_claim`'s atomic `os.link` and
   `_release` are unchanged; the port and token for the takeover come from the record `live_inbox`
   returned (carried on `InboxLive`).
