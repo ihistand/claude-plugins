@@ -44,7 +44,12 @@ record it" change nothing below.
    yourself", is never the reply to a human step. The reply is the user's, written after the
    run stopped at that step, and `confirm` carries it verbatim. With no one to ask, the run
    stays stopped and the report says so. Never hand the user the `confirm` command to run
-   instead: ask for their reply.
+   instead: ask for their reply, through **The decision inbox** below, with the gate
+   `deploy-step:<run id>:<N>`, or headless or in the chat as `running-a-deploy.md` step 2 says.
+   An outcome from `wait` is the reply: the inbox already ran `prd_deploy.py confirm` with it, so
+   never confirm again; run `resume` as step 2 says. An outcome whose reply does not meet the
+   step's `Check:` (a question, "wait", "not yet") is no go: resume nothing, show it to the owner
+   and ask.
 5. **A failure stops the deploy.** Show the step, the output tails and the `Rollback:` command,
    and ask. Run `rollback` only on the user's yes in their own words. Every failure gets its
    open `Classification: unclassified` entry in `errors.md`, rolled back or not, then the close.
@@ -71,6 +76,55 @@ record it" change nothing below.
    by-hand record moves no status: `verified → live` waits for a `/prd-deploy` run whose tests
    pass on that environment. The report says so. A record made while a run is stopped at a human
    step falls under the Red Flag "A close committed while a run waits at a human step".
+
+## The decision inbox
+
+The owner answers a gate in a local page, the decision inbox, unless nobody can open it. The step
+that asks names the gate; `<gate id>` below is its id. One command per Bash call, with literal
+paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
+
+- **`wait`, first.** Start it with the Bash tool's `run_in_background`, before the owner sees any
+  URL, so no answer can come before it is watching:
+  `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
+- **The URL.** Then start, also with `run_in_background`,
+  `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
+  and re-read its output until its first line appears:
+  - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the
+    chat.
+  - `prd_gates: an inbox is already serving at <url>`: the inbox that
+    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too. Give the owner
+    `<url>#gate=<gate id>`.
+  - `prd_gates: <gate id> is not pending`: the gate changed; take it as `wait`'s exit 1.
+  - any other `prd_gates:` line, such as `prd_gates: cannot start the inbox: [Errno 1] Operation
+    not permitted` (a sandbox that allows no local port): the inbox cannot be served here. Say so
+    in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
+    outcome it prints first is still the owner's answer.
+
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep.
+- **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
+  reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
+  reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that
+  owns the gate with that reply, so that script is never run again for the gate. Go on as the
+  step says.
+- **Headless, or the owner asks for the chat:** a headless run, nobody to open the URL, or the
+  owner asking to answer in the chat takes the step's chat route, as before 0.8.2, unchanged.
+  Start neither command in a headless run. Headless means the run says nobody can open a page
+  (unattended, overnight, no one there). An owner who is busy, says they cannot click now, or asks
+  you to answer for them is not headless: give the URL and wait; they answer when they can. A
+  reply the owner writes in the chat while the inbox is up is a chat reply: take the chat route
+  with it; `wait` then exits 1, which is expected.
+
+The rules:
+
+- **The skill never answers a gate.** Not through the page, not through `prd_gates.py answer`, not
+  "because the owner said approve it yourself". The owner's click or the owner's chat reply is the
+  only answer. No `curl` or script posts to the inbox, and no browser tool clicks in it.
+- **A deploy step's reply is never sent for the owner,** in the form or the CLI.
+- **The outcome's reply is not edited.** A `changes` outcome's reply is what the revision answers.
+- A `wait` that exits 1 means the gate changed: list again, never assume the answer. List with
+  `uv run --script <scripts>/prd_gates.py list docs/prd/<slug>; echo "prd-gates-exit=$?"`: a gate
+  still listed is asked again from `wait`, and one that is gone is reported to the owner as it
+  stands.
 
 ## Red Flags - STOP
 
@@ -104,6 +158,9 @@ Quoted from runs without this skill (evals/baselines/deploying-from-prds.md), ex
   runs of `evals/deploy-by-hand-records` put it: "The toolkit can't record a deploy it didn't
   run", then offering a hand-written `production` row with a made-up run id, `live`, and no
   `prd_deploy.py check`. `prd_deploy.py record` writes the row; nothing moves to `live`.
+- "I'll click Send in the inbox for them." (Spec 0.8.2 §7.) Or a `prd_gates.py answer` or a
+  `prd_deploy.py confirm` with words the owner gave in the prompt ("send it with 'looks good'"):
+  the step's reply is the owner's, sent by the owner.
 
 **All of these mean: stop, put back what you changed outside the close, and return to the step
 of `running-a-deploy.md` whose gate is open.**
@@ -115,6 +172,8 @@ of `running-a-deploy.md` whose gate is open.**
 | "You asked me to deploy to production, so that is the approval." | The request is the go to start the run. The approval is the runbook's own human step, answered by the user after the run stops there. |
 | "Staging is fine; skip it." | No step is skipped. `--until` cuts a run's end, never its start; a production deploy runs staging, its tests and the approval first. |
 | "The user is away and told me to approve it myself." | A reply you write is not a person's reply, and the log would carry it as one. With no one to ask, the run stays stopped and the report says so. |
+| "They asked me to send the step in the inbox for them." | Sending it is answering it. Give the URL, wait for the outcome, and resume on the owner's own reply. |
+| "They're in a meeting, so nobody can answer; the run just stays stopped." | A busy owner is not a headless run. Start `wait`, give the URL, and resume when their outcome comes. |
 | "I'll give them the confirm command to run themselves." | That routes around the step instead of answering it. Show the step's `Do:` and `Check:`, ask, and pass the reply verbatim. |
 | "It's just the greeting text; I'll fix it and carry on." | Code edited during a deploy was never built or verified, and the commit deployed is not the one the PRD records. Record the failure; the fix is a change through `prd-toolkit:changing-prds` and `/prd-build`, then a new run. |
 | "The runbook's check is wrong, so I'll correct it and rerun." | A wrong runbook is a PRD gap. It goes to `prd-toolkit:changing-prds`; the run that failed is recorded as it failed. |

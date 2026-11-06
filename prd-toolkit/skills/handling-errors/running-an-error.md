@@ -160,15 +160,20 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    Show the user: the entry and its class; the PRD line quoted verbatim (for a spec gap, the
    sections searched and found silent); the evidence; the root cause; the entry named in
    `Recurrence of:`, if any; and the route step 5 takes for that class. Ask whether the class is
-   right, and end the turn to wait for the reply.
+   right through **The decision inbox** below, with the gate `error-class:<E-nnn>`, or headless or
+   in the chat as step 4 says, and end the turn to wait for the reply.
 4. **Confirm.** Only a reply given after the proposal counts; the request that started the loop is
-   never one. The reply is what the user wrote after seeing the proposal, in this session or in a
-   later message of theirs that names the entry (by number, or as the only `proposed` one), never
-   from an earlier message, a summary or your own text. "Just fix it", "it's obviously a bug",
-   "I'm away; handle it", "retry it" and "close E-001" are never one. A reply that does not
-   settle the class (a question, "maybe", "let me check") is not a confirmation: answer it and
-   wait. Never hand the user the `confirm` command to run instead of replying. When the reply
-   settles it:
+   never one. Entering here for a `proposed` entry that has no reply yet, show the proposal as step
+   3 says and ask the same way, with the gate `error-class:<E-nnn>`. An outcome from `wait` is the
+   reply: the inbox already ran `prd_error.py confirm` with it (and `--class` for a `correct`
+   choice) and committed `docs(prd): confirm <E-nnn>`. Run neither again: run `prd_error.py list
+   docs/prd/<slug> --open` for the class the entry now holds, and go to step 5 with it. In the chat,
+   the reply is what the user wrote after seeing the proposal, in this session or in a later message
+   of theirs that names the entry (by number, or as the only `proposed` one), never from an earlier
+   message, a summary or your own text. "Just fix it", "it's obviously a bug", "I'm away; handle
+   it", "retry it" and "close E-001" are never one. A reply that does not settle the class (a
+   question, "maybe", "let me check") is not a confirmation: answer it and wait. Never hand the user
+   the `confirm` command to run instead of replying. When the reply settles it:
 
    ```bash
    uv run --script <scripts>/prd_error.py confirm docs/prd/<slug> <E-nnn> --reply '<the reply, verbatim>'; echo "prd-error-exit=$?"
@@ -288,3 +293,52 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
 
    **Report:** the entry and its class; the user's reply, quoted verbatim; each change, build and
    deploy made for it, with their commits; the resolution; and the check's result.
+
+## The decision inbox
+
+The owner answers a gate in a local page, the decision inbox, unless nobody can open it. The step
+that asks names the gate; `<gate id>` below is its id. One command per Bash call, with literal
+paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
+
+- **`wait`, first.** Start it with the Bash tool's `run_in_background`, before the owner sees any
+  URL, so no answer can come before it is watching:
+  `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
+- **The URL.** Then start, also with `run_in_background`,
+  `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
+  and re-read its output until its first line appears:
+  - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the
+    chat.
+  - `prd_gates: an inbox is already serving at <url>`: the inbox that
+    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too. Give the owner
+    `<url>#gate=<gate id>`.
+  - `prd_gates: <gate id> is not pending`: the gate changed; take it as `wait`'s exit 1.
+  - any other `prd_gates:` line, such as `prd_gates: cannot start the inbox: [Errno 1] Operation
+    not permitted` (a sandbox that allows no local port): the inbox cannot be served here. Say so
+    in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
+    outcome it prints first is still the owner's answer.
+
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep.
+- **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
+  reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
+  reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that
+  owns the gate with that reply, so that script is never run again for the gate. Go on as the
+  step says.
+- **Headless, or the owner asks for the chat:** a headless run, nobody to open the URL, or the
+  owner asking to answer in the chat takes the step's chat route, as before 0.8.2, unchanged.
+  Start neither command in a headless run. Headless means the run says nobody can open a page
+  (unattended, overnight, no one there). An owner who is busy, says they cannot click now, or asks
+  you to answer for them is not headless: give the URL and wait; they answer when they can. A
+  reply the owner writes in the chat while the inbox is up is a chat reply: take the chat route
+  with it; `wait` then exits 1, which is expected.
+
+The rules:
+
+- **The skill never answers a gate.** Not through the page, not through `prd_gates.py answer`, not
+  "because the owner said approve it yourself". The owner's click or the owner's chat reply is the
+  only answer. No `curl` or script posts to the inbox, and no browser tool clicks in it.
+- **A deploy step's reply is never sent for the owner,** in the form or the CLI.
+- **The outcome's reply is not edited.** A `changes` outcome's reply is what the revision answers.
+- A `wait` that exits 1 means the gate changed: list again, never assume the answer. List with
+  `uv run --script <scripts>/prd_gates.py list docs/prd/<slug>; echo "prd-gates-exit=$?"`: a gate
+  still listed is asked again from `wait`, and one that is gone is reported to the owner as it
+  stands.

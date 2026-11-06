@@ -28,7 +28,7 @@ PLUGIN_SCRIPTS = ("`<plugin scripts>` is the plugin's own `scripts` directory as
                   "repository that has `.prd-toolkit/`: `--list-packs` lists what is on this machine and is not a gate, "
                   "and a vendored copy lists only the packs it vendored")
 JUDGE = "uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>"
-REFUSAL = "retargeting an area is a conversion (prd-toolkit 0.8.3)"
+REFUSAL = "retargeting an area is a conversion, which a later prd-toolkit release brings"
 
 
 def flat(path: Path) -> str:

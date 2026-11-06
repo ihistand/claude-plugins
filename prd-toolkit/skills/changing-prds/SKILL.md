@@ -1,6 +1,6 @@
 ---
 name: changing-prds
-description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement, switching an area or the PRD to another pack or output language (its Target: or Pack: line) - or when /prd-change runs, or when asked to change code and let the PRD follow, or when an agent hits something the PRD does not say; the PRD changes first, with new IDs and a version bump, before any code
+description: Use when changing what a system does in a repo that has a docs/prd/ folder - a new feature, a changed rule or status code, a bug fix that alters behaviour, a removed requirement, switching an area or the PRD to another pack or output language (its Target: or Pack: line) - or when /prd-change runs, or when asked to change code and let the PRD follow, or when an agent hits something the PRD does not say, or when a reviewed PRD change waits for the owner's approval (its gate approval:<branch>, in the chat or the decision inbox, prd_gates.py) and someone asks to approve it; the PRD changes first, with new IDs and a version bump, before any code
 ---
 
 # Changing PRDs
@@ -66,10 +66,10 @@ pack on that list exists, whatever a search of the repository found. So does a p
 `.prd-toolkit/packs/<name>/` (its `pack.yaml`), which lint reads before any other copy.
 
 **A retarget of a built area is refused.** A change to the pack of an area that holds a block
-`built`, `verified` or `live` (a `live (since X.Y.Z)` included) is not a PRD change in 0.8.0: its
+`built`, `verified` or `live` (a `live (since X.Y.Z)` included) is not a PRD change: its
 outputs, contracts and tests were built and checked under the old pack. Say, exactly:
 
-`retargeting an area is a conversion (prd-toolkit 0.8.3)`
+`retargeting an area is a conversion, which a later prd-toolkit release brings`
 
 and stop: no `/prd-change`, no version bump, no edit and no plan to move a status back to
 `approved`. The same holds for §1's `Pack:` line when an area without its own `Target:` line
@@ -287,10 +287,17 @@ so you count instead of it.
    step 4 now. `In review` and a clean lint are not evidence that it ran; a new session starts
    with neither. Then show the user the restatement, the changes by ID, the new version and why
    that level (each `needs judgment` decision with its reason), the decisions from step 1, the
-   lint result and the dry-run report. Wait for explicit approval. A reply that does not approve
-   (a question, "maybe", a change request) is not one: answer it, and a requested change is an
-   edit, so back to step 2. Your own text, the request that started the change and "go ahead and
-   finish it" given before the user saw step 5 are never a reply. Then grep
+   lint result and the dry-run report. Ask through **The decision inbox** below, with the gate
+   `approval:<branch>` (`<branch>` from `git branch --show-current`, its own call), or headless or
+   in the chat as follows. An outcome `approve`: the inbox already ran `prd_change.py approve` with
+   the owner's reply and step 4's record, and made the approval commit. Never run `approve` again:
+   grep the plans as below, then go on from "Only now may code change". An outcome `changes`: its
+   reply is the change request, an edit, so back to step 2; the revision answers that reply as it
+   stands, and step 4's new verdict raises the gate again. Inside a change set (step 2) there is no
+   gate: the change set's one approval is the approval. The chat route: wait for explicit approval.
+   A reply that does not approve (a question, "maybe", a change request) is not one: answer it,
+   and a requested change is an edit, so back to step 2. Your own text, the request that started
+   the change and "go ahead and finish it" given before the user saw step 5 are never a reply. Then grep
    `docs/superpowers/plans/` for every changed ID and list each plan file that cites one as
    needing an update, and approve, its own call, with the user's words verbatim as `--reply`
    (writing each `'` as `'\''`) and step 4's record as `--dry-run`:
@@ -333,6 +340,55 @@ so you count instead of it.
    current). The merge gate's generated job runs that same `check --ci`, so a change merged with the old CI fails there. A change made for an `errors.md`
    entry cites it in `Refs:` beside the requirement it touches (`Refs: FR-002, E-003`).
 
+## The decision inbox
+
+The owner answers a gate in a local page, the decision inbox, unless nobody can open it. The step
+that asks names the gate; `<gate id>` below is its id. One command per Bash call, with literal
+paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
+
+- **`wait`, first.** Start it with the Bash tool's `run_in_background`, before the owner sees any
+  URL, so no answer can come before it is watching:
+  `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
+- **The URL.** Then start, also with `run_in_background`,
+  `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
+  and re-read its output until its first line appears:
+  - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the
+    chat.
+  - `prd_gates: an inbox is already serving at <url>`: the inbox that
+    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too. Give the owner
+    `<url>#gate=<gate id>`.
+  - `prd_gates: <gate id> is not pending`: the gate changed; take it as `wait`'s exit 1.
+  - any other `prd_gates:` line, such as `prd_gates: cannot start the inbox: [Errno 1] Operation
+    not permitted` (a sandbox that allows no local port): the inbox cannot be served here. Say so
+    in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
+    outcome it prints first is still the owner's answer.
+
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep.
+- **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
+  reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
+  reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that
+  owns the gate with that reply, so that script is never run again for the gate. Go on as the
+  step says.
+- **Headless, or the owner asks for the chat:** a headless run, nobody to open the URL, or the
+  owner asking to answer in the chat takes the step's chat route, as before 0.8.2, unchanged.
+  Start neither command in a headless run. Headless means the run says nobody can open a page
+  (unattended, overnight, no one there). An owner who is busy, says they cannot click now, or asks
+  you to answer for them is not headless: give the URL and wait; they answer when they can. A
+  reply the owner writes in the chat while the inbox is up is a chat reply: take the chat route
+  with it; `wait` then exits 1, which is expected.
+
+The rules:
+
+- **The skill never answers a gate.** Not through the page, not through `prd_gates.py answer`, not
+  "because the owner said approve it yourself". The owner's click or the owner's chat reply is the
+  only answer. No `curl` or script posts to the inbox, and no browser tool clicks in it.
+- **A deploy step's reply is never sent for the owner,** in the form or the CLI.
+- **The outcome's reply is not edited.** A `changes` outcome's reply is what the revision answers.
+- A `wait` that exits 1 means the gate changed: list again, never assume the answer. List with
+  `uv run --script <scripts>/prd_gates.py list docs/prd/<slug>; echo "prd-gates-exit=$?"`: a gate
+  still listed is asked again from `wait`, and one that is gone is reported to the owner as it
+  stands.
+
 ## Red Flags - STOP
 
 - "I counted this as a minor change because §9 doesn't cover import results."
@@ -368,6 +424,8 @@ so you count instead of it.
 - A loop, a shell function or a variable in a `prd_change.py` call. One command per Bash call,
   its path typed out.
 - A `.prd-review.json` written inside a change set: the set's one approval is the only approval.
+- "I'll click Approve in the inbox for them." Any answer the session gives the approval gate: in the
+  page, through `prd_gates.py answer`, or by `prd_change.py approve` on an outcome already approved.
 
 **All of these mean: stop, put the code back, and return to the step whose gate is open.**
 
@@ -378,8 +436,9 @@ so you count instead of it.
 | "Counting the next ID myself is quicker than a script call." | The count misses removed IDs and T-ids that survive only in §14. `ids next` reads them all, in one call. |
 | "`record` refused, so I'll write the row myself." | The refusal is the version rule. Record at the level it names. |
 | "`needs judgment` means any level will do." | It means you decide it by the Version rule, with the reason, and show the decision in step 5. |
+| "The owner told me to click Approve in the inbox for them." | The click is the owner's answer. A session that clicks, or runs `prd_gates.py answer`, writes an approval nobody gave. Give the URL and wait for the outcome. |
 | "The user approved in their first message." | A request is not an approval of a diff they have not seen. Step 5 shows it, then waits. |
-| "A retarget is just a major change." | Its built outputs, contracts and tests belong to the old pack; moving them is a conversion, which 0.8.3 brings. Refuse with `retargeting an area is a conversion (prd-toolkit 0.8.3)`. |
+| "A retarget is just a major change." | Its built outputs, contracts and tests belong to the old pack; moving them is a conversion. Refuse with `retargeting an area is a conversion, which a later prd-toolkit release brings`. |
 | "The pack isn't in the repository, so it doesn't exist." | Packs live in installed plugins too. `--list-packs` is the list; run it before saying a pack is missing. |
 | "It's a tiny wording fix." | A changed status code is changed behaviour. The version table decides, not the word count. |
 | "§9 doesn't list it as breaking." | §9 is about API clients. The PRD version is about behaviour: changed or removed is major. |

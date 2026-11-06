@@ -1,6 +1,6 @@
 ---
 name: handling-errors
-description: Use when something goes wrong in a repo that has a docs/prd/ folder - a bug report or an error, wrong output, a failing or flaky test, a failed or killed deploy run, a stopped build, an open errors.md entry (E-nnn), /prd-error - and when asked to just fix it, retry it, redeploy it or close an entry; prd_error.py records the error in errors.md, Claude proposes its class, the user confirms it, and the fix starts from a failing test through /prd-change and /prd-build
+description: Use when something goes wrong in a repo that has a docs/prd/ folder - a bug report or an error, wrong output, a failing or flaky test, a failed or killed deploy run, a stopped build, an open errors.md entry (E-nnn), an entry's proposed class waiting for the owner's answer (its gate error-class:E-nnn, in the chat or the decision inbox, prd_gates.py), /prd-error - and when asked to just fix it, retry it, redeploy it or close an entry; prd_error.py records the error in errors.md, Claude proposes its class, the user confirms it, and the fix starts from a failing test through /prd-change and /prd-build
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/handling-errors/running-an-error.md` whole before anything else

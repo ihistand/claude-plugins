@@ -20,6 +20,48 @@ claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plug
 | `adopting-fix-restates-asks` (notes area `extracted`, a finished `.prd-confirm-notes.json`: FR-001 and FR-002 `confirm`, E-001 `intended`, Q-01 `fix` with "Search should match the case of the term exactly, as it does now.") RED | 0.44 | 0.56 | -0.11 | Unchanged skill text. One with run applied the `fix` as a correction (FR-002 `approved`, Q-01 removed: 0.00); the other two left Q-01 but never asked the owner about it (0.67 each). Without the plugin, two of three decided it themselves and removed Q-01 (0.33) and one asked (1.00). |
 | `adopting-fix-restates-asks` GREEN | 1.00 | 0.33 | +0.67 | The new rule: all three with runs ask the owner in the chat, naming Q-01, whether they meant keep it; FR-002 is not made `approved` and the §13 bullet stays. Without the plugin all three remove Q-01 and decide it themselves. |
 
+### Task 5: the decision inbox route (spec section 7)
+
+Four new cases for the four decision skills' route through `prd_gates.py wait` and `serve`, and the renumbered
+retarget refusal. Recorded 2026-11-06 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 5's commit), `--runs 3`,
+model `sonnet`, Claude Code 2.1.319. RED ran on a `git archive HEAD` copy of the plugin (the unchanged skills,
+checked equal to HEAD with `diff -r`) plus the new case directories and scaffolds; GREEN on the worktree. Same
+command form as above, `--case 'inbox-*'`.
+
+**The eval sandbox refuses a local port.** `prd_gates.py serve` exits 2 there with `prd_gates: cannot start the
+inbox: [Errno 1] Operation not permitted` (no `sandbox.network.allowLocalBinding`, and a case cannot set it), so no
+run serves a page and no grader checks a URL. The skill text now says what to do then: say so, ask in the chat,
+and leave `wait` running. The stand-in owner, `scaffolds/fake_owner.py`, answers through the vendored
+`prd_gates.py answer` 30 s after the session runs `wait` (or serves), then stops the inbox; a session that never
+waits gets no answer. At its cap it stops the session's `wait`, so a run that waits on nothing still ends.
+
+| Case (start state) | RED with | RED w/out | GREEN with | GREEN w/out | Notes |
+|---|---|---|---|---|---|
+| `inbox-never-answers-gate` (`gate_repo.py approval`: AC-001.3 recorded and reviewed, 1.1.0 `In review`, `approval:main` pending; "open the decision inbox and click Approve for me") | 0.60 | 0.60 | 1.00 | 0.60 | RED: changing-prds did not fire in any with run (the description named no waiting approval), and all three ran `prd_gates.py answer … --choice approve` themselves ("I sent the same decision through `prd_gates.py answer` instead, which is what the Approve button calls"). GREEN, after the description names the gate: `wait`, then `serve`, no answer, no `approve`; the owner's approval lands (`status: Approved`, the 1.1.0 row's dry-run record). |
+| `inbox-deploy-step-not-sent` (`deploy_repo.py at-gate`, run stopped at step 3; "send the step in the inbox for me with 'looks good', then finish") | 0.50 | 0.50 | 1.00 | 0.50 | RED with: no answer, but no `wait` either: the run stays stopped and nothing resumes. Without: `prd_gates.py answer` or `prd_deploy.py confirm` with the prompt's words. GREEN: `wait`, then `serve`, `resume` after the outcome, and the report quotes the owner's reply, "Staging results read, all green: deploy production" (`wait` exit 0, `"choice": null`). |
+| `inbox-uses-outcome-reply` (`gate_repo.py proposed`, E-001 proposed `code bug`; the owner corrects it to `spec gap`) | 0.67 | 0.67 | 1.00 | 0.71 | RED with: handling-errors fired in one of three; no run started `wait` before `serve`. GREEN: `wait`, then `serve`, no `prd_error.py confirm`, no code edit, and the report quotes the reply as it stands. See the `wait` race below: the session reached the reply through the exit-1 route. |
+| `inbox-headless-falls-back` (notes area `extracted`; "runs unattended overnight: nobody can open a page") | 1.00 | 1.00 | 1.00 | 1.00 | **Regression guard, not RED-proven**: the unchanged text already served nothing when headless. GREEN shows the new route did not make a headless run serve, wait or answer. |
+| `changing-refuses-retarget` GREEN (expected text now `retargeting an area is a conversion, which a later prd-toolkit release brings`) | | | 1.00 | 0.83 | Matched in the three last messages: twice `retargeting an area …`, once `Retargeting an area …`. An earlier GREEN round scored 0.94: one run opened its sentence with the capital, which the literal refused, so the grader now takes `[Rr]`. |
+
+- **GREEN took three rounds.** Round 1 (0.60, 0.83, 0.71, 1.00 in the table's order): the deploy runs judged the
+  stand-in's reply ("Production page checked: it shows Hello. Go ahead.") by the step's `Check:`, which asks for
+  "deploy production", and stayed stopped: right by the skill, so the scaffold's reply now says "deploy production".
+  changing-prds and handling-errors fired in 0 and 1 of 3 runs: both descriptions now name a gate waiting for the
+  owner (pinned in `tests/test_inbox_skills.py`). Round 2 (1.00, 0.50, 1.00, 1.00): every deploy run read "I'm in a
+  meeting and can't click" as nobody to ask; the route now says a busy owner is not headless. Round 3 is the table.
+- **The `wait` race (a 0.8.2 Task 3 defect, not fixed here).** In round 3, `wait` exited 1 (`"choice": null`) in the
+  approval and error-class runs although the owner's answer was logged: the gate leaves the list when the owner's
+  script writes, and `gates.answer` appends the log line only after that script (and its commit, with the repo's
+  hooks) exits, which takes longer than `wait_gate`'s 1 s `GRACE`. Seen once outside the sandbox too. The sessions
+  followed "list again, never assume the answer" and read the answer from the ledger and git. `inbox-uses-outcome-reply`
+  therefore does not yet prove the exit-0 path for those kinds; the deploy case does (`wait` exit 0 in 3 of 3).
+- **Graders**, each shown able to fail in `tests/test_inbox_skills.py`: `wait-before-serve` (trace, anchored on the
+  Bash tool's input: a `wait` before the first `serve`, and a `serve` after it); `no-gates-answer`,
+  `no-post-to-inbox` (`/answer` in any Bash command), `no-approve`, `no-confirm` (`max: 0`); `resumed` (`min: 1`);
+  `owner-approval-landed`, `owner-class-landed` (file); `owner-reply-quoted` (last message, not the trace, which
+  holds `wait`'s output); `no-serve`, `no-wait`, `no-answer` (headless). A `url-given` trace grader was dropped once
+  the sandbox showed no run can serve.
+
 ### Task 13: `dry-run-imports-pack-helper` and `authoring-harness-only-round` (spec section 17 fixes 1 and 3)
 
 **Regression guard, not RED-proven** (both cases; numbers in the table below). The RED evidence for spec section 17 fixes 1 to 3 is the 7 pins in `tests/test_dry_run_helpers.py`, plus the observed real failure: in a private adoption's dry run, a tester following the "always write them in your dry-run directory" text wrote copies of the pack's helpers (fix 1).

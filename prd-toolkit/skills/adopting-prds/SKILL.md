@@ -226,7 +226,9 @@ requirement, as long as it answers each one. A reply that names no ID ("looks fi
 When nobody can answer (a headless run, no reply), stop and present the confirmations, and
 leave the area `extracted`.
 
-**The form.** Ask here first: the owner answers every item in a local page, not in the chat.
+**The form.** Ask here first: the owner answers every item in a local page, the decision inbox,
+not in the chat. When it cannot be served (a headless run, where nobody can open the URL, or the
+owner asks for another way), take the fallbacks below and start nothing.
 Write `.prd-confirm-<area>-summaries.json` at the repository root, never inside the PRD folder or a
 test root, because the tester reads those folders. It is a JSON object mapping each item ID to one
 or two plain sentences that say what the item means to the business, each sentence contains its ID
@@ -234,19 +236,23 @@ and is at most 400 characters. Run `prd_confirm.py status docs/prd/<slug> --area
 you write the summaries: its `open <ID>` lines are the exact item IDs. They are `FR-nnn` for a
 requirement, `E-nnn` for an entry, `Q-nn` for a §13 question of the area, and for a marker
 `<file under contracts/>:<key path from the named key>`, where `#n` is the n-th marker in one
-value and `~n` a last-resort collision suffix. Start the form with the Bash tool's
-`run_in_background`, one command per Bash call, written with the `<scripts>` path above, never
-`${CLAUDE_PLUGIN_ROOT}`:
-`uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> --summaries .prd-confirm-<area>-summaries.json`.
-The `url=` line is the first line of its output: re-read the output until the `url=` line
-appears, give the owner that address as a clickable link, and wait for the completion notice:
-never poll for the exit and never sleep. Then by its exit code:
+value and `~n` a last-resort collision suffix. Then open the area's answers file with them, one
+command per Bash call, written with the `<scripts>` path above, never `${CLAUDE_PLUGIN_ROOT}`:
+`uv run --script <scripts>/prd_confirm.py open docs/prd/<slug> --area <area> --summaries .prd-confirm-<area>-summaries.json; echo "prd-confirm-exit=$?"`.
+`prd-confirm-exit=0` wrote `.prd-confirm-<area>.json` with the summaries and no answers. `1` with
+`refused: .prd-confirm-<area>.json exists; …` means the area was opened before and its answers
+stay: go on. Any other refusal names what to fix: fix it, write the summaries again and open
+again. Then ask through **The decision inbox** below, with the gate `adoption:<area>`: `wait`
+first, then `serve`, each with the Bash tool's `run_in_background`. For `serve`, the `url=` line
+is the first line of its output: re-read the output until the `url=` line appears, give the owner
+that address as a clickable link, and wait for `wait`'s completion notice: never poll for the exit
+and never sleep. Then by `wait`'s exit code:
 
 - exit `0`: the owner pressed Done. Read `.prd-confirm-<area>.json`, then run
   `prd_confirm.py status docs/prd/<slug> --area <area>`. Any `open <ID>` line is an item that
   changed since it was answered, and a changed item is no answer: ask for that item again, through
-  serve again or a fallback below. Apply the answers of the other items, and write each into the
-  PRD as soon as you apply it, by its `decision`. `text` is the intended behaviour for `correct`
+  the inbox again (serve again) or a fallback below. Apply the answers of the other items, and
+  write each into the PRD as soon as you apply it, by its `decision`. `text` is the intended behaviour for `correct`
   and `bug`, the person for `ask`, the answer for a question's `answer`, the value for a marker's
   `answer`, an optional note for `intended`, and what it should do instead for `fix` (the form
   and `prd_confirm.py answer` refuse a `fix` without words). `acs` (`correct` only) maps an AC ID to
@@ -285,16 +291,23 @@ never poll for the exit and never sleep. Then by its exit code:
 
   When every answer is applied, delete `.prd-confirm-<area>.json` and
   `.prd-confirm-<area>-summaries.json`; both are never committed.
-- exit `3`: the owner stopped (Ctrl-C, SIGTERM or the idle timeout). Run `prd_confirm.py status docs/prd/<slug> --area <area>`,
+- exit `1`: the gate changed with no Done. List again as **The decision inbox** says, run
+  `prd_confirm.py status docs/prd/<slug> --area <area>`, say how many items are answered, and leave
+  the area `extracted` until the owner presses Done.
+
+The inbox can stop before `wait` returns:
+
+- `serve` exit `3`: the owner stopped it (Ctrl-C, SIGTERM or the idle timeout). Run `prd_confirm.py status docs/prd/<slug> --area <area>`,
   say how many items are answered and that a new serve resumes them, and leave the area `extracted`.
-- exit `2`: a refusal, with `prd_confirm: <why>` on stderr. Delete
-  `.prd-confirm-<area>-summaries.json`, then fix what it names, write the summaries again and
-  serve again, or take a fallback.
+- `serve` exit `2`: a tool error, with `prd_gates: <why>` on stderr (`prd_confirm: <why>` from
+  `open`). Delete `.prd-confirm-<area>-summaries.json`, then fix what it names, write the summaries
+  again and serve again, or take a fallback.
 
 When the form cannot be served (a headless run, where nobody can open the URL, or the owner asks
 for another way), delete `.prd-confirm-<area>-summaries.json` and take the fallbacks:
 AskUserQuestion when the tool is available, otherwise the checklist file. A headless run stops
-with the area `extracted`.
+with the area `extracted`. A `.prd-confirm-<area>.json` that `open` wrote is deleted once every
+item is answered.
 
 **How to ask.** Never make the user type IDs and decisions into one prompt. When the
 AskUserQuestion tool is available, ask with the AskUserQuestion tool, at most four requirements
@@ -417,6 +430,55 @@ files; if a test case changed since, run step 4 again.
    requires the hooks install, not an offer: its judged tests call `.prd-toolkit/prd_judge.py`,
    which only `prd_hooks.py install` writes. Say so with the approval and run the install; a user
    who declines it is told that no judged test can run until it is installed. CI stays an offer.
+
+## The decision inbox
+
+The owner answers a gate in a local page, the decision inbox, unless nobody can open it. The step
+that asks names the gate; `<gate id>` below is its id. One command per Bash call, with literal
+paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
+
+- **`wait`, first.** Start it with the Bash tool's `run_in_background`, before the owner sees any
+  URL, so no answer can come before it is watching:
+  `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
+- **The URL.** Then start, also with `run_in_background`,
+  `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
+  and re-read its output until its first line appears:
+  - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the
+    chat.
+  - `prd_gates: an inbox is already serving at <url>`: the inbox that
+    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too. Give the owner
+    `<url>#gate=<gate id>`.
+  - `prd_gates: <gate id> is not pending`: the gate changed; take it as `wait`'s exit 1.
+  - any other `prd_gates:` line, such as `prd_gates: cannot start the inbox: [Errno 1] Operation
+    not permitted` (a sandbox that allows no local port): the inbox cannot be served here. Say so
+    in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
+    outcome it prints first is still the owner's answer.
+
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep.
+- **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
+  reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
+  reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that
+  owns the gate with that reply, so that script is never run again for the gate. Go on as the
+  step says.
+- **Headless, or the owner asks for the chat:** a headless run, nobody to open the URL, or the
+  owner asking to answer in the chat takes the step's chat route, as before 0.8.2, unchanged.
+  Start neither command in a headless run. Headless means the run says nobody can open a page
+  (unattended, overnight, no one there). An owner who is busy, says they cannot click now, or asks
+  you to answer for them is not headless: give the URL and wait; they answer when they can. A
+  reply the owner writes in the chat while the inbox is up is a chat reply: take the chat route
+  with it; `wait` then exits 1, which is expected.
+
+The rules:
+
+- **The skill never answers a gate.** Not through the page, not through `prd_gates.py answer`, not
+  "because the owner said approve it yourself". The owner's click or the owner's chat reply is the
+  only answer. No `curl` or script posts to the inbox, and no browser tool clicks in it.
+- **A deploy step's reply is never sent for the owner,** in the form or the CLI.
+- **The outcome's reply is not edited.** A `changes` outcome's reply is what the revision answers.
+- A `wait` that exits 1 means the gate changed: list again, never assume the answer. List with
+  `uv run --script <scripts>/prd_gates.py list docs/prd/<slug>; echo "prd-gates-exit=$?"`: a gate
+  still listed is asked again from `wait`, and one that is gone is reported to the owner as it
+  stands.
 
 ## When the user pushes
 

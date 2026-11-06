@@ -80,6 +80,10 @@ into your report.
 6. Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
    never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those.
 7. **Background runs (suite mode).** A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output. The `tasks` folder also holds the caller's background tasks; the guard lets you read only an `<id>.output` file there.
+8. **A sign-off is its owner's.** A `signoff:` case is answered by its owner, in the inbox or in
+   the chat, and never by the tester or the session. Its result is a person's walk through its
+   `steps:`, recorded in testing.md's Sign-offs by the owner's answer to its `signoff:<T-id>` gate:
+   you write no Sign-offs row and no `pass` or `fail` for it, and never run `prd_gates.py answer`.
 
 ## Citations
 
