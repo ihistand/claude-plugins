@@ -69,3 +69,17 @@ def test_a_harness_only_round_is_in_authoring_and_adopting():
         for phrase in ("harness-only", "stays `In review`", "in one batch", "on a fresh sample"):
             assert phrase in s, (p, phrase)
     assert "A failed dry run is a gap: write each question into the file it names" in flat(AUTHORING)  # full round stays
+
+
+DECIDE = ("Decide before asking: a round is harness-only when every question names testing.md's Harness as the file "
+          "that should have answered it, which the dry-run report's questions must name.")
+TURNS_FULL = ("An answer that turns out to touch another file makes it a full round: set the status back to `Draft` "
+              "and continue from phase 3 as above.")
+
+
+def test_a_round_is_decided_from_the_questions_before_asking():
+    for p in (AUTHORING, ADOPTING):
+        s = flat(p)
+        assert DECIDE in s, p
+    assert TURNS_FULL in flat(AUTHORING)
+    assert "a late answer that touches another file makes it a full round" in flat(ADOPTING)

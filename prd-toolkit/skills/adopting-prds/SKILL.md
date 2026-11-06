@@ -373,8 +373,8 @@ files; if a test case changed since, run step 4 again.
      and every question in `${CLAUDE_PLUGIN_ROOT}/references/quality-checklist.md` for the area.
    - Either way, run the dry run's commands one command per Bash call, with literal paths
      (dispatching.md's first rule).
-   - A failed dry run follows `prd-toolkit:authoring-prds`: a full round, or a harness-only round when every
-     question's answer is an edit to testing.md's `## Harness` and to no other PRD file. A harness-only round
+   - A failed dry run follows `prd-toolkit:authoring-prds`: a full round, or a harness-only round. Decide before asking: a round is harness-only when every question names testing.md's Harness as the file that should have answered it, which the dry-run report's questions must name. Then a late answer that touches another file makes it a full round.
+     A harness-only round
      stays `In review`, puts the questions to the owner in one batch, writes the answers into the Harness, runs
      lint, and runs the dry run again on a fresh sample.
 2. **The adoption-map row.** Set only the area's row to `adopted`, uncommitted: trace scopes by
