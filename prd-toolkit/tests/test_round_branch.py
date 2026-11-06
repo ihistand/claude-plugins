@@ -105,3 +105,31 @@ def test_the_caller_red_flag():
 def test_the_builder_question_is_not_a_prd_gap():
     s4 = step(4)
     assert re.search(r"`QUESTIONS: worktree is not on the build branch` is not a PRD gap", s4)
+
+
+# --- fix round 1 ---
+
+def test_the_cut_is_checked_before_each_dispatch():
+    s3 = step(3)
+    cut = s3.index("git switch -c prd-round/<area>-<n>")
+    dispatch = s3.index("`prd-toolkit:prd-builder` with no `isolation`")
+    check = s3.find("`git branch --show-current` and `git rev-parse HEAD`", cut)
+    assert cut < check < dispatch
+    between = s3[cut:dispatch]
+    assert "must print the new round branch" in between and "the `<base>` its prompt carries as `Base:`" in between
+    assert "On a mismatch, the build stops and reports both values." in between
+    assert "before the next one, run" not in step(4)
+
+
+def test_a_refused_switch_back_stops_as_a_dirty_tree():
+    s3 = step(3)
+    back = s3.index("git switch <build branch>")
+    diff = s3.index(DIFF_CALL)
+    rule = s3[back:diff]
+    assert "If it refuses, the round fails and the build stops as a dirty tree" in rule
+    assert "git status --porcelain --untracked-files=all" in rule
+    assert "Never `--force`, and never discard the edit." in rule
+
+
+def test_no_double_bullet():
+    assert "- - **" not in RUN.read_text(encoding="utf-8")

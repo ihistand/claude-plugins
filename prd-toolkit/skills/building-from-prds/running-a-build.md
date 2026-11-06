@@ -209,11 +209,17 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    1. `git status --porcelain --untracked-files=all` prints nothing. Anything else stops the build
       as a dirty tree: report the paths, restore nothing.
-   2. `git switch -c prd-round/<area>-<n>`.
+   2. `git switch -c prd-round/<area>-<n>`, then `git branch --show-current` and
+      `git rev-parse HEAD`, each its own call: the first must print the new round branch, and the
+      second the `<base>` its prompt carries as `Base:`. On a mismatch, the build stops and
+      reports both values.
    3. Dispatch `prd-toolkit:prd-builder` with no `isolation`, and the builder prompt (below) with
       its slots filled and nothing else: no summary of the PRD, no hints, no pointers into the
       code. Its `Base:` is `<base>`, typed out in full; its `Branch:` is the round branch.
-   4. `git switch <build branch>`, the branch step 1's `git branch --show-current` printed.
+   4. `git switch <build branch>`, the branch step 1's `git branch --show-current` printed. If it
+      refuses, the round fails and the build stops as a dirty tree (the builder left an
+      uncommitted edit): report the paths `git status --porcelain --untracked-files=all` lists.
+      Never `--force`, and never discard the edit.
    5. Step 4's builder check, on the round branch:
 
       ```bash
@@ -280,8 +286,8 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
      stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. The
      one exception: `QUESTIONS: worktree is not on the build branch` is not a PRD gap. The round
-     was cut wrong, so it fails the round; before the next one, run `git branch --show-current`
-     and `git rev-parse HEAD` and check them against that round's `Branch:` and `Base:`. A test
+     was cut wrong, so it fails the round, and the next round's cut is checked before its dispatch
+     (step 3's round step 2). A test
      dispute, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
      does not stop it: the caller reconciles each test dispute by quote at step 6, as a test
      misread or a code bug. On an area whose pack says `builder-tests: none`, a QUESTIONS line
@@ -294,7 +300,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      as its `Failure:`, with the quote of that T-id's test case and its unit test as
      `Failing test:`. A failed round merges nothing (step 3): run step 3's round again, on a new
      round branch from the unchanged build branch, as the next round of each of its unit T-ids.
-   - - **The tester.** `dispatching.md` step 4: the five commands into `-after` files and the diffs,
+   - **The tester.** `dispatching.md` step 4: the five commands into `-after` files and the diffs,
      each its own call, against the snapshot taken after the merge. A write's check exempts the test
      roots. Every changed path outside the test roots fails the check, and you report it as
      `dispatching.md` step 4 says: the changed paths to the user, nothing restored, and the build
