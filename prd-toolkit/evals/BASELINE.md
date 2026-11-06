@@ -50,6 +50,30 @@ directory); GREEN on the worktree. Same command form as above with `--case 'test
   wrote the stand-in). The skill's Gaps section and the agent now say a shipped helper's shapes are a question and
   that no stand-in decides them.
 
+### Task 11: `build-stale-sends-rewrite` and `tester-rewrite-only-that-test` (spec section 15)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 11's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts and no `--stale`, plus the
+two case directories); GREEN on the worktree. Same command form as above, one `--case` each.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `build-stale-sends-rewrite` (notes area `confirmed`; a tester test per T-id, committed; a later commit changes T-001.1's case, not T-002.1's) RED | 0.47 | 0.53 | -0.07 | Unchanged text: no `--stale` call and no `Rewrite:` line in any run; two with runs sent `Misread: T-001.1`. Two without runs edited the test themselves. |
+| `build-stale-sends-rewrite` GREEN | 1.00 | 0.60 | +0.40 | All three with runs ran `prd_build_check.py docs/prd/notes --stale --tids T-001.1,T-002.1` as a Bash call (the grader matched that command line) and dispatched the tester with `Rewrite: T-001.1` on its own line and no `Rewrite:` for T-002.1, no `Misread:`, and no main-session edit of a test. |
+| `tester-rewrite-only-that-test` (the same repo; the tester is given `Rewrite: T-001.1`) RED | 0.89 | 0.67 | +0.22 | Unchanged text: two of three with runs already rewrote the test (the PRD value, with a QUESTION about the missing quote); one left it. So this case is weak at RED. |
+| `tester-rewrite-only-that-test` GREEN | 1.00 | 0.67 | +0.33 | All three with runs wrote `tests/test_t001.py` with `add_note("call bob")` then `== 2`, kept `@prd T-001.1`, and left `tests/test_t002.py` byte for byte as it was. Without the plugin the agent type does not exist, so nothing is rewritten. |
+
+- **Graders (build-stale-sends-rewrite):** `skill-fired` (with-only), `stale-ran` (Bash command with the script, `--stale`
+  and `--tids`), `rewrite-line-for-t-001-1` (the `Mode: suite` Agent prompt has `Rewrite: T-001.1` at a line start),
+  `no-rewrite-for-t-002-1`, `no-misread-for-t-001-1`, `caller-edited-no-test`.
+- **Grader holes closed:** the trace holds the tester's own Edit and Write calls, so a plain "no Edit of tests/" grader
+  would fail the correct run. `caller-edited-no-test` matches only trace lines with `"parent_tool_use_id":null`, the
+  main session. Checked on three synthetic lines (main-session edit of a test: matches; the same from a subagent: no
+  match; a main-session edit of `src/`: no match), and two RED without runs failed it for real.
+- **First scaffold was too weak:** the first case change (the input text only) made the unchanged tester rewrite at
+  once (RED 1.00). The case now changes the expected output (AC-001.1 and T-001.1 expect id 2 after one stored note),
+  which is what rule 2 forbids changing without a line.
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply

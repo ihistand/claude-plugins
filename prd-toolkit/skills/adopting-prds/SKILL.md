@@ -328,6 +328,18 @@ of the area's questions, set the row to `confirmed` and run lint.
 
 ### 4. Characterize
 
+Before each suite dispatch, find the tests whose case changed after them, as its own Bash call, with the
+suite's T-ids (the `<scripts>` directory is the one the other steps use):
+
+```bash
+uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --stale --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"
+```
+
+`prd-build-check-exit=1` prints one `stale <T-id> <test path>: …` line per stale T-id: add a `Rewrite: <T-id>`
+line to the dispatch for each, and the integrity check allows changes to those tests only. `prd-build-check-exit=2`
+is a tool error, never "nothing stale": stop the dispatch and fix the call. You never edit a test to bring it up
+to date, and never send `Misread:` for a case that changed: a changed case gets `Rewrite:`.
+
 Dispatch the `prd-toolkit:prd-tester` agent in suite mode, exactly as
 `${CLAUDE_PLUGIN_ROOT}/skills/testing-from-prds/dispatching.md` says: the state record before,
 the dispatch with `Mode: suite`, `PRD: docs/prd/<slug>/` and every non-unit T-id in
@@ -466,6 +478,7 @@ Quoted from runs without this skill:
   case-insensitive". Any code change during adoption.
 - A `Source:` line without `@<commit>`, or one you did not open.
 - The extract prompt sent to `prd-tester`, or a suite run by anything but `prd-tester`.
+- Editing a test to bring it up to date, or sending `Misread:` for a case you changed. A changed case gets a `Rewrite:` line.
 
 **All of these mean: stop, put the area back to the state its last passed gate allows, and ask
 the user.**

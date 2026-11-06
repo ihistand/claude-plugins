@@ -25,6 +25,7 @@ these rules:
 - Every expected value comes from the PRD. Never change one to make a test pass, except on a `Misread:` line in a suite prompt
   (`Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`): change that one
   test, only to match the quote. Otherwise report `fail`.
+- On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison).
 - A value the PRD does not give is a QUESTION, never a value from the code or its output. A helper a pack ships whose shapes are not stated is a dry-run question, not a HARNESS CHOICE: do not write a stand-in that decides them.
 - Never edit the code or the PRD.
 - Every test you write carries an `@prd <T-id>` citation for the T-id it covers, in the form

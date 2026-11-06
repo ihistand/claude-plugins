@@ -4,8 +4,10 @@ import re
 import subprocess
 from pathlib import Path
 
+import yaml
+
 from .model import Prd
-from .trace import CITE, BadRange
+from .trace import CITE, BadRange, citations
 
 RESULT = re.compile(r"^(T-\d{3}\.\d+): (pass|fail: .+|known-failing E-\d+)$")
 _LINE_TID = re.compile(r"^(T-\d{3}\.\d+)\b")
@@ -103,3 +105,62 @@ def results_findings(report: str, tids: list[str]) -> list[str]:
         if tid not in counts:
             findings.append(f"{tid} has no RESULTS line")
     return findings
+
+
+def _last_commit(root: Path, path: str) -> tuple[int, str, str] | None:
+    """(commit time, full sha, short sha) of the last commit that changed `path`, None when it has none."""
+    p = _git(root, "log", "-1", "--format=%ct %H %h", "--", path)
+    if p.returncode != 0:
+        raise RuntimeError(f"git log {path} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
+    parts = p.stdout.split()
+    return (int(parts[0]), parts[1], parts[2]) if len(parts) == 3 else None
+
+
+def _case_entries(root: Path, rev: str | None, prd_rel: str, tid: str) -> object:
+    """The parsed entry for `tid` across every test-case file of the PRD at `rev` (None: the working tree); a
+    missing entry is the sentinel `_ABSENT`."""
+    if rev is None:
+        names = sorted(p.relative_to(root).as_posix() for p in (root / prd_rel / "test-cases").glob("*.yaml"))
+    else:
+        p = _git(root, "ls-tree", "-r", "--name-only", rev, "--", f"{prd_rel}/test-cases/")
+        if p.returncode != 0:
+            raise RuntimeError(f"git ls-tree {rev} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
+        names = [n for n in p.stdout.split("\n") if n.endswith(".yaml")]
+    for name in names:
+        text = (root / name).read_text(encoding="utf-8") if rev is None else _show(root, rev, name)
+        data = yaml.safe_load(text)
+        if isinstance(data, dict) and tid in data:
+            return data[tid]
+    return _ABSENT
+
+
+_ABSENT = object()
+
+
+def stale_findings(prd: Prd, repo_root: Path, tids: list[str]) -> list[str]:
+    """One line per T-id of `tids` whose test case differs, as parsed YAML, between the commit that last changed
+    its test and the working tree. A T-id with no test, or whose test file is uncommitted (listed by git status or
+    without a commit), is never stale; of two committed citing files the newer by commit time is judged."""
+    cites = citations(prd, repo_root)
+    prd_rel = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
+    out: list[str] = []
+    for tid in tids:
+        best: tuple[int, str, str, str] | None = None
+        for path in dict.fromkeys(f for f, _ in cites.get(tid, [])):
+            last = _last_commit(repo_root, path)
+            if last and (best is None or last[0] > best[0]):
+                best = (last[0], last[1], last[2], path)
+        if best is None:
+            continue
+        _, full, short, path = best
+        st = _git(repo_root, "status", "--porcelain", "--", path)
+        if st.returncode != 0:
+            raise RuntimeError(f"git status {path} failed: {(st.stderr.strip().splitlines() or ['?'])[0]}")
+        if st.stdout.strip():
+            continue
+        now = _case_entries(repo_root, None, prd_rel, tid)
+        if now is _ABSENT:
+            continue  # a removed case is a PRD change, not a stale test
+        if _case_entries(repo_root, full, prd_rel, tid) != now:
+            out.append(f"stale {tid} {path}: its test case changed after the test (last changed in {short})")
+    return out

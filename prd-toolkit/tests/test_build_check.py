@@ -1,4 +1,5 @@
 """prd_build_check.py: --diff (builder touched the PRD or a tester's test) and --results (RESULTS lines)."""
+import re
 import shutil
 import subprocess
 import sys
@@ -220,3 +221,154 @@ def test_r28_results_check_takes_only_the_dispatched_build_gate_tids():
     report = f"RESULTS\n{NONUNIT}: pass\n"
     assert buildcheck.results_findings(report, [NONUNIT]) == []
     assert buildcheck.results_findings(report + f"{DEPLOY_GATE}: pass\n", [NONUNIT]) == [f"{DEPLOY_GATE} was not dispatched"]
+
+
+# --- --stale (spec section 15) ---
+
+CASES = "docs/prd/orders/test-cases/import.yaml"
+STALE_TEST = "tests/test_import.py"
+
+
+@pytest.fixture
+def srepo(repo):
+    """The repo with one committed test citing T-001.1, committed after its case."""
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    commit(repo, "test for T-001.1")
+    return repo
+
+
+def stale(root: Path, *tids: str) -> list[str]:
+    return buildcheck.stale_findings(model.load(root / "docs/prd/orders"), root, list(tids))
+
+
+def edit_case(root: Path, n: int = 2) -> None:
+    """Make T-001.1's expected output `inserted: n`."""
+    p = root / CASES
+    s = re.sub(r"output: \{status: ok, inserted: \d+, skipped: 0\}", f"output: {{status: ok, inserted: {n}, skipped: 0}}", s_ := p.read_text(), count=1)
+    assert s != s_ or f"inserted: {n}, skipped: 0}}" in s_
+    p.write_text(s)
+
+
+def test_stale_case_edited_after_the_test_commit(srepo):
+    edit_case(srepo)
+    commit(srepo, "fix the case")
+    sha = git(srepo, "log", "-1", "--format=%h", "--", STALE_TEST)
+    assert stale(srepo, "T-001.1") == [
+        f"stale T-001.1 {STALE_TEST}: its test case changed after the test (last changed in {sha})"]
+
+
+def test_stale_working_tree_edit_of_the_case_counts(srepo):
+    edit_case(srepo)
+    assert len(stale(srepo, "T-001.1")) == 1
+
+
+def test_stale_unchanged_is_not_stale(srepo):
+    assert stale(srepo, "T-001.1") == []
+
+
+def test_stale_layout_only_change_is_not_stale(srepo):
+    p = srepo / CASES
+    s = p.read_text()
+    old = "  ac: AC-001.1\n  level: integration\n"
+    assert s.count(old) == 1
+    s = s.replace(old, "  level:    integration\n  ac:   AC-001.1\n")
+    p.write_text(s.replace("{status: ok, inserted: 1, skipped: 0}", "{ skipped: 0,  status: ok, inserted: 1 }"))
+    assert stale(srepo, "T-001.1") == []
+
+
+def test_stale_tid_with_no_test_is_not_stale(srepo):
+    edit_case(srepo, 3)
+    p = srepo / "docs/prd/orders/test-cases/api.yaml"
+    p.write_text(p.read_text().replace("status: 404", "status: 410", 1))
+    assert stale(srepo, "T-002.2") == []
+
+
+def test_stale_test_with_working_tree_edits_is_not_stale(srepo):
+    edit_case(srepo)
+    commit(srepo, "fix the case")
+    (srepo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    assert 1\n")
+    assert stale(srepo, "T-001.1") == []
+
+
+def test_stale_never_committed_test_is_not_stale(repo):
+    edit_case(repo)
+    commit(repo, "fix the case")
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    assert stale(repo, "T-001.1") == []
+    git(repo, "add", STALE_TEST)  # staged, still no commit
+    assert stale(repo, "T-001.1") == []
+
+
+def test_stale_the_newer_of_two_citing_files_is_judged(repo):
+    old = {"GIT_COMMITTER_DATE": "2020-01-01T00:00:00Z", "GIT_AUTHOR_DATE": "2020-01-01T00:00:00Z"}
+    (repo / "tests/test_old.py").write_text("# @" "prd T-001.1\n")
+    subprocess.run([*GIT, "add", "-A"], cwd=repo, check=True)
+    subprocess.run([*GIT, "commit", "-qm", "old test"], cwd=repo, check=True, env={**__import__("os").environ, **old})
+    edit_case(repo)
+    commit(repo, "fix the case")
+    (repo / "tests/test_new.py").write_text("# @" "prd T-001.1\n")  # written after the fix: current
+    commit(repo, "new test")
+    assert stale(repo, "T-001.1") == []
+    edit_case(repo, 4)
+    commit(repo, "fix the case again")
+    found = stale(repo, "T-001.1")
+    assert len(found) == 1 and "tests/test_new.py" in found[0]
+
+
+def test_stale_case_moved_unchanged_to_another_file_is_not_stale(srepo):
+    """Review Focus 9: the entry is looked up across every test-case file at the test's commit."""
+    src, dst = srepo / CASES, srepo / "docs/prd/orders/test-cases/moved.yaml"
+    s = src.read_text()
+    head, rest = s.split("\nT-001.2:", 1)
+    dst.write_text(head.rstrip("\n") + "\n")
+    src.write_text("T-001.2:" + rest)
+    commit(srepo, "move T-001.1")
+    assert stale(srepo, "T-001.1") == []
+
+
+def test_stale_entry_absent_at_the_test_commit_is_stale(repo):
+    p = repo / CASES
+    s = p.read_text()
+    head, rest = s.split("\nT-001.2:", 1)
+    p.write_text("T-001.2:" + rest)
+    (repo / "docs/prd/orders/test-cases/new.yaml").write_text(head.rstrip("\n") + "\n")
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\n")
+    # the test is committed while the case is not in any file yet
+    git(repo, "add", STALE_TEST, CASES)
+    git(repo, "commit", "-qm", "test first", "--", STALE_TEST, CASES)
+    commit(repo, "case arrives")
+    assert len(stale(repo, "T-001.1")) == 1
+
+
+def test_stale_lines_follow_the_tids_order(srepo):
+    (srepo / "tests/test_a2.py").write_text("# @" "prd T-002.2\n")
+    commit(srepo, "test for T-002.2")
+    edit_case(srepo)
+    p = srepo / "docs/prd/orders/test-cases/api.yaml"
+    p.write_text(p.read_text().replace("status: 404", "status: 410", 1))
+    out = stale(srepo, "T-002.2", "T-001.1")
+    assert [line.split()[1] for line in out] == ["T-002.2", "T-001.1"]
+
+
+def test_cli_stale_exit_codes(srepo):
+    code, out, _ = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1")
+    assert (code, out) == (0, "")
+    edit_case(srepo)
+    code, out, _ = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1,T-002.1")
+    assert code == 1 and out.startswith("stale T-001.1 tests/test_import.py: its test case changed after the test (last changed in ")
+
+
+@pytest.mark.parametrize("args", [["--stale"], ["--stale", "--diff", "base..HEAD", "--tids", "T-001.1"],
+                                  ["--stale", "--results", "r", "--tids", "T-001.1"]])
+def test_cli_stale_usage_exit_2(srepo, args):
+    code, out, err = run(srepo, "docs/prd/orders", *args)
+    assert code == 2 and out == "" and err
+
+
+def test_stale_git_failure_raises_so_the_cli_exits_2(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    shutil.copytree(FIXTURE, tmp_path / "docs/prd/orders")  # no git repository
+    (tmp_path / "tests").mkdir()
+    (tmp_path / STALE_TEST).write_text("# @" "prd T-001.1\n")
+    with pytest.raises(RuntimeError):
+        stale(tmp_path, "T-001.1")

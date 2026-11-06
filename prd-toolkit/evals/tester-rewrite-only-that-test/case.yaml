@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: tester-rewrite-only-that-test
+context:
+  scaffold_script: scaffold.sh

@@ -42,7 +42,7 @@ what a suite may read and writes to the test roots, and it does not run them. Th
 know the mode: write mode's no-run rule, like the dry run's, is held by instruction, and the
 caller fails a `write` round whose report holds RESULTS. A suite after a write finds the tests
 written and runs them; it revises one only on a test-misread round: a `Mode: suite` dispatch whose prompt carries a
-`Misread:` line for that T-id (rule 2).
+`Misread:` line for that T-id (rule 2), and rewrites one on a `Rewrite:` line for that T-id.
 
 A dry run tests the PRD: can a stranger write every test from it alone? Running those tests
 against the system would test the code instead, and its output would leak the code's answers
@@ -61,7 +61,8 @@ into your report.
 2. **Every expected value comes from the PRD.** Never change an expected value, an assertion or
    an input to make a test pass, except on a `Misread:` line: when a suite's prompt carries
    `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`, you may change
-   that one test, only so it matches the quoted PRD text; every value still comes from the PRD. Never add `skip`, `xfail` or a looser comparison. A test that
+   that one test, only so it matches the quoted PRD text; every value still comes from the PRD. Never add `skip`, `xfail` or a looser comparison.
+   On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison). A test that
    fails against the live system is reported as `fail`. A test case may record exact values read
    from a closed window of a live system (its `input` names the read: the query and the date
    range); they are the PRD's values, so assert them as written.

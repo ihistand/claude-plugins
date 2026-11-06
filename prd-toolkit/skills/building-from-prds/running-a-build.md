@@ -312,7 +312,23 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `/prd-deploy`. The snapshot goes into a new `<SNAP>`, and the dispatch takes the tester prompt
    below. When the build has no non-unit build-gate T-ids, step 5 is skipped: there is nothing to
    dispatch, and the close's `verified` needs only the builder's UNIT lines, your step 7 run and
-   `prd-trace-exit=0`. Save the tester's whole report, verbatim, with the Write tool to
+   `prd-trace-exit=0`.
+
+   **Before each suite dispatch, find the tests whose case changed after them**, as its own Bash
+   call, with the suite's T-ids:
+
+   ```bash
+   uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --stale --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"
+   ```
+
+   `prd-build-check-exit=1` prints one `stale <T-id> <test path>: …` line per stale T-id: add a
+   `Rewrite: <T-id>` line to the tester prompt for each. `prd-build-check-exit=2` is a tool error,
+   never "nothing stale": stop the dispatch and fix the call.
+   **Red Flag:** editing a test to bring it up to date, or sending `Misread:` for a case you
+   changed. A changed case gets `Rewrite:`; a misread is the tester's error, read against an
+   unchanged case.
+
+   Save the tester's whole report, verbatim, with the Write tool to
    `<SNAP>/suite-report.md`, then run:
 
    ```bash
@@ -322,9 +338,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    `prd-build-check-exit=1` fails the round: a dispatched T-id with no line, a line for a T-id not
    dispatched, a duplicate, or a line in none of the three forms. Outside a test-misread round a
-   suite writes nothing, so the status output must be empty; on a test-misread round only that
-   T-id's test may change: run `dispatching.md` step 4, then commit the test with
-   `git commit -m "test(<area>): <T-id> matches the PRD" -m "Refs: <IDs>"` after its `git add`.
+   suite writes nothing, so the status output must be empty; on a test-misread round, or for a
+   `Rewrite:` line, only that T-id's test may change: run `dispatching.md` step 4, then commit
+   the test with `git commit -m "test(<area>): <T-id> matches the PRD" -m "Refs: <IDs>"` after
+   its `git add`.
    A `known-failing E-nnn` line for a case that carries `known-failing: E-nnn` is expected: it is
    not reconciled, and it is not a pass.
 
@@ -505,4 +522,5 @@ A `--fixes` build's `write` adds, after the T-ids, `Un-mark: <T-ids> (known-fail
 
 A test-misread round is `Mode: suite` with one
 `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"` line per
-affected T-id after the T-ids.
+affected T-id after the T-ids. A stale test (step 5's `--stale` call) adds one
+`Rewrite: <T-id>` line per stale T-id instead.
