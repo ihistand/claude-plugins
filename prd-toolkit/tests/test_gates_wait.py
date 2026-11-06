@@ -142,3 +142,83 @@ def test_an_answer_in_the_same_second_as_the_start_is_returned(repo, monkeypatch
     answer(repo, "error-class:E-003", "just before")
     code, out = gates.wait_gate(repo / PRD, "error-class:E-003", poll=0.05)
     assert code == 0 and out["reply"] == "just before"
+
+
+# --- Task 5 fix round 1: the answering marker closes the race between the owner's write and its log line ---
+
+def slow_owner(monkeypatch, delay=2.5, exit_code=0, leave=True):
+    """The error-class owner writes (the gate leaves the list), then takes `delay` s before it returns `exit_code`."""
+    real = gates.ANSWERERS["error-class"]
+
+    def owner(prd, gate, reply, **kw):
+        out = real(prd, gate, reply, **kw) if leave else {"stdout": [], "exit": 0}
+        time.sleep(delay)
+        return {**out, "exit": exit_code}
+
+    monkeypatch.setitem(gates.ANSWERERS, "error-class", owner)
+
+
+def test_a_slow_owner_still_reaches_wait_with_its_choice(repo, monkeypatch):
+    add_errors(repo, entry(3, "code bug"))
+    slow_owner(monkeypatch, delay=gates.GRACE + 1.5)
+    t, box = waiting(repo, "error-class:E-003", timeout=20)
+    answer(repo, "error-class:E-003", "slow but sure", by="form")
+    t.join(25)
+    code, out = box["r"]
+    assert code == 0 and out["choice"] == "confirm" and out["reply"] == "slow but sure"
+    assert not any(gates.answering_dir(repo).glob("*"))  # the marker is gone after the log line
+
+
+def test_the_marker_is_keyed_on_the_worktree_and_gate_and_holds_the_pid(repo, monkeypatch):
+    add_errors(repo, entry(3, "code bug"))
+    seen = {}
+    real = gates.ANSWERERS["error-class"]
+
+    def owner(prd, gate, reply, **kw):
+        path = gates.answering_path(repo, "error-class:E-003")
+        seen["exists"], seen["pid"] = path.is_file(), path.read_text(encoding="utf-8").strip()
+        return real(prd, gate, reply, **kw)
+
+    monkeypatch.setitem(gates.ANSWERERS, "error-class", owner)
+    answer(repo, "error-class:E-003", "yes")
+    import hashlib, os
+    key = hashlib.sha1(f"{repo.resolve()}\0error-class:E-003".encode()).hexdigest()
+    assert gates.answering_path(repo, "error-class:E-003").name == key
+    assert seen == {"exists": True, "pid": str(os.getpid())}
+    # a deploy step is repo-wide, as its log match is: keyed on the gate id alone
+    assert gates.answering_path(repo, "deploy-step:r:3").name == hashlib.sha1("\0deploy-step:r:3".encode()).hexdigest()
+
+
+def test_a_dead_pid_marker_does_not_hang_wait(repo):
+    import subprocess, sys
+    add_errors(repo, entry(3, "code bug"))
+    dead = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True).stdout.strip()
+    path = gates.answering_path(repo, "error-class:E-003")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(dead + "\n", encoding="utf-8")
+    t, box = waiting(repo, "error-class:E-003", timeout=20)
+    start = time.monotonic()
+    errors = repo / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8").replace("E-003", "E-099"), encoding="utf-8")
+    t.join(25)
+    assert box["r"][0] == 1 and time.monotonic() - start < gates.GRACE + 2
+
+
+def test_a_failed_owner_removes_the_marker_and_wait_goes_on_as_today(repo, monkeypatch):
+    add_errors(repo, entry(3, "code bug"))
+    slow_owner(monkeypatch, delay=0.5, exit_code=1, leave=False)  # nothing written: the gate stays pending
+    t, box = waiting(repo, "error-class:E-003", timeout=3)
+    answer(repo, "error-class:E-003", "fails")
+    assert not any(gates.answering_dir(repo).glob("*"))
+    t.join(10)
+    assert box["r"][0] == 3  # still pending: wait keeps waiting, as today
+
+
+def test_a_failed_owner_whose_gate_left_exits_1(repo, monkeypatch):
+    add_errors(repo, entry(3, "code bug"))
+    slow_owner(monkeypatch, delay=0.5, exit_code=1)  # it wrote, then failed: no log line
+    t, box = waiting(repo, "error-class:E-003", timeout=20)
+    answer(repo, "error-class:E-003", "fails late")
+    t.join(25)
+    assert box["r"][0] == 1 and box["r"][1]["choice"] is None
+    assert not any(gates.answering_dir(repo).glob("*"))

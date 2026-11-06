@@ -258,3 +258,32 @@ def test_the_descriptions_route_a_waiting_gate():
             "decision inbox, prd_gates.py) and someone asks to approve it") in head(CHANGING)
     assert ("an entry's proposed class waiting for the owner's answer (its gate error-class:E-nnn, in the chat or the "
             "decision inbox, prd_gates.py)") in head(SKILLS / "handling-errors/SKILL.md")
+
+
+# ---------------------------------------------------------------- fix round 1
+
+SERVE_STOPPED = ("When the `serve` this session started exits before `wait` returns (the idle timeout, Ctrl-C), stop "
+                 "the background `wait` and take the chat route.")
+CHAT_STOPS_SERVE = ("take the chat route with it, and stop the `serve` this session started, never an inbox it reused; "
+                    "`wait` then exits 1, which is expected.")
+SEND_FAILS_CHECK = ("An inbox Send already ran `prd_deploy.py confirm` with the owner's words, so the step is confirmed. "
+                    "When those words do not meet the step's `Check:` (a question, \"wait\", \"not yet\"), do not resume: "
+                    "tell the owner the step was confirmed with those words, ask in the chat whether to resume or stop, "
+                    "and resume only on a go.")
+
+
+def test_a_stopped_serve_stops_wait_and_takes_the_chat_route():
+    for path in DECISION_SKILLS:
+        assert SERVE_STOPPED in inbox(path), path.name
+
+
+def test_a_chat_reply_stops_only_the_sessions_own_serve():
+    for path in DECISION_SKILLS:
+        assert CHAT_STOPS_SERVE in inbox(path), path.name
+
+
+def test_an_inbox_send_that_fails_the_check_is_confirmed_but_not_resumed():
+    for path in (DEPLOYING, RUNNING_DEPLOY):
+        t = flat(path.read_text(encoding="utf-8"))
+        assert SEND_FAILS_CHECK in t, path.name
+    assert "resume nothing, show it to the owner and ask" not in flat(DEPLOYING.read_text(encoding="utf-8"))

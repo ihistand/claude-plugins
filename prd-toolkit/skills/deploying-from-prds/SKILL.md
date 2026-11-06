@@ -47,9 +47,10 @@ record it" change nothing below.
    instead: ask for their reply, through **The decision inbox** below, with the gate
    `deploy-step:<run id>:<N>`, or headless or in the chat as `running-a-deploy.md` step 2 says.
    An outcome from `wait` is the reply: the inbox already ran `prd_deploy.py confirm` with it, so
-   never confirm again; run `resume` as step 2 says. An outcome whose reply does not meet the
-   step's `Check:` (a question, "wait", "not yet") is no go: resume nothing, show it to the owner
-   and ask.
+   never confirm again; run `resume` as step 2 says. An inbox Send already ran `prd_deploy.py
+   confirm` with the owner's words, so the step is confirmed. When those words do not meet the
+   step's `Check:` (a question, "wait", "not yet"), do not resume: tell the owner the step was
+   confirmed with those words, ask in the chat whether to resume or stop, and resume only on a go.
 5. **A failure stops the deploy.** Show the step, the output tails and the `Rollback:` command,
    and ask. Run `rollback` only on the user's yes in their own words. Every failure gets its
    open `Classification: unclassified` entry in `errors.md`, rolled back or not, then the close.
@@ -100,7 +101,9 @@ paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
     in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
     outcome it prints first is still the owner's answer.
 
-  Then wait for `wait`'s completion notice: never poll for the exit and never sleep.
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep. When the
+  `serve` this session started exits before `wait` returns (the idle timeout, Ctrl-C), stop the
+  background `wait` and take the chat route.
 - **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
   reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
   reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that
@@ -112,7 +115,8 @@ paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
   (unattended, overnight, no one there). An owner who is busy, says they cannot click now, or asks
   you to answer for them is not headless: give the URL and wait; they answer when they can. A
   reply the owner writes in the chat while the inbox is up is a chat reply: take the chat route
-  with it; `wait` then exits 1, which is expected.
+  with it, and stop the `serve` this session started, never an inbox it reused; `wait` then exits
+  1, which is expected.
 
 The rules:
 

@@ -2,6 +2,7 @@
 owner, the answer log, and the decision inbox that answers them in the browser."""
 import datetime
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -427,10 +428,14 @@ def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | No
     for key, value in given.items():
         if value is not None and key not in FLAGS[gate.kind]:
             raise Refused(f"{FLAG_NAMES[key]} does not apply to {gate.kind}")
-    out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
-    if out.get("exit") == 0 and not (gate.kind == "adoption" and choice != "done"):
-        logged = choice or {"approval": "approve", "error-class": "confirm", "signoff": result}.get(gate.kind)
-        _append_log(Path(repo_root), prd, gate.id, logged, reply, by)
+    marker = _mark_answering(Path(repo_root), gate.id)
+    try:
+        out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
+        if out.get("exit") == 0 and not (gate.kind == "adoption" and choice != "done"):
+            logged = choice or {"approval": "approve", "error-class": "confirm", "signoff": result}.get(gate.kind)
+            _append_log(Path(repo_root), prd, gate.id, logged, reply, by)
+    finally:
+        marker.unlink(missing_ok=True)
     return {"gate": gate.id, "result": out}
 
 
@@ -480,6 +485,39 @@ def _append_log(repo_root: Path, prd: Prd, gate_id: str, choice: str | None, rep
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+# --- the answering marker: `answer` holds it from before the owner runs until its log line is written, so `wait` can
+# tell an owner still at work (the gate gone, the line not yet there) from a gate that changed under it ---
+
+ANSWERING_DIR = "prd-gates-answering"
+
+
+def answering_dir(repo_root: Path) -> Path:
+    return common_dir(repo_root) / ANSWERING_DIR
+
+
+def answering_path(repo_root: Path, gate_id: str) -> Path:
+    """<git common dir>/prd-gates-answering/<sha1 of the resolved worktree, NUL, gate id>; a deploy step is repo-wide, as its
+    log match is, so its key is the gate id alone."""
+    where = "" if gate_id.startswith("deploy-step:") else str(Path(repo_root).resolve())
+    return answering_dir(repo_root) / hashlib.sha1(f"{where}\0{gate_id}".encode("utf-8")).hexdigest()
+
+
+def _mark_answering(repo_root: Path, gate_id: str) -> Path:
+    path = answering_path(repo_root, gate_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    return path
+
+
+def _answering(repo_root: Path, gate_id: str) -> bool:
+    """True while a marker for the gate names a live process; a dead pid's marker counts as absent."""
+    try:
+        pid = int(answering_path(repo_root, gate_id).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return False
+    return pid > 0 and _alive(pid)
+
+
 # --- wait: block until the owner answers one gate (in the form or the chat) ---
 
 GRACE = 1.0  # a gate leaves the list a moment before its log line is written
@@ -521,6 +559,15 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
         if line:
             return 0, _outcome(wt, gate_id, line)
         if not pending():
+            # an owner still at work holds the marker until its log line is written; GRACE covers the chat route,
+            # whose owner script writes no marker
+            while _answering(wt, gate_id):
+                line = found()
+                if line:
+                    return 0, _outcome(wt, gate_id, line)
+                if timeout is not None and time.monotonic() - begun >= timeout:
+                    return 3, {}
+                time.sleep(min(poll, 0.2))
             end = time.monotonic() + GRACE
             while time.monotonic() < end:
                 line = found()

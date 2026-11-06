@@ -3,7 +3,10 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""Plan and run a PRD's deploy runbook. Exit 0 done, 1 refused, 2 usage or tool error, 3 human step, 4 failed."""
+"""Plan and run a PRD's deploy runbook. Exit 0 done, 1 refused, 2 usage or tool error, 3 human step, 4 failed.
+
+`record` writes a deploy the owner did by hand: exit 0, 1 refused, 2 usage.
+"""
 import argparse
 import sys
 from pathlib import Path
@@ -44,6 +47,11 @@ def _parser() -> argparse.ArgumentParser:
             p.add_argument("--reply", required=True, metavar="TEXT", help="the user's words" if name == "recover" else None)
         else:
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
+    p = sub.add_parser("record", help="record a deploy the owner did by hand: a run log and the environment's Deployed row; runs nothing")
+    p.add_argument("prd_dir")
+    p.add_argument("--env", required=True, metavar="ENV")
+    p.add_argument("--commit", required=True, metavar="SHA", help="the commit the owner deployed")
+    p.add_argument("--reply", required=True, metavar="TEXT", help="the owner's words, verbatim")
     p = sub.add_parser("check", help="the close check: a deploy run's close commit says only what its log proves")
     p.add_argument("prd_dir")
     p.add_argument("--run", required=True, metavar="ID")
@@ -182,6 +190,16 @@ def main(argv: list[str]) -> int:
         return _fail(f"{prd.root.as_posix()}/prd.md: {model.UNMIGRATED}")
     if args.command in ("confirm", "resume", "rollback", "recover"):
         return _existing_run(args, prd)
+    if args.command == "record":
+        try:
+            run_id = deploy.record(prd, model.repo_root(prd.root), args.env, args.commit, args.reply)
+        except deploy.Refused as e:
+            print(f"prd_deploy: {e.reasons[0]}", file=sys.stderr)
+            return deploy.EXIT["refused"]
+        except Exception as e:
+            return _fail(f"internal error: {type(e).__name__}: {e}")
+        print(f"run={run_id}")
+        return 0
     if args.command == "check":
         try:
             found = deploy.close_findings(prd, model.repo_root(prd.root), args.run, args.diff)

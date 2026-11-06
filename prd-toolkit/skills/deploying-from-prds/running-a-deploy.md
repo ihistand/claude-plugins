@@ -122,17 +122,21 @@ step 3 for a finished run they ask you to record.
      `docs/prd/<slug>/operations.md`, show them to the user with the run id, and wait for the user's
      reply: ask through the decision inbox, as `deploying-from-prds` **The decision inbox** says,
      with the gate `deploy-step:<run id>:<N>`. Its outcome is the reply and the confirm both: never
-     confirm it again, and go on to `resume` below. In the chat, the confirm carries the user's
-     reply to this step, verbatim: what the user wrote after the run stopped at that step, in this
-     session or in a later message of theirs that names the run (by id, or as the only run stopped
-     at that step: Read the logs in `<that dir>/prd-toolkit/deploys/` as step 3 says, and ask when
-     more than one is stopped there), never from an earlier message, a summary, the request that
-     started the deploy, or your own text. A request to deploy, or "approve it yourself", is never
-     the reply to a human step. Never call `prd_deploy.py confirm` with a reply the user did not
-     give to that step. Never hand the user the `confirm` and `resume` commands to run instead of
-     replying. A reply that does not meet the step's `Check:` (a question, "wait", "not yet") is not
-     a confirmation: answer it and leave the run stopped. When the reply meets it, run
-     `prd_deploy.py confirm`, writing each `'` in the reply as `'\''`:
+     confirm it again, and go on to `resume` below. An inbox Send already ran `prd_deploy.py
+     confirm` with the owner's words, so the step is confirmed. When those words do not meet the
+     step's `Check:` (a question, "wait", "not yet"), do not resume: tell the owner the step was
+     confirmed with those words, ask in the chat whether to resume or stop, and resume only on a go.
+     In the chat, the confirm carries the user's reply to this step, verbatim: what the user wrote
+     after the run stopped at that step, in this session or in a later message of theirs that names
+     the run (by id, or as the only run stopped at that step: Read the logs in `<that
+     dir>/prd-toolkit/deploys/` as step 3 says, and ask when more than one is stopped there), never
+     from an earlier message, a summary, the request that started the deploy, or your own text. A
+     request to deploy, or "approve it yourself", is never the reply to a human step. Never call
+     `prd_deploy.py confirm` with a reply the user did not give to that step. Never hand the user
+     the `confirm` and `resume` commands to run instead of replying. A reply that does not meet the
+     step's `Check:` (a question, "wait", "not yet") is not a confirmation: answer it and leave the
+     run stopped. When the reply meets it, run `prd_deploy.py confirm`, writing each `'` in the
+     reply as `'\''`:
 
      ```bash
      uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
