@@ -354,6 +354,10 @@ T-012.2:
   `xfail(strict=True)`, jest `test.failing`) and its citation reads `@prd <T-id> known-failing <E-nnn>`.
   A `/prd-build --fixes E-nnn` removes the line before its step 7 trace: once its T-id passes, or, at a
   deploy-gate level, once the tester's un-mark is committed; no other build edits one.
+- `symptom:` (optional, beside `known-failing:` only) is what the run shows while the bug is open, in plain
+  language, one observable symptom. The test then treats only that symptom as the expected failure. A
+  `known-failing:` case with no `symptom:` is a `test-refs` warning (any failure would pass as the known one);
+  a `symptom:` without `known-failing:` is a `test-refs` error. A blank `symptom:` counts as absent.
 - A custom contract type whose files are YAML mappings makes `<type>:<name>` resolvable: `<name>`
   must be a top-level key of one of the type's `.yaml` files under `contracts/` (`test-refs`). A
   type whose files are not YAML mappings there is not checked. A custom type whose glob matches no file is a `contracts-valid`

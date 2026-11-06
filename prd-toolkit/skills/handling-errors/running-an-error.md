@@ -215,7 +215,9 @@ and paste the first line wherever `<start>` appears: its first SHA when it holds
    take the lowest level that reproduces it: a deploy-gate regression T-id's test runs only at
    `/prd-deploy`, so the fix is proven only there. A non-unit regression
    T-id's case carries `known-failing: <E-nnn>`; a unit one is written failing by the builder in
-   the `--fixes` build, as always. As with any change, the block returns to `approved`. When the
+   the `--fixes` build, as always. Write the case's `symptom:` from the entry's Evidence or
+   Diagnosis, never invented; a symptom the entry does not show is a question for the owner. As
+   with any change, the block returns to `approved`. When the
    regression T-id's case already carries `known-failing: <E-nnn>` and its block is `approved` (an
    entry from 0.5, or from adoption), the PRD already says it all: skip the patch, and the
    tester-only round below marks and tags its test.

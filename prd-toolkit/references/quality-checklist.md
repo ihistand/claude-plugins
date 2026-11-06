@@ -22,6 +22,7 @@ judgement. Answer each with yes or no. A "no" is a gap: fix it, then re-run lint
 - [ ] Does every dependency have a mock, and does the PRD say tests never call production?
 - [ ] Does every allow cell in `permissions.yaml` have a test, as well as every deny cell?
 - [ ] Does every test case that depends on something outside its contracts (a component contract, an architecture fact, a Harness slot) cite it in `refs:`?
+- [ ] Does every precondition or state a test case declares name the check that confirms it, or does the Harness (Clean state or Fixtures) say how such a precondition is confirmed?
 
 ## Flows and people
 

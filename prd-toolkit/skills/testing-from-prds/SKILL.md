@@ -116,6 +116,9 @@ it (the harness's marker and where it sits), one line per test. In a suite, an e
 still reports `<T-id>: known-failing E-nnn`, never `pass`; a strict marker that reports an
 unexpected pass is `fail: unexpected pass`.
 
+On a case with `symptom:`, the test treats only that symptom as the expected failure. It checks for the symptom and, when it sees it, raises the harness's own expected-failure exception. The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the harness's equivalent, recorded under HARNESS CHOICES. Any other failure reports `<T-id>: fail: not the known failure: <one line>`. A case with no `symptom:` keeps today's rule. Without it, a test broken in some
+other way would count as the known bug.
+
 In a `--fixes` build's `write` round you are given the regression tests of the entry being
 fixed: the tester removes the marker and the tag from each regression test it is given, a
 deploy-gate regression test too (it is run at `/prd-deploy`, never by the build), and changes

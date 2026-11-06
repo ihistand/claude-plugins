@@ -74,6 +74,32 @@ two case directories); GREEN on the worktree. Same command form as above, one `-
   once (RED 1.00). The case now changes the expected output (AC-001.1 and T-001.1 expect id 2 after one stored note),
   which is what rule 2 forbids changing without a line.
 
+### Task 12: `tester-symptom-strict-marker` and `tester-other-failure-not-known` (spec section 16)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 12's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts, plus the two case
+directories); GREEN on the worktree. Same command form as above, one `--case` each. Both cases start from the notes PRD
+(area `confirmed`) with T-002.1's case carrying `known-failing: E-001` (open) and a `symptom:` (`search_notes("milk")`
+returns an empty list while the store holds "Buy Milk"); the prompt dispatches `prd-tester` in suite mode for T-002.1.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `tester-symptom-strict-marker` (the code is case-sensitive, so the symptom shows) RED | 0.50 | 0.50 | 0.00 | Unchanged text, final grader. All three with runs wrote `@pytest.mark.xfail(strict=True)` with no `raises=` and a plain `assert`, cited `@prd T-002.1 known-failing E-001`, and reported `T-002.1: known-failing E-001`; `marker-raises-only-the-symptom` failed 3 of 3 (0.50 each, the dispatch grader passing). |
+| `tester-symptom-strict-marker` GREEN | 1.00 | 0.50 | +0.50 | 3 of 3 with runs. The grader matched one Write or Edit of a `tests/*.py` file holding the `@prd` tag, `xfail(strict=True, raises=<X>)` with `<X>` a test-defined exception (`KnownSymptom`, `_KnownSymptom`), `search_notes(` and `raise <X>`. |
+| `tester-other-failure-not-known` (`search_notes` returns `["buy milk"]`: it ignores case, so the symptom does not show) RED | 0.33 | 0.67 | -0.33 | Unchanged text. All three with runs reported `T-002.1: known-failing E-001` (the hole), so `not-reported-known-failing` failed and `reports-not-the-known-failure` found nothing. |
+| `tester-other-failure-not-known` GREEN | 1.00 | 0.67 | +0.33 | 3 of 3 with runs. `reports-not-the-known-failure` matched the line `T-002.1: fail: not the known failure: <one line>` and `not-reported-known-failing` found no `T-002.1: known-failing E-001` line. |
+
+- **Graders:** `tester-dispatched` (both), `marker-raises-only-the-symptom`, `reports-not-the-known-failure` (a last-message
+  line `T-002.1: fail: not the known failure: <text>`), `not-reported-known-failing` (`match: not_contains` on a line that
+  is only `T-002.1: known-failing E-001`).
+- **Grader rounds:** the second case's first patterns began with an inline `(?m)`, which a JavaScript regex rejects (the
+  grader would have thrown in every run); they now use `flags: m`, and its RED was re-run. The first marker grader read
+  `tests/test_notes.py`, but the tester wrote `tests/test_search.py`; it now reads the trace, with every lookahead bounded to
+  one Write or Edit call's content string. Its first trace form required `file_path` first, which failed a correct run whose
+  Edit input began with `replace_all`; it now allows that key, and both arms were re-run on the final grader. Checked under node
+  on eight synthetic calls (a correct one; no `raises=`; `raises=AssertionError`; no `raise`; a different exception raised;
+  no tag; `strict=False`; the lookaheads spread over two calls) and replayed on the real RED and GREEN traces: all as intended.
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply

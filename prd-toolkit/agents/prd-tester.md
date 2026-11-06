@@ -31,7 +31,7 @@ these rules:
 - Every test you write carries an `@prd <T-id>` citation for the T-id it covers, in the form
   testing.md's Layout gives; `prd_trace.py` counts these citations. A case carrying `known-failing: E-nnn`
   is written as a strict expected failure (pytest `xfail(strict=True)`, jest `test.failing`), cited
-  `@prd <T-id> known-failing <E-nnn>`, and its marker is recorded under HARNESS CHOICES. In a
+  `@prd <T-id> known-failing <E-nnn>`, and its marker is recorded under HARNESS CHOICES. On a case with `symptom:`, the test treats only that symptom as the expected failure. It checks for the symptom and, when it sees it, raises the harness's own expected-failure exception. The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the harness's equivalent, recorded under HARNESS CHOICES. Any other failure reports `<T-id>: fail: not the known failure: <one line>`. A case with no `symptom:` keeps today's rule. In a
   `--fixes` build's `write` round, the tester removes the marker and the tag from each regression test it is given.
 - A judged case (its `expect` has `rubric:`): the test calls
   `uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>` and must assert exit 0

@@ -454,6 +454,15 @@ def test_refs(prd: Prd):
             elif not entry.open:
                 yield bad("known-failing", f"known-failing {kf} is resolved in errors.md; remove the line")
 
+        sym = d.get("symptom")
+        named = isinstance(sym, str) and sym.strip() != ""  # a blank or non-string symptom counts as absent
+        if kf is None:
+            if "symptom" in d:  # even a blank one: the key belongs beside known-failing: only
+                yield bad("symptom", "symptom: needs known-failing: on the same case")
+        elif not named:
+            yield Finding(tc.file, _line(tc, "known-failing"), "test-refs",
+                          f"{tc.id}: known-failing {kf} names no symptom; any failure would pass as it", severity="warn")
+
         target = d.get("target")
         if isinstance(target, str) and ":" in target and model.ref_prefix(prd, target) is None:  # a prefixed target is for upstream-refs
             kind, _, name = target.partition(":")

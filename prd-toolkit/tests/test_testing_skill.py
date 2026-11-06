@@ -97,3 +97,41 @@ def test_a_shipped_helper_is_asked_about_never_stood_in_for():
         assert "A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE" in s or \
             "A helper a pack ships whose shapes are not stated is a dry-run question, not a HARNESS CHOICE" in s, p
         assert "stand-in" in s, p
+
+
+# 0.8.2, spec section 16: a known-failing case names its symptom.
+SYMPTOM_RULES = (
+    "On a case with `symptom:`, the test treats only that symptom as the expected failure.",
+    "It checks for the symptom and, when it sees it, raises the harness's own expected-failure exception.",
+    "The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the harness's equivalent, "
+    "recorded under HARNESS CHOICES.",
+    "Any other failure reports `<T-id>: fail: not the known failure: <one line>`.",
+    "A case with no `symptom:` keeps today's rule.",
+)
+
+
+def test_the_tester_treats_only_the_symptom_as_the_expected_failure():
+    for p in (SKILL, AGENT):
+        s = flat(p)
+        for sentence in SYMPTOM_RULES:
+            assert sentence in s, (p, sentence)
+
+
+def test_symptom_is_an_optional_key_beside_known_failing_in_the_format():
+    s = flat(FORMAT)
+    assert ("`symptom:` (optional, beside `known-failing:` only) is what the run shows while the bug is open, in plain "
+            "language, one observable symptom.") in s
+    assert "`test-refs` warning" in s
+
+
+def test_the_writers_take_the_symptom_from_the_entry():
+    rule = ("Write the case's `symptom:` from the entry's Evidence or Diagnosis, never invented; a symptom the entry "
+            "does not show is a question for the owner.")
+    for p in (ROOT / "skills/handling-errors/running-an-error.md", ADOPT):
+        assert rule in flat(p), p
+
+
+def test_the_checklist_asks_how_a_precondition_is_confirmed():
+    s = flat(ROOT / "references/quality-checklist.md")
+    assert ("Does every precondition or state a test case declares name the check that confirms it, or does the Harness "
+            "(Clean state or Fixtures) say how such a precondition is confirmed?") in s
