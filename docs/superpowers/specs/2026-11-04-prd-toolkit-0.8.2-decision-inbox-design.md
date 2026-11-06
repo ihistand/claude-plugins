@@ -119,7 +119,7 @@ Exit codes, as the other scripts: 0 ok, 1 refused, 2 usage or tool error, 3 stop
 
 | Command | Does |
 |---|---|
-| `serve <prd dir> [--gate <id>] [--port N] [--no-open] [--idle-minutes N]` | Starts the inbox, prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open`, and opens the page on `--gate` when given. Runs until Ctrl-C, SIGTERM or `--idle-minutes` without a request (default 120); exit 3. There is no Done: an inbox has no last item |
+| `serve <prd dir> [--gate <id>] [--port N] [--no-open] [--idle-minutes N]` | Starts the inbox, prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open`, and opens the page on `--gate` when given. Runs until Ctrl-C, SIGTERM or `--idle-minutes` without a request (default 120); exit 3. There is no Done: an inbox has no last item. With `--gate`, a `serve` that finds a live inbox stands by and takes it over at the same URL (section 18) |
 | `wait <prd dir> <gate id> [--worktree <path>] [--timeout S]` | Blocks until that gate is answered, by any client. Prints `{"interface": 1, "kind": "gates.outcome", "gate": …, "worktree": …, "choice": …, "reply": "…", "by": "form"\|"cli", "at": …}` and exits 0. Exit 3 on timeout (default: none). Exit 1, with `{"kind": "gates.outcome", "gate": …, "choice": null}`, when the gate stopped being pending with no answer in the log (the PRD changed under it) |
 
 `wait` reads the answer log, not the page, so a session never depends on which client answered.
@@ -127,7 +127,7 @@ Exit codes, as the other scripts: 0 ok, 1 refused, 2 usage or tool error, 3 stop
 `wait`'s `--worktree` defaults to the worktree that holds `<prd dir>`.
 
 **Errors.** Exit 2, nothing served: a folder with no `prd.md`; a port in use when `--port` is given.
-Exit 1: a `--gate` that is not pending; a second live inbox for the PRD (section 4).
+Exit 1: a `--gate` that is not pending; a second live inbox for the PRD without `--gate` (section 4); a standby whose gate is no longer pending (section 18). Exit 2 also when a standby cannot take over the port (section 18).
 
 ## 4. The inbox
 
@@ -136,7 +136,8 @@ Exit 1: a `--gate` that is not pending; a second live inbox for the PRD (section
 git common directory is shared by every worktree and never committed. An inbox is **live** when its
 PID is running and `GET /ping?token=…` answers 200. `serve` refuses to start a second live inbox for
 the same PRD (exit 1, `prd_gates: an inbox is already serving at <url>`) and replaces a file that is
-not live.
+not live. With `--gate` it prints the same line and stands by instead, so the inbox outlives the session
+that started it (section 18).
 
 **Worktrees.** The inbox lists every worktree of the repository (`git worktree list`) whose checkout
 holds the PRD folder, calls `list_gates()` once per worktree, and shows every kind grouped by worktree
@@ -643,3 +644,65 @@ PRD.
   eval, a builder whose branch is not the `Branch:` line, or whose HEAD lacks `Base:`, stops with
   the question. In another, a caller on a side branch cuts a round branch, merges it with
   `--ff-only` after the check, and uses no Agent isolation.
+
+## 18. The shared inbox outlives its starter (added 2026-11-06, from the proof)
+
+The real two-session proof of the inbox found two faults.
+
+- **A reused inbox died with its starter.** One session served the inbox for its gate. A second
+  session's `serve --gate` found it live, printed `prd_gates: an inbox is already serving at <url>` and
+  exited 1, as section 4 said, and the owner got that URL. When the first session's gate was answered,
+  it stopped its own `serve`. The second session's link died, and nothing in it noticed: its `wait` ran
+  on with no inbox anywhere. The first session then started a fresh inbox, on a new port with a new
+  token, and the same happened again at its next gate.
+- **A gate nobody waits on looked like any other.** A worktree abandoned mid-change still held its
+  `.prd-review.json` and its PRD diff, so the inbox listed its approval gate, and the owner approved it
+  by mistake. The inbox could not tell a gate some session is waiting on from one whose session ended,
+  died or moved its work.
+
+**Fix 1: `serve --gate` stands by and takes over at the same URL.**
+
+- `serve` without `--gate` that finds a live inbox is unchanged: the refusal line, exit 1.
+- `serve --gate <id>` that finds a live inbox prints the same line on stderr and stays running, standing
+  by. Once a second (`STANDBY_POLL`):
+  - when the gate has left `list_gates(prd, repo_root, worktrees=True)` and no answering marker is live
+    for it, it waits `STANDBY_LINGER` (5 s, longer than `wait`'s GRACE, so `wait` reports first),
+    prints `prd_gates: <gate id> is not pending` and exits 1;
+  - when the inbox it stood behind is no longer live, it takes over:
+    `make_inbox(prd_dir, port=<that port>, idle_minutes=…, token=<that token>)`, prints
+    `url=<the same url>#gate=<id>` on stdout, opens no browser, and from then on runs as any `serve`
+    does (until Ctrl-C, SIGTERM or the idle time; it does not exit when its own gate is answered).
+  - Another standby that won the lock (`InboxLive`), or that holds the port while it claims the lock
+    (the bind fails, and a live inbox appears there within `TAKEOVER_SETTLE`, 3 s): it goes on
+    standing by, behind that one.
+  - The port held by anything else: `prd_gates: cannot take over the inbox at port <N>: <reason>`,
+    exit 2.
+- SIGTERM or Ctrl-C while standing by: exit 3, as a serving inbox does. `serve` still never exits 0.
+- `make_inbox` takes `token=`. The lock file, the token, mode 0600, `_claim`'s atomic `os.link` and
+  `_release` are unchanged; the port and token for the takeover come from the record `live_inbox`
+  returned (carried on `InboxLive`).
+
+**Fix 2: `wait` marks that a session is waiting; the card shows when none is.**
+
+- `wait` writes `<git common dir>/prd-gates-waiting/<key>-<pid>` when it starts, `<key>` being the sha1
+  key the answering marker uses for that (worktree, gate) (a deploy step's repo-wide), its content the
+  pid, and removes it when it returns. One file per waiting process.
+- `gates.waiting(repo_root, worktree, gate_id)` is true while a marker with that key names a live
+  process. A marker whose process is gone is removed when read. There is no age limit: a `wait` may
+  run for hours.
+- Each `/gates` card gains `"waiting": true|false`. A card whose `waiting` is false shows one muted
+  line, `No session is waiting on this gate. Answering it still records the answer.` `prd_gates.py
+  list` and the `gates` document are unchanged.
+
+**Skills.** The four copies of **The decision inbox** say: after an `already serving` line, give
+`<url>#gate=<gate id>` and leave that `serve` running, since it stands by and takes over at the same
+URL. A `serve` of this session that exits 2 or 3 before `wait` returns (the idle timeout, Ctrl-C, a
+port it cannot take over) sends the session to the chat route; a standby's exit 1 once its gate is
+answered is expected.
+
+**Tests:** `make_inbox(token=…)`; `waiting()` for a live and a dead marker; `wait`'s marker on its exit
+0, 1 and 3 paths; the card's `waiting`. Real `serve` processes on a temp repository: a standby takes
+over at the same port and token; of two standbys exactly one takes over and the other stands by; a
+standby exits 1 after the linger once its gate is answered; it exits 2 when the port is held; SIGTERM
+while standing by is exit 3. The page shows the muted line for `waiting: false` only. The skill
+sentences are pinned in the four files.

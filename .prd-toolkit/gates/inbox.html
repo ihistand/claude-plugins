@@ -20,6 +20,7 @@
 .gtitle { font-size: 1.2rem; line-height: 1.3; margin: 8px 0; overflow-wrap: anywhere; }
 .gtitle:focus { outline: none; }
 .gq { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 12px; }
+.gnowait { margin: -4px 0 12px; }
 .gev { margin: 0 0 12px; padding-left: 1.2em; }
 .gev li { margin: 4px 0; overflow-wrap: anywhere; }
 .gfacts { margin: 0 0 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; }
@@ -283,6 +284,7 @@ function gateCard(entry, slots) {
       h('button', { type: 'button', class: 'link', text: 'Dismiss', events: { click: () => { I.flags.delete(entry.key); draw(); } } })));
   }
   card.append(h('p', { class: 'gq', text: g.question }));
+  if (!entry.gone && g.waiting === false) card.append(h('p', { class: 'muted gnowait', text: 'No session is waiting on this gate. Answering it still records the answer.' }));
   const evidence = g.evidence || [];
   if (evidence.length) {
     card.append(h('ul', { class: 'gev' }, evidence.slice(0, FOLD).map((line) => h('li', { text: line }))));

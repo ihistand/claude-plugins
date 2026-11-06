@@ -262,8 +262,12 @@ def test_the_descriptions_route_a_waiting_gate():
 
 # ---------------------------------------------------------------- fix round 1
 
-SERVE_STOPPED = ("When a `serve` that printed its URL later exits before `wait` returns (the idle timeout, Ctrl-C), "
-                 "stop the background `wait` and take the chat route.")
+SERVE_STOPPED = ("When this session's `serve` exits 2 or 3 before `wait` returns (the idle timeout, Ctrl-C, a port it cannot "
+                 "take over), stop the background `wait` and take the chat route. A `serve` that stood by and exits 1 once the "
+                 "gate is answered is expected: go on with `wait`'s outcome.")
+OLD_SERVE_STOPPED = "When a `serve` that printed its URL later exits before `wait` returns"
+STANDBY = ("Give the owner `<url>#gate=<gate id>`. Leave that `serve` running: it stands by, and if that inbox stops before "
+           "this gate is answered it takes over at the same URL.")
 CHAT_STOPS_SERVE = ("take the chat route with it, and stop the `serve` this session started, never an inbox it reused; "
                     "`wait` then exits 1, which is expected.")
 SEND_FAILS_CHECK = ("An inbox Send already ran `prd_deploy.py confirm` with the owner's words, so the step is confirmed. "
@@ -275,6 +279,14 @@ SEND_FAILS_CHECK = ("An inbox Send already ran `prd_deploy.py confirm` with the 
 def test_a_stopped_serve_stops_wait_and_takes_the_chat_route():
     for path in DECISION_SKILLS:
         assert SERVE_STOPPED in inbox(path), path.name
+        assert OLD_SERVE_STOPPED not in inbox(path), path.name  # proof fix wave: a standby's exit 1 is not a stop
+
+
+def test_a_reused_inbox_is_given_and_its_serve_left_standing_by():
+    for path in DECISION_SKILLS:
+        s = inbox(path)
+        assert f"`{LIVE}`" in s and STANDBY in s, path.name
+        assert s.index(LIVE) < s.index(STANDBY), path.name
 
 
 def test_a_chat_reply_stops_only_the_sessions_own_serve():

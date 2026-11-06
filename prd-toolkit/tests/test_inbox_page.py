@@ -361,3 +361,20 @@ const deploy = latestAnswer(answers, at('deploy-step:r1:3'));
 console.log(JSON.stringify({ deploy: deploy && deploy.reply, signoff: latestAnswer(answers, at('signoff:T-1')) }));
 """)
     assert got == {"deploy": "deployed (form)", "signoff": None}
+
+
+NO_WAIT = "No session is waiting on this gate. Answering it still records the answer."
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_card_nobody_waits_on_says_so_in_one_muted_line(tmp_path):
+    got = run_page(tmp_path, r"""
+const g = (waiting) => ({ id: 'error-class:E-003', kind: 'error-class', title: 't', question: 'q', evidence: [], waiting });
+const lines = (card) => card.all((n) => n.className.split(' ').includes('gnowait')).map((n) => [n.className, n.textContent]);
+const entry = (w, gone) => ({ key: `/w\n${w}`, g: g(w), wt: { path: '/w', branch: 'main' }, gone, answer: null });
+console.log(JSON.stringify({ no: lines(gateCard(entry(false, false), new Map())), yes: lines(gateCard(entry(true, false), new Map())),
+  gone: lines(gateCard(entry(false, true), new Map())) }));
+""")
+    assert got["no"] == [["muted gnowait", NO_WAIT]]
+    assert got["yes"] == [] and got["gone"] == []
+    assert NO_WAIT in page()

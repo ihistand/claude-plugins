@@ -500,11 +500,16 @@ def answering_dir(repo_root: Path) -> Path:
     return common_dir(repo_root) / ANSWERING_DIR
 
 
+def gate_key(worktree: Path, gate_id: str) -> str:
+    """The sha1 of the resolved worktree, NUL, gate id; a deploy step is repo-wide, as its log match is, so its key is the
+    gate id alone."""
+    where = "" if gate_id.startswith("deploy-step:") else str(Path(worktree).resolve())
+    return hashlib.sha1(f"{where}\0{gate_id}".encode("utf-8")).hexdigest()
+
+
 def answering_path(repo_root: Path, gate_id: str) -> Path:
-    """<git common dir>/prd-gates-answering/<sha1 of the resolved worktree, NUL, gate id>; a deploy step is repo-wide, as its
-    log match is, so its key is the gate id alone."""
-    where = "" if gate_id.startswith("deploy-step:") else str(Path(repo_root).resolve())
-    return answering_dir(repo_root) / hashlib.sha1(f"{where}\0{gate_id}".encode("utf-8")).hexdigest()
+    """<git common dir>/prd-gates-answering/<gate_key(repo_root, gate_id)>."""
+    return answering_dir(repo_root) / gate_key(repo_root, gate_id)
 
 
 def _mark_answering(repo_root: Path, gate_id: str) -> Path:
@@ -537,6 +542,47 @@ def _answering(repo_root: Path, gate_id: str) -> bool:
     return False
 
 
+# --- the waiting marker: each running `wait` holds one, so the inbox can tell a gate some session waits on from one
+# nobody waits on (a session that ended, died or moved its work) ---
+
+WAITING_DIR = "prd-gates-waiting"
+
+
+def waiting_dir(repo_root: Path) -> Path:
+    return common_dir(repo_root) / WAITING_DIR
+
+
+def _mark_waiting(worktree: Path, gate_id: str) -> Path:
+    """<git common dir>/prd-gates-waiting/<gate key>-<pid>, holding the pid; one file per waiting process."""
+    path = waiting_dir(worktree) / f"{gate_key(worktree, gate_id)}-{os.getpid()}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, f"{os.getpid()}\n")  # never read half-written: a temp file (".tmp-…") then a rename
+    return path
+
+
+def waiting(repo_root: Path, worktree: Path, gate_id: str) -> bool:
+    """True when a waiting marker for (worktree, gate) names a live process. A marker whose pid is dead is removed; there
+    is no age limit, since a `wait` may run for hours."""
+    found = False
+    for path in waiting_dir(repo_root).glob(f"{gate_key(worktree, gate_id)}-*"):
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            pid = int(raw.strip())
+        except ValueError:
+            pid = 0
+        if pid > 0 and _alive(pid):
+            found = True
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    return found
+
+
 # --- wait: block until the owner answers one gate (in the form or the chat) ---
 
 GRACE = 1.0  # a gate leaves the list a moment before its log line is written
@@ -549,13 +595,21 @@ def _outcome(worktree: Path, gate_id: str, line: dict | None) -> dict:
 
 
 def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout: float | None = None, poll: float = 1.0) -> tuple[int, dict]:
-    """0 with the first log line for (worktree, gate), or for a deploy-step gate from any worktree, at or after the start; 1 when the gate is not pending (outcome with choice None); 3 on timeout."""
+    """0 with the first log line for (worktree, gate), or for a deploy-step gate from any worktree, at or after the start; 1 when the gate is not pending (outcome with choice None); 3 on timeout.
+    Holds a waiting marker from its start until it returns."""
     started, begun = _now(), time.monotonic()
     prd_dir = Path(prd_dir)
     here = model.repo_root(prd_dir).resolve()
     wt = Path(worktree).resolve() if worktree else here
     root = wt / prd_dir.resolve().relative_to(here)
+    marker = _mark_waiting(wt, gate_id)
+    try:
+        return _wait(root, wt, gate_id, started, begun, timeout, poll)
+    finally:
+        marker.unlink(missing_ok=True)
 
+
+def _wait(root: Path, wt: Path, gate_id: str, started: str, begun: float, timeout: float | None, poll: float) -> tuple[int, dict]:
     def found():
         for line in read_log(wt):
             # a deploy step is repo-wide (its run log is in the git common dir): its answer counts from any worktree
@@ -676,9 +730,9 @@ PING_TIMEOUT = 2.0
 class InboxLive(Refused):
     """An inbox for this PRD is already serving."""
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, record: dict | None = None):
         super().__init__(f"an inbox is already serving at {url}")
-        self.url = url
+        self.url, self.record = url, record  # the lock file's record: a standby takes over at its port with its token
 
 
 def inbox_path(repo_root: Path, slug: str) -> Path:
@@ -754,7 +808,7 @@ def _claim(path: Path, record: dict, repo_root: Path, slug: str) -> None:
             except FileExistsError:
                 live = live_inbox(repo_root, slug)
                 if live:
-                    raise InboxLive(inbox_url(live)) from None
+                    raise InboxLive(inbox_url(live), live) from None
         raise Refused(f"cannot write {path.name}")
     finally:
         Path(tmp).unlink(missing_ok=True)
@@ -850,6 +904,7 @@ def card(gate: Gate, prd: Prd, root: Path, rel: str) -> dict:
         out.update({"tid": key, "owner": data.get("signoff"), "input": _plain(data.get("input")), "expect": _plain(data.get("expect"))})
     elif gate.kind == "adoption":
         out["area"] = key
+    out["waiting"] = waiting(root, root, gate.id)
     return out
 
 
@@ -990,8 +1045,9 @@ def _inbox_handler(state: _Inbox) -> type[formserver.Handler]:
     return Handler
 
 
-def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120):
-    """The inbox server for the PRD at `prd_dir`, bound to 127.0.0.1, and its token. Writes the lock file (mode 0600),
+def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120, token: str | None = None):
+    """The inbox server for the PRD at `prd_dir`, bound to 127.0.0.1, and its token (`token` when given, so a standby
+    takes over at the same URL; else a new one). Writes the lock file (mode 0600),
     which is deleted when `formserver.run` returns or the server is closed. Raises InboxLive, OSError (port in use),
     formserver.PageError, model.NotAPrd."""
     class InboxServer(formserver.Server):
@@ -1018,9 +1074,9 @@ def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120):
     slug = prd.frontmatter.get("prd", prd.root.name)
     live = live_inbox(root, slug)
     if live:
-        raise InboxLive(inbox_url(live))
+        raise InboxLive(inbox_url(live), live)
     state = _Inbox(root, rel, slug, _inbox_page(), _now())
-    token = secrets.token_urlsafe(24)
+    token = token or secrets.token_urlsafe(24)
     server = InboxServer(("127.0.0.1", port), _inbox_handler(state), token, idle_minutes, state)
     path = inbox_path(root, slug)
     try:

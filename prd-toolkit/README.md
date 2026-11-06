@@ -633,7 +633,7 @@ uv run --script .prd-toolkit/prd_deploy.py record docs/prd/<slug> --env <env> --
 
 | Command | Does | Exit codes |
 |---|---|---|
-| `prd_gates.py serve` | Prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open` (the page opens on `--gate` when given), and serves until Ctrl-C, SIGTERM or `--idle-minutes` (default 120) without a request | `serve` exits 3 when stopped (Ctrl-C, SIGTERM or the idle time), 1 when refused (a `--gate` that is not pending, or `prd_gates: an inbox is already serving at <url>`), 2 when it cannot start (usage, a port in use, `prd_gates: cannot start the inbox: …`); it has no Done, so it never exits 0 |
+| `prd_gates.py serve` | Prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open` (the page opens on `--gate` when given), and serves until Ctrl-C, SIGTERM or `--idle-minutes` (default 120) without a request. With `--gate`, when an inbox for the PRD is already live, it prints `prd_gates: an inbox is already serving at <url>` and stands by: if that inbox stops before the gate is answered, it takes over at the same URL (the same port and token; it prints `url=<url>#gate=<id>` and opens no browser) and serves from then on as any `serve` does | `serve` exits 3 when stopped (Ctrl-C, SIGTERM or the idle time), 1 when refused (a `--gate` that is not pending, or `prd_gates: an inbox is already serving at <url>` without `--gate`) and when a standby's gate is answered or gone (`prd_gates: <gate id> is not pending`, 5 seconds after it left the list), 2 when it cannot start (usage, a port in use, `prd_gates: cannot start the inbox: …`) or cannot take over (`prd_gates: cannot take over the inbox at port <N>: …`); a standby stopped by Ctrl-C or SIGTERM exits 3 too; it has no Done, so it never exits 0 |
 | `prd_gates.py wait` | Blocks until the gate is answered by any client and prints `{"interface": 1, "kind": "gates.outcome", "gate", "worktree", "choice", "reply", "by", "at"}` | `wait` exits 0 when answered, 1 when the gate is not pending, 3 on timeout, 2 on usage (at exit 0 `choice` is the answer's, `confirm` for a deploy step; a gate that is not pending prints `choice` null: it was answered before `wait` began with nothing logged, or the PRD changed under it) |
 | `prd_build_check.py --stale` | Prints `stale <T-id> <test path>: its test case changed after the test (last changed in <sha>)` for each dispatched T-id whose test case changed after its test's last commit; a suite prompt then carries one `Rewrite: <T-id>` line for each | `--stale` exits 0 when nothing is stale, 1 when any is, 2 on a usage or tool error (which stops the dispatch) |
 | `prd_deploy.py record` | Records a deploy the owner did by hand: a run log marked `by: hand` and the environment's Deployed row, left uncommitted; it runs nothing and moves no status | `record` exits 0, 1 when refused (an environment not in both Environments tables, a commit not in the repository, an empty reply), 2 on usage; it prints `run=<id>` on success |
@@ -646,11 +646,14 @@ seconds. A reply from a button ends with ` (form)` and the answer log's `by` is 
 These files live in the git common directory, so every worktree of the repository shares them:
 
 - `prd-inbox-<slug>.json` (mode 0600): the lock file of the live inbox, with its port, token and pid. A second
-  `serve` for the PRD finds it live and refuses; a dead one is deleted.
+  `serve` for the PRD finds it live and refuses, or with `--gate` stands by behind it; a dead one is deleted.
 - `prd-gates-log.jsonl`: the answer log, one line per accepted answer (an adoption's per-item answers
   excepted; only its `done` is logged). `wait` reads it, never the page.
 - `prd-gates-answering/`: one marker for each answer in progress. `wait` waits while a live marker
   exists. A marker older than 15 minutes, or whose process is gone (a dead pid), is ignored and removed.
+- `prd-gates-waiting/`: one marker for each running `wait`, `<key>-<pid>`, keyed as the answering marker
+  is. A card whose gate no live `wait` holds says `No session is waiting on this gate. Answering it still
+  records the answer.` A marker whose process is gone is removed when read; a marker has no age limit.
 
 The skills route each decision through the inbox and fall back to the chat when `serve` cannot start; the
 page is never the only route.
@@ -747,6 +750,7 @@ the user cannot state.
 
 - **0.8.2:** A local decision inbox, and the fixes from the first real adoption. The sections named below are those of the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
   - `prd_gates.py serve` is the inbox (see Decision inbox): one page for every pending gate across the worktrees, with the approval's diff. `prd_gates.py wait` blocks until a gate is answered by any client and prints `gates.outcome`; both read and write `prd-gates-log.jsonl` in the git common directory. `gates.answer` gains `by` (`form` or `cli`), a reply from a button ends with ` (form)`, and the vendored page is `.prd-toolkit/gates/inbox.html`. The skills route each decision through the inbox and fall back to the chat.
+  - The shared inbox outlives its starter (section 18): a `serve --gate` that finds a live inbox stands by and, when that inbox stops before its gate is answered, takes it over at the same URL; each card says when no session's `wait` holds its gate.
   - It builds on three changes to the 0.8.1 interface, made before 0.8.1 shipped (`interface` stays 1): the approval gate has two choices, `approve` and `changes`; the adoption gate stays pending until `done`; and `prd_confirm.py open` writes a new answers file.
   - The 0.8.0 retarget refusal names no release number now: `retargeting an area is a conversion, which a later prd-toolkit release brings`.
   - The confirm form (section 13): the page asks `/ping` every 60 seconds, so the idle time counts from the last page closing and not from the last answer; the question choices read `Keep it as it is`, `Change it…` (words required) and `Answer in my own words`; a confirmed bug counts as answered after the answers file is deleted.

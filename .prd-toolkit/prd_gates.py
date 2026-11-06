@@ -10,6 +10,7 @@ import errno
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,7 +62,9 @@ def _build() -> argparse.ArgumentParser:
     _flags(wt, leaf=True)
     sv = sub.add_parser("serve", help="serve the decision inbox: every pending gate of the PRD across the worktrees",
                         description="Prints url=... first, then serves until Ctrl-C, SIGTERM or --idle-minutes without a request (exit 3). "
-                                    "Exit 1 when an inbox for the PRD is already serving or --gate is not pending.")
+                                    "Exit 1 when --gate is not pending, or when an inbox for the PRD is already serving. With --gate it stands "
+                                    "by behind that inbox instead and, if it stops before the gate is answered, takes over at the same URL; "
+                                    "a standby exits 1 once its gate is no longer pending and 2 when it cannot take over the port.")
     sv.add_argument("prd_dir")
     sv.add_argument("--gate", help="open the page on this gate; refused when it is not pending")
     sv.add_argument("--port", type=int, help="bind this port (default: a free one)")
@@ -89,6 +92,15 @@ def _stop(signum, frame) -> None:
     raise KeyboardInterrupt  # SIGTERM ends the inbox as Ctrl-C does: exit 3
 
 
+# a `serve --gate` standing by behind a live inbox (spec section 18): it looks once every STANDBY_POLL seconds; once its gate
+# is no longer pending it waits STANDBY_LINGER seconds (longer than `wait`'s GRACE, so `wait` reports first) and exits 1; when
+# the bind of a takeover fails, a live inbox appearing within TAKEOVER_SETTLE seconds (most often another standby that bound
+# the port first and is claiming the lock) is stood behind, and anything else is exit 2
+STANDBY_POLL = 1.0
+STANDBY_LINGER = 5.0
+TAKEOVER_SETTLE = 3.0
+
+
 def _serve(prd: model.Prd, args) -> int:
     if args.json:
         print("prd_gates: serve prints no JSON document", file=sys.stderr)
@@ -96,11 +108,23 @@ def _serve(prd: model.Prd, args) -> int:
     if args.gate and not any(g.id == args.gate for g in gates.list_gates(prd, model.repo_root(prd.root))):
         print(f"prd_gates: {args.gate} is not pending", file=sys.stderr)
         return 1
+    main_thread = threading.current_thread() is threading.main_thread()  # a signal handler needs the main thread
+    previous = signal.signal(signal.SIGTERM, _stop) if main_thread else None
+    try:
+        return _start(prd, args)
+    except KeyboardInterrupt:  # Ctrl-C or SIGTERM before the server ran, or while standing by
+        return 3
+    finally:
+        if main_thread:
+            signal.signal(signal.SIGTERM, previous)
+
+
+def _start(prd: model.Prd, args) -> int:
     try:
         server, token = gates.make_inbox(prd.root, port=args.port or 0, idle_minutes=args.idle_minutes)
     except gates.InboxLive as e:
-        print(f"prd_gates: an inbox is already serving at {e.url}", file=sys.stderr)
-        return 1
+        print(f"prd_gates: an inbox is already serving at {e.url}", file=sys.stderr, flush=True)
+        return _standby(prd, args, e.record) if args.gate else 1
     except gates.Refused as e:
         print(f"prd_gates: {e}", file=sys.stderr)
         return 1
@@ -112,24 +136,79 @@ def _serve(prd: model.Prd, args) -> int:
         else:
             print(f"prd_gates: cannot bind port {args.port}: {e.strerror or e}", file=sys.stderr)
         return 2
-    main_thread = threading.current_thread() is threading.main_thread()  # a signal handler needs the main thread
-    previous = signal.signal(signal.SIGTERM, _stop) if main_thread else None
+    return _run_inbox(server, token, args, browser=not args.no_open)
+
+
+def _run_inbox(server, token: str, args, browser: bool) -> int:
     try:
         url = f"http://127.0.0.1:{server.server_address[1]}/?token={token}" + (f"#gate={args.gate}" if args.gate else "")
         print(f"url={url}", flush=True)
-        if not args.no_open:
+        if browser:
             try:
                 import webbrowser
                 webbrowser.open(url)
             except Exception:
                 pass
         return formserver.run(server)
-    except KeyboardInterrupt:  # Ctrl-C or SIGTERM before the server ran
-        return 3
     finally:
         server.server_close()
-        if main_thread:
-            signal.signal(signal.SIGTERM, previous)
+
+
+def _pending(prd: model.Prd, repo_root: Path, gate_id: str) -> bool:
+    """The gate is in the listing the inbox shows, or an `answer` for it is still at work. A PRD that cannot be read
+    this moment (a write in progress) counts as pending: the next look decides."""
+    try:
+        listed = any(g.id == gate_id for g in gates.list_gates(model.load(prd.root), repo_root, worktrees=True))
+    except Exception:  # noqa: BLE001
+        return True
+    return listed or gates._answering(repo_root, gate_id)
+
+
+def _standby(prd: model.Prd, args, record: dict | None) -> int:
+    """Stand by behind the live inbox `record` names; take it over at its port, with its token, when it stops."""
+    repo_root = model.repo_root(prd.root)
+    slug = prd.frontmatter.get("prd", prd.root.name)
+    while True:
+        time.sleep(STANDBY_POLL)
+        if not _pending(prd, repo_root, args.gate):
+            time.sleep(STANDBY_LINGER)
+            print(f"prd_gates: {args.gate} is not pending", file=sys.stderr, flush=True)
+            return 1
+        live = gates.live_inbox(repo_root, slug)
+        if live or record is None:
+            record = live or record
+            continue
+        try:
+            server, token = gates.make_inbox(prd.root, port=record["port"], idle_minutes=args.idle_minutes, token=record["token"])
+        except gates.InboxLive as e:  # another standby won the lock: stand behind that one
+            record = e.record or record
+            continue
+        except gates.Refused as e:
+            print(f"prd_gates: {e}", file=sys.stderr)
+            return 1
+        except formserver.PageError as e:
+            print(f"prd_gates: cannot start the inbox: {e}", file=sys.stderr)
+            return 2
+        except OSError as e:
+            other = _settled(repo_root, slug)
+            if other:
+                record = other
+                continue
+            print(f"prd_gates: cannot take over the inbox at port {record['port']}: {e.strerror or e}", file=sys.stderr, flush=True)
+            return 2
+        return _run_inbox(server, token, args, browser=False)
+
+
+def _settled(repo_root: Path, slug: str) -> dict | None:
+    """A live inbox within TAKEOVER_SETTLE seconds, or None: most often another standby that bound the port first."""
+    end = time.monotonic() + TAKEOVER_SETTLE
+    while True:
+        live = gates.live_inbox(repo_root, slug)
+        if live:
+            return live
+        if time.monotonic() >= end:
+            return None
+        time.sleep(0.1)
 
 
 COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer), "wait": ("gates.outcome", _cmd_wait)}

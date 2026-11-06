@@ -512,3 +512,33 @@ def test_a_deploy_step_tool_error_stays_500(inbox, monkeypatch):
     monkeypatch.setattr(gates, "_run", lambda *a: {"stdout": [], "exit": 2, "stderr": ["prd_deploy: internal error: OSError: disk"]})
     status, out = inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")
     assert status == 500 and out["error"] == "prd_deploy: internal error: OSError: disk"
+
+
+# --- proof fix wave: every card says whether a session is waiting on its gate (spec section 18) ---
+
+def test_every_card_carries_waiting_from_the_wait_markers(inbox):
+    import hashlib
+    import os
+
+    doc = inbox.gates()
+    cards = [g for group in doc["worktrees"] for g in group["gates"]]
+    assert cards and all(g["waiting"] is False for g in cards)
+    key = hashlib.sha1(f"{inbox.repo}\0error-class:E-003".encode()).hexdigest()
+    marker = gates.common_dir(inbox.repo) / "prd-gates-waiting" / f"{key}-{os.getpid()}"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    assert inbox.gate("error-class:E-003")["waiting"] is True
+    assert inbox.gate("error-class:E-003", inbox.second)["waiting"] is False  # the same id in another worktree
+    assert inbox.gate("signoff:T-001.4")["waiting"] is False
+
+
+def test_the_list_command_and_its_document_carry_no_waiting(inbox):
+    import contextlib
+    import io
+
+    from prd_gates import main as gates_main
+
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert gates_main(["list", str(inbox.repo / PRD), "--json"]) == 0
+    assert all("waiting" not in g for g in json.loads(out.getvalue())["gates"])

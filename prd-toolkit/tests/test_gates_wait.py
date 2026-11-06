@@ -277,3 +277,73 @@ def test_a_gate_gone_at_the_start_with_a_live_marker_waits_for_the_log_line(repo
     threading.Thread(target=owner_finishes).start()
     code, out = gates.wait_gate(repo / PRD, gate, poll=0.05, timeout=20)
     assert code == 0 and out["choice"] == "confirm" and out["reply"] == "late line"
+
+
+# --- proof fix wave: `wait` marks that a session is waiting on its gate (spec section 18) ---
+
+def waiting_marker(repo, gate, pid):
+    import hashlib
+    key = hashlib.sha1(f"{repo.resolve()}\0{gate}".encode()).hexdigest()
+    return gates.common_dir(repo) / "prd-gates-waiting" / f"{key}-{pid}"
+
+
+def dead_pid():
+    import subprocess, sys
+    return int(subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True).stdout)
+
+
+def test_waiting_is_true_for_a_live_pid_marker_and_keyed_as_answering_is(repo):
+    import os
+    gate = "error-class:E-003"
+    assert gates.waiting(repo, repo, gate) is False  # no folder yet
+    path = waiting_marker(repo, gate, os.getpid())
+    path.parent.mkdir(parents=True)
+    path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    assert gates.waiting(repo, repo, gate) is True and path.exists()
+    assert gates.waiting(repo, repo, "error-class:E-004") is False
+    assert path.name.split("-")[0] == gates.answering_path(repo, gate).name  # the same sha1 key
+    # a deploy step is repo-wide: keyed on the gate id alone, as its answering marker is
+    import hashlib
+    key = hashlib.sha1("\0deploy-step:r:3".encode()).hexdigest()
+    step = gates.common_dir(repo) / "prd-gates-waiting" / f"{key}-{os.getpid()}"
+    step.write_text(f"{os.getpid()}\n", encoding="utf-8")
+    assert gates.waiting(repo, Path("/elsewhere"), "deploy-step:r:3") is True
+
+
+def test_waiting_is_false_for_a_dead_pid_and_its_marker_is_unlinked(repo):
+    gate = "error-class:E-003"
+    dead = dead_pid()
+    path = waiting_marker(repo, gate, dead)
+    path.parent.mkdir(parents=True)
+    path.write_text(f"{dead}\n", encoding="utf-8")
+    assert gates.waiting(repo, repo, gate) is False and not path.exists()
+
+
+def test_wait_holds_its_marker_while_it_runs_and_removes_it_after_an_answer(repo):
+    import os
+    add_errors(repo, entry(3, "code bug"))
+    gate = "error-class:E-003"
+    t, box = waiting(repo, gate, timeout=20)
+    path = waiting_marker(repo, gate, os.getpid())
+    assert path.read_text(encoding="utf-8").strip() == str(os.getpid())
+    assert gates.waiting(repo, repo, gate) is True
+    answer(repo, gate, "yes")
+    t.join(25)
+    assert box["r"][0] == 0 and not path.exists() and gates.waiting(repo, repo, gate) is False
+
+
+def test_wait_removes_its_marker_on_exit_1_and_exit_3(repo):
+    import os
+    add_errors(repo, entry(3, "code bug"))
+    gate = "error-class:E-003"
+    path = waiting_marker(repo, gate, os.getpid())
+    t, box = waiting(repo, gate, timeout=1.5)
+    assert path.exists()
+    t.join(10)
+    assert box["r"][0] == 3 and not path.exists()
+    t, box = waiting(repo, gate, timeout=20)
+    assert path.exists()
+    errors = repo / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8").replace("E-003", "E-099"), encoding="utf-8")
+    t.join(25)
+    assert box["r"][0] == 1 and not path.exists()

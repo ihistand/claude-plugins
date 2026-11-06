@@ -202,3 +202,174 @@ def test_ping_answers_with_the_token_only(made):
         server.shutdown()
         t.join(10)
         server.server_close()
+
+
+# --- proof fix wave: a `serve --gate` that finds a live inbox stands by and takes it over at the same URL ---
+
+GATE = "error-class:E-003"
+# The test-only hook: `prd_gates.py serve` run through this wrapper with STANDBY_POLL, STANDBY_LINGER and
+# TAKEOVER_SETTLE shortened (argv[1] the scripts folder, argv[2] "poll,linger,settle"), so the suite stays fast.
+HOOK = ("import sys; sys.path.insert(0, sys.argv.pop(1)); import prd_gates; "
+        "prd_gates.STANDBY_POLL, prd_gates.STANDBY_LINGER, prd_gates.TAKEOVER_SETTLE = map(float, sys.argv.pop(1).split(',')); "
+        "sys.exit(prd_gates.main(sys.argv[1:]))")
+
+
+class Standby:
+    """`prd_gates.py serve --no-open --gate <id>` through HOOK; its stdout and stderr lines are collected as they come."""
+
+    def __init__(self, prd_dir, gate=GATE, timing="0.2,1.5,1.0"):
+        self.proc = subprocess.Popen([sys.executable, "-c", HOOK, str(SCRIPTS), timing, "serve", str(prd_dir), "--no-open", "--gate", gate],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        self.out, self.err = [], []
+        self.readers = [threading.Thread(target=self._read, args=(s, box), daemon=True)
+                        for s, box in ((self.proc.stdout, self.out), (self.proc.stderr, self.err))]
+        for r in self.readers:
+            r.start()
+
+    @staticmethod
+    def _read(stream, box):
+        for line in stream:
+            box.append(line.rstrip("\n"))
+
+    def until(self, test, timeout=20.0):
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            if test():
+                return True
+            time.sleep(0.05)
+        return False
+
+    def stop(self):
+        if self.proc.poll() is None:
+            self.proc.send_signal(signal.SIGTERM)
+        code = self.proc.wait(30)
+        for r in self.readers:
+            r.join(5)
+        return code
+
+
+@pytest.fixture
+def standby():
+    started = []
+
+    def start(prd_dir, *a, **kw):
+        s = Standby(prd_dir, *a, **kw)
+        started.append(s)
+        return s
+
+    yield start
+    for s in started:
+        s.stop()
+
+
+def ping(port, token):
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping?token={token}", timeout=5) as r:
+            return r.status
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def lock(repo):
+    try:
+        return json.loads(gates.inbox_path(repo, "orders").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def standing_by(s, url):
+    assert s.until(lambda: s.err), "no line on stderr"
+    assert s.err[0] == f"prd_gates: an inbox is already serving at {url}"
+    time.sleep(0.6)  # a few standby ticks
+    assert s.proc.poll() is None and s.out == []
+
+
+def test_make_inbox_uses_a_given_token(made):
+    server, token = gates.make_inbox(made["repo"] / PRD, token="given-token")
+    try:
+        assert token == "given-token" and server.token == "given-token"
+        assert json.loads(gates.inbox_path(made["repo"], "orders").read_text(encoding="utf-8"))["token"] == "given-token"
+    finally:
+        server.server_close()
+
+
+def test_standby_takes_over_at_the_same_url_when_the_inbox_stops(made, serving, standby):
+    repo = made["repo"]
+    a = serving(repo / PRD)
+    rec = lock(repo)
+    b = standby(repo / PRD)
+    standing_by(b, a.url)
+    assert a.stop() == 3
+    assert b.until(lambda: b.out), (b.err, b.proc.poll())
+    assert b.out == [f"url={a.url}#gate={GATE}"]
+    assert ping(rec["port"], rec["token"]) == 200
+    assert lock(repo)["pid"] == b.proc.pid and lock(repo)["token"] == rec["token"] and lock(repo)["port"] == rec["port"]
+    assert b.proc.poll() is None
+    assert b.stop() == 3 and lock(repo) is None
+
+
+def test_two_standbys_one_takes_over_the_other_stands_by(made, serving, standby):
+    repo = made["repo"]
+    a = serving(repo / PRD)
+    rec = lock(repo)
+    b, c = standby(repo / PRD), standby(repo / PRD)
+    standing_by(b, a.url)
+    standing_by(c, a.url)
+    assert a.stop() == 3
+    assert b.until(lambda: (lock(repo) or {}).get("pid") in (b.proc.pid, c.proc.pid) and ping(rec["port"], rec["token"]) == 200)
+    time.sleep(2.5)  # past the loser's settle time: it must still be standing by
+    holder = lock(repo)["pid"]
+    won, lost = (b, c) if holder == b.proc.pid else (c, b)
+    assert won.out == [f"url={a.url}#gate={GATE}"] and lost.out == []
+    assert won.proc.poll() is None and lost.proc.poll() is None
+    assert len(lost.err) == 1  # the already-serving line only
+
+
+def test_standby_exits_1_after_the_linger_once_its_gate_is_answered(made, serving, standby):
+    from prdlint import model
+
+    repo = made["repo"]
+    a = serving(repo / PRD)
+    b = standby(repo / PRD)
+    standing_by(b, a.url)
+    done = gates.answer(model.load(repo / PRD), repo, GATE, "yes", by="cli")
+    assert done["result"]["exit"] == 0
+    answered = time.monotonic()
+    assert b.proc.wait(20) == 1
+    assert time.monotonic() - answered >= 1.5  # the linger: `wait` reports first
+    assert b.err == [f"prd_gates: an inbox is already serving at {a.url}", f"prd_gates: {GATE} is not pending"]
+    assert b.out == [] and a.proc.poll() is None
+
+
+def test_standby_exits_2_when_the_port_is_held_after_the_inbox_stops(made, standby):
+    # The inbox runs in this process, then stops serving: its lock goes, but its socket stays bound, so the port is held
+    # by a socket that is no inbox (nothing answers on it and no lock names it) when the standby tries to take over.
+    repo = made["repo"]
+    server, token = gates.make_inbox(repo / PRD)
+    port = server.server_address[1]
+    t = threading.Thread(target=formserver.run, args=(server,))
+    t.start()
+    try:
+        b = standby(repo / PRD)
+        standing_by(b, f"http://127.0.0.1:{port}/?token={token}")
+        server.shutdown()
+        t.join(10)
+        assert lock(repo) is None
+        assert b.proc.wait(20) == 2
+        assert b.until(lambda: len(b.err) == 2)
+        assert b.err[1].startswith(f"prd_gates: cannot take over the inbox at port {port}: ") and len(b.err[1]) > len(f"... port {port}: ")
+        assert b.out == []
+    finally:
+        server.shutdown()  # returns at once when the server already stopped
+        t.join(10)
+        server.server_close()
+
+
+def test_sigterm_while_standing_by_exits_3(made, serving, standby):
+    a = serving(made["repo"] / PRD)
+    b = standby(made["repo"] / PRD)
+    standing_by(b, a.url)
+    assert b.stop() == 3 and b.out == []
+    assert lock(made["repo"])["pid"] == a.proc.pid  # the inbox it stood behind is untouched
