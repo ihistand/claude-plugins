@@ -523,6 +523,7 @@ refer to (levels, environments, fixtures).
   `Test roots:` that lists no backticked directory and holds no marker is a finding, because the
   guard would then block every write); `[NEEDS CLARIFICATION]` markers block `In review` until
   every slot is answered.
+- The Leaks slot of the Harness also says how a failure's traceback is kept free of test values. Say how a failure report avoids printing the values a test passes: for pytest, the harness commands carry `--tb=short`, or each helper that takes a value sets `__tracebackhide__ = True`; another harness names its own equivalent.
 - Leak checks define `expect.leaks: none`: one row per sink a test scans (application logs, error
   bodies, and any other output such as metrics labels or events), where the test reads it, and
   which classified columns from `contracts/data-classification.yaml` must not appear in it.

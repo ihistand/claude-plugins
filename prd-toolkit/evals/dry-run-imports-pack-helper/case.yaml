@@ -1,0 +1,5 @@
+# Regression guard, not RED-proven: the unchanged text already passes most runs (see evals/BASELINE.md, Task 13).
+schema_version: "1.1"
+name: dry-run-imports-pack-helper
+context:
+  scaffold_script: scaffold.sh

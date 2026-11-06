@@ -42,11 +42,11 @@ you something you need (a URL, a payload field, an error code, a fixture's conte
 command, an expected value), do not guess and do not look elsewhere: record the question and
 carry on with the next element.
 
-Test helpers that <PRD_DIR>/testing.md names (fixtures, clients, loaders, page objects) may not
+Test helpers that <PRD_DIR>/testing.md names, other than one a pack ships, (fixtures, clients, loaders, page objects) may not
 exist yet. If they do not exist yet, write them yourself, in <SCRATCH_DIR>/, to match what
 testing.md says about them. A detail testing.md leaves open about a helper's own internals (a
 method signature, a return value, a default such as following redirects) is yours to choose:
-list it under HARNESS CHOICES, not QUESTIONS. Anything else the PRD does not tell you is a
+list it under HARNESS CHOICES, not QUESTIONS. A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says. Anything else the PRD does not tell you is a
 question: behaviour, payloads, status codes, error codes, fixture contents, environments,
 identities, or a convention testing.md should state.
 

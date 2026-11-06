@@ -95,12 +95,12 @@ names, and the contracts, fixtures, environments and identities it references. W
 does not tell you something you need, do not guess and do not look elsewhere: record the
 question and carry on with the next element.
 
-Test helpers that testing.md names (fixtures, clients, loaders, page objects) may not exist yet.
+Test helpers that testing.md names, other than one a pack ships, (fixtures, clients, loaders, page objects) may not exist yet.
 If they do not exist yet, write them yourself, to match what testing.md says about them: in a
 dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a
 suite, in the test roots. A detail testing.md leaves open about a
 helper's own internals (a method signature, a return value, a default such as following
-redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. A helper a pack ships already exists, so its parameters and the shape of its result are not yours to choose. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. Record the question, call the helper as testing.md names it, and do not write a stand-in for it that decides its shapes. Anything else the
+redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says. A helper a pack ships already exists, so its parameters and the shape of its result are not yours to choose. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. Record the question, call the helper as testing.md names it, and do not write a stand-in for it that decides its shapes. Anything else the
 PRD does not tell you is a question: behaviour, payloads, status codes, error codes, fixture
 contents, environments, identities, or a convention testing.md should state.
 

@@ -20,6 +20,31 @@ claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plug
 | `adopting-fix-restates-asks` (notes area `extracted`, a finished `.prd-confirm-notes.json`: FR-001 and FR-002 `confirm`, E-001 `intended`, Q-01 `fix` with "Search should match the case of the term exactly, as it does now.") RED | 0.44 | 0.56 | -0.11 | Unchanged skill text. One with run applied the `fix` as a correction (FR-002 `approved`, Q-01 removed: 0.00); the other two left Q-01 but never asked the owner about it (0.67 each). Without the plugin, two of three decided it themselves and removed Q-01 (0.33) and one asked (1.00). |
 | `adopting-fix-restates-asks` GREEN | 1.00 | 0.33 | +0.67 | The new rule: all three with runs ask the owner in the chat, naming Q-01, whether they meant keep it; FR-002 is not made `approved` and the §13 bullet stays. Without the plugin all three remove Q-01 and decide it themselves. |
 
+### Task 13: `dry-run-imports-pack-helper` and `authoring-harness-only-round` (spec section 17 fixes 1 and 3)
+
+**Regression guard, not RED-proven** (both cases; numbers in the table below). The RED evidence for spec section 17 fixes 1 to 3 is the 7 pins in `tests/test_dry_run_helpers.py`, plus the observed real failure: in a private adoption's dry run, a tester following the "always write them in your dry-run directory" text wrote copies of the pack's helpers (fix 1).
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted), `--runs 3`, model `sonnet`, Claude Code 2.1.318. RED on a
+`git archive HEAD` copy plus the new case directories; GREEN on the worktree. **Neither case separates RED from GREEN.**
+Both are regression guards, not RED-proven; the pins in `tests/test_dry_run_helpers.py` are the RED evidence (7 failed
+before the text, 7 passed after).
+
+| Case | RED with | GREEN with | Notes |
+|---|---|---|---|
+| `dry-run-imports-pack-helper` (a vendored made-up pack `ledger` ships `stored_notes`; its `harness` states module, parameter, result and "never copied"; testing.md's Assertions slot only names the helper) | 0.78 on the scaffold run that caught a copy; 3 of 3 correct (1.00) on the final-grader run | 1.00 (3 of 3) | The unchanged text copied the helper in 1 of 9 with runs over three scaffold/grader variants (it wrote `stored_notes` in `conftest.py`); the other eight imported from the pack as `pack.yaml` says. |
+| `authoring-harness-only-round` (notes PRD `In review`, eight cases, a failed dry run of five with two Harness questions answered in the prompt) | 0.96 (two runs 1.00, one 0.875: status ended `Draft` after a new question) | 0.92 (two runs 1.00, one 0.75: a marker left in features, status `Draft`) | The unchanged skill already kept `In review` and wrote the answers into the Harness in most runs. GREEN is not better than RED. |
+
+- **Graders for `dry-run-imports-pack-helper`:** `tester-dispatched`, `no-helper-written` (no HARNESS CHOICES line says the tester
+  wrote or defined `stored_notes`; heading-anchored, numbered headings allowed, only explicit negations such as
+  "not copied" excuse a line), `imports-from-the-pack`. `tool_used` on `Write` was tried first and is vacuous: a
+  subagent's tool calls are not counted, so the graders read the report. Checked on eight synthetic reports (a defining
+  line, an import line, a numbered heading, a negated line, a line that wrote a copy and said the PRD "does not say",
+  an intro sentence, a mention after the section): all as intended. The first version missed a verb before the name
+  ("defines `stored_notes()`") and passed a copy; fixed before the final runs.
+- **Graders for `authoring-harness-only-round`:** the status file, the two answers in testing.md, no marker in
+  testing.md, features or test cases, a tester dispatched, and `fresh-sample` (no dispatch carries all five of the failed
+  run's T-ids; `min: 0` is needed beside `max: 0`, or a run with zero calls fails).
+
 ### Task 10: `tester-pack-helper-unstated-asks` (spec section 14 fix 3)
 
 Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 10's commit), `--runs 3`, model `sonnet`,

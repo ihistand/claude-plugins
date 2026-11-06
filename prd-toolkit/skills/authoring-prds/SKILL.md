@@ -99,6 +99,14 @@ it read code. A state check that finds a changed path outside the dry-run direct
 run too: report the paths to the user and restore nothing yourself. Delete the dry-run directory
 either way (dispatching.md's cleanup step).
 
+**A harness-only round.** A failed dry run is harness-only when every question's answer is an edit to
+testing.md's `## Harness` and to no other PRD file. Then the full round above does not apply:
+the status stays `In review`, with no return to `Draft` and phase 3. Put the questions to the owner
+in one batch, write the answers into the Harness, run lint, and run phase 6 again on a fresh sample.
+The fresh sample stays: it is the only evidence that the gaps are closed. An answer that touches
+another file (an AC, a test case, a contract), or a question the owner answers with a behaviour,
+makes it a full round, unchanged.
+
 Before phase 7, check what this conversation holds. If it does not hold a passing checklist and
 a passing dry-run report for the current files, run phases 5 and 6 now before approving. A
 status of `In review` and a clean lint are not evidence that either ran; a new session starts

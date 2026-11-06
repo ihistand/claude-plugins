@@ -373,6 +373,10 @@ files; if a test case changed since, run step 4 again.
      and every question in `${CLAUDE_PLUGIN_ROOT}/references/quality-checklist.md` for the area.
    - Either way, run the dry run's commands one command per Bash call, with literal paths
      (dispatching.md's first rule).
+   - A failed dry run follows `prd-toolkit:authoring-prds`: a full round, or a harness-only round when every
+     question's answer is an edit to testing.md's `## Harness` and to no other PRD file. A harness-only round
+     stays `In review`, puts the questions to the owner in one batch, writes the answers into the Harness, runs
+     lint, and runs the dry run again on a fresh sample.
 2. **The adoption-map row.** Set only the area's row to `adopted`, uncommitted: trace scopes by
    that row. The status, the version and the §14 row stay untouched until the user approves.
 3. **Trace,** before the user's approval and before any commit:

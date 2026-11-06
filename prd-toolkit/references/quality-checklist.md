@@ -24,6 +24,8 @@ judgement. Answer each with yes or no. A "no" is a gap: fix it, then re-run lint
 - [ ] Does every test case that depends on something outside its contracts (a component contract, an architecture fact, a Harness slot) cite it in `refs:`?
 - [ ] Does every precondition or state a test case declares name the check that confirms it, or does the Harness (Clean state or Fixtures) say how such a precondition is confirmed?
 
+- [ ] The Leaks slot says how a failure's traceback is kept free of test values.
+
 ## Flows and people
 
 - [ ] Does every flow have its empty state and its failure state?

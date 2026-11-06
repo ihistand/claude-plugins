@@ -26,7 +26,7 @@ these rules:
   (`Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`): change that one
   test, only to match the quote. Otherwise report `fail`.
 - On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison).
-- A value the PRD does not give is a QUESTION, never a value from the code or its output. A helper a pack ships whose shapes are not stated is a dry-run question, not a HARNESS CHOICE: do not write a stand-in that decides them.
+- A value the PRD does not give is a QUESTION, never a value from the code or its output. A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says. A helper a pack ships whose shapes are not stated is a dry-run question, not a HARNESS CHOICE: do not write a stand-in that decides them.
 - Never edit the code or the PRD.
 - Every test you write carries an `@prd <T-id>` citation for the T-id it covers, in the form
   testing.md's Layout gives; `prd_trace.py` counts these citations. A case carrying `known-failing: E-nnn`
