@@ -212,7 +212,7 @@ The PRD at `docs/prd/prd-toolkit` (version 4.0.0) is the authority.
 - To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
   files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code
   implements the PRD; it never defines behaviour the PRD lacks.
-- Every behaviour change starts with `/prd-change` (`prd-toolkit:changing-prds`), before code.
+- Every behaviour change in an adopted area (below) starts with `/prd-change` (`prd-toolkit:changing-prds`), before code; outside them, the PRD does not govern yet.
 - Gap rule: if the PRD is silent on what you need, stop and raise it with `/prd-change`.
   Do not guess or read the code to fill the gap.
 - Deploy with `/prd-deploy`; never run a runbook command yourself.

@@ -63,10 +63,18 @@ CHANGE_RULE_LINKED = ("`/prd-change`, before code; one to an item another PRD ci
                       "  with `/prd-change-set`")
 
 
+def change_line(prd: model.Prd) -> str:
+    """The block's change sentence (no bullet, no newline); on an adopted PRD it covers only the adopted areas."""
+    rule = CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE
+    if prd.adoption is None:
+        return f"Every behaviour change starts with {rule}."
+    return f"Every behaviour change in an adopted area (below) starts with {rule}; outside them, the PRD does not govern yet."
+
+
 def render_block(prd: model.Prd, prd_rel: str) -> str:
     text = TEMPLATE.read_text(encoding="utf-8")
     slots = {
-        "change_rule": CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE,
+        "change_line": change_line(prd),
         "prd_path": prd_rel,
         "version": prd.frontmatter.get("version", "unknown").strip(),
         "required_skills": _required_skills(prd),

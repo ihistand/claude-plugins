@@ -83,3 +83,48 @@ def test_adopting_skill_names_adoption_md_not_section_8_table():
     text = (ROOT / "skills/adopting-prds/SKILL.md").read_text()
     assert "`adoption.md`" in text and "See adoption.md." in text
     assert "replace §8's marker with the" not in text
+
+
+# --- the block's change line names the adopted areas (0.8.2, spec section 17 fix 4) ---
+
+NEW_LINE = "- Every behaviour change starts with `/prd-change` (`prd-toolkit:changing-prds`), before code."
+ADOPTED_LINE = ("- Every behaviour change in an adopted area (below) starts with `/prd-change` "
+                "(`prd-toolkit:changing-prds`), before code; outside them, the PRD does not govern yet.")
+LINKS_MD = ("# Links\n\n## Upstreams\n\n| Upstream | Location | Version | Commit | Needs |\n|---|---|---|---|---|\n\n"
+            "## Consumers\n\n| Consumer | Location |\n|---|---|\n| reports | `../reports` |\n")
+
+
+def _block(prd):
+    return prd_block.render_block(model.load(prd), "docs/prd/orders")
+
+
+def test_change_line_without_adoption_is_unchanged(prd):
+    block = _block(prd)
+    assert NEW_LINE in block.splitlines() and "{{" not in block
+
+
+def test_change_line_with_an_adopted_area(prd):
+    adopt(prd, "| import | adopted | `src/**` |\n")
+    block = _block(prd)
+    assert ADOPTED_LINE in block.splitlines() and "{{" not in block
+
+
+def test_change_line_with_adoption_and_no_area_adopted_yet(prd):
+    adopt(prd, "| import | not started | `src/**` |\n")
+    block = _block(prd)
+    assert ADOPTED_LINE in block.splitlines() and "Adopted areas: none yet" in block
+
+
+def test_change_line_linked_with_adoption(prd):
+    adopt(prd, "| import | adopted | `src/**` |\n")
+    (prd / "links.md").write_text(LINKS_MD, encoding="utf-8")
+    block = _block(prd)
+    assert ("- Every behaviour change in an adopted area (below) starts with " + prd_block.CHANGE_RULE_LINKED
+            + "; outside them, the PRD does not govern yet.") in block
+    assert "{{" not in block
+
+
+def test_change_line_function_has_no_bullet_or_newline_at_the_ends(prd):
+    adopt(prd, "| import | adopted | `src/**` |\n")
+    line = prd_block.change_line(model.load(prd))
+    assert not line.startswith("- ") and not line.endswith("\n")

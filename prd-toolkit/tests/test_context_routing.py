@@ -36,7 +36,7 @@ def test_block_bullet():
 def test_block_stays_small(prd):
     adopt(prd, "".join(f"| area-{i:02} | adopted | `src/a{i}/**` |\n" for i in range(20)))
     add_required_skills(prd, 4)
-    assert len(prd_block.render_block(model.load(prd), "docs/prd/orders").encode()) < 1536
+    assert len(prd_block.render_block(model.load(prd), "docs/prd/orders").encode()) < 1664
 
 
 def test_changing_step_1_runs_the_decide_pack():

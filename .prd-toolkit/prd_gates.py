@@ -3,9 +3,13 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""The pending human decisions of a PRD (`list`) and one reply for one of them (`answer`). Exit 0 done, 1 refused, 2 usage, dependency or internal error."""
+"""The pending human decisions of a PRD (`list`), one reply for one of them (`answer`), a wait for its answer (`wait`) and the decision
+inbox that answers them in the browser (`serve`). Exit 0 done, 1 refused, 3 wait timed out or serve stopped, 2 usage, dependency or internal error."""
 import argparse
+import errno
+import signal
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -15,7 +19,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import gates, interface, model  # noqa: E402
+from prdlint import formserver, gates, interface, model  # noqa: E402
 
 
 def _flags(parser: argparse.ArgumentParser, leaf: bool) -> None:
@@ -48,6 +52,21 @@ def _build() -> argparse.ArgumentParser:
     ans.add_argument("--correction", help="adoption: the corrected text")
     ans.add_argument("--question", help="the question the client showed; a gate whose question differs is refused. Omitting it skips that check (only a gone gate is refused): clients should pass the question they showed")
     _flags(ans, leaf=True)
+    wt = sub.add_parser("wait", help="block until the owner answers one gate, then print the outcome",
+                        description="Start it before giving the owner the URL. Exit 0 answered, 1 the gate is not pending (choice null), 3 timed out.")
+    wt.add_argument("prd_dir")
+    wt.add_argument("gate")
+    wt.add_argument("--worktree", help="the worktree whose gate it is (default: the PRD's own)")
+    wt.add_argument("--timeout", type=float, help="seconds to wait (default: until answered)")
+    _flags(wt, leaf=True)
+    sv = sub.add_parser("serve", help="serve the decision inbox: every pending gate of the PRD across the worktrees",
+                        description="Prints url=... first, then serves until Ctrl-C, SIGTERM or --idle-minutes without a request (exit 3). "
+                                    "Exit 1 when an inbox for the PRD is already serving or --gate is not pending.")
+    sv.add_argument("prd_dir")
+    sv.add_argument("--gate", help="open the page on this gate; refused when it is not pending")
+    sv.add_argument("--port", type=int, help="bind this port (default: a free one)")
+    sv.add_argument("--no-open", action="store_true", help="do not open the browser")
+    sv.add_argument("--idle-minutes", type=float, default=120, help="stop after this long without a request (default 120)")
     return parser
 
 
@@ -61,7 +80,59 @@ def _cmd_list(prd: model.Prd, args) -> tuple[str, dict]:
     return "".join(f"{g.id} {g.title}\n" for g in found), {"prd": prd.frontmatter.get("prd", prd.root.name), "gates": [g.to_dict() for g in found]}
 
 
-COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer)}
+def _cmd_wait(prd: model.Prd, args) -> tuple[str, dict]:
+    code, outcome = gates.wait_gate(prd.root, args.gate, Path(args.worktree) if args.worktree else None, args.timeout)
+    return str(code), outcome
+
+
+def _stop(signum, frame) -> None:
+    raise KeyboardInterrupt  # SIGTERM ends the inbox as Ctrl-C does: exit 3
+
+
+def _serve(prd: model.Prd, args) -> int:
+    if args.json:
+        print("prd_gates: serve prints no JSON document", file=sys.stderr)
+        return 2
+    if args.gate and not any(g.id == args.gate for g in gates.list_gates(prd, model.repo_root(prd.root))):
+        print(f"prd_gates: {args.gate} is not pending", file=sys.stderr)
+        return 1
+    try:
+        server, token = gates.make_inbox(prd.root, port=args.port or 0, idle_minutes=args.idle_minutes)
+    except gates.InboxLive as e:
+        print(f"prd_gates: an inbox is already serving at {e.url}", file=sys.stderr)
+        return 1
+    except gates.Refused as e:
+        print(f"prd_gates: {e}", file=sys.stderr)
+        return 1
+    except (OSError, formserver.PageError) as e:
+        if isinstance(e, formserver.PageError) or not args.port:
+            print(f"prd_gates: cannot start the inbox: {e}", file=sys.stderr)
+        elif e.errno == errno.EADDRINUSE:
+            print(f"prd_gates: port {args.port} is in use", file=sys.stderr)
+        else:
+            print(f"prd_gates: cannot bind port {args.port}: {e.strerror or e}", file=sys.stderr)
+        return 2
+    main_thread = threading.current_thread() is threading.main_thread()  # a signal handler needs the main thread
+    previous = signal.signal(signal.SIGTERM, _stop) if main_thread else None
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}/?token={token}" + (f"#gate={args.gate}" if args.gate else "")
+        print(f"url={url}", flush=True)
+        if not args.no_open:
+            try:
+                import webbrowser
+                webbrowser.open(url)
+            except Exception:
+                pass
+        return formserver.run(server)
+    except KeyboardInterrupt:  # Ctrl-C or SIGTERM before the server ran
+        return 3
+    finally:
+        server.server_close()
+        if main_thread:
+            signal.signal(signal.SIGTERM, previous)
+
+
+COMMANDS = {"list": ("gates", _cmd_list), "answer": ("gates.answer", _cmd_answer), "wait": ("gates.outcome", _cmd_wait)}
 
 
 def main(argv: list[str]) -> int:
@@ -84,10 +155,10 @@ def _main(argv: list[str]) -> int:
         print(f"prd_gates: {bad}", file=sys.stderr)
         return 2
     entry = COMMANDS.get(args.cmd)
-    if entry is None:
+    if entry is None and args.cmd != "serve":
         parser.print_usage(sys.stderr)
         return 2
-    kind, handler = entry
+    kind, handler = entry or ("", None)
     try:
         prd = model.load(Path(args.prd_dir))
     except model.NotAPrd as e:
@@ -96,6 +167,12 @@ def _main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_gates: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if args.cmd == "serve":
+        try:
+            return _serve(prd, args)
+        except Exception as e:
+            print(f"prd_gates: internal error: {type(e).__name__}: {e}", file=sys.stderr)
+            return 2
     try:
         text, payload = handler(prd, args)
     except gates.Refused as e:
@@ -104,6 +181,13 @@ def _main(argv: list[str]) -> int:
     except Exception as e:
         print(f"prd_gates: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    if args.cmd == "wait":
+        code = int(text)
+        if code == 3:
+            print(f"prd_gates: timed out waiting for {args.gate}", file=sys.stderr)
+        else:
+            sys.stdout.write(interface.dump(kind, payload))
+        return code
     if args.cmd == "answer":
         owner = payload["result"]
         if args.json:

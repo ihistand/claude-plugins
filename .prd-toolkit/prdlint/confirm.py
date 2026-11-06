@@ -51,6 +51,7 @@ class Item:
     fingerprint: str = ""
     where: str = ""
     related: list[str] = field(default_factory=list)  # a requirement's open E-nnn entries that touch it
+    confirmed: str | None = None  # a bug's `Confirmed:` reply in errors.md: the item counts as answered
 
 
 def _fp(text: str) -> str:
@@ -120,7 +121,8 @@ def _bugs(prd: Prd, root: Path, area: str, ids: set[str], cache: dict) -> list[I
             continue
         served = "\n".join(lines[e.line - 1 : e.end]).rstrip()
         cites = _excerpts(root, e.detected, cache)
-        out.append(Item(e.id, "bug", e.title, served, [], [c[3] for c in cites], _fp(served), "errors.md"))
+        out.append(Item(e.id, "bug", e.title, served, [], [c[3] for c in cites], _fp(served), "errors.md",
+                        confirmed=e.confirmed[1] if e.state == "confirmed" and e.confirmed else None))
     return out
 
 
@@ -326,9 +328,11 @@ def save_answers(path: Path, data: dict) -> None:
 
 
 def open_ids(items: list[Item], answers: dict) -> list[str]:
-    """Items with no answer, or whose answer was given to a different text (its fingerprint differs)."""
+    """Items with no answer, or whose answer was given to a different text (its fingerprint differs).
+    A bug whose errors.md entry holds `Confirmed:` is answered, with or without an answers file."""
     saved = answers.get("answers", {}) if isinstance(answers, dict) else {}
-    return [i.id for i in items if not isinstance(saved.get(i.id), dict) or saved[i.id].get("fingerprint") != i.fingerprint]
+    return [i.id for i in items if i.confirmed is None
+            and (not isinstance(saved.get(i.id), dict) or saved[i.id].get("fingerprint") != i.fingerprint)]
 
 
 def ensure_excluded(repo_root: Path) -> None:
@@ -385,6 +389,8 @@ def validate_answer(item: Item, decision: Any, text: Any, acs: Any) -> tuple[str
         raise Refused(f"unknown decision {decision!r}")
     if decision not in ALLOWED[item.kind]:
         raise Refused(f"decision {decision} is not allowed for a {item.kind}")
+    if item.confirmed is not None:
+        raise Refused(f"{item.id} is confirmed in errors.md; change it through /prd-error")
     if text is not None and not isinstance(text, str):
         raise Refused("text must be a string")
     text = (text or "").strip()
@@ -400,6 +406,8 @@ def validate_answer(item: Item, decision: Any, text: Any, acs: Any) -> tuple[str
     if decision == "correct":
         if not text and not acs:
             raise Refused("correct needs text or an edited AC")
+    elif decision == "fix" and not text:
+        raise Refused("a fix needs its words: what should it do instead?")
     elif decision in REQUIRES_TEXT and not text:
         raise Refused(f"{decision} needs text")
     return text, acs
@@ -475,18 +483,97 @@ def open_file(prd: Prd, area: str, items: list[Item], summaries: dict, repo_root
     return path
 
 
+class BadRequest(Refused):
+    """A request the page sent wrong (an unknown item, a decision the item does not take): answered 400."""
+
+
+def saved_summaries(items: list[Item], area: str, repo_root: Path) -> dict[str, str]:
+    """The summaries `open` wrote into the answers file, checked by the 0.7.1 rules; {} when it holds none."""
+    path = answers_path(repo_root, area)
+    saved = load_answers(path).get("summaries")
+    if not saved:
+        return {}
+    try:
+        return check_summaries(saved, items, area, f"summaries in {path.name}")
+    except Refused as e:
+        raise Refused(f"the summaries saved in the answers file {path.name} are not valid: {e}; fix or remove them") from e
+
+
+class AdoptionRoutes:
+    """The item panel's requests for one area, against that area's answers file in `repo_root` (its worktree).
+
+    The 0.7.1 form and the decision inbox both serve these. `item_list`, `summaries` and `head` default to the
+    area's items now, the summaries saved in the answers file, and HEAD. Every method raises Refused: BadRequest
+    for a request sent wrong (400), StillOpen from `done` (409), plain Refused for an answers file that cannot
+    be read (500)."""
+
+    def __init__(self, prd: Prd, area: str, repo_root: Path, item_list: list[Item] | None = None,
+                 summaries: dict | None = None, head: str | None = None):
+        self.prd, self.area, self.root = prd, area, Path(repo_root)
+        self.item_list = build_items(prd, area) if item_list is None else item_list
+        self.summaries = saved_summaries(self.item_list, area, self.root) if summaries is None else summaries
+        self.by_id = {i.id: i for i in self.item_list}
+        self.path = answers_path(self.root, area)
+        self.head = head or _head(self.root)
+        load_answers(self.path)  # a corrupt file refuses before anything is served
+
+    def _item(self, body: dict) -> Item:
+        iid = body.get("id")
+        if not isinstance(iid, str) or iid not in self.by_id:
+            raise BadRequest(f"unknown item {iid!r}")
+        return self.by_id[iid]
+
+    def items(self) -> dict:
+        with _WRITE_LOCK:
+            data = load_answers(self.path)
+        saved = data.get("answers", {}) if isinstance(data.get("answers"), dict) else {}
+        shown = [{**asdict(i), "summary": self.summaries.get(i.id)} for i in self.item_list]
+        changed = [i.id for i in self.item_list if isinstance(saved.get(i.id), dict)
+                   and saved[i.id].get("fingerprint") != i.fingerprint]
+        return {"area": self.area, "items": shown, "answers": saved, "open": open_ids(self.item_list, data),
+                "changed": changed}
+
+    def answer(self, body: dict) -> dict:
+        item = self._item(body)
+        try:
+            text, acs = validate_answer(item, body.get("decision"), body.get("text"), body.get("acs"))
+        except Refused as e:
+            raise BadRequest(str(e)) from e
+        data = _store(self.prd, self.area, self.root, item, _entry(item, body["decision"], text, acs), self.head)
+        return {"open": open_ids(self.item_list, data)}
+
+    def undo(self, body: dict) -> dict:
+        iid = self._item(body).id
+
+        def apply(data: dict) -> None:
+            data["answers"].pop(iid, None)
+            data.pop("done", None)
+        return {"open": open_ids(self.item_list, _mutate(self.prd, self.area, self.root, apply, self.head))}
+
+    def done(self) -> dict:
+        """Write `done` through `mark_done`, as `prd_confirm.py done` does; StillOpen while an item is open or changed."""
+        mark_done(self.prd, self.area, self.item_list, self.root)
+        return {"open": []}
+
+
+def refused_status(e: Refused) -> int:
+    """The HTTP status of an AdoptionRoutes refusal."""
+    return 409 if isinstance(e, StillOpen) else 400 if isinstance(e, BadRequest) else 500
+
+
+def refused_body(e: Refused) -> dict:
+    return {"open": e.ids} if isinstance(e, StillOpen) else {"error": str(e)}
+
+
 class _State:
-    """Everything a request needs; every write to the answers file goes through `_mutate`, `_store` or `mark_done`."""
+    """The 0.7.1 form's run: its page, its end, and the area's AdoptionRoutes."""
 
     def __init__(self, prd: Prd, area: str, items: list[Item], summaries: dict, page: str):
         self.prd, self.area, self.items, self.summaries, self.page = prd, area, items, summaries, page
         self.server: formserver.Server | None = None
-        self.by_id = {i.id: i for i in items}
         self.root = repo_root(prd.root)
-        self.path = answers_path(self.root, area)
         self._end: str | None = None
-        self.head = _head(self.root)
-        load_answers(self.path)  # a corrupt file refuses the server before anything is served
+        self.routes = AdoptionRoutes(prd, area, self.root, items, summaries)
 
     @property
     def end(self) -> str | None:
@@ -498,48 +585,23 @@ class _State:
         if self.server is not None:
             self.server.end = value
 
-    def snapshot(self) -> dict:
-        with _WRITE_LOCK:
-            return load_answers(self.path)
-
     def answer(self, body: dict) -> dict:
-        iid = body.get("id")
-        if not isinstance(iid, str) or iid not in self.by_id:
-            raise formserver.Bad(400, f"unknown item {iid!r}")
-        item = self.by_id[iid]
-        try:
-            text, acs = validate_answer(item, body.get("decision"), body.get("text"), body.get("acs"))
-        except Refused as e:
-            raise formserver.Bad(400, str(e)) from e
-        return _store(self.prd, self.area, self.root, item, _entry(item, body["decision"], text, acs), self.head)
+        return self.routes.answer(body)
 
     def undo(self, body: dict) -> dict:
-        iid = body.get("id")
-        if not isinstance(iid, str) or iid not in self.by_id:
-            raise formserver.Bad(400, f"unknown item {iid!r}")
-
-        def apply(data: dict) -> None:
-            data["answers"].pop(iid, None)
-            data.pop("done", None)
-        return _mutate(self.prd, self.area, self.root, apply, self.head)
+        return self.routes.undo(body)
 
     def finish(self) -> list[str]:
         """The open IDs; when there are none, write `done` and end the run."""
         try:
-            mark_done(self.prd, self.area, self.items, self.root)
+            self.routes.done()
         except StillOpen as e:  # the check and the write share one lock, so this is the answer, not a race
             return e.ids
         self.end = "done"  # reported only after `done` is on disk
         return []
 
     def listing(self) -> dict:
-        data = self.snapshot()
-        saved = data.get("answers", {}) if isinstance(data.get("answers"), dict) else {}
-        shown = [{**asdict(i), "summary": self.summaries.get(i.id)} for i in self.items]
-        changed = [i.id for i in self.items if isinstance(saved.get(i.id), dict)
-                   and saved[i.id].get("fingerprint") != i.fingerprint]
-        return {"area": self.area, "items": shown, "answers": saved, "open": open_ids(self.items, data),
-                "changed": changed}
+        return self.routes.items()
 
 
 def _handler(state: _State) -> type[formserver.Handler]:
@@ -548,7 +610,7 @@ def _handler(state: _State) -> type[formserver.Handler]:
             try:
                 self._route(method, route)
             except Refused as e:
-                self.send_json(500, {"error": str(e)})
+                self.send_json(refused_status(e), refused_body(e))
 
         def _route(self, method: str, route: str) -> None:
             if method == "GET" and route == "/":
@@ -557,8 +619,7 @@ def _handler(state: _State) -> type[formserver.Handler]:
                 self.send_json(200, state.listing())
             elif method == "POST" and route in ("/answer", "/undo"):
                 body = self.body_json()
-                data = state.answer(body) if route == "/answer" else state.undo(body)
-                self.send_json(200, {"open": open_ids(state.items, data)})
+                self.send_json(200, state.answer(body) if route == "/answer" else state.undo(body))
             elif method == "POST" and route == "/done":
                 self.body_json()
                 pending = state.finish()

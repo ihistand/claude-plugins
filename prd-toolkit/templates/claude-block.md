@@ -6,7 +6,7 @@ The PRD at `{{prd_path}}` (version {{version}}) is the authority.
 - To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
   files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code
   implements the PRD; it never defines behaviour the PRD lacks.
-- Every behaviour change starts with {{change_rule}}.
+- {{change_line}}
 - Gap rule: if the PRD is silent on what you need, stop and raise it with `/prd-change`.
   Do not guess or read the code to fill the gap.
 - Deploy with `/prd-deploy`; never run a runbook command yourself.

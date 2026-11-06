@@ -124,6 +124,8 @@ textarea.edited { background: var(--edited); border-color: var(--warn); }
 <script>
 'use strict';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
+// The decision inbox embeds this panel: it sets window.PANEL_HOST before this script ({ endpoint, question, active, onEnd }).
+const HOST = window.PANEL_HOST || null;
 const GROUPS = [['requirement', 'Requirements'], ['bug', 'Bugs'], ['question', 'Questions'], ['marker', 'Settings']];
 const KIND_NAME = { requirement: 'Requirement', bug: 'Apparent bug', question: 'Open question', marker: 'Missing setting' };
 const WHO = 'A role or a name, and anything they should know.';
@@ -147,20 +149,21 @@ const ACTIONS = {
       prompt: 'Who decides?', hint: WHO },
   ],
   question: [
-    { decision: 'intended', label: 'Yes, intended', key: 'c', icon: '✓', saved: 'Yes, intended', note: true },
-    { decision: 'fix', label: 'No, fix it', key: 'r', icon: '✎', saved: 'No, fix it', note: true },
-    { decision: 'answer', label: 'In my own words', icon: '✎', saved: 'In my own words', note: true, needs: true },
+    { decision: 'intended', label: 'Keep it as it is', key: 'c', icon: '✓', saved: 'Keep it as it is', note: true },
+    { decision: 'fix', label: 'Change it…', key: 'r', icon: '✎', saved: 'Change it', note: true, needs: true,
+      placeholder: 'What should it do instead?' },
+    { decision: 'answer', label: 'Answer in my own words', icon: '✎', saved: 'Answer in my own words', note: true, needs: true },
   ],
   marker: [
     { decision: 'answer', label: 'Answer', icon: '✓', saved: 'Answered', note: true, needs: true, primary: true },
   ],
 };
 const NOTE_PROMPT = {
-  question: 'Your answer in your own words, or a note to go with Yes or No (optional for those two)',
+  question: 'Your answer in your own words, what it should do instead, or a note to go with Keep it as it is (optional there)',
   marker: 'What should the value be?',
 };
 const NOTE_HINT = {
-  question: 'Yes or No needs no note. With No, say what it should do instead, or you are asked in the chat. If the question asks two things, answer both.',
+  question: 'Keep it as it is needs no note. Change it needs what it should do instead. If the question asks two things, answer both.',
   marker: 'The value as it should be written in the contract.',
 };
 const S = { data: null, order: [], cur: 0, drafts: new Map(), changing: new Set(), busy: false, ended: null, notice: '' };
@@ -187,6 +190,7 @@ function h(tag, props, ...kids) {
 const has = (obj, key) => !!obj && Object.prototype.hasOwnProperty.call(obj, key);
 const cur = () => S.order[S.cur];
 const isOpen = (id) => S.data.open.includes(id);
+const confirmedBy = (it) => (typeof it.confirmed === 'string' ? it.confirmed : null);
 const isChanged = (id) => S.data.changed.includes(id);
 const savedFor = (id) => (has(S.data.answers, id) ? S.data.answers[id] : null);
 const actionFor = (kind, decision) => (ACTIONS[kind] || []).find((a) => a.decision === decision);
@@ -198,6 +202,7 @@ function draft(id) {
 }
 
 function stateOf(it) {
+  if (confirmedBy(it) !== null) return { icon: '✓', cls: 'done', label: 'confirmed in errors.md' };
   if (isChanged(it.id)) return { icon: '⟳', cls: 'changed', label: 'changed since you answered' };
   if (isOpen(it.id)) return { icon: '·', cls: 'open', label: 'open' };
   const a = savedFor(it.id);
@@ -208,7 +213,7 @@ function stateOf(it) {
 async function call(method, path, body) {
   let res;
   try {
-    res = await fetch(path, {
+    res = await fetch(HOST ? HOST.endpoint(path) : path, {
       method, cache: 'no-store',
       headers: { 'X-Prd-Token': TOKEN, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -245,7 +250,7 @@ async function load() {
   const at = S.order.findIndex((it) => it.id === keep);
   if (at >= 0) S.cur = at;
   else { const first = S.order.findIndex((it) => isOpen(it.id)); S.cur = first >= 0 ? first : 0; }
-  document.title = `Confirm ${S.data.area}`;
+  if (!HOST) document.title = `Confirm ${S.data.area}`;
   render();
   return true;
 }
@@ -272,7 +277,17 @@ function go(i, focusCard = true) {
 
 function end(kind) {
   S.ended = kind;
+  if (HOST) { HOST.onEnd(kind); return; }
   render();
+}
+
+// The inbox opens the panel on one area: start from nothing, then load that area's items.
+function openPanel() {
+  Object.assign(S, { data: null, order: [], cur: 0, busy: false, ended: null, notice: '' });
+  S.drafts.clear(); S.changing.clear();
+  document.getElementById('shell').hidden = false;
+  document.getElementById('end').hidden = true;
+  return load();
 }
 
 // --- answers ---------------------------------------------------------------------------------------------
@@ -349,7 +364,8 @@ function pick(it, a) {
     return;
   }
   if (a.note && a.needs && !d.text.trim()) {
-    d.error = it.kind === 'marker' ? 'Type the value first.' : 'Type your answer first, or choose Yes or No.';
+    d.error = it.kind === 'marker' ? 'Type the value first.'
+      : a.decision === 'fix' ? 'Say what it should do instead.' : 'Type your answer first, or choose Keep it as it is.';
     render();
     focusId('note');
     return;
@@ -378,7 +394,7 @@ function submitBox(it) {
 async function finish() {
   if (S.busy) return;
   S.busy = true; render();
-  const r = await call('POST', '/done', {});
+  const r = await call('POST', '/done', HOST ? { question: HOST.question } : {});
   S.busy = false;
   if (!r) return;
   if (r.status === 200) { end('done'); return; }
@@ -509,12 +525,16 @@ function cardView() {
       h('summary', {}, 'Show the code', it.excerpts.length > 1 ? ` (${it.excerpts.length} places)` : ''),
       it.excerpts.map((x) => h('pre', { class: 'code', text: x }))));
   }
-  if (isChanged(it.id) && saved) {
+  if (confirmedBy(it) !== null) {
+    out.push(h('section', { class: 'confirmed' }, h('h3', { text: 'Your answer' }),
+      h('div', { class: 'saved' }, h('div', { class: 'decision', text: '✓ Confirmed' }), h('p', { class: 'said', text: it.confirmed })),
+      h('p', { class: 'hint', text: 'Confirmed in errors.md; change it through /prd-error' })));
+  } else if (isChanged(it.id) && saved) {
     out.push(h('div', { class: 'notice warn', role: 'status' },
       h('strong', { text: '⟳ This item changed since you answered.' }), ' Your earlier answer is below; answer it again.',
       savedView(it, saved)));
   }
-  if (saved && !deciding(it.id)) {
+  if (saved && !deciding(it.id) && confirmedBy(it) === null) {
     out.push(h('section', {}, h('h3', { text: 'Your answer' }), savedView(it, saved),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn', disabled: S.busy, events: { click: () => change(it) } }, 'Change'),
@@ -538,8 +558,8 @@ function savedView(it, a) {
   return box;
 }
 
-function textarea(id, value, onInput, rows, extra) {
-  return h('textarea', { id, rows: rows || 3, class: extra, value,
+function textarea(id, value, onInput, rows, extra, placeholder) {
+  return h('textarea', { id, rows: rows || 3, class: extra, value, placeholder,
     events: { input: (e) => { onInput(e.target.value); clearError(); } } });
 }
 
@@ -557,7 +577,8 @@ function decideView(it, d) {
   if (changing) out.append(h('h3', { text: 'Change your answer' }));
   if (acts.some((a) => a.note)) {
     out.append(h('label', { class: 'prompt', for: 'note', text: NOTE_PROMPT[it.kind] }),
-      textarea('note', d.text, (v) => { d.text = v; }, it.kind === 'marker' ? 2 : 3));
+      textarea('note', d.text, (v) => { d.text = v; }, it.kind === 'marker' ? 2 : 3, undefined,
+        (acts.find((a) => a.placeholder) || {}).placeholder));
     if (NOTE_HINT[it.kind]) out.append(h('p', { class: 'hint', text: NOTE_HINT[it.kind] }));
   }
   const row = h('div', { class: 'actions' });
@@ -623,7 +644,7 @@ function criteriaView(it, d) {
 // --- keys ------------------------------------------------------------------------------------------------
 
 document.addEventListener('keydown', (e) => {
-  if (S.ended || !S.data || !cur()) return;
+  if (S.ended || !S.data || !cur() || (HOST && !HOST.active())) return;
   const it = cur();
   const t = e.target;
   const typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable);
@@ -655,5 +676,9 @@ document.addEventListener('keydown', (e) => {
   pick(it, a);
 });
 
-if (TOKEN) load(); else end('forbidden');
+if (!HOST) {
+  // Only a request resets the server's idle clock, so an open page asks every minute while the owner reads.
+  setInterval(() => { if (TOKEN && !S.ended) call('GET', '/ping'); }, 60000);
+  if (TOKEN) load(); else end('forbidden');
+}
 </script>

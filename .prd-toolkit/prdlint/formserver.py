@@ -53,7 +53,7 @@ def assemble(page: Path, include_dir: Path | None = None) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    """Checks the token on every request, then calls `route`. Subclasses implement `route`."""
+    """Checks the token on every request, answers `GET /ping`, then calls `route`. Subclasses implement `route`."""
     protocol_version = "HTTP/1.0"
 
     def setup(self) -> None:
@@ -128,6 +128,9 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized(query, header=parts.path != "/"):
                 raise Bad(403, "missing or wrong token")
             self.server.touch()  # only an authorized request keeps the server alive
+            if method == "GET" and parts.path == "/ping":  # the liveness check every page and `live_inbox` use
+                self.send_json(200, {"ok": True})
+                return
             self.route(method, parts.path, query)
         except Bad as e:
             self.send_json(e.status, {"error": e.why})
