@@ -28,8 +28,8 @@ directory); GREEN on the worktree. Same command form as above with `--case 'test
 
 | Case (start state) | with | w/out | Δ | Notes |
 |---|---|---|---|---|
-| `tester-pack-helper-unstated-asks` (notes area `confirmed`; a vendored made-up pack `ledger` ships `stored_notes`; testing.md's Assertions slot says T-001.1's effect is checked with it; no slot states its parameters or result) RED | 0.78 | 0.44 | +0.33 | Unchanged text, final grader. All three with runs put the helper under QUESTIONS; two also wrote a stand-in `stored_notes` with its parameters and result chosen under HARNESS CHOICES (`no-harness-choice-for-the-helper-shape` failed 2 of 3, 0.67 each; the third passed, 1.00). |
-| `tester-pack-helper-unstated-asks` GREEN | 1.00 | 0.44 | +0.56 | Final grader, 3 of 3 with runs 1.00. All three: the helper is a QUESTION (import path, signature, result shape), "No helper was written", the test calls it as testing.md names it. |
+| `tester-pack-helper-unstated-asks` (notes area `confirmed`; a vendored made-up pack `ledger` ships `stored_notes`; testing.md's Assertions slot says T-001.1's effect is checked with it; no slot states its parameters or result) RED | 0.78 | 0.56 | +0.22 | Unchanged text, final grader (fix round 2). All three with runs put the helper under QUESTIONS; two also wrote a stand-in `stored_notes` with its parameters and result chosen under HARNESS CHOICES (`no-harness-choice-for-the-helper-shape` failed 2 of 3, 0.67 each; the third wrote no helper, 1.00). Every with run's last message had a HARNESS CHOICES section the anchor matched. |
+| `tester-pack-helper-unstated-asks` GREEN | 1.00 | 0.44 | +0.56 | Final grader, 3 of 3 with runs 1.00. All three last messages had a `**HARNESS CHOICES**` section the anchor matched ("No helper written"), so the pass is not vacuous. All three: the helper is a QUESTION (import path, signature, result shape), "No helper was written", the test calls it as testing.md names it. |
 
 - **Graders:** `tester-dispatched`, `questions-name-the-helper` (QUESTIONS section names `stored_notes`),
   `no-harness-choice-for-the-helper-shape` (no HARNESS CHOICES line in which `stored_notes` takes or returns anything).
@@ -39,6 +39,12 @@ directory); GREEN on the worktree. Same command form as above with `--case 'test
   section's own heading line, ends the section at FILES READ or RESULTS, and skips a line with `stand-in`,
   `not written` or `no helper`. Checked under node on six reports (intro sentence, negating line, two stand-in
   shape lines, a mention after the section, the GREEN wording): all as intended. RED and GREEN were re-run on it.
+- **Grader round 3 (fix round 2):** the testing skill's report format numbers its sections (`3. **HARNESS CHOICES**`),
+  which the anchor did not match, so a numbered report would pass vacuously. The anchor and the end markers now take
+  an optional `3. ` or `3) ` prefix. A re-run on that alone showed a second hole: the negating word `stand-in` also
+  excused lines that describe a stand-in, so RED scored 1.00. The negation is now `no stand-in`, `without a
+  stand-in`, `wrote no`, `no helper` or `not written`, and `returning` counts as a shape word. Checked under node on
+  14 reports (the six earlier, numbered failing and passing ones, and three real RED lines): all as intended.
 - **Text round:** the two lines the brief gives (`testing-from-prds` rule 1 and suite rule 7, the agent) and the
   `harness` sentence in `prd-format.md` and `contract-types.md` did not change the run (GREEN 0.67, with runs still
   wrote the stand-in). The skill's Gaps section and the agent now say a shipped helper's shapes are a question and
