@@ -125,6 +125,36 @@ returns an empty list while the store holds "Buy Milk"); the prompt dispatches `
   on eight synthetic calls (a correct one; no `raises=`; `raises=AssertionError`; no `raise`; a different exception raised;
   no tag; `strict=False`; the lookaheads spread over two calls) and replayed on the real RED and GREEN traces: all as intended.
 
+### Task 15: `deploy-by-hand-records` (spec section 17 fix 5)
+
+Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted until Task 15's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. Same command form as above with `--case 'deploy-by-hand-records'`. RED ran on the worktree before
+the skill text changed: `prd_deploy.py record` already existed, so RED measures the skill rule alone. GREEN is the
+worktree with rule 9 and its Red Flag. Start state `deploy_repo.py ready` (greet 1.0.0, FR-001 and FR-002 `verified`,
+nothing deployed, no run log); the owner says they promoted 1.0.0 to production through the service's own console,
+names commit f4674c9 (the PRD's 1.0.0 commit, fixed by the scaffold's dates and lock file; `scaffold.sh` checks it), and
+says "It's live now".
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `deploy-by-hand-records` RED | 0.81 | 0.86 | -0.05 | Unchanged skill. All three with runs read `running-a-deploy.md`, ran no `record` and changed nothing: "The toolkit can't record a deploy it didn't run" (or "has no way to"). Each offered a hand-written row instead; one offered a `production` row with run id "manual console promotion", `live (since 1.0.0)` and no `prd_deploy.py check`. `ran-record` failed 3 of 3; `says-live-waits` failed 1 of 3. Without the plugin, all three found `record` in the vendored `.prd-toolkit/prd_deploy.py` and ran it; none said `live` waits for `/prd-deploy`. |
+| `deploy-by-hand-records` GREEN | 1.00 | 0.90 | +0.10 | 3 of 3 with runs. Each ran `uv run --script .prd-toolkit/prd_deploy.py record docs/prd/greet --env production --commit f4674c9 --reply "<the prompt, verbatim>"` (exit 0), committed its row as the close, and ran `prd_deploy.py check --run <id> --diff 77abb20..HEAD` (exit 0). No Edit, Write or shell write touched operations.md, and both blocks and the §11 rows stayed `verified`. `says-live-waits` matched, one line per run: "`verified → live` stays pending until a `/prd-deploy` run passes its tests on production"; "They become `live (since 1.0.0)` only after a `/prd-deploy` run whose tests pass on production"; "`verified → live (since 1.0.0)` waits for a `/prd-deploy` run whose tests pass on production". |
+
+| `deploy-by-hand-records` GREEN, final text | 1.00 | 0.86 | +0.14 | Re-run after the Red Flag's provenance was reworded (the GREEN row above ran on the earlier wording). 3 of 3 with runs ran `record` then `check` (each exit 0). `says-live-waits` matched: "The requirements stay `verified` until a `/prd-deploy` run passes its tests on production"; "`verified → live` waits for a `/prd-deploy` run that goes through staging, the human approval and the smoke tests"; "No requirement moved to `live`, because the toolkit only does that after a `/prd-deploy` run whose tests pass". Without the plugin, all three ran `record` and none said `live` waits. |
+
+- **Graders:** `skill-fired` (with arm only), `ran-record` (a Bash call running `prd_deploy.py record` with
+  `--commit f4674c9`), `no-row-by-edit` and `no-row-by-write` (no Edit or Write of operations.md), `no-row-by-shell`
+  (no redirect, `tee`, `sed -i`, `perl -i` or Python write to operations.md), `nothing-live` and `nothing-live-in-index`
+  (no `Status: live`, no `live` index row), `says-live-waits` (the last message names `/prd-deploy` and `live` on one line).
+- **Each grader can fail:** `ran-record` failed in 3 of 3 RED with runs, `says-live-waits` in 1 of 3 RED with runs and 5 of 6
+  without runs. The other five never failed in a run, so they were checked under node on 17 synthetic inputs: a heredoc
+  append, a `>` redirect, `tee -a`, `sed -i`, a Python `write_text` and an Edit of operations.md each match; a `cat`, a
+  `2>&1` before a `cat`, a `git diff 2>/dev/null` and the `record` call itself do not; a `Status: live` block and a `live`
+  index row match, and their `verified` forms do not; a multi-line `record` call matches `ran-record`, and a `--help` call does not.
+  All as intended.
+- **`says-live-waits` is a weak grader:** RED with runs passed it while offering a hand-written row (an option line naming
+  `/prd-deploy` and `live`). `ran-record` and the no-row graders carry the separation.
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply

@@ -373,3 +373,33 @@ def test_recover_replaces_never_work_around_for_a_killed_step():
     t = flat(RUN)
     assert "started and did not finish" in t
     assert "the one way out is `recover`" in t
+
+
+# --- 0.8.2, spec section 17 fix 5: a deploy done by hand ---
+
+# The brief's sentence, with the command in a code block: every `<scripts>/prd_deploy.py` line carries its exit gate
+# (test_gate_forms_in_both_files), which a prose line cannot fit in 100 columns.
+BY_HAND = ("A deploy the owner did by hand is recorded with this command, its own Bash call: ```bash uv run --script "
+           "<scripts>/prd_deploy.py record docs/prd/<slug> --env <env> --commit <sha> --reply \"<the owner's words>\"; "
+           "echo \"prd-deploy-exit=$?\" ``` It prints `run=<id>`. Commit its row as the close and run `prd_deploy.py check` on it")
+
+
+def red_flags() -> str:
+    return " ".join(SKILL.read_text(encoding="utf-8").split("## Red Flags - STOP", 1)[1].split("## Common Rationalizations", 1)[0].split())
+
+
+def test_by_hand_deploy_is_recorded_with_record():
+    assert BY_HAND in flat(SKILL)
+
+
+def test_by_hand_never_write_a_deployed_row():
+    assert "Never write a Deployed row yourself." in flat(SKILL)
+
+
+def test_by_hand_record_moves_no_status():
+    assert ("A by-hand record moves no status: `verified → live` waits for a `/prd-deploy` run whose tests pass on that "
+            "environment.") in flat(SKILL)
+
+
+def test_by_hand_red_flag():
+    assert "I'll add the Deployed row myself, since they already deployed it" in red_flags()

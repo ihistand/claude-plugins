@@ -605,3 +605,55 @@ def test_an_unfinished_start_accepts_its_entry(repo, monkeypatch, capsys):
     close(repo, run_id, "Record the failure", ERRORS)
     r = check(repo, run_id)
     assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+# ---- a by-hand record's close (spec section 17, fix 5) ----
+
+def hand_record(repo, env, sha=None) -> str:
+    return deploy.record(model.load(repo / PRD), repo, env, sha or head_sha(repo), "I promoted it in the service's console")
+
+
+@pytest.mark.parametrize("env", ["staging", "production"])
+def test_by_hand_close_accepted(repo, env):
+    run_id = hand_record(repo, env)
+    close(repo, run_id, "Record the deploy done by hand")
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == "", r.stdout + r.stderr
+
+
+def test_by_hand_close_of_an_older_commit_accepted(repo):
+    old = head_sha(repo)
+    (repo / "tools/notes.txt").write_text("a later change\n", encoding="utf-8")
+    commit(repo, "A later commit", "tools")
+    run_id = hand_record(repo, "production", old)
+    close(repo, run_id, "Record the deploy done by hand")
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_by_hand_close_moves_no_status(repo):
+    run_id = hand_record(repo, "production")
+    go_live(repo)
+    close(repo, run_id, "Record the deploy done by hand")
+    out = findings(check(repo, run_id))
+    assert "FR-001: a by-hand record moves no status" in out
+    assert not any("still verified" in f or "after a run that did not finish" in f for f in out), out
+
+
+def test_by_hand_close_row_for_another_env(repo):
+    run_id = hand_record(repo, "staging")
+    add_deployed(repo, run_id, "production")
+    close(repo, run_id, "Record the deploy done by hand")
+    assert "Deployed production: the run did not finish production" in findings(check(repo, run_id))
+
+
+def test_by_hand_close_wrong_commit(repo):
+    old = head_sha(repo)
+    (repo / "tools/notes.txt").write_text("a later change\n", encoding="utf-8")
+    commit(repo, "A later commit", "tools")
+    run_id = hand_record(repo, "production", old)
+    new = head_sha(repo)[:7]  # the repo's HEAD, which the record did not deploy
+    p = repo / OPS
+    p.write_text(p.read_text(encoding="utf-8").replace(f"| {old[:7]} |", f"| {new} |"), encoding="utf-8")
+    close(repo, run_id, "Record the deploy done by hand")
+    assert findings(check(repo, run_id)) == [f"Deployed production: commit {new} is not the recorded commit {old[:7]}"]

@@ -58,6 +58,18 @@ record it" change nothing below.
 8. **A refusal is final.** A step that started and did not finish, a confirm already used, a
    second rollback, a resume of a failed run: the script refuses each. Report it and stop. A new
    run starts only when the user asks for one after seeing the failure.
+9. **A deploy done by hand is recorded, never written.** When the owner deployed through the
+   service's own UI, or any way but `/prd-deploy`, no run is started. A deploy the owner did by
+   hand is recorded with this command, its own Bash call:
+
+   ```bash
+   uv run --script <scripts>/prd_deploy.py record docs/prd/<slug> --env <env> --commit <sha> --reply "<the owner's words>"; echo "prd-deploy-exit=$?"
+   ```
+
+   It prints `run=<id>`. Commit its row as the close and run `prd_deploy.py check` on it, with
+   `--run <id> --diff <HEAD before the close>..HEAD`. Never write a Deployed row yourself. A
+   by-hand record moves no status: `verified → live` waits for a `/prd-deploy` run whose tests
+   pass on that environment. The report says so.
 
 ## Red Flags - STOP
 
@@ -87,6 +99,10 @@ Quoted from runs without this skill (evals/baselines/deploying-from-prds.md), ex
 - A new run started to retry a failed step without telling the user. (Spec §5.)
 - A close committed while a run waits at a human step the user may still answer: `resume` then
   refuses with "HEAD moved since the run started".
+- "I'll add the Deployed row myself, since they already deployed it." (Spec §17.) Or, as the RED
+  runs of `evals/deploy-by-hand-records` put it: "The toolkit can't record a deploy it didn't
+  run", then offering a hand-written `production` row with a made-up run id, `live`, and no
+  `prd_deploy.py check`. `prd_deploy.py record` writes the row; nothing moves to `live`.
 
 **All of these mean: stop, put back what you changed outside the close, and return to the step
 of `running-a-deploy.md` whose gate is open.**
@@ -108,6 +124,7 @@ of `running-a-deploy.md` whose gate is open.**
 | "The script is slow, or its run was denied, so I ran the steps myself." | Steps run by hand have no log, no timeout and no stop at the human step, and the close cannot record them. Stop and tell the user which command to allow. |
 | "Staging passed, so the requirements are live." | `live` means running in production. A run that did not reach production moves no status. |
 | "Recording a deploy changes the PRD, so it gets a version." | Deployed rows and `verified → live` are progress, not behaviour: no version bump and no §14 row. |
+| "They deployed it by hand, so the toolkit cannot record it." | `prd_deploy.py record` logs the owner's words and writes that environment's row; the close is committed and checked like any other. It moves no status: `live` waits for a `/prd-deploy` run. |
 | "A fresh run will get past it." | A failed run ends. A new run starts only when the user asks after seeing the failure, and on the same commit it runs the same commands. |
 
 ## Related skills
