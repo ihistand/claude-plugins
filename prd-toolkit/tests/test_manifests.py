@@ -36,6 +36,6 @@ def test_description_says_links_across_repositories():
     assert "links PRDs across repositories" in plugin["description"]
 
 
-def test_version_is_0_8_1():
+def test_version_is_a_release():
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.8.1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", plugin["version"])  # the current release is pinned in the newest test_release_*.py

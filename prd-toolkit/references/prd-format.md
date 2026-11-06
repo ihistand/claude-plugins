@@ -595,7 +595,9 @@ Two optional tables follow the runbook.
 
 `## Deployed` is the PRD's record of what each environment runs: the caller writes one row per
 environment at a deploy run's close, replacing that environment's earlier row. A missing table
-means nothing is deployed yet. `## Drift` lists the checks run against a live environment; `Check`
+means nothing is deployed yet. A deploy the owner did by hand, outside `/prd-deploy`, is recorded with
+`prd_deploy.py record <prd dir> --env <env> --commit <sha> --reply "<owner's words>"`, which writes a
+run log marked `by: hand` and that environment's row, runs nothing and moves no status; the caller never writes that row directly. `## Drift` lists the checks run against a live environment; `Check`
 is `version` or `config` (`drift-rows`; a `schema` row is reported as arriving in prd-toolkit 0.6,
 and a `config` row needs `contracts/config.yaml`). Without the table there is no drift check. A
 Deployed or Drift row's environment must be in both Environments tables (`runbook-env`).

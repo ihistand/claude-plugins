@@ -446,8 +446,8 @@ def test_r11c_one_record_drives_agent_steps_run_from_the_members_root():
     assert "`git -C <root>`, never a `cd`" in para
     assert "(`prd_deploy.py` dispatches no agent)" in para
     assert ("Anything that dispatches an agent runs in a session started in that member's root: `changing-prds` "
-            "step 4's dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the "
-            "session's own repository.") in para
+            "step 4's dry run and `/prd-build`, because the builder's round is cut as a `prd-round/<area>-<n>` branch "
+            "in the session's own worktree and the tester's guard binds to the session's own repository.") in para
     assert "changeset log <record> '<prd>: step <n> runs from <root>'" in para  # R-11e's Log line
     assert '"Continue with `/prd-change-set CS-<nnn>` from `<root>`" (headless: `prd-toolkit:prd-change-set CS-<nnn>`)' in para
     assert "A build or a deploy dispatches" not in t and "A build or deploy of a member" not in t
