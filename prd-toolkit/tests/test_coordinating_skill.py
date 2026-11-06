@@ -364,7 +364,7 @@ def test_changing_prds_red_flag_for_a_cited_item():
 def test_running_a_build_on_a_change_set_branch():
     t = BUILD_RUN.read_text(encoding="utf-8")
     para_at = t.index("**On a change-set branch.**")
-    assert para_at < t.index("3. **Dispatch both in one message**")
+    assert para_at < t.index("3. **Dispatch the builder's round, then the tester.**")
     para = " ".join(t[para_at:t.index("\n\n**", para_at + 10)].split())
     assert ('uv run --script <scripts>/prd_links.py sync docs/prd/<slug> <upstream> --ref <branch>; '
             'echo "prd-links-exit=$?"') in t

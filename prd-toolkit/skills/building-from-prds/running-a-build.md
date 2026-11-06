@@ -64,15 +64,15 @@ failure counts as a round and is recorded by its finding lines. After a third fa
 T-id the build stops and reports it to the user. The stop report carries every round's RECONCILE
 record or failure line for that T-id.
 
-**Stops.** A build stops on a dirty working tree in step 1 (no status: nothing has merged), on
-a PRD gap (a QUESTIONS line that is not a test dispute, a tester QUESTION the PRD does not answer,
-or step 6's PRD-gap row), on a failing test that cites no T-id, on a failed tester state check
-(`dispatching.md` step 4), on a failed builder state check only without worktree isolation; with
-it, a failed builder check is a failed round (**Rounds**), on a `prd-trace-exit=` other than `0`
-in step 7 or the close, on a harness overlap in step 7, and on the third failed round on a
-T-id. Any stop after the builder's merge writes `built` for each block whose unit T-ids pass,
-never `verified`. A stop before the merge writes no status. Either way, report the stop to the
-user with its records; a PRD gap also goes to `/prd-change`.
+**Stops.** A build stops on a dirty working tree in step 1 or before a round's cut (no status in
+step 1: nothing has merged), on a PRD gap (a QUESTIONS line that is not a test dispute, a tester
+QUESTION the PRD does not answer, or step 6's PRD-gap row), on a failing test that cites no T-id, on
+a failed tester state check (`dispatching.md` step 4), on a `prd-trace-exit=` other than `0` in step
+7 or the close, on a harness overlap in step 7, and on the third failed round on a T-id. A failed
+builder check is not a stop: it is a failed round (**Rounds**). Any stop after the builder's merge
+writes `built` for each block whose unit T-ids pass, never `verified`. A stop before the merge
+writes no status. Either way, report the stop to the user with its records; a PRD gap also goes to
+`/prd-change`.
 
 **Stops that record an entry.** Three stops are failures the build could not settle, and each
 appends an `unclassified` entry to `errors.md`: the third failed round on a T-id, a failing test
@@ -143,7 +143,8 @@ All of this comes before the dispatch, and it is the change set's only sync befo
 tester's tests, the `known-failing` removals, a stop's entry, the close) adds
 `-m "Change-set: <start-prd>/CS-<nnn>"` after its `Refs:` message, and the builder prompt carries
 the line `Change-set: <start-prd>/CS-<nnn>` (**Prompts**), so the builder's commits carry it too.
-The build runs on the record's branch and never cuts a `prd-build/…` branch from it. The build
+The build runs on the record's branch and never cuts a `prd-build/…` branch from it; its rounds'
+`prd-round/…` branches are cut from it and merged back (step 3). The build
 never writes the record: its close reports the state reached for the row (`verified` when every
 block of its IDs closed `verified`, `built` when one stayed `built`, none on a stop before the
 merge), and the caller writes it with `changeset set`.
@@ -197,11 +198,49 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    caches are git-ignored. A build has no dry-run directory. Never skipped: without the
    `-before` files, step 4 cannot tell the tester's changes from anything else, and the round
    fails.
-3. **Dispatch both in one message**: two Agent tool calls in the same message.
-   - `prd-toolkit:prd-builder`, with `isolation: worktree`, and the builder prompt (below) with
-     its slots filled and nothing else: no summary of the PRD, no hints, no pointers into the code.
-   - `prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and every
-     non-unit T-id, build gate and deploy gate, each with its test-case file.
+3. **Dispatch the builder's round, then the tester.** Every builder round runs on a round branch
+   you cut in the build worktree: `prd-round/<area>-<n>`, where `<n>` is the round number counted
+   from 1 for the build (a `--fixes` build too). An existing branch of that name takes the next
+   free `<n>`. Never dispatch the builder with `isolation: worktree`: it cuts from the main
+   checkout's HEAD, not from the build branch. The cwd stays the build worktree throughout, so the
+   harness commands run where testing.md expects them. Run the round in this order, each step its
+   own Bash call, the `<base>` being the build branch's HEAD as step 1 (or, before a later round,
+   `git rev-parse HEAD`) printed it:
+
+   1. `git status --porcelain --untracked-files=all` prints nothing. Anything else stops the build
+      as a dirty tree: report the paths, restore nothing.
+   2. `git switch -c prd-round/<area>-<n>`.
+   3. Dispatch `prd-toolkit:prd-builder` with no `isolation`, and the builder prompt (below) with
+      its slots filled and nothing else: no summary of the PRD, no hints, no pointers into the
+      code. Its `Base:` is `<base>`, typed out in full; its `Branch:` is the round branch.
+   4. `git switch <build branch>`, the branch step 1's `git branch --show-current` printed.
+   5. Step 4's builder check, on the round branch:
+
+      ```bash
+      uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"
+      git log --format=%B <base>..prd-round/<area>-<n>
+      git status --porcelain --untracked-files=all
+      ```
+
+   6. When it passes, merge the round and delete its branch:
+
+      ```bash
+      git merge --ff-only prd-round/<area>-<n>
+      git branch -d prd-round/<area>-<n>
+      ```
+
+      If `--ff-only` refuses, the build branch moved during the round: stop, and report both
+      branches to the user.
+
+   A failed round (a failed check, a UNIT failure, a stop) merges nothing. Its branch is kept and
+   named in the report, and the next round cuts a new branch from the unchanged build branch. A
+   kept branch stays: never delete one with `-D`.
+
+   The tester's `write` dispatch follows the merged round, never in the same message as the
+   builder: both work in the build worktree. After the merge, take step 2's snapshot again, into
+   a new `<SNAP>`, then dispatch `prd-toolkit:prd-tester`, with the tester prompt (below) as
+   `Mode: write` and every non-unit T-id, build gate and deploy gate, each with its test-case
+   file. Its step 4 check runs against that snapshot.
 
    On a `--fixes` build, the tester's `write` prompt carries one more line, after the T-ids:
    `Un-mark: T-002.5, T-002.6 (known-failing E-003)`, the entry's non-unit regression T-ids (the
@@ -221,29 +260,17 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    `pack.yaml`: in `.prd-toolkit/packs/<name>/` when the repository has `.prd-toolkit/`, else the
    toolkit's `packs/<name>/` for the source `prd-toolkit`, else `<installPath>/prd-packs/<name>/`
    of the plugin that `~/.claude/plugins/installed_plugins.json` records. The built-in `document`
-   pack says `none`. Such an area has
-   no unit T-ids: the builder prompt carries `Unit T-ids: none`, and you dispatch the builder all
-   the same, beside the tester, because the builder writes the area's outputs (for `document`, each
-   `outline` entry's `path`) and runs the standards linters, as building-from-prds says. A request
-   to "write the unit tests first" adds no unit T-id: the area has no unit case to cite, and a test
-   for its `checks` or `judged` T-ids is the tester's `write`, never the builder's.
-
-   When the Agent tool offers no worktree isolation, dispatch the builder first and the tester
-   after it returns, each followed by its step 4 check. The builder then commits on the build
-   branch itself, so there is no merge: its commits land on the build branch, and its range is
-   `<base>..HEAD`, for `prd_build_check.py --diff <base>..HEAD` and
-   `git log --format=%B <base>..HEAD`. The merge, for every rule below, is the moment that
-   check passes. `git status --porcelain --untracked-files=all` must print nothing after the
-   builder: take step 2's snapshot after the builder's check passes and before the tester's
-   dispatch. Without worktree isolation, a builder round that fails its state check stops the
-   build and reports its commits to the user; never re-record `<base>` past them.
-4. **Check the state.** Both checks must pass before anything merges.
-   - **The builder.** Take the branch from its COMMIT line and run:
-
-     ```bash
-     uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..<builder branch>; echo "prd-build-check-exit=$?"
-     git log --format=%B <base>..<builder branch>
-     ```
+   pack says `none`. Such an area has no unit T-ids: the builder prompt carries `Unit T-ids: none`,
+   and you dispatch the builder all the same, in its round before the tester's `write`, because the
+   builder writes the area's outputs (for `document`, each `outline` entry's `path`) and runs the
+   standards linters, as building-from-prds says. A request to "write the unit tests first" adds no
+   unit T-id: the area has no unit case to cite, and a test for its `checks` or `judged` T-ids is
+   the tester's `write`, never the builder's.
+4. **Check the state.** Each agent's check must pass before its work merges or is committed.
+   - **The builder.** Its check is step 3's round step 5, after `git switch <build branch>`: the
+     `--diff` and `git log` of `<base>..prd-round/<area>-<n>`, and the status, which must print
+     nothing (a file the builder left uncommitted fails the round, and the next round's step 1
+     stops the build as a dirty tree).
 
      `prd-build-check-exit=1` fails the round: each line names a file in the PRD folder or a
      tester's test the builder touched; record the lines as the round's failure. `2` is a usage
@@ -251,7 +278,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
      one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
-     stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. A test
+     stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. The
+     one exception: `QUESTIONS: worktree is not on the build branch` is not a PRD gap. The round
+     was cut wrong, so it fails the round; before the next one, run `git branch --show-current`
+     and `git rev-parse HEAD` and check them against that round's `Branch:` and `Base:`. A test
      dispute, `<T-id>: test dispute: "<assertion, verbatim>" vs "<ac:/expect quote, verbatim>"`,
      does not stop it: the caller reconciles each test dispute by quote at step 6, as a test
      misread or a code bug. On an area whose pack says `builder-tests: none`, a QUESTIONS line
@@ -262,35 +292,26 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      block's T-ids (**Rounds**); only a gap neither the outline nor the rubric answers stops the
      build. A UNIT line that is not `pass` fails the round, and the next builder round carries it
      as its `Failure:`, with the quote of that T-id's test case and its unit test as
-     `Failing test:`. With worktree isolation, a failed round merges nothing; dispatch the
-     builder again, as the next round of each of its unit T-ids. A failed round's builder branch
-     is kept and listed in the report; never delete one with `-D`. Without worktree isolation, a
-     failed builder check stops the build instead, as step 3 says. Without worktree isolation,
-     `<base>` does not move on a UNIT-failure round: the range keeps the earlier commits, and the
-     check covers them all.
-   - **The tester.** `dispatching.md` step 4: the five commands into `-after` files and the
-     diffs, each its own call. A write's check exempts the test roots. If the Agent tool placed
-     the builder's worktree inside the repository, that one new path is the builder's, not the
-     tester's; every other changed path outside the test roots fails the check, and you report
-     it as `dispatching.md` step 4 says: the changed paths to the user, nothing restored, and the
-     build stops. Then judge the report as `dispatching.md` step 5 says: TESTS holds one line per
-     dispatched T-id, and a `write` report that holds RESULTS fails the round. Each tester
-     QUESTION the PRD answers is dismissed by an exact quote of the line that answers it; any
-     other is a PRD gap and stops the build. A test that cites a deploy-gate T-id is the tester's
-     like any other non-unit test: `prd_build_check.py --diff` fails a builder round that edits
-     it, and the commit below takes it with the rest.
+     `Failing test:`. A failed round merges nothing (step 3): run step 3's round again, on a new
+     round branch from the unchanged build branch, as the next round of each of its unit T-ids.
+   - - **The tester.** `dispatching.md` step 4: the five commands into `-after` files and the diffs,
+     each its own call, against the snapshot taken after the merge. A write's check exempts the test
+     roots. Every changed path outside the test roots fails the check, and you report it as
+     `dispatching.md` step 4 says: the changed paths to the user, nothing restored, and the build
+     stops. Then judge the report as `dispatching.md` step 5 says: TESTS holds one line per
+     dispatched T-id, and a `write` report that holds RESULTS fails the round. Each tester QUESTION
+     the PRD answers is dismissed by an exact quote of the line that answers it; any other is a PRD
+     gap and stops the build. A test that cites a deploy-gate T-id is the tester's like any other
+     non-unit test: `prd_build_check.py --diff` fails a builder round that edits it, and the commit
+     below takes it with the rest.
 
-   When both pass, run each line as its own call, the tester's paths typed out from its TESTS and
-   HARNESS CHOICES:
+   When the tester's check passes, run each line as its own call, the tester's paths typed out
+   from its TESTS and HARNESS CHOICES:
 
    ```bash
-   git merge <builder branch>
    git add <tester path> <tester path>
    git commit -m "test(<area>): <T-ids> from the PRD" -m "Refs: <IDs>"
    ```
-
-   If the merge refuses because a tester's file is in the way, stop and report both paths to the
-   user.
 
    **`--fixes E-nnn` only: the deploy-gate lines.** Right after that commit, remove the
    `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level,
@@ -381,9 +402,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    | PRD gap | the quote admits both readings, or is silent | **stop**: the gap goes to `/prd-change`; the status follows **Stops** |
 
    A classification without its quote does not count. The quote is all three, each verbatim: the
-   `ac:` line, the `expect` entry and the test's assertion. A builder round is a new
-   `prd-toolkit:prd-builder` dispatch with `isolation: worktree`, the builder prompt and its three
-   code-bug lines, and `<base>` re-recorded with `git rev-parse HEAD` before it. A tester round is
+   `ac:` line, the `expect` entry and the test's assertion. A builder round is step 3's round
+   again, on a new round branch: `<base>` re-recorded with `git rev-parse HEAD` before it, and the
+   builder prompt with its three code-bug lines. A tester round is
    a `Mode: suite` dispatch carrying
    `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`, one line
    per affected T-id, added only after you have checked the test against the quote.
@@ -421,8 +442,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    A clean build writes `verified` directly. A block with no unit and no build-gate T-ids moves
    to `verified` at a clean close, since the `built → verified` conditions hold vacuously for it
    (an NFR whose only test is a deploy-gate `[system]` check, say); its deploy-gate tests run at
-   `/prd-deploy`. Never leave it `built` at a clean close: `prd_deploy.py` pre-flight refuses a
-   deploy while any block is `built`, so it could never reach `live`. On a stopped build it
+   `/prd-deploy`, and the report names it (below). Never leave it `built` at a clean close:
+   `prd_deploy.py` pre-flight refuses a deploy while any block is `built`, so it could never
+   reach `live`. On a stopped build it
    stays `built`, and the next clean build closes it `verified`. A stopped build closes by
    **Stops**: `built` for each block whose unit T-ids pass after the merge, nothing before it. A
    `known-failing` result is not a pass, so its block stays `built`. Never write `live`: it
@@ -465,11 +487,13 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    git commit -m "docs(prd): <IDs> <built or verified>" -m "Refs: <IDs>"
    ```
 
-   Then remove each worktree a passed round left, `git worktree remove <worktree path>` and
-   `git branch -d <builder branch>`, each its own call; a failed round's branch stays. Report to
-   the user: the build branch, each block's status, each T-id's result, every reconcile record
-   and every kept branch. On a change-set branch the report also names the row's state reached,
-   for the caller's `changeset set` (**On a change-set branch**).
+   A merged round's branch is already deleted (step 3); a failed round's branch stays. Report to the
+   user: the build branch, each block's status, each T-id's result, every reconcile record and every
+   kept round branch. For each block whose IDs have no unit and no build-gate T-id and that closed
+   `verified`, the report adds one line, `<ID>: verified with no build-gate test; its proof is the
+   deploy gate at /prd-deploy`: nothing in the build ran a test of it. On a change-set branch the
+   report also names the row's state reached, for the caller's `changeset set` (**On a change-set
+   branch**).
 
 ## Prompts
 
@@ -482,7 +506,12 @@ Area: <area>
 IDs: <UJ, FR and NFR IDs>
 Unit T-ids: <one per line, with its test-case file>
 Scripts: <scripts directory, as an absolute path>
+Base: <sha>
+Branch: prd-round/<area>-<n>
 ```
+
+`<sha>` is the round's `<base>`, the build branch's HEAD before the cut, typed out in full;
+`Branch:` names the round branch step 3 cut for it.
 
 A `--fixes` build adds one line after those, on every builder round:
 
@@ -505,8 +534,9 @@ Quote: "<the test case's ac: line>" / "<the expect entry>"
 Failing test: <path>
 ```
 
-It runs `prd_context.py … --for implement` itself, writes unit tests first, then the code, runs the
-standards linters and required skills, and commits in its worktree with `Refs: <IDs>`.
+It first checks that HEAD holds `Base:` and that the current branch is `Branch:`, then runs
+`prd_context.py … --for implement` itself, writes unit tests first, then the code, runs the
+standards linters and required skills, and commits on the round branch with `Refs: <IDs>`.
 
 The tester prompt, as `dispatching.md` step 3 gives it, with no dry-run directory: `Mode: write` in
 step 3, `Mode: suite` in step 5 and on a test-misread round.

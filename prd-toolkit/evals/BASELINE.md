@@ -156,6 +156,56 @@ says "It's live now".
 - **`says-live-waits` is a weak grader:** RED with runs passed it while offering a hand-written row (an option line naming
   `/prd-deploy` and `live`). `ran-record` and the no-row graders carry the separation.
 
+### Task 16: `builder-checks-branch` and `build-round-branch` (spec section 17 fixes 6 and 7)
+
+Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted), `--runs 3`, model `sonnet`, Claude Code 2.1.318.
+Same command form as above, one `--case` each. RED ran on the worktree before any skill or agent text changed; GREEN on
+the worktree with the round-branch text. Both start from `build_repo.py` (FR-003 approved, `count_notes` not written).
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `builder-checks-branch` (on `base` at 61e0159; the prompt dispatches prd-builder with `Base: 61e0159…` and `Branch: prd-round/notes-1`, a branch that does not exist; reflog emptied) RED | 0.20 | 0.80 | -0.60 | Unchanged text: all three builders built `count_notes`, wrote a unit test and committed on `base`. One wrote "The prompt named branch `prd-round/notes-1`, but the worktree was already on `base`. I committed there and did not switch branches, as the rules require." |
+| `builder-checks-branch` GREEN | 1.00 | 0.80 | +0.20 | 3 of 3: the builder ran only `git merge-base --is-ancestor 61e0159… HEAD` and `git branch --show-current`, and the grader matched `QUESTIONS: worktree is not on the build branch` in each last message. Without the plugin there is no prd-builder agent, so nothing is built and only the QUESTIONS grader fails. |
+| `build-round-branch` (FR-003's approval only on `feature/count-notes`; `base` put back one commit) RED | 0.00 | 0.20 | -0.20 | Unchanged text: all three dispatched the builder with `isolation: worktree` (refused: "worktree isolation is unavailable in this session") beside the tester, then the builder alone, committing on the build branch; `--diff <base>..HEAD`; no round branch, no merge. |
+| `build-round-branch` GREEN | 1.00 | 0.20 | +0.80 | 3 of 3 (twice: once on a near-final text, once on the final text). Each ran `git switch -c prd-round/notes-1`, dispatched prd-builder with no `isolation` and `Base: 61e0159…`/`Branch: prd-round/notes-1`, `git switch feature/count-notes`, `prd_build_check.py … --diff 61e0159…..prd-round/notes-1`, `git merge --ff-only prd-round/notes-1`, `git branch -d`, then the tester's `Mode: write`. One final run's round 1 failed the `--diff` check (the builder edited `tests/test_notes.py`); it kept `prd-round/notes-1`, cut `prd-round/notes-2`, and merged that. |
+
+- **Graders (`builder-checks-branch`):** `builder-dispatched`, `reports-not-on-build-branch` (last message), `no-file-written`
+  (no Write or Edit in the trace, the builder's included), `count-notes-not-built` (src/notes/app.py), `no-commit-or-switch`
+  (`.git/logs/HEAD`, emptied by the scaffold, holds no commit, checkout, merge, reset, rebase or branch line). RED failed
+  the last four in 3 of 3 with runs, so the reflog grader reads `.git/` and can fail.
+- **Graders (`build-round-branch`):** `skill-fired` (with arm only), `no-agent-isolation`, `round-branch-before-builder`
+  (trace: the `git switch -c prd-round/` Bash call comes before the first prd-builder dispatch), `diff-on-round-branch`,
+  `ff-only-merge`, `tester-after-merge` (trace: no prd-tester dispatch before the `--ff-only` merge, one after). RED
+  failed all five in 3 of 3 with runs. The two trace graders were checked under node on five synthetic traces built
+  around a real 490 KB trace (good order; switch after the builder; tester before the merge; no tester; no merge): all
+  as intended, each in under 6 ms.
+
+**Regression re-runs.** The four build evals at 3 runs on the final text, then the two that dropped re-run on a
+`git archive HEAD` copy (the unchanged texts), then both at 5 runs on each text (controller ruling: one bad run in three
+cannot tell a regression from noise):
+
+| Case | final, 3 runs | unchanged, 3 runs | final, 5 runs | unchanged, 5 runs |
+|---|---|---|---|---|
+| `builder-stays-out-of-prd` | 1.00 (3/3) | — | — | — |
+| `builder-document-no-unit` | 1.00 (3/3) | — | — | — |
+| `build-close-no-bump` | 0.90 (2/3) | 1.00 (3/3) | 1.00 (5/5) | 0.89 (3/5) |
+| `build-gap-stops` | 0.89 (2/3) | 1.00 (3/3) | 1.00 (5/5) | 1.00 (5/5) |
+
+- **The failed runs, and whether a round-branch step failed.**
+  - `build-close-no-bump`, final, 3 runs (0.71): round 1's builder edited `tests/test_notes.py`, which cites
+    T-001.1 and T-002.1, so `--diff` exited 1. Round 2 was cut correctly as `prd-round/notes-2`. Its builder raised
+    a Boundary QUESTION (the Boundary names `tests/test_notes.py` only), and the build stopped with FR-003
+    `approved`. The cut, the dispatch, the `--diff` check and the kept branch all behaved as written.
+  - `build-gap-stops`, final, 3 runs (0.67): the round merged `--ff-only`. Then the tester's `write` asserted
+    `count_notes() == len(_NOTES)` after `archive_note(2)`, and `no-guessed-archive-count` failed on that guess. The
+    caller stopped on the gap with FR-003 `built`, as **Stops** says. No round-branch step failed.
+  - `build-close-no-bump`, unchanged, 5 runs (two runs at 0.71): the same builder behaviour, its unit test put into
+    `tests/test_notes.py`. Under the old no-isolation text a failed builder check stops the build, so neither run
+    reached `verified`. These runs have no round-branch step.
+- **Ruling: the drop was noise.** At 5 runs, the final text is 5/5 on both cases. The unchanged text is 3/5 and 5/5.
+  No failed run on the final text came from a round-branch step. The builder's edit of a tester's file happens on
+  both texts; the round-branch path gives it another round, where the old path stopped.
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply

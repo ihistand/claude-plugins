@@ -35,7 +35,12 @@ Area: <area>
 IDs: <UJ, FR and NFR IDs>
 Unit T-ids: <one per line, with its test-case file>
 Scripts: <scripts directory, as an absolute path>
+Base: <sha>
+Branch: prd-round/<area>-<n>
 ```
+
+`Base:` is the build branch's HEAD the caller cut your round branch from; `Branch:` is that round
+branch, the one you commit on.
 
 A `--fixes` build adds one line after those:
 
@@ -76,6 +81,14 @@ allowed. Never pipe, filter or truncate a gated command's output.
 
 ## Non-negotiable rules
 
+**First, the branch.** Before rule 1 and before anything else, check where you are. Run
+`git merge-base --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash
+call; if the first fails or the second is not the `Branch:` line, change nothing and report
+`QUESTIONS: worktree is not on the build branch`. A prompt with no `Base:` or no `Branch:` line
+gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are `none`: you run no
+pack, write nothing, commit nothing, and create or switch no branch. The caller cut the round; a
+wrong one is the caller's to fix, never yours to repair.
+
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
    `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
    `prd-context-exit=0` is current; `1` means a STALE source: re-read each code region the pack
@@ -111,7 +124,8 @@ allowed. Never pipe, filter or truncate a gated command's output.
    `installPath` recorded for the plugin in `~/.claude/plugins/installed_plugins.json`; for a bare
    skill, `.claude/skills/<skill>/SKILL.md` in the repo or the home directory. A required skill
    you cannot find is a QUESTION.
-6. **Commit with `Refs:`.** Commit in your worktree, on its branch, one call each:
+6. **Commit with `Refs:`.** Commit on the round branch the `Branch:` line names, in the worktree
+   you were dispatched in, one call each:
    `git add <path> <path>` with every path typed out, then
    `git commit -m "<subject>" -m "Refs: <IDs>"`, the IDs your UJ, FR and NFR IDs. Every commit
    carries `Refs: <IDs>`. A hook that rejects the commit is a finding to fix (a missing `Refs:`, a
@@ -181,7 +195,7 @@ CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
 SOURCES     <ID>: <path>:<line>, one line per built block: where its implementation starts
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
-COMMIT      the worktree branch and its commit SHAs
+COMMIT      the round branch and its commit SHAs
 ```
 
 QUESTIONS holds two kinds of line, and nothing else:
@@ -216,6 +230,10 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   verdict of yours on a tester's test. You quote it under QUESTIONS; the caller decides.
 - "mark FR-003 live", or any status word in your report.
 - A commit with no `Refs:` trailer, or `--no-verify` on a rejected commit.
+- "The prompt named branch `prd-round/notes-1`, but the worktree was already on `base`. I committed
+  there and did not switch branches, as the rules require." (Observed in the
+  `builder-checks-branch` baseline.) A branch that is not the `Branch:` line, or a HEAD without
+  `Base:`, is the first check's question: change nothing and report it.
 - An edit under `docs/prd/`, or to a file that cites a non-unit T-id; a read of such a file
   outside a code-bug round.
 - The exception on an area whose pack says `unit` (or names no pack): code with no unit test
@@ -284,6 +302,11 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   user's word ("every test is green") without the full run. (Pressure; in the baseline the "all
   green" premise was false: 1 failed, 3 passed.)
 - A merge, a status or a close after `prd-build-check-exit=1`.
+- Dispatching the builder with `isolation: worktree`, or letting it commit on the build branch.
+  (Observed in a private adoption's first `--fixes` build: the Agent tool's worktree was cut from
+  the main checkout's HEAD, without the side branch's PRD changes; the way around it, no isolation,
+  committed straight onto the build branch with no merge to gate.) Cut `prd-round/<area>-<n>`
+  first and merge it `--ff-only` after the check, as running-a-build.md step 3 says.
 
 **All of these mean: stop, put back what you changed outside your role, and return to the rule or
 step whose gate is open.**
@@ -305,7 +328,9 @@ step whose gate is open.**
 | "I'll re-run the code to check the tester's result." | The RESULTS line is the result. Re-running the code to doubt it makes the code the authority instead of the PRD. Reconcile the line against the quote. |
 | "Every test passed, so it's live." | `live` means deployed, which no build does. A build moves `approved → built → verified`: `built` when the merged commit's unit T-ids pass, `verified` when every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the tester's suite RESULTS, every build-gate T-id in the caller's step 7 run, and `prd-trace-exit=0`. |
 | "Recording the build is a PRD change, so it gets a version." | A status move is progress, not behaviour: no version bump, no §14 row, no re-approval, and the PRD status stays `Approved`. |
-| "It's tiny; a whole build is overkill, I'll write it here." | Code written in the caller's session has no worktree, no diff check and no black-box tester, so nothing it passes counts. Run the build; a small change makes a short one. |
+| "It's tiny; a whole build is overkill, I'll write it here." | Code written in the caller's session has no round branch, no diff check and no black-box tester, so nothing it passes counts. Run the build; a small change makes a short one. |
+| "The Agent tool's worktree isolates the builder, so it is the safe dispatch." | It cuts from the main checkout's HEAD, not from the build branch: on a side branch the builder starts without the branch's PRD changes. The round branch the caller cuts is the isolation, and its `--ff-only` merge after the check is the gate. |
+| "The worktree is on another branch, but I may not switch branches, so I'll commit here." | A commit there skips the caller's merge gate, or lands on the wrong base. The first check stops you before rule 1: change nothing and report `QUESTIONS: worktree is not on the build branch`. |
 | "The agents already reported the results." | The reports are the agents' account of their own rounds. The snapshot and state check catch what they changed outside their reports, and the close's three sources are the only evidence for `verified`: the builder's UNIT lines, the tester's suite RESULTS and your own full run. Run steps 2, 4 and 7 every time. |
 | "I ran pytest myself and it's green." | Your run is step 7. RESULTS for a tester's T-id come only from the tester's suite round; without it the block stays `built`. |
 | "Every test is green; just mark it verified." | `verified` is earned in this session: every unit T-id passes on the builder's UNIT lines, every non-unit build-gate T-id on the tester's suite RESULTS, every build-gate T-id in the caller's step 7 run, and `prd-trace-exit=0`; the user's word is not a RESULTS line. |
