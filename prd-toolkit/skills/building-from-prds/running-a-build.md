@@ -201,9 +201,12 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 3. **Dispatch the builder's round, then the tester.** Every builder round runs on a round branch
    you cut in the build worktree: `prd-round/<area>-<n>`, where `<n>` is the round number counted
    from 1 for the build (a `--fixes` build too). An existing branch of that name takes the next
-   free `<n>`. Never dispatch the builder with `isolation: worktree`: it cuts from the main
-   checkout's HEAD, not from the build branch. The cwd stays the build worktree throughout, so the
-   harness commands run where testing.md expects them. Run the round in this order, each step its
+   free `<n>`: run `git branch --list 'prd-round/<area>-*'`, its own call, and take one more than
+   the highest `<n>` it lists. A tester round (a test-misread round or a tester-only round) cuts no
+   round branch and does not advance `<n>`. Never dispatch the builder with
+   `isolation: worktree`: it cuts from the main checkout's HEAD, not from the build branch. The
+   cwd stays the build worktree throughout, so the harness commands run where testing.md expects
+   them. Run the round in this order, each step its
    own Bash call, the `<base>` being the build branch's HEAD as step 1 (or, before a later round,
    `git rev-parse HEAD`) printed it:
 

@@ -214,7 +214,7 @@ CASES = [
     ("error-class:E-003", "error-class", "confirm", "", {}, "Confirm the class (form)", "confirm"),
     ("error-class:E-003", "error-class", "correct", "the PRD never says", {"class": "spec gap"},
      "Correct it to spec gap: the PRD never says (form)", "correct"),
-    ("deploy-step", "deploy-step", "send", "deploy production", {}, "deploy production (form)", None),
+    ("deploy-step", "deploy-step", "send", "deploy production", {}, "deploy production (form)", "confirm"),
     ("signoff:T-001.4", "signoff", "pass", "", {}, "Pass (form)", "pass"),
 ]
 
@@ -489,3 +489,26 @@ def test_an_owner_refusal_is_400_with_its_words(inbox, monkeypatch):
     status, out = inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")
     assert status == 400 and out["result"]["exit"] == 1 and out["error"] == "refused: lint exits 1"
     assert inbox.log() == []
+
+
+def test_a_deploy_step_its_owner_refuses_is_400_with_its_words(inbox, monkeypatch):
+    # another session confirms step 3 between the listing and prd_deploy.py confirm, which then refuses (its exit 2)
+    from prdlint import deploy
+
+    real = gates._run
+
+    def raced(*argv):
+        deploy.append(inbox.repo, inbox.run_id, {"kind": "confirm", "step": 3, "reply": "elsewhere", "at": "t"})
+        return real(*argv)
+
+    monkeypatch.setattr(gates, "_run", raced)
+    status, out = inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")
+    assert (status, out["result"]["exit"]) == (400, 2)
+    assert out["error"] == "prd_deploy: step 3 already has a confirm record"
+    assert inbox.log() == []
+
+
+def test_a_deploy_step_tool_error_stays_500(inbox, monkeypatch):
+    monkeypatch.setattr(gates, "_run", lambda *a: {"stdout": [], "exit": 2, "stderr": ["prd_deploy: internal error: OSError: disk"]})
+    status, out = inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")
+    assert status == 500 and out["error"] == "prd_deploy: internal error: OSError: disk"

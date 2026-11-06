@@ -64,9 +64,10 @@ def _last_row(prd: Prd):
     return table.rows[-1] if table and table.rows else None
 
 
-# the verdict keys `list` reads or a client may, with the type each must have; `touches` and `dry_run` are required
+# the verdict keys `list` reads or a client may, with the type each must have; `touches` and `dry_run` are required;
+# `refs` (0.8.2, optional) is the approval commit's trailer IDs for a change made for an errors.md entry
 VERDICT_TYPES = {"interface": int, "kind": str, "head": str, "digest": str, "restate": str, "touches": list, "impact": dict,
-                 "bump": dict, "dry_run": dict, "ready": bool, "blockers": list, "owner": dict}
+                 "bump": dict, "dry_run": dict, "ready": bool, "blockers": list, "owner": dict, "refs": str}
 VERDICT_REQUIRED = ("digest", "touches", "dry_run", "ready")
 
 
@@ -316,7 +317,9 @@ def _answer_approval(prd: Prd, gate: Gate, reply: str, choice: str | None, **_) 
     record = (verdict.get("dry_run") or {}).get("record")
     if not record:
         raise Refused("the verdict holds no dry-run record")
-    return _run("prd_change.py", "approve", str(root), f"--reply={reply}", f"--dry-run={record}")
+    refs = verdict.get("refs")
+    extra = [f"--refs={refs}"] if isinstance(refs, str) and refs.strip() else []
+    return _run("prd_change.py", "approve", str(root), f"--reply={reply}", f"--dry-run={record}", *extra)
 
 
 def _answer_error_class(prd: Prd, gate: Gate, reply: str, choice: str | None, cls: str | None, repo_root: Path, **_) -> dict:
@@ -432,7 +435,8 @@ def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | No
     try:
         out = ANSWERERS[gate.kind](prd, gate, reply, choice=choice, cls=cls, result=result, item=item, correction=correction, repo_root=Path(repo_root))
         if out.get("exit") == 0 and not (gate.kind == "adoption" and choice != "done"):
-            logged = choice or {"approval": "approve", "error-class": "confirm", "signoff": result}.get(gate.kind)
+            # a deploy step's one choice is confirm: an answered gate never logs null, which is wait's "not pending"
+            logged = choice or {"approval": "approve", "error-class": "confirm", "deploy-step": "confirm", "signoff": result}.get(gate.kind)
             _append_log(Path(repo_root), prd, gate.id, logged, reply, by)
     finally:
         marker.unlink(missing_ok=True)
@@ -555,8 +559,8 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
     def found():
         for line in read_log(wt):
             # a deploy step is repo-wide (its run log is in the git common dir): its answer counts from any worktree
-            here = gate_id.startswith("deploy-step:") or line.get("worktree") == str(wt)
-            if line.get("gate") == gate_id and here and str(line.get("at", "")) >= started:
+            ours = gate_id.startswith("deploy-step:") or line.get("worktree") == str(wt)
+            if line.get("gate") == gate_id and ours and str(line.get("at", "")) >= started:
                 return line
         return None
 
@@ -791,9 +795,11 @@ def _git_text(cwd: Path, *args: str) -> str:
 
 
 def _diff_base(root: Path) -> str | None:
-    """The review's default base: `git merge-base HEAD <upstream, else main>`."""
+    """`git merge-base HEAD <target>` for the first target that has one: the branch's upstream, `origin/HEAD`, the
+    default branch (`init.defaultBranch`), then `main`."""
     upstream = _git_text(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}").strip()
-    for target in ([upstream] if upstream else []) + ["main"]:
+    default = _git_text(root, "config", "--get", "init.defaultBranch").strip()
+    for target in [t for t in (upstream, "origin/HEAD", default) if t] + ["main"]:
         base = _git_text(root, "merge-base", "HEAD", target).strip()
         if base:
             return base
@@ -919,7 +925,9 @@ class _Inbox:
         if code == 0:
             return 200, done
         why = "\n".join(done["result"].get("stderr") or done["result"]["stdout"]) or f"the owner exited {code}"
-        return (400 if code == 1 else 500), {**done, "error": why}  # an owner's refusal is 400, its tool error 500
+        # an owner's refusal is 400, its tool error 500; prd_deploy.py confirm refuses with exit 2 (a usage error), not 1
+        refused = code == 1 or (gate.kind == "deploy-step" and code == 2 and "internal error" not in why)
+        return (400 if refused else 500), {**done, "error": why}
 
     def done(self, prd: Prd, wt: Path, area: str, routes, body: dict) -> tuple[int, dict]:
         """Done goes through `answer` (`prd_confirm.py done`) with the question the page showed, so it is logged;

@@ -39,13 +39,15 @@ def test_a_pack_helper_is_never_written_in_any_mode():
 
 def test_the_write_them_yourself_rule_names_its_exception():
     s = flat(SKILL)
-    assert "Test helpers that testing.md names, other than one a pack ships," in s
+    assert ("Test helpers that testing.md names (fixtures, clients, loaders, page objects), other than one a pack ships, "
+            "may not exist yet.") in s
     assert "without looking whether they exist" in s  # stays, for a helper no pack ships
 
 
 def test_the_dry_run_prompt_helper_paragraph_has_the_exception_too():
     block = re.search(r"^```\n(.*?)^```", DRY_RUN.read_text(encoding="utf-8"), re.S | re.M).group(1)
-    assert "Test helpers that <PRD_DIR>/testing.md names, other than one a pack ships," in " ".join(block.split())
+    assert ("Test helpers that <PRD_DIR>/testing.md names (fixtures, clients, loaders, page objects), other than one a pack "
+            "ships, may not exist yet.") in " ".join(block.split())
 
 
 def test_the_leaks_slot_and_its_format_description_say_how_tracebacks_stay_clean():

@@ -73,7 +73,7 @@ waits gets no answer. At its cap it stops the session's `wait`, so a run that wa
 
 **Regression guard, not RED-proven** (both cases; numbers in the table below). The RED evidence for spec section 17 fixes 1 to 3 is the 7 pins in `tests/test_dry_run_helpers.py`, plus the observed real failure: in a private adoption's dry run, a tester following the "always write them in your dry-run directory" text wrote copies of the pack's helpers (fix 1).
 
-Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted), `--runs 3`, model `sonnet`, Claude Code 2.1.318. RED on a
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 13's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318. RED on a
 `git archive HEAD` copy plus the new case directories; GREEN on the worktree. **Neither case separates RED from GREEN.**
 Both are regression guards, not RED-proven; the pins in `tests/test_dry_run_helpers.py` are the RED evidence (7 failed
 before the text, 7 passed after).
@@ -188,7 +188,6 @@ says "It's live now".
 |---|---|---|---|---|
 | `deploy-by-hand-records` RED | 0.81 | 0.86 | -0.05 | Unchanged skill. All three with runs read `running-a-deploy.md`, ran no `record` and changed nothing: "The toolkit can't record a deploy it didn't run" (or "has no way to"). Each offered a hand-written row instead; one offered a `production` row with run id "manual console promotion", `live (since 1.0.0)` and no `prd_deploy.py check`. `ran-record` failed 3 of 3; `says-live-waits` failed 1 of 3. Without the plugin, all three found `record` in the vendored `.prd-toolkit/prd_deploy.py` and ran it; none said `live` waits for `/prd-deploy`. |
 | `deploy-by-hand-records` GREEN | 1.00 | 0.90 | +0.10 | 3 of 3 with runs. Each ran `uv run --script .prd-toolkit/prd_deploy.py record docs/prd/greet --env production --commit f4674c9 --reply "<the prompt, verbatim>"` (exit 0), committed its row as the close, and ran `prd_deploy.py check --run <id> --diff 77abb20..HEAD` (exit 0). No Edit, Write or shell write touched operations.md, and both blocks and the §11 rows stayed `verified`. `says-live-waits` matched, one line per run: "`verified → live` stays pending until a `/prd-deploy` run passes its tests on production"; "They become `live (since 1.0.0)` only after a `/prd-deploy` run whose tests pass on production"; "`verified → live (since 1.0.0)` waits for a `/prd-deploy` run whose tests pass on production". |
-
 | `deploy-by-hand-records` GREEN, final text | 1.00 | 0.86 | +0.14 | Re-run after the Red Flag's provenance was reworded (the GREEN row above ran on the earlier wording). 3 of 3 with runs ran `record` then `check` (each exit 0). `says-live-waits` matched: "The requirements stay `verified` until a `/prd-deploy` run passes its tests on production"; "`verified → live` waits for a `/prd-deploy` run that goes through staging, the human approval and the smoke tests"; "No requirement moved to `live`, because the toolkit only does that after a `/prd-deploy` run whose tests pass". Without the plugin, all three ran `record` and none said `live` waits. |
 | `deploy-by-hand-records` GREEN, fix round 1 | 1.00 | 0.86 | +0.14 | Re-run after rule 9 gained its stopped-run clause. 3 of 3 with runs ran `record` then `check` (each exit 0). `says-live-waits` matched: "They go to `live (since 1.0.0)` only after a `/prd-deploy` run reaches production and its tests…"; "The requirements stay `verified` until a `/prd-deploy` run passes its tests against production"; "A by-hand record can't move them to `live`, because that needs a `/prd-deploy` run whose tests pass on production". |
 
@@ -207,7 +206,7 @@ says "It's live now".
 
 ### Task 16: `builder-checks-branch` and `build-round-branch` (spec section 17 fixes 6 and 7)
 
-Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted), `--runs 3`, model `sonnet`, Claude Code 2.1.318.
+Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted until Task 16's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318.
 Same command form as above, one `--case` each. RED ran on the worktree before any skill or agent text changed; GREEN on
 the worktree with the round-branch text. Both start from `build_repo.py` (FR-003 approved, `count_notes` not written).
 

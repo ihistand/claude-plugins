@@ -164,3 +164,200 @@ def test_the_two_scripts_share_no_top_level_name():
     names = lambda found: {a or b for a, b in found}  # noqa: E731
     assert names(inbox) and names(panel)
     assert names(inbox) & names(panel) == set()
+
+
+# --- the page in a small DOM: moving a node out of its parent drops the focus inside it, as a browser does ---
+
+DOM_RUN = r"""
+const vm = require('node:vm');
+const fs = require('node:fs');
+const [pageFile, driverFile, base] = process.argv.slice(2);
+const DOM = { active: null, hostMoves: 0, host: null };
+const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+class Nd {
+  constructor(tag) {
+    this.tagName = tag.toUpperCase(); this.parentNode = null; this.childNodes = []; this.attrs = {}; this.dataset = {};
+    this.hidden = false; this.style = {}; this.className = ''; this._text = ''; this.value = ''; this.disabled = false;
+    this.classList = { toggle() {} }; this.selectionStart = 0; this.selectionEnd = 0;
+  }
+  get isConnected() { for (let n = this; n; n = n.parentNode) if (n === html) return true; return false; }
+  contains(o) { for (let n = o; n; n = n.parentNode) if (n === this) return true; return false; }
+  _take(node) {
+    const was = node.isConnected;
+    this.childNodes.splice(this.childNodes.indexOf(node), 1);
+    node.parentNode = null;
+    if (was && DOM.active && node.contains(DOM.active)) DOM.active = body;
+    if (was && DOM.host && node.contains(DOM.host)) DOM.hostMoves++;
+  }
+  _put(node, at) { if (node.parentNode) node.parentNode._take(node); node.parentNode = this; this.childNodes.splice(at, 0, node); }
+  append(...ns) { for (const n of ns) this._put(n, this.childNodes.length); }
+  replaceChildren(...ns) {
+    for (const n of ns) if (n.parentNode) n.parentNode._take(n);
+    for (const c of [...this.childNodes]) this._take(c);
+    this.append(...ns);
+  }
+  before(...ns) { const p = this.parentNode; for (const n of ns) { if (n.parentNode) n.parentNode._take(n); p._put(n, p.childNodes.indexOf(this)); } }
+  after(...ns) { const p = this.parentNode; let ref = this; for (const n of ns) { if (n.parentNode) n.parentNode._take(n); p._put(n, p.childNodes.indexOf(ref) + 1); ref = n; } }
+  remove() { if (this.parentNode) this.parentNode._take(this); }
+  setAttribute(k, v) { this.attrs[k] = v; if (k === 'id') this.id = v; if (k.startsWith('data-')) this.dataset[camel(k.slice(5))] = v; }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  addEventListener() {}
+  set textContent(v) { for (const c of [...this.childNodes]) this._take(c); this._text = String(v); }
+  get textContent() { return this._text + this.childNodes.map((c) => c.textContent).join(''); }
+  focus() { if (this.isConnected) DOM.active = this; }
+  blur() { if (DOM.active === this) DOM.active = body; }
+  setSelectionRange(a, b) { this.selectionStart = a; this.selectionEnd = b; }
+  scrollIntoView() {}
+  all(test, out = []) { for (const c of this.childNodes) { if (test(c)) out.push(c); c.all(test, out); } return out; }
+  querySelectorAll(sel) {
+    const tests = { '[data-fk]': (n) => 'fk' in n.dataset, '.gtitle': (n) => n.className.split(' ').includes('gtitle') };
+    return tests[sel] ? this.all(tests[sel]) : [];
+  }
+  querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+}
+const el = (tag, id, ...kids) => { const n = new Nd(tag); if (id) n.setAttribute('id', id); n.append(...kids); return n; };
+const host = el('div', 'panel-host', el('div', 'shell', el('aside', 'list'), el('main', 'card')), el('div', 'end'));
+host.hidden = true;
+const body = el('body', '', el('header', 'inbox-bar', el('span', 'inbox-status')), el('div', 'inbox-root'), el('div', 'inbox-end'), host);
+const html = el('html', '', body);
+DOM.host = host;
+DOM.active = body;
+const document = {
+  body, documentElement: html, title: '',
+  get activeElement() { return DOM.active; },
+  createElement: (t) => new Nd(t),
+  createTextNode: (s) => { const n = new Nd('#text'); n._text = String(s); return n; },
+  getElementById: (id) => (id === 'panel-host' ? host : html.all((n) => n.id === id)[0] || null),
+  addEventListener() {},
+};
+const route = { handler: null };
+const ctx = {
+  console, URLSearchParams, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, DOM, document,
+  location: { search: '?token=tok', hash: '' },
+  window: { addEventListener() {}, matchMedia: () => ({ matches: false }) },
+  route,
+  fetch: async (path, opts) => {
+    if (base) {
+      const { cache, ...rest } = opts || {};
+      return fetch(base + path + (path.includes('?') ? '&' : '?') + 'token=' + process.env.PRD_TOKEN, rest);
+    }
+    const data = route.handler(path, opts && opts.body ? JSON.parse(opts.body) : undefined);
+    return { status: data.status || 200, json: async () => data.body };
+  },
+};
+vm.createContext(ctx);
+for (const js of fs.readFileSync(pageFile, 'utf8').split('\n//--- next script ---\n')) vm.runInContext(js, ctx);
+vm.runInContext(fs.readFileSync(driverFile, 'utf8'), ctx);
+"""
+
+
+def run_page(tmp_path, driver: str, base: str = "", token: str = ""):
+    """Run the page's two scripts, in page order, in DOM_RUN's small DOM, then the driver; return its last stdout line as JSON."""
+    import json
+    import os
+
+    files = {"run.js": DOM_RUN, "page.js": "\n//--- next script ---\n".join(re.findall(r"<script>(.*?)</script>", page(), re.S)),
+             "driver.js": f"(async () => {{\n{driver}\n}})().catch((e) => {{ console.log(JSON.stringify({{ error: String(e.stack) }})); }});"}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    env = {**os.environ, "PRD_TOKEN": token}
+    out = subprocess.run(["node", str(tmp_path / "run.js"), str(tmp_path / "page.js"), str(tmp_path / "driver.js"), base],
+                         capture_output=True, text=True, timeout=120, env=env)
+    assert out.returncode == 0, out.stderr
+    got = json.loads(out.stdout.strip().splitlines()[-1])
+    assert "error" not in got, got["error"]
+    return got
+
+
+OPEN_ADOPTION = r"""
+const gatesDoc = (open, extra) => ({ prd: 'orders', answers: [], worktrees: [
+  { path: '/w', branch: 'main', gates: [...extra, { id: 'adoption:import', kind: 'adoption', area: 'import', title: 'Confirm import',
+    question: `${open} of 1 items in import are open`, evidence: [] }] },
+  { path: '/w2', branch: 'feature-x', gates: [] }] });
+const listing = { area: 'import', items: [{ id: 'E-003', kind: 'bug', title: 'Importer reads the wrong key', text: 't', acs: [], excerpts: [], where: 'w', summary: null }],
+  answers: {}, open: ['E-003'], changed: [] };
+let doc = gatesDoc(1, []);
+route.handler = (path) => (path === '/gates' ? { body: doc } : { body: listing });
+const wait = () => new Promise((r) => setTimeout(r, 20));
+await refresh();
+const entry = [...I.seen.values()].find((e) => e.g.kind === 'adoption');
+openAdoption(entry);
+await wait();
+pick(cur(), ACTIONS.bug[0]);  // "Real bug — it should…": the panel focuses its text box
+const box = document.getElementById('answer-text');
+box.value = 'it should read the order key'; box.selectionStart = 3; box.selectionEnd = 9;
+const before = document.activeElement === box;
+DOM.hostMoves = 0;
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_redraw_never_moves_the_open_panel_and_keeps_its_focus(tmp_path):
+    # /gates changes while the panel is open: the adoption question counts down, and another worktree gains a gate
+    got = run_page(tmp_path, OPEN_ADOPTION + r"""
+doc = gatesDoc(0, [{ id: 'signoff:T-1', kind: 'signoff', title: 't', question: 'q', evidence: [] }]);
+doc.worktrees[1].gates.push({ id: 'error-class:E-009', kind: 'error-class', title: 'e', question: 'q', evidence: [] });
+await refresh();
+await refresh();
+console.log(JSON.stringify({ before, redrew: I.raw === JSON.stringify(doc), moves: DOM.hostMoves, focused: document.activeElement === box,
+  selection: [box.selectionStart, box.selectionEnd], inCard: I.cards.get(entry.key).contains(document.getElementById('panel-host')),
+  shown: !document.getElementById('panel-host').hidden, cardInPage: I.cards.get(entry.key).isConnected }));
+""")
+    assert got == {"before": True, "redrew": True, "moves": 0, "focused": True, "selection": [3, 9], "inCard": True,
+                   "shown": True, "cardInPage": True}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_move_of_the_panel_restores_its_focus_and_selection(tmp_path):
+    got = run_page(tmp_path, OPEN_ADOPTION + r"""
+I.slot = null;  // forget the slot the panel sits in, so the next redraw has to move it
+doc = gatesDoc(0, []);
+await refresh();
+console.log(JSON.stringify({ moves: DOM.hostMoves, focused: document.activeElement === box, selection: [box.selectionStart, box.selectionEnd] }));
+""")
+    assert got["moves"] >= 1  # the panel did move: the restore is what kept the focus
+    assert got["focused"] is True and got["selection"] == [3, 9]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_done_right_after_the_last_answer_is_accepted(tmp_path, monkeypatch):
+    # the page against a real inbox: the question the page last listed counts one item open; Done must send the current one
+    import json
+
+    from conftest import PLUGINS_FILE
+    from inbox_fixture import AREA
+    from prdlint import confirm
+    from test_inbox_server import Inbox
+
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    box = Inbox(tmp_path / "repo")
+    try:
+        got = run_page(tmp_path, f"""
+await refresh();
+const entry = [...I.seen.values()].find((e) => e.g.kind === 'adoption' && e.wt.path === {json.dumps(str(box.repo))});
+openAdoption(entry);
+const shown = window.PANEL_HOST.question;
+await new Promise((r) => setTimeout(r, 300));
+await save(S.order.find((it) => it.id === 'E-003'), 'intended', '', null);
+const stale = window.PANEL_HOST.question === shown;
+await finish();
+console.log(JSON.stringify({{ stale, ended: S.ended, notice: S.notice, open: I.panelKey }}));
+""", base=box.base, token=box.token)
+        assert got == {"stale": True, "ended": "done", "notice": "", "open": None}
+        assert json.loads(confirm.answers_path(box.repo, AREA).read_text(encoding="utf-8"))["done"] is True
+        assert [line["reply"] for line in box.log()] == ["Done (form)"]
+    finally:
+        box.stop()
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_deploy_step_answered_in_another_worktree_shows_its_reply(tmp_path):
+    # a deploy step is repo-wide, as wait_gate matches it: its answer from any worktree is its answer
+    got = run_page(tmp_path, r"""
+const answers = [{ worktree: '/w2', gate: 'deploy-step:r1:3', reply: 'deployed (form)', by: 'form', at: 't' },
+                 { worktree: '/w2', gate: 'signoff:T-1', reply: 'Pass (form)', by: 'form', at: 't' }];
+const at = (id) => ({ g: { id, kind: id.split(':')[0] }, wt: { path: '/w' } });
+const deploy = latestAnswer(answers, at('deploy-step:r1:3'));
+console.log(JSON.stringify({ deploy: deploy && deploy.reply, signoff: latestAnswer(answers, at('signoff:T-1')) }));
+""")
+    assert got == {"deploy": "deployed (form)", "signoff": None}

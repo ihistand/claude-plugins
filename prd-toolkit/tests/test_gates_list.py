@@ -270,3 +270,48 @@ def test_a_verdict_of_the_wrong_shape_is_no_gate_and_the_others_stay(recorded, o
     assert [g["id"] for g in json.loads(out)["gates"]] == ["error-class:E-003"]
     code, out, err = call("list", str(recorded / PRD))
     assert code == 0 and out.startswith("error-class:E-003 "), (out, err)
+
+
+# --- the approval card's diff base in a repository with no main (0.8.2 final review M5) ---
+
+def _git(cwd, *args):
+    return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", *args],
+                          cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8").stdout.strip()
+
+
+def _trunk_repo(path):
+    path.mkdir()
+    _git(path, "init", "-q", "-b", "trunk")
+    (path / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(path, "add", "a.txt")
+    _git(path, "commit", "-q", "-m", "a")
+    return path
+
+
+def _change_on_a_branch(repo):
+    _git(repo, "checkout", "-q", "--no-track", "-b", "feat")
+    (repo / "b.txt").write_text("b\n", encoding="utf-8")
+    _git(repo, "add", "b.txt")
+    _git(repo, "commit", "-q", "-m", "b")
+
+
+def test_the_diff_base_falls_back_to_origin_head(tmp_path):
+    from prdlint import gates
+
+    origin = _trunk_repo(tmp_path / "origin")
+    _git(tmp_path, "clone", "-q", str(origin), "clone")
+    repo = tmp_path / "clone"
+    base = _git(repo, "rev-parse", "HEAD")
+    _change_on_a_branch(repo)  # no upstream and no main: only origin/HEAD (origin/trunk) knows the base
+    assert _git(repo, "branch", "--list", "main") == ""
+    assert gates._diff_base(repo) == base
+
+
+def test_the_diff_base_falls_back_to_the_default_branch(tmp_path):
+    from prdlint import gates
+
+    repo = _trunk_repo(tmp_path / "repo")
+    _git(repo, "config", "init.defaultBranch", "trunk")
+    base = _git(repo, "rev-parse", "HEAD")
+    _change_on_a_branch(repo)  # no remote, no main
+    assert gates._diff_base(repo) == base

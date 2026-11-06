@@ -507,15 +507,25 @@ def test_only_a_read_of_an_output_file_in_tasks_is_allowed(tmp_path):
 
 def test_an_output_file_is_not_readable_without_a_sibling_tasks_folder(tmp_path):
     repo = make_repo(tmp_path)
-    assert_blocked(call(repo, "Read", file_path=str(tmp_path / "tasks/b1x9.output")), "read")
+    assert_blocked(call(repo, "Read", file_path=str(tmp_path / "tasks/b1x9.output")), "read")  # no tasks folder yet
     other = tmp_path / "elsewhere/tasks"
     other.mkdir(parents=True)
     (other / "b1x9.output").write_text("x\n")
+    make_tasks(tmp_path)  # the scratchpad's sibling exists, so the refusal below is about the folder, not its absence
+    assert call(repo, "Read", file_path=str(tmp_path / "tasks/b1x9.output")).returncode == 0
     assert_blocked(call(repo, "Read", file_path=str(other / "b1x9.output")), "read")  # not the scratchpad's sibling
     payload = {"agent_type": "prd-tester", "tool_name": "Read", "cwd": str(repo),
                "tool_input": {"file_path": str(tmp_path / "tasks/b1x9.output")}}  # no scratchpad_dir
-    make_tasks(tmp_path)
     assert_blocked(run(payload), "read")
+
+
+def test_a_symlinked_tasks_folder_is_no_tasks_folder(tmp_path):
+    repo = make_repo(tmp_path)
+    (tmp_path / "real").mkdir()
+    real = make_tasks(tmp_path / "real")  # tmp_path/real/tasks
+    (tmp_path / "tasks").symlink_to(real, target_is_directory=True)
+    assert_blocked(call(repo, "Read", file_path=str(tmp_path / "tasks/b1x9.output")), "read")
+    assert_blocked(call(repo, "Read", file_path=str(real / "b1x9.output")), "read")
 
 
 def make_pack(repo: Path) -> Path:
@@ -541,6 +551,26 @@ def test_the_vendored_packs_are_read_only_and_nothing_else_of_prd_toolkit(tmp_pa
     assert_blocked(call(repo, "Read", file_path=".prd-toolkit/prd_lint.py"), "read")
     assert_blocked(call(repo, "Glob", path=".prd-toolkit", pattern="*"), "read")
     assert_blocked(bash(repo, "ls .prd-toolkit"), "read")
+
+
+def test_a_symlinked_packs_folder_is_no_pack_folder(tmp_path):
+    repo = make_repo(tmp_path)
+    inside = repo / "src/packs/orders"  # a folder inside the repository, which the tester may not read
+    inside.mkdir(parents=True)
+    (inside / "helpers.py").write_text("def h(): ...\n")
+    (repo / ".prd-toolkit").mkdir()
+    (repo / ".prd-toolkit/packs").symlink_to(repo / "src/packs", target_is_directory=True)
+    assert_blocked(call(repo, "Read", file_path=".prd-toolkit/packs/orders/helpers.py"), "read")
+    assert_blocked(bash(repo, "ls .prd-toolkit/packs/orders"), "read")
+
+
+def test_a_symlinked_prd_toolkit_folder_is_no_pack_folder(tmp_path):
+    repo = make_repo(tmp_path)
+    inside = repo / "src/vendored/packs/orders"
+    inside.mkdir(parents=True)
+    (inside / "helpers.py").write_text("def h(): ...\n")
+    (repo / ".prd-toolkit").symlink_to(repo / "src/vendored", target_is_directory=True)
+    assert_blocked(call(repo, "Read", file_path=".prd-toolkit/packs/orders/helpers.py"), "read")
 
 
 def test_the_vendored_packs_stay_closed_when_degraded(tmp_path):

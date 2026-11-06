@@ -104,3 +104,30 @@ def test_tester_description_matches_the_round_branch_build():
     assert d.startswith("description:")
     assert "built elsewhere" not in d
     assert "while the builder's round runs on its own branch" in d
+
+
+def test_the_changelog_links_the_spec_its_sections_name():
+    e = entry()
+    assert "(section 13)" in e
+    assert f"[design spec](../{SPEC_REL})" in e
+    assert e.index(f"[design spec](../{SPEC_REL})") < e.index("(section 13)")
+
+
+def test_wait_says_exit_0_always_names_the_choice():
+    row = flat(next(line for line in README.splitlines() if line.startswith("| `prd_gates.py wait` |")))
+    assert "at exit 0 `choice` is the answer's, `confirm` for a deploy step" in row
+
+
+def test_the_tester_rewrite_scaffold_header_says_what_it_builds():
+    header = (ROOT / "evals/tester-rewrite-only-that-test/scaffold.sh").read_text(encoding="utf-8").splitlines()[1]
+    assert "one note stored first" in header and "corrects T-001.1's expected id from 1 to 2" in header
+    assert "corrects T-001.1's test case input" not in header
+
+
+def test_the_0_8_2_baseline_says_no_stale_uncommitted_and_keeps_each_table_whole():
+    text = (ROOT / "evals/BASELINE.md").read_text(encoding="utf-8")
+    part = text[:text.index("### Rounds and rulings (0.8.1)")]  # the 0.8.2 tasks' records
+    assert "(uncommitted)" not in part
+    lines = part.split("\n")
+    split = [n + 1 for n in range(1, len(lines) - 1) if lines[n] == "" and lines[n - 1].startswith("|") and lines[n + 1].startswith("|")]
+    assert split == []

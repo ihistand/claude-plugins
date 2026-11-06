@@ -41,7 +41,10 @@ def test_step3_runs_the_round_in_order():
 def test_step3_names_the_round_branch_and_its_number():
     s3 = step(3)
     assert "`<n>` is the round number counted from 1 for the build (a `--fixes` build too)" in s3
-    assert "An existing branch of that name takes the next free `<n>`." in s3
+    assert ("An existing branch of that name takes the next free `<n>`: run `git branch --list 'prd-round/<area>-*'`, its "
+            "own call, and take one more than the highest `<n>` it lists.") in s3
+    assert ("A tester round (a test-misread round or a tester-only round) cuts no round branch and does not advance "
+            "`<n>`.") in s3
 
 
 def test_step3_never_dispatches_with_isolation():

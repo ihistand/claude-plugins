@@ -198,6 +198,21 @@ def test_write_deployed_row_creates_the_section_once(repo):
                          "| production | 1.0.0 | abc1234 | 2026-11-03 | 20261103T093000Z-production |\n")
 
 
+
+def test_write_deployed_row_fills_a_section_with_no_table(repo):
+    ops = repo / OPS
+    ops.write_text(ops.read_text(encoding="utf-8").rstrip("\n") + "\n\n## Deployed\n\nNothing is deployed yet.\n", encoding="utf-8")
+    deploy.write_deployed_row(load(repo), "staging", "1.0.0", "abc1234", "2026-11-03", "20261103T093000Z-staging")
+    deploy.write_deployed_row(load(repo), "production", "1.0.0", "abc1234", "2026-11-03", "20261103T093000Z-production")
+    text = ops.read_text(encoding="utf-8")
+    assert text.count("## Deployed") == 1 and text.count(HEADER) == 1
+    assert text.endswith(f"## Deployed\n\n{HEADER}\n|---|---|---|---|---|\n"
+                         "| staging | 1.0.0 | abc1234 | 2026-11-03 | 20261103T093000Z-staging |\n"
+                         "| production | 1.0.0 | abc1234 | 2026-11-03 | 20261103T093000Z-production |\n\nNothing is deployed yet.\n")
+    assert [(r.env, r.run) for r in load(repo).operations.deployed] == [("staging", "20261103T093000Z-staging"),
+                                                                         ("production", "20261103T093000Z-production")]
+
+
 def test_commit_without_the_prd_refused(repo):
     """A commit that holds no prd.md has no version to record; the refusal echoes the caller's input."""
     empty = git(repo, "commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "-m", "An empty tree").strip()

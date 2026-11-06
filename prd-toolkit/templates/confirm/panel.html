@@ -124,7 +124,7 @@ textarea.edited { background: var(--edited); border-color: var(--warn); }
 <script>
 'use strict';
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
-// The decision inbox embeds this panel: it sets window.PANEL_HOST before this script ({ endpoint, question, active, onEnd }).
+// The decision inbox embeds this panel: it sets window.PANEL_HOST before this script ({ endpoint, question, active, beforeDone, onEnd }).
 const HOST = window.PANEL_HOST || null;
 const GROUPS = [['requirement', 'Requirements'], ['bug', 'Bugs'], ['question', 'Questions'], ['marker', 'Settings']];
 const KIND_NAME = { requirement: 'Requirement', bug: 'Apparent bug', question: 'Open question', marker: 'Missing setting' };
@@ -394,6 +394,7 @@ function submitBox(it) {
 async function finish() {
   if (S.busy) return;
   S.busy = true; render();
+  if (HOST) await HOST.beforeDone(); // the host lists its gates again, so HOST.question is the current one
   const r = await call('POST', '/done', HOST ? { question: HOST.question } : {});
   S.busy = false;
   if (!r) return;

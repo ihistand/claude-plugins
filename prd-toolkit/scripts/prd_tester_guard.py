@@ -153,12 +153,13 @@ class Context:
             p = (self.cwd / sp).resolve()
             if len(p.parts) > 1:
                 self.scratch = p
-        # Claude Code writes a background task's output in the `tasks` folder beside the scratchpad.
+        # Claude Code writes a background task's output in the `tasks` folder beside the scratchpad; a symlink is no tasks folder.
         tasks = self.scratch.parent / "tasks" if self.scratch else None
-        self.tasks_dir: Path | None = tasks.resolve() if tasks and tasks.is_dir() else None
-        # The vendored packs are part of the PRD's harness; a symlink out of the repository is no pack folder.
-        packs = (self.top / ".prd-toolkit" / "packs").resolve()
-        self.packs_root: Path | None = packs if packs.is_dir() and packs.is_relative_to(self.top) else None
+        self.tasks_dir: Path | None = tasks if tasks and tasks.is_dir() and not tasks.is_symlink() else None
+        # The vendored packs are part of the PRD's harness; a symlinked `.prd-toolkit` or `packs` is no pack folder,
+        # even one that points inside the repository.
+        packs = self.top / ".prd-toolkit" / "packs"
+        self.packs_root: Path | None = packs if packs.is_dir() and packs.resolve() == packs else None
 
     def _toplevel(self) -> Path:
         try:

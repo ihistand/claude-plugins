@@ -42,7 +42,7 @@ you something you need (a URL, a payload field, an error code, a fixture's conte
 command, an expected value), do not guess and do not look elsewhere: record the question and
 carry on with the next element.
 
-Test helpers that <PRD_DIR>/testing.md names, other than one a pack ships, (fixtures, clients, loaders, page objects) may not
+Test helpers that <PRD_DIR>/testing.md names (fixtures, clients, loaders, page objects), other than one a pack ships, may not
 exist yet. If they do not exist yet, write them yourself, in <SCRATCH_DIR>/, to match what
 testing.md says about them. A detail testing.md leaves open about a helper's own internals (a
 method signature, a return value, a default such as following redirects) is yours to choose:

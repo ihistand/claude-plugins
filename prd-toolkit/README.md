@@ -590,7 +590,8 @@ the verdict): it restates the change, runs `prd_links.py impact` when `links.md`
 decides each `needs judgment` item, dry-runs the new and revised non-unit T-ids through `prd-tester`,
 and writes `.prd-review.json` in the PRD folder: `{"interface": 1, "kind": "review", "head",
 "digest", "restate", "touches", "impact", "bump": {"level", "decided"}, "dry_run", "ready",
-"blockers"}`. Run it headless as `claude -p "/prd-change --review <dir>" --output-format json` with
+"blockers"}`, plus an optional `"refs"` (0.8.2) that `changing-prds` step 4 sets for a change made for an
+`errors.md` entry, the approval commit's `Refs:` IDs. Run it headless as `claude -p "/prd-change --review <dir>" --output-format json` with
 the plugin loaded and the tools `Read`, `Grep`, `Glob`, `Bash` and `Agent`. The order a client runs: `bump`, then the review, then `record` at the level the verdict gives, then lint and trace; `record` does not change the digest, so the verdict stays valid.
 
 **Pending decisions.** `prd_gates.py list <prd dir> [--worktrees] --json` prints every decision a
@@ -633,7 +634,7 @@ uv run --script .prd-toolkit/prd_deploy.py record docs/prd/<slug> --env <env> --
 | Command | Does | Exit codes |
 |---|---|---|
 | `prd_gates.py serve` | Prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open` (the page opens on `--gate` when given), and serves until Ctrl-C, SIGTERM or `--idle-minutes` (default 120) without a request | `serve` exits 3 when stopped (Ctrl-C, SIGTERM or the idle time), 1 when refused (a `--gate` that is not pending, or `prd_gates: an inbox is already serving at <url>`), 2 when it cannot start (usage, a port in use, `prd_gates: cannot start the inbox: …`); it has no Done, so it never exits 0 |
-| `prd_gates.py wait` | Blocks until the gate is answered by any client and prints `{"interface": 1, "kind": "gates.outcome", "gate", "worktree", "choice", "reply", "by", "at"}` | `wait` exits 0 when answered, 1 when the gate is not pending, 3 on timeout, 2 on usage (a gate that is not pending prints `choice` null: it was answered before `wait` began with nothing logged, or the PRD changed under it) |
+| `prd_gates.py wait` | Blocks until the gate is answered by any client and prints `{"interface": 1, "kind": "gates.outcome", "gate", "worktree", "choice", "reply", "by", "at"}` | `wait` exits 0 when answered, 1 when the gate is not pending, 3 on timeout, 2 on usage (at exit 0 `choice` is the answer's, `confirm` for a deploy step; a gate that is not pending prints `choice` null: it was answered before `wait` began with nothing logged, or the PRD changed under it) |
 | `prd_build_check.py --stale` | Prints `stale <T-id> <test path>: its test case changed after the test (last changed in <sha>)` for each dispatched T-id whose test case changed after its test's last commit; a suite prompt then carries one `Rewrite: <T-id>` line for each | `--stale` exits 0 when nothing is stale, 1 when any is, 2 on a usage or tool error (which stops the dispatch) |
 | `prd_deploy.py record` | Records a deploy the owner did by hand: a run log marked `by: hand` and the environment's Deployed row, left uncommitted; it runs nothing and moves no status | `record` exits 0, 1 when refused (an environment not in both Environments tables, a commit not in the repository, an empty reply), 2 on usage; it prints `run=<id>` on success |
 
@@ -744,7 +745,7 @@ the user cannot state.
 
 ## Changelog
 
-- **0.8.2:** A local decision inbox, and the fixes from the first real adoption.
+- **0.8.2:** A local decision inbox, and the fixes from the first real adoption. The sections named below are those of the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
   - `prd_gates.py serve` is the inbox (see Decision inbox): one page for every pending gate across the worktrees, with the approval's diff. `prd_gates.py wait` blocks until a gate is answered by any client and prints `gates.outcome`; both read and write `prd-gates-log.jsonl` in the git common directory. `gates.answer` gains `by` (`form` or `cli`), a reply from a button ends with ` (form)`, and the vendored page is `.prd-toolkit/gates/inbox.html`. The skills route each decision through the inbox and fall back to the chat.
   - It builds on three changes to the 0.8.1 interface, made before 0.8.1 shipped (`interface` stays 1): the approval gate has two choices, `approve` and `changes`; the adoption gate stays pending until `done`; and `prd_confirm.py open` writes a new answers file.
   - The 0.8.0 retarget refusal names no release number now: `retargeting an area is a conversion, which a later prd-toolkit release brings`.

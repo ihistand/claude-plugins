@@ -63,13 +63,15 @@ const KIND_LABEL = { approval: 'Approval', 'error-class': 'Error class', 'deploy
 const CLASSES = ['code bug', 'spec gap', 'invalid requirement', 'environment', 'standard'];
 const FOLD = 5;
 const I = { doc: null, raw: '', seen: new Map(), seq: 0, first: true, drafts: new Map(), flags: new Set(), cards: new Map(),
-  panelKey: null, scrollKey: null, targetKey: null, hashSeen: '', failures: 0, stopped: false, timer: null };
+  panelKey: null, slot: null, scrollKey: null, targetKey: null, hashSeen: '', failures: 0, stopped: false, timer: null };
 
 // The decision inbox embeds the confirm panel for one adoption area at a time.
 window.PANEL_HOST = {
   area: '', wt: '', question: '',
   endpoint(path) { return `/adoption/${encodeURIComponent(this.area)}${path}?wt=${encodeURIComponent(this.wt)}`; },
   active() { return I.panelKey !== null; },
+  // Done sends the gate's question, which counts the open items: list again first, so it is the current one.
+  beforeDone() { return refresh(); },
   onEnd(kind) {
     if (kind === 'done') { I.panelKey = null; I.raw = ''; refresh(); return; }
     stop(kind);
@@ -142,7 +144,9 @@ async function refresh() {
 }
 
 function latestAnswer(answers, entry) {
-  const mine = (answers || []).filter((a) => a.worktree === entry.wt.path && a.gate === entry.g.id);
+  // a deploy step is repo-wide, as wait matches it: its answer from any worktree counts
+  const anywhere = entry.g.id.startsWith('deploy-step:');
+  const mine = (answers || []).filter((a) => a.gate === entry.g.id && (anywhere || a.worktree === entry.wt.path));
   return mine.length ? mine[mine.length - 1] : null;
 }
 
@@ -176,14 +180,23 @@ function reconcile(doc) {
 
 // --- drawing ---------------------------------------------------------------------------------------------
 
+// Put kids into parent, in order, without ever taking keep out of it: moving a node drops the focus inside it.
+function settle(parent, kids, keep) {
+  if (!keep || keep.parentNode !== parent || !kids.includes(keep)) { parent.replaceChildren(...kids); return; }
+  for (const old of [...parent.childNodes]) if (old !== keep) old.remove();
+  const at = kids.indexOf(keep);
+  keep.before(...kids.slice(0, at));
+  keep.after(...kids.slice(at + 1));
+}
+
 function draw() {
   const root = byId('inbox-root');
   const host = byId('panel-host');
   const was = document.activeElement;
   const focusKey = was && was.dataset ? was.dataset.fk : null;
   const caret = focusKey && typeof was.selectionStart === 'number' ? was.selectionStart : null;
-  document.body.append(host); // park the panel so rebuilding the cards does not destroy it
-  host.hidden = true;
+  const inPanel = was && was !== host && host.contains(was) ? { el: was, start: was.selectionStart, end: was.selectionEnd } : null;
+  const before = I.cards;
   I.cards = new Map();
   const slots = new Map();
   const pending = [...I.seen.values()].filter((e) => !e.gone).length;
@@ -201,9 +214,28 @@ function draw() {
     }
   }
   if (!kids.length) kids.push(h('p', { class: 'muted', text: 'Nothing is waiting for you.' }));
-  root.replaceChildren(...kids);
-  const slot = I.panelKey ? slots.get(I.panelKey) : null;
-  if (slot) { slot.append(host); host.hidden = false; }
+  // The open panel stays in its slot, and its card in the page: the old card takes the new card's content around the slot.
+  const fresh = I.panelKey ? slots.get(I.panelKey) : null;
+  const old = fresh ? before.get(I.panelKey) : null;
+  let keep = null;
+  if (fresh && I.slot && I.slot.key === I.panelKey && host.parentNode === I.slot.el && old && old.parentNode === root && old.contains(I.slot.el)) {
+    const card = I.cards.get(I.panelKey);
+    settle(old, [...card.childNodes].map((n) => (n === fresh ? I.slot.el : n)), I.slot.el);
+    old.className = card.className;
+    kids[kids.indexOf(card)] = old;
+    I.cards.set(I.panelKey, old);
+    keep = old;
+  } else {
+    I.slot = fresh ? { key: I.panelKey, el: fresh } : null;
+  }
+  settle(root, kids, keep);
+  if (I.slot && host.parentNode !== I.slot.el) I.slot.el.append(host);
+  if (!I.slot && host.parentNode !== document.body) document.body.append(host); // keep the closed panel for the next one
+  host.hidden = !I.slot;
+  if (inPanel && document.activeElement !== inPanel.el && host.contains(inPanel.el) && !host.hidden) {
+    inPanel.el.focus({ preventScroll: true });
+    if (typeof inPanel.start === 'number' && typeof inPanel.el.setSelectionRange === 'function') inPanel.el.setSelectionRange(inPanel.start, inPanel.end);
+  }
   byId('inbox-status').textContent = `${I.doc.prd}: ${pending} waiting, refreshed ${new Date().toLocaleTimeString()}`;
   document.title = pending ? `(${pending}) Decision inbox` : 'Decision inbox';
   if (focusKey) {

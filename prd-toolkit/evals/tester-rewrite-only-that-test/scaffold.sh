@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start state: the notes PRD (area `confirmed`) with a tester test per T-id (tests/test_t001.py for T-001.1, tests/test_t002.py for T-002.1), committed; then a later commit corrects T-001.1's test case input to expect id 2 after one stored note, so its test is stale and T-002.1's is not.
+# Start state: the notes PRD (area `confirmed`) with T-001.1's case changed to one note stored first and id 1, and a tester test per T-id written from the cases as they stood (tests/test_t001.py for T-001.1, tests/test_t002.py for T-002.1), committed; then a later commit corrects T-001.1's expected id from 1 to 2, so its test is stale and T-002.1's is not.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python3 -B "$here/../scaffolds/notes_repo.py" "$PWD" confirmed

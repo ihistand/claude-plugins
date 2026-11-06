@@ -277,7 +277,9 @@ so you count instead of it.
    in the shape **The verdict** of `${CLAUDE_PLUGIN_ROOT}/skills/changing-prds/reviewing-a-change.md`
    gives, filled from steps 1 to 4: `head` from `git rev-parse HEAD` and `digest` from
    `uv run --script <scripts>/prd_change.py digest docs/prd/<slug>; echo "prd-change-exit=$?"`, each
-   its own call, `ready` `true` and `blockers` `[]`. Write it only then: anything that would make
+   its own call, `ready` `true` and `blockers` `[]`. For a change made for an `errors.md` entry, add
+   `"refs": "<changed IDs>, E-nnn"` to the verdict: the inbox's approval passes it to `approve` as
+   `--refs`. Leave `refs` out for any other change. Write it only then: anything that would make
    `ready` false sends you back to the step whose gate is open. It is never committed (`approve`
    leaves it out and deletes it). Inside a change set (step 2), write no `.prd-review.json`: the
    change set's one approval (`running-a-change-set.md` step 3) is the only approval, and this
@@ -290,7 +292,8 @@ so you count instead of it.
    lint result and the dry-run report. Ask through **The decision inbox** below, with the gate
    `approval:<branch>` (`<branch>` from `git branch --show-current`, its own call), or headless or
    in the chat as follows. An outcome `approve`: the inbox already ran `prd_change.py approve` with
-   the owner's reply and step 4's record, and made the approval commit. Never run `approve` again:
+   the owner's reply, step 4's record and the verdict's `refs` (step 4 sets it for a change made for
+   an `errors.md` entry: `'<changed IDs>, E-nnn'`), and made the approval commit. Never run `approve` again:
    grep the plans as below, then go on from "Only now may code change". An outcome `changes`: its
    reply is the change request, an edit, so back to step 2; the revision answers that reply as it
    stands, and step 4's new verdict raises the gate again. Inside a change set (step 2) there is no

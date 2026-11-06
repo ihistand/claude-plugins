@@ -106,6 +106,9 @@ def test_deploy_step_reply_reaches_the_log_verbatim(repo):
     recs = deploy.read_log(repo, run_id)
     assert [r["reply"] for r in recs if r.get("kind") == "confirm"] == [REPLY]
     assert listed(repo / PRD) == []
+    from prdlint import gates
+    [line] = gates.read_log(repo)
+    assert line["choice"] == "confirm"  # never null at exit 0: null is wait's "not pending"
 
 
 # --- Review Focus 4: a PRD path with a space ---
@@ -194,6 +197,38 @@ def test_approval_approve_commits_with_the_reply_verbatim(recorded):
     assert f'Reply: "{REPLY}"\nDry run: {DRY}\n' in body
     assert DRY in body
     assert not (recorded / PRD / ".prd-review.json").exists()
+
+
+
+def approve_through_gates(repo):
+    from prdlint import gates
+
+    out = gates.answer(model.load(repo / PRD), repo, f"approval:{branch(repo)}", REPLY)
+    assert out["result"]["exit"] == 0, out
+    return git_out(repo, "log", "-1", "--format=%B")
+
+
+def test_approval_carries_the_verdicts_refs_on_its_trailer(recorded):
+    # a change made for an errors.md entry: changing-prds step 4 writes its trailer IDs into the verdict
+    from test_change_approve import verdict
+
+    verdict(recorded, refs="AC-002.3, E-003")
+    body = approve_through_gates(recorded)
+    assert body.rstrip().splitlines()[-1] == "Refs: AC-002.3, E-003"
+    assert "Refs: none" not in body
+
+
+def test_approval_without_refs_keeps_the_no_behaviour_change_trailer(recorded):
+    v = json.loads((recorded / PRD / ".prd-review.json").read_text(encoding="utf-8"))
+    assert "refs" not in v  # the 0.8.1 verdict shape
+    assert approve_through_gates(recorded).rstrip().splitlines()[-1] == "Refs: none (no behaviour change)"
+
+
+def test_a_verdict_whose_refs_is_not_text_is_no_gate(recorded):
+    from test_change_approve import verdict
+
+    verdict(recorded, refs=["E-003"])
+    assert listed(recorded / PRD) == []
 
 
 def test_approval_changes_writes_the_verdict_and_commits_nothing(recorded):
