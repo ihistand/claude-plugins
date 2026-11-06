@@ -69,7 +69,8 @@ record it" change nothing below.
    It prints `run=<id>`. Commit its row as the close and run `prd_deploy.py check` on it, with
    `--run <id> --diff <HEAD before the close>..HEAD`. Never write a Deployed row yourself. A
    by-hand record moves no status: `verified → live` waits for a `/prd-deploy` run whose tests
-   pass on that environment. The report says so.
+   pass on that environment. The report says so. A record made while a run is stopped at a human
+   step falls under the Red Flag "A close committed while a run waits at a human step".
 
 ## Red Flags - STOP
 

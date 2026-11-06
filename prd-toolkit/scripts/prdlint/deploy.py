@@ -593,7 +593,8 @@ def record(prd: Prd, repo_root: Path, env: str, commit: str, reply: str) -> str:
     """Record a deploy the owner did by hand: a `by: hand` run log and `env`'s Deployed row, left uncommitted.
 
     Runs nothing and moves no status. Returns the run id; Refused for an environment not in both Environments tables,
-    a commit not in the repository, or an empty reply, with nothing written.
+    a commit not in the repository, an empty reply, a commit whose prd.md has no version, or a held repository lock,
+    with nothing written. Takes the repository lock after those checks, as `recover` does.
     """
     if env not in prd.operations.environments or env not in prd.testing.environments:
         raise Refused([f"environment {env} is not in both Environments tables"])
@@ -607,19 +608,20 @@ def record(prd: Prd, repo_root: Path, env: str, commit: str, reply: str) -> str:
     prefix = prd_rel(prd, repo_root)
     version = frontmatter(_show(repo_root, full, "prd.md" if prefix == "." else f"{prefix}/prd.md"))[0].get("version")
     if not version:
-        raise Refused([f"commit {full[:7]} has no {prefix}/prd.md version"])
-    run_id = new_run_id(repo_root, env)
-    try:
-        now = _iso()
-        append(repo_root, run_id, {
-            "kind": "header", "by": "hand", "run": run_id, "head": _git(repo_root, "rev-parse", "HEAD").strip(), "commit": full,
-            "prd": prefix, "runbook": runbook_hash(prd.root), "version": version, "until": env, "started": now,
-        })
-        append(repo_root, run_id, {"kind": "hand", "env": env, "commit": full, "reply": reply, "at": now})
-    except Exception:
-        _log_path(repo_root, run_id).unlink(missing_ok=True)
-        raise
-    write_deployed_row(prd, env, version, full[:7], f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}", run_id)
+        raise Refused([f"commit {commit} has no {prefix}/prd.md version"])
+    with repo_lock(repo_root):  # as recover: one prd_deploy command at a time in the repository
+        run_id = new_run_id(repo_root, env)
+        try:
+            now = _iso()
+            append(repo_root, run_id, {
+                "kind": "header", "by": "hand", "run": run_id, "head": _git(repo_root, "rev-parse", "HEAD").strip(), "commit": full,
+                "prd": prefix, "runbook": runbook_hash(prd.root), "version": version, "until": env, "started": now,
+            })
+            append(repo_root, run_id, {"kind": "hand", "env": env, "commit": full, "reply": reply, "at": now})
+        except Exception:
+            _log_path(repo_root, run_id).unlink(missing_ok=True)
+            raise
+        write_deployed_row(prd, env, version, full[:7], f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}", run_id)
     return run_id
 
 

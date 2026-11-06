@@ -403,3 +403,8 @@ def test_by_hand_record_moves_no_status():
 
 def test_by_hand_red_flag():
     assert "I'll add the Deployed row myself, since they already deployed it" in red_flags()
+
+
+def test_by_hand_record_during_a_stopped_run():
+    assert ("A record made while a run is stopped at a human step falls under the Red Flag \"A close committed while a "
+            "run waits at a human step\".") in flat(SKILL)

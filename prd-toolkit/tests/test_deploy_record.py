@@ -196,3 +196,25 @@ def test_write_deployed_row_creates_the_section_once(repo):
     assert text.count("## Deployed") == 1 and text.count(HEADER) == 1
     assert text.endswith(f"{HEADER}\n|---|---|---|---|---|\n| staging | 1.0.0 | abc1234 | 2026-11-03 | 20261103T093000Z-staging |\n"
                          "| production | 1.0.0 | abc1234 | 2026-11-03 | 20261103T093000Z-production |\n")
+
+
+def test_commit_without_the_prd_refused(repo):
+    """A commit that holds no prd.md has no version to record; the refusal echoes the caller's input."""
+    empty = git(repo, "commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "-m", "An empty tree").strip()
+    before = logs(repo)
+    with pytest.raises(deploy.Refused) as e:
+        record(repo, "staging", empty)
+    assert e.value.reasons == [f"commit {empty} has no {PRD}/prd.md version"]
+    nothing_written(repo, before)
+
+
+def test_a_held_repo_lock_refuses(repo):
+    """record takes the repository lock as recover does: non-waiting, so a held lock refuses with nothing written."""
+    before = logs(repo)
+    with deploy.repo_lock(repo):
+        with pytest.raises(deploy.Refused) as e:
+            record(repo, "staging", head_sha(repo))
+        r = deploy_cli(repo, "record", "--env", "staging", "--commit", head_sha(repo), "--reply", "x")
+    assert e.value.reasons == ["another prd_deploy command is running in this repository"]
+    assert (r.returncode, r.stdout, r.stderr) == (1, "", "prd_deploy: another prd_deploy command is running in this repository\n")
+    nothing_written(repo, before)
