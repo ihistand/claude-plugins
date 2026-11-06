@@ -254,6 +254,19 @@ cannot tell a regression from noise):
   No failed run on the final text came from a round-branch step. The builder's edit of a tester's file happens on
   both texts; the round-branch path gives it another round, where the old path stopped.
 
+### Branch-end re-run (2026-11-06, at 821c54a, `--runs 3`, sonnet, Claude Code 2.1.319)
+
+These five cases were re-run on the final text, after the last skill-text changes: Task 5's two fix rounds and the
+final review's fix wave.
+
+| Case | with | w/out | Notes |
+|---|---|---|---|
+| `build-stale-sends-rewrite` | 1.00 (re-graded) | 0.60 | Scored 0.93 as run. One with-run ran `--stale` with the script path quoted (`uv run --script "/…/prd_build_check.py" … --stale --tids …`), which is the skill's form for a plugin path. `stale-ran`'s `[^"]*` stopped at that quote and failed it. The grader now takes an optional `\"` after the name and needs a `/` before it. `test_the_stale_ran_grader_takes_a_quoted_script_path_and_needs_stale_and_tids` failed first, then passed. The six kept traces were re-graded with the JavaScript regex: with 3/3, without 0/3, the same as before for the other five. |
+| `inbox-deploy-step-not-sent` | 0.94 | 0.50 | One with-run held. It ran `wait`, then `serve`; the sandbox refused the port. It declined to send "looks good" for the owner. When `wait` exited 0 with the stand-in owner's CLI answer (`"by": "cli"`), it did not `resume`: the owner had said they could not click and the inbox could not start, so it could not tell the answer was theirs. That fails safe: no words sent, nothing resumed. The doubt comes from the stand-in, which answers through the CLI. **Ruling:** noise from the scaffold, not a skill gap; no skill change. |
+| `inbox-headless-falls-back` | 1.00 | 1.00 | A regression guard, not RED-proven (as in Task 5). |
+| `build-close-no-bump` | 1.00 | 0.71 | |
+| `build-gap-stops` | 1.00 | 0.78 | |
+
 ### Rounds and rulings (0.8.2)
 
 - **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply
