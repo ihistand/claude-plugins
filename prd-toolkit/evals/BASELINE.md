@@ -60,8 +60,8 @@ two case directories); GREEN on the worktree. Same command form as above, one `-
 |---|---|---|---|---|
 | `build-stale-sends-rewrite` (notes area `confirmed`; a tester test per T-id, committed; a later commit changes T-001.1's case, not T-002.1's) RED | 0.47 | 0.53 | -0.07 | Unchanged text: no `--stale` call and no `Rewrite:` line in any run; two with runs sent `Misread: T-001.1`. Two without runs edited the test themselves. |
 | `build-stale-sends-rewrite` GREEN | 1.00 | 0.60 | +0.40 | All three with runs ran `prd_build_check.py docs/prd/notes --stale --tids T-001.1,T-002.1` as a Bash call (the grader matched that command line) and dispatched the tester with `Rewrite: T-001.1` on its own line and no `Rewrite:` for T-002.1, no `Misread:`, and no main-session edit of a test. |
-| `tester-rewrite-only-that-test` (the same repo; the tester is given `Rewrite: T-001.1`) RED | 0.89 | 0.67 | +0.22 | Unchanged text: two of three with runs already rewrote the test (the PRD value, with a QUESTION about the missing quote); one left it. So this case is weak at RED. |
-| `tester-rewrite-only-that-test` GREEN | 1.00 | 0.67 | +0.33 | All three with runs wrote `tests/test_t001.py` with `add_note("call bob")` then `== 2`, kept `@prd T-001.1`, and left `tests/test_t002.py` byte for byte as it was. Without the plugin the agent type does not exist, so nothing is rewritten. |
+| `tester-rewrite-only-that-test` (the same repo; the tester is given `Rewrite: T-001.1`; the old test asserts `== 1` after one stored note and fails against the code, the corrected case says 2, which the code returns) RED | 0.89 | 0.67 | +0.22 | Unchanged text, `--runs 3`. Not separated: two of three with runs edited the test to `== 2` (one `Edit` of the assertion, one of the whole test) with no `Rewrite:` rule; the third only ran `uv run pytest tests` and left the failing test. |
+| `tester-rewrite-only-that-test` GREEN | 0.89 | 0.67 | +0.22 | Not separated either: two with runs wrote `add_note("call bob")` then `== 2`, T-002.1's file byte for byte; the third wrote a loop (`for text in ["call bob"]: add_note(text)`) that is correct but misses the grader's literal `add_note("call bob")`, so it scored 0.67. |
 
 - **Graders (build-stale-sends-rewrite):** `skill-fired` (with-only), `stale-ran` (Bash command with the script, `--stale`
   and `--tids`), `rewrite-line-for-t-001-1` (the `Mode: suite` Agent prompt has `Rewrite: T-001.1` at a line start),
@@ -581,3 +581,11 @@ claude plugin eval ./prd-toolkit --runs 1 --model sonnet --scaffold --trust-plug
 - Narrow Bash grants (`Bash(uv run *)` and similar) denied compound commands and in one run left the
   agent unable to lint, which failed `lint-ran`. Grant plain `Bash`.
 - Results land in `evals/results/`, which is git-ignored.
+
+- **`tester-rewrite-only-that-test` does not separate RED from GREEN (fix round 1).** The first scaffold's old test still
+  passed against the code, so the unchanged tester fixed it anyway (RED 0.89). The scaffold now commits the case and the
+  test with the wrong id (1 after one stored note, so the old test fails against the code) and corrects the case to 2 in
+  a later commit. RED stayed 0.89 (2 of 3 rewrote), GREEN 0.89 (2 of 3 passed, one correct rewrite missed the literal
+  `add_note("call bob")`). The word `Rewrite:` is enough for the unchanged tester to act, so this behaviour is not
+  something the text changes; the Task 11 text is shown by `build-stale-sends-rewrite` (RED 0.47, GREEN 1.00) and the
+  pins. The grader was not loosened.
