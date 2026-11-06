@@ -489,6 +489,7 @@ def _append_log(repo_root: Path, prd: Prd, gate_id: str, choice: str | None, rep
 # tell an owner still at work (the gate gone, the line not yet there) from a gate that changed under it ---
 
 ANSWERING_DIR = "prd-gates-answering"
+MARKER_MAX_AGE = 15 * 60  # seconds: a marker older than this is stale (a killed `answer` whose pid may be reused)
 
 
 def answering_dir(repo_root: Path) -> Path:
@@ -510,12 +511,26 @@ def _mark_answering(repo_root: Path, gate_id: str) -> Path:
 
 
 def _answering(repo_root: Path, gate_id: str) -> bool:
-    """True while a marker for the gate names a live process; a dead pid's marker counts as absent."""
+    """True while a marker for the gate names a live process and is younger than MARKER_MAX_AGE. A marker whose pid is
+    dead, or that is older (a killed `answer`, its pid perhaps reused), counts as absent and is removed."""
+    path = answering_path(repo_root, gate_id)
     try:
-        pid = int(answering_path(repo_root, gate_id).read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
+        raw = path.read_text(encoding="utf-8")
+        age = time.time() - path.stat().st_mtime
+    except OSError:
         return False
-    return pid > 0 and _alive(pid)
+    try:
+        pid = int(raw.strip())
+    except ValueError:
+        pid = 0
+    if pid > 0 and age <= MARKER_MAX_AGE and _alive(pid):
+        return True
+    try:
+        if path.read_text(encoding="utf-8") == raw:  # never one a newer `answer` wrote since
+            path.unlink()
+    except OSError:
+        pass
+    return False
 
 
 # --- wait: block until the owner answers one gate (in the form or the chat) ---
@@ -551,30 +566,33 @@ def wait_gate(prd_dir: Path, gate_id: str, worktree: Path | None = None, timeout
         except Exception:
             return False
 
+    def gone():
+        """The gate left the list: an owner still at work holds the marker until its log line is written; GRACE then
+        covers the chat route, whose owner script writes no marker. 0 with the line, 1 without, 3 on timeout."""
+        while _answering(wt, gate_id):
+            line = found()
+            if line:
+                return 0, _outcome(wt, gate_id, line)
+            if timeout is not None and time.monotonic() - begun >= timeout:
+                return 3, {}
+            time.sleep(min(poll, 0.2))
+        end = time.monotonic() + GRACE
+        while True:
+            line = found()  # an answer that landed since `started` still counts
+            if line:
+                return 0, _outcome(wt, gate_id, line)
+            if time.monotonic() >= end:
+                return 1, _outcome(wt, gate_id, None)
+            time.sleep(0.05)
+
     if not pending():
-        line = found()  # an answer that landed since `started` still counts
-        return (0, _outcome(wt, gate_id, line)) if line else (1, _outcome(wt, gate_id, None))
+        return gone()
     while True:
         line = found()
         if line:
             return 0, _outcome(wt, gate_id, line)
         if not pending():
-            # an owner still at work holds the marker until its log line is written; GRACE covers the chat route,
-            # whose owner script writes no marker
-            while _answering(wt, gate_id):
-                line = found()
-                if line:
-                    return 0, _outcome(wt, gate_id, line)
-                if timeout is not None and time.monotonic() - begun >= timeout:
-                    return 3, {}
-                time.sleep(min(poll, 0.2))
-            end = time.monotonic() + GRACE
-            while time.monotonic() < end:
-                line = found()
-                if line:
-                    return 0, _outcome(wt, gate_id, line)
-                time.sleep(0.05)
-            return 1, _outcome(wt, gate_id, None)
+            return gone()
         if timeout is not None and time.monotonic() - begun >= timeout:
             return 3, {}
         time.sleep(poll)

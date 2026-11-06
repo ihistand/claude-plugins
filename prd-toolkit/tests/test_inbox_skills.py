@@ -262,8 +262,8 @@ def test_the_descriptions_route_a_waiting_gate():
 
 # ---------------------------------------------------------------- fix round 1
 
-SERVE_STOPPED = ("When the `serve` this session started exits before `wait` returns (the idle timeout, Ctrl-C), stop "
-                 "the background `wait` and take the chat route.")
+SERVE_STOPPED = ("When a `serve` that printed its URL later exits before `wait` returns (the idle timeout, Ctrl-C), "
+                 "stop the background `wait` and take the chat route.")
 CHAT_STOPS_SERVE = ("take the chat route with it, and stop the `serve` this session started, never an inbox it reused; "
                     "`wait` then exits 1, which is expected.")
 SEND_FAILS_CHECK = ("An inbox Send already ran `prd_deploy.py confirm` with the owner's words, so the step is confirmed. "

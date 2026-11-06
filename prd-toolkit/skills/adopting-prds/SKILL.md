@@ -455,9 +455,9 @@ paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
     in one line, ask in the chat as the step's chat route says, and leave `wait` running: an
     outcome it prints first is still the owner's answer.
 
-  Then wait for `wait`'s completion notice: never poll for the exit and never sleep. When the
-  `serve` this session started exits before `wait` returns (the idle timeout, Ctrl-C), stop the
-  background `wait` and take the chat route.
+  Then wait for `wait`'s completion notice: never poll for the exit and never sleep. When a
+  `serve` that printed its URL later exits before `wait` returns (the idle timeout, Ctrl-C), stop
+  the background `wait` and take the chat route.
 - **The outcome.** `wait` exit 0 prints one `gates.outcome` document. Its `reply` is the owner's
   reply, used as it stands, with its `choice`; `"by": "form"` marks an answer from the page (the
   reply ends ` (form)`). The owner's answer is already written: the inbox ran the script that

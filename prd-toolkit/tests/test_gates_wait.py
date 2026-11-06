@@ -63,7 +63,8 @@ def test_a_gate_answered_before_wait_starts_exits_1_at_once(repo):
     time.sleep(1.1)
     start = time.monotonic()
     code, out = gates.wait_gate(repo / PRD, "error-class:E-003", poll=0.05)
-    assert code == 1 and out["choice"] is None and time.monotonic() - start < 1
+    # fix round 2: a gate gone at the start gets the loop's marker-then-GRACE read, so "at once" is within GRACE
+    assert code == 1 and out["choice"] is None and time.monotonic() - start < gates.GRACE + 1
 
 
 def test_a_gate_that_disappears_unanswered_exits_1(repo):
@@ -222,3 +223,57 @@ def test_a_failed_owner_whose_gate_left_exits_1(repo, monkeypatch):
     t.join(25)
     assert box["r"][0] == 1 and box["r"][1]["choice"] is None
     assert not any(gates.answering_dir(repo).glob("*"))
+
+
+# --- Task 5 fix round 2: a stale marker never holds `wait`, and a gate gone at the start reads the marker too ---
+
+def plant_marker(repo, gate, pid, age=0.0):
+    import os
+    path = gates.answering_path(repo, gate)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{pid}\n", encoding="utf-8")
+    if age:
+        then = time.time() - age
+        os.utime(path, (then, then))
+    return path
+
+
+def test_wait_removes_a_dead_pid_marker(repo):
+    import subprocess, sys
+    add_errors(repo, entry(3, "code bug"))
+    dead = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True).stdout.strip()
+    path = plant_marker(repo, "error-class:E-003", dead)
+    t, box = waiting(repo, "error-class:E-003", timeout=20)
+    errors = repo / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8").replace("E-003", "E-099"), encoding="utf-8")
+    t.join(25)
+    assert box["r"][0] == 1 and not path.exists()
+
+
+def test_an_old_marker_with_a_live_pid_does_not_hold_wait_and_is_removed(repo):
+    import os
+    add_errors(repo, entry(3, "code bug"))
+    path = plant_marker(repo, "error-class:E-003", os.getpid(), age=gates.MARKER_MAX_AGE + 60)  # a reused pid
+    assert gates.MARKER_MAX_AGE == 15 * 60
+    t, box = waiting(repo, "error-class:E-003", timeout=20)
+    start = time.monotonic()
+    errors = repo / PRD / "errors.md"
+    errors.write_text(errors.read_text(encoding="utf-8").replace("E-003", "E-099"), encoding="utf-8")
+    t.join(25)
+    assert box["r"][0] == 1 and time.monotonic() - start < gates.GRACE + 2 and not path.exists()
+
+
+def test_a_gate_gone_at_the_start_with_a_live_marker_waits_for_the_log_line(repo):
+    import os
+    add_errors(repo, entry(3, "code bug", confirmed=True))  # already off the list: the owner has written
+    gate = "error-class:E-003"
+    path = plant_marker(repo, gate, os.getpid())
+
+    def owner_finishes():
+        time.sleep(gates.GRACE + 1)
+        gates._append_log(repo, load(repo), gate, "confirm", "late line", "form")
+        path.unlink()
+
+    threading.Thread(target=owner_finishes).start()
+    code, out = gates.wait_gate(repo / PRD, gate, poll=0.05, timeout=20)
+    assert code == 0 and out["choice"] == "confirm" and out["reply"] == "late line"
