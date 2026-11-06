@@ -405,7 +405,7 @@ def test_block_names_the_coordination_role_only_with_links(prd):
     assert ROLE not in prd_block.render_block(model.load(prd), "docs/prd/orders")
     (prd / "links.md").write_text(LINKS, encoding="utf-8")
     block = prd_block.render_block(model.load(prd), "docs/prd/orders")
-    assert ROLE in block and "another PRD cites" in block
+    assert ROLE in block and "a cited item" in block
     assert "{{" not in block and "\n\n\n" not in block
 
 
@@ -419,7 +419,7 @@ def test_block_with_links_stays_small(prd):
     (prd / "links.md").write_text(LINKS, encoding="utf-8")
     adopt(prd, "".join(f"| area-{i:02} | adopted | `src/a{i}/**` |\n" for i in range(20)))
     add_required_skills(prd, 4)
-    assert len(prd_block.render_block(model.load(prd), "docs/prd/orders").encode()) < 1664
+    assert len(prd_block.render_block(model.load(prd), "docs/prd/orders").encode()) < 1536
 
 
 # --- fix round 1 (review of 5094a60; rulings R-11b, R-11c, R-11d) ---

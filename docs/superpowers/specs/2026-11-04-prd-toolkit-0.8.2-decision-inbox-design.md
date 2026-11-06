@@ -572,8 +572,9 @@ PRD.
    behaviour change starts with `/prd-change`". On a PRD that lists adopted areas, a session read
    it as covering changes outside them too, where the PRD holds nothing yet.
    - **Fix.** When the PRD has `Adopted areas:`, `templates/claude-block.md` renders the rule as
-     `Every behaviour change in an adopted area (below) starts with <change rule>; outside them,
-     the PRD does not govern yet`.
+     `Every behaviour change in an adopted area starts with <change rule>.` The change rule is
+     "`/prd-change`, before code", and with `links.md` it adds "; one to a cited item, with
+     `/prd-change-set`".
    - A PRD with no adoption keeps today's line.
    - `prd_block.py` writes it. A repository picks it up on its next `prd_block.py` run, and the
      release notes say so.
