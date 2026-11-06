@@ -1,3 +1,4 @@
+# Regression guard, not RED-proven: the unchanged tester already acts on the word `Rewrite:` (BASELINE.md, Task 11).
 schema_version: "1.1"
 name: tester-rewrite-only-that-test
 context:
