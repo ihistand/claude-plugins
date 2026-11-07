@@ -170,14 +170,15 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
     repo_root = model.repo_root(prd.root)
     slug = prd.frontmatter.get("prd", prd.root.name)
     until = time.monotonic() + args.idle_minutes * 60  # an orphaned standby's pings would keep a live inbox from idling out
+    said: set[tuple[str, str]] = set()
     while True:
         time.sleep(STANDBY_POLL)
-        if time.monotonic() >= until:
-            return 3
-        if not _pending(prd, repo_root, args.gate):
+        if not _pending(prd, repo_root, args.gate):  # not pending wins over the idle bound in the same tick
             time.sleep(STANDBY_LINGER)
             print(f"prd_gates: {args.gate} is not pending", file=sys.stderr, flush=True)
             return 1
+        if time.monotonic() >= until:
+            return 3
         live = gates.live_inbox(repo_root, slug)
         if live or record is None:
             record = live or record
@@ -197,6 +198,8 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
         except formserver.PageError as e:
             print(f"prd_gates: cannot start the inbox: {e}", file=sys.stderr)
             return 2
+        except (gates.PrdUnreadable, model.NotAPrd):  # the PRD vanished or changed since the look above: look again next time
+            continue
         except OSError as e:
             other = _settled(repo_root, slug, record)
             if other:
@@ -204,7 +207,11 @@ def _standby(prd: model.Prd, args, record: dict | None) -> int:
                 continue
             print(f"prd_gates: cannot take over the inbox at port {record['port']}: {e.strerror or e}", file=sys.stderr, flush=True)
             return 2
-        except Exception:  # noqa: BLE001 - the PRD failed to load inside make_inbox (it changed since the look above)
+        except Exception as e:  # noqa: BLE001 - keep standing by, but say a programming error once
+            seen_key = (type(e).__name__, str(e))
+            if seen_key not in said:
+                said.add(seen_key)
+                print(f"prd_gates: standby: {seen_key[0]}: {e}", file=sys.stderr, flush=True)
             continue
         return _run_inbox(server, token, args, browser=False)
 

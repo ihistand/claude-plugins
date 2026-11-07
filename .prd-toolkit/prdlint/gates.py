@@ -737,6 +737,10 @@ INBOX_PREFIX = "prd-inbox-"
 PING_TIMEOUT = 2.0
 
 
+class PrdUnreadable(Exception):
+    """The PRD could not be read this moment (it vanished or is being written): `make_inbox`'s own load failed with OSError."""
+
+
 class InboxLive(Refused):
     """An inbox for this PRD is already serving."""
 
@@ -1060,7 +1064,7 @@ def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120, token: s
     """The inbox server for the PRD at `prd_dir`, bound to 127.0.0.1, and its token (`token` when given, so a standby
     takes over at the same URL; else a new one). Writes the lock file (mode 0600),
     which is deleted when `formserver.run` returns or the server is closed. Raises InboxLive, OSError (port in use),
-    formserver.PageError, model.NotAPrd."""
+    formserver.PageError, model.NotAPrd, PrdUnreadable (the PRD's load failed with OSError; a bind failure stays OSError)."""
     class InboxServer(formserver.Server):
         lock_path: Path | None = None
 
@@ -1079,7 +1083,10 @@ def make_inbox(prd_dir: Path, port: int = 0, idle_minutes: float = 120, token: s
                 _release(self.lock_path, self.token)
                 self.lock_path = None
 
-    prd = model.load(Path(prd_dir))
+    try:
+        prd = model.load(Path(prd_dir))
+    except OSError as e:
+        raise PrdUnreadable(str(e)) from e
     root = model.repo_root(prd.root).resolve()
     rel = prd.root.resolve().relative_to(root).as_posix()
     slug = prd.frontmatter.get("prd", prd.root.name)

@@ -432,3 +432,91 @@ def test_a_takeover_while_the_prd_fails_to_load_keeps_standing_by(made, serving,
         moved.rename(prd_md)
     assert b.until(lambda: b.out), (b.err, b.proc.poll())  # the next look takes over
     assert b.out == [f"url={a.url}#gate={GATE}"]
+
+
+# --- 0.8.3 (f, g, h): the standby's edge cases, driven in-process with a fast poll ---
+
+def _drive_standby(made, monkeypatch, capsys, *, make, pending, idle_minutes=120.0):
+    """`_standby` run in this process: `make` replaces gates.make_inbox, `pending` is a list of answers for `_pending` (the last repeats)."""
+    import types
+
+    import prd_gates
+    from prdlint import model
+
+    monkeypatch.setattr(prd_gates, "STANDBY_POLL", 0.01)
+    monkeypatch.setattr(prd_gates, "STANDBY_LINGER", 0.0)
+    monkeypatch.setattr(gates, "live_inbox", lambda *a, **k: None)
+    answers = list(pending)
+    monkeypatch.setattr(prd_gates, "_pending", lambda *a, **k: answers.pop(0) if len(answers) > 1 else answers[0])
+    monkeypatch.setattr(gates, "make_inbox", make)
+    ran = []
+    monkeypatch.setattr(prd_gates, "_run_inbox", lambda *a, **k: ran.append(a) or 0)
+    prd = model.load(made["repo"] / PRD)
+    args = types.SimpleNamespace(gate=GATE, idle_minutes=idle_minutes)
+    code = prd_gates._standby(prd, args, {"port": 1, "token": "t"})
+    return code, capsys.readouterr().err, ran
+
+
+def test_standby_keeps_standing_by_when_the_prd_vanishes_mid_takeover(made, monkeypatch, capsys):
+    calls = []
+
+    def make(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise gates.PrdUnreadable("prd.md: No such file or directory")
+        return object(), "t"
+
+    code, err, ran = _drive_standby(made, monkeypatch, capsys, make=make, pending=[True])
+    assert code == 0 and len(ran) == 1 and len(calls) == 2
+    assert "cannot take over" not in err and "prd_gates: standby:" not in err
+
+
+def test_make_inbox_raises_prd_unreadable_when_its_load_fails_with_oserror(made, monkeypatch):
+    from prdlint import model
+
+    def boom(*a, **k):
+        raise FileNotFoundError(2, "No such file or directory")
+
+    monkeypatch.setattr(model, "load", boom)
+    with pytest.raises(gates.PrdUnreadable):
+        gates.make_inbox(made["repo"] / PRD)
+
+
+def test_standby_says_an_unexpected_error_once(made, monkeypatch, capsys):
+    calls = []
+
+    def make(*a, **k):
+        calls.append(1)
+        raise KeyError("x")
+
+    code, err, _ = _drive_standby(made, monkeypatch, capsys, make=make, pending=[True, True, True, True, False])
+    assert code == 1
+    assert len(calls) >= 3
+    assert err.count("prd_gates: standby: KeyError: 'x'") == 1, err
+
+
+def test_standby_prints_nothing_for_an_expected_load_failure(made, monkeypatch, capsys):
+    from prdlint import model
+
+    calls = []
+
+    def make(*a, **k):
+        calls.append(1)
+        raise (model.NotAPrd("no prd") if len(calls) % 2 else gates.PrdUnreadable("gone"))
+
+    code, err, _ = _drive_standby(made, monkeypatch, capsys, make=make, pending=[True, True, True, True, False])
+    assert code == 1 and len(calls) >= 2
+    assert "prd_gates: standby:" not in err
+
+
+def test_not_pending_wins_over_idle_in_the_same_tick(made, monkeypatch, capsys):
+    code, err, _ = _drive_standby(made, monkeypatch, capsys, make=lambda *a, **k: pytest.fail("no takeover"),
+                                  pending=[False], idle_minutes=1e-9)
+    assert code == 1
+    assert f"prd_gates: {GATE} is not pending" in err
+
+
+def test_still_pending_past_the_bound_exits_3(made, monkeypatch, capsys):
+    code, err, _ = _drive_standby(made, monkeypatch, capsys, make=lambda *a, **k: pytest.fail("no takeover"),
+                                  pending=[True], idle_minutes=1e-9)
+    assert code == 3
