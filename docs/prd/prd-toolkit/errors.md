@@ -56,3 +56,16 @@ Touches: FR-007
 Diagnosis: The sample keeps every loaded case whose `str(level).strip()` is not `unit` (prd_lint.py:67). A case with no `level` gives `""` and one with `level: Unit` gives `Unit`, so both are sampled. T-007.5 printed `T-009.1 test-cases/odd.yaml` and `T-009.2 test-cases/odd.yaml` beside the nine expected lines, where AC-007.4 (the owner's answer to Q-02) samples neither.
 Resolution: T-007.5 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
+
+### E-007 lint crashes (internal error, exit 2) on a directory or broken symlink named `<name>.yaml` in test-cases/ or contracts/
+Detected: 2026-11-07, user report (/prd-error)
+Classification: invalid requirement
+Confirmed: 2026-11-07, "Confirm the class (form)"
+Touches: FR-006
+Evidence: User report (/prd-error), verbatim:
+    lint-cli: a directory or broken symlink named <name>.yaml in test-cases/ or contracts/ crashes lint
+    (internal error, exit 2) instead of a sufficiency finding like AC-006.3.
+    Repro: /private/tmp/claude-502/-Users-ihistand-projects/70d5ca74-4580-4373-ba48-6ff35310fa48/scratchpad/lintbug/ydir
+Diagnosis: Reproduced once: `prd_lint.py <repro>/ydir`, where test-cases/sub.yaml is an empty directory, printed `prd_lint: internal error: IsADirectoryError: [Errno 21] Is a directory: .../test-cases/sub.yaml` and exited 2. Root cause: prdlint/model.py guards `.md` entries with `is_file()` (line 854, the E-005 fix), but the test-cases glob (line 887) and the contracts rglob (line 899) pass every `*.yaml` match, a directory or a broken symlink included, to load_yaml, whose open raises. The broken-symlink half is read from the code, not run: glob yields a dangling link and open raises FileNotFoundError. The code does what an AC says: AC-006.1 `If loading the folder raises an error other than a missing prd.md, the lint command shall print prd_lint: internal error: <exception type>: <message> to stderr ... and exit 2.` AC-006.3 gives the sufficiency finding only to `an entry of the folder whose name ends in .md`. The AC is wrong in scope: a non-file `.yaml` entry in test-cases/ or contracts/ is the same malformed-folder case E-005 fixed for `.md`, and should be a sufficiency finding at line 0, not an internal error.
+Resolution: T-006.4 [integration], PRD 5.0.0, fixed in 52b85d8
+Recurrence of: E-005

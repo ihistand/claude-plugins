@@ -14,7 +14,7 @@
 - **Lifecycle.** Nothing runs between tests: there is no service or database. A test runs a CLI script as a subprocess with the test's own interpreter, `python <repo>/prd-toolkit/scripts/<script>` (not `uv run --script`, whose own stderr lines would break the stderr assertions), or calls the script's library, in a fresh temporary directory it creates itself.
 - **Environment switch.** Not applicable: one environment, `local`; no test touches `production` (the marketplace).
 - **Database access.** Not applicable: no database.
-- **Tools on the runner.** python3 3.11 or later, uv and git on PATH; the tests directory is `prd-toolkit/tests/`.
+- **Tools on the runner.** python3 3.11 or later, uv and git on PATH, on macOS or Linux, whose file systems let a test create a symbolic link with `os.symlink`; the tests directory is `prd-toolkit/tests/`; the Levels commands run pytest in the environment of `prd-toolkit/pyproject.toml`, which holds pyyaml, sqlglot, openapi-spec-validator and markdown-it-py, so a test may import `yaml`.
 - **Clean state.** Every test starts from its own pytest `tmp_path`; a PRD folder or git repository it needs is copied or built there, and nothing is shared between tests.
 - **Subprocess environment.** A script runs with the runner's environment minus `PYTHONIOENCODING`, `PYTHONPATH` and `PYTHONHOME`, which would hide the locale or reach a bare virtual environment, and minus `PRD_LINT_CI`, which would skip checks a case expects, plus the case's own `env`.
 - **In-process calls.** A case's `call:` runs the named function inside the test process instead of a subprocess, with the same environment rules (set through pytest's monkeypatch), and `return` is the value it returns; its stdout and stderr are captured.

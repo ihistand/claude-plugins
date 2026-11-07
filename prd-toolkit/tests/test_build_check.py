@@ -424,6 +424,19 @@ def test_e013_non_file_yaml_entry_is_skipped(srepo):
     assert len(buildcheck.stale_findings(prd, srepo, ["T-001.1"])) == 1
 
 
+def test_e013_cli_with_a_non_file_yaml_entry_does_not_crash(srepo):
+    # 0.8.3 spec §5, E-013, through the CLI: the script loads the PRD with the directory already there,
+    # which crashed in model.load (exit 2, internal error) until E-007's fix.
+    (srepo / "docs/prd/orders/test-cases/bad.yaml").mkdir()
+    # stderr is not compared whole: a cold uv cache prints its own "Installed N packages" line there
+    code, out, err = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1")
+    assert (code, out) == (0, "") and "internal error" not in err
+    edit_case(srepo)
+    code, out, err = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1")
+    assert code == 1 and "internal error" not in err
+    assert out.startswith("stale T-001.1 tests/test_import.py: its test case changed after the test (last changed in ")
+
+
 def test_e014_citation_split_across_lines_is_not_a_citation(repo):
     # 0.8.3 spec §5, E-014
     (repo / "tests/test_split.py").write_text("# @" "prd\nT-002.1\n")  # CITE's \s+ spans a newline; a trace per-line scan does not
