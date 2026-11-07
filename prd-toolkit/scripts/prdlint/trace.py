@@ -62,6 +62,11 @@ def _scan(prd: Prd, repo_root: Path, rx: re.Pattern) -> list[tuple[tuple[str, ..
     return out
 
 
+def cited_tids(text: str) -> list[str]:
+    """The T-ids cited in `text`, read line by line as `_scan` reads a file: `@prd` and its T-id share a line."""
+    return [m.group(1) for line in text.split("\n") for m in CITE.finditer(line)]
+
+
 def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:
     """T-id -> [(file relative to repo_root, line)] for every `@prd T-nnn.n` under the test roots."""
     out: dict[str, list[tuple[str, int]]] = {}

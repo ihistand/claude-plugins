@@ -49,6 +49,9 @@ def main(argv: list[str]) -> int:
         if args.diff:
             findings = buildcheck.diff_findings(prd, model.repo_root(prd.root), args.diff)
         elif args.stale:
+            if model.git_toplevel(prd.root) is None:
+                print(f"prd_build_check: {prd.root.as_posix()} is not in a git working tree", file=sys.stderr)
+                return 2
             findings = buildcheck.stale_findings(prd, model.repo_root(prd.root), [t.strip() for t in args.tids.split(",") if t.strip()])
         else:
             findings = buildcheck.results_findings(

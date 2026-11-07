@@ -9,8 +9,10 @@ from pathlib import Path
 
 import yaml
 
+from .yamlload import _Loader
+
 from .model import Prd
-from .trace import CITE, BadRange, citations
+from .trace import BadRange, cited_tids, citations
 
 RESULT = re.compile(r"^(T-\d{3}\.\d+): (pass|fail: .+|known-failing E-\d+)$")
 _LINE_TID = re.compile(r"^(T-\d{3}\.\d+)\b")
@@ -136,8 +138,8 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
             continue
         cited: dict[str, None] = {}
         for rev in (base, head):
-            for m in CITE.finditer(_show(repo_root, rev, path)):
-                cited[m.group(1)] = None
+            for tid in cited_tids(_show(repo_root, rev, path)):
+                cited[tid] = None
         # a T-id with no test case is treated as non-unit: a tester owns anything not proven unit
         non_unit = [t for t in cited if levels.get(t) != "unit"]
         if non_unit:
@@ -158,15 +160,15 @@ _RESULT_LINE = re.compile(r"^(?:[-*]\s+)?(T-\d{3}\.\d+)\b")
 
 def results_findings(report: str, tids: list[str]) -> list[str]:
     """The block starts at the first line beginning with a RESULTS heading; its result lines are the
-    contiguous run of T-id lines after it (blank lines allowed before the first); the first other
-    non-blank line ends it, and what follows is notes."""
+    contiguous run of T-id lines after it (blank lines allowed before the first); the first line after
+    a result line that is blank or not a result line ends it, and what follows is notes."""
     lines = [line.strip() for line in report.split("\n")]
     start = next((n for n, line in enumerate(lines) if _HEADING.match(line)), None)
     findings: list[str] = []
     counts: dict[str, int] = {}
     for line in lines[start + 1:] if start is not None else []:
-        if not line:
-            continue  # blank lines do not end the run; the first non-T-id line does
+        if not line and not counts:
+            continue  # blank lines before the first result line are skipped; after it, a blank line ends the run
         m = _RESULT_LINE.match(line)
         if not m:
             break
@@ -199,15 +201,15 @@ def _case_entries(root: Path, rev: str | None, prd_rel: str, tid: str) -> object
     """The parsed entry for `tid` across every test-case file of the PRD at `rev` (None: the working tree); a
     missing entry is the sentinel `_ABSENT`."""
     if rev is None:
-        names = sorted(p.relative_to(root).as_posix() for p in (root / prd_rel / "test-cases").glob("*.yaml"))
+        names = sorted(p.relative_to(root).as_posix() for p in (root / prd_rel / "test-cases").glob("*.yaml") if p.is_file())
     else:
-        p = _git(root, "ls-tree", "-r", "--name-only", rev, "--", f"{prd_rel}/test-cases/")
+        p = _git(root, "ls-tree", "--name-only", rev, "--", f"{prd_rel}/test-cases/")
         if p.returncode != 0:
             raise RuntimeError(f"git ls-tree {rev} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
-        names = [n for n in p.stdout.split("\n") if n.endswith(".yaml")]
+        names = [n for n in p.stdout.split("\n") if n.endswith(".yaml") and "/" not in n[len(prd_rel) + len("/test-cases/"):]]
     for name in names:
         text = (root / name).read_text(encoding="utf-8") if rev is None else _show(root, rev, name)
-        data = yaml.safe_load(text)
+        data = yaml.load(text, Loader=_Loader)  # the loader's reader: the first value of a repeated key wins
         if isinstance(data, dict) and tid in data:
             return data[tid]
     return _ABSENT
@@ -218,25 +220,26 @@ _ABSENT = object()
 
 def stale_findings(prd: Prd, repo_root: Path, tids: list[str]) -> list[str]:
     """One line per T-id of `tids` whose test case differs, as parsed YAML, between the commit that last changed
-    its test and the working tree. A T-id with no test, or whose test file is uncommitted (listed by git status or
-    without a commit), is never stale; of two committed citing files the newer by commit time is judged."""
+    its test and the working tree. A T-id with no test, or any of whose citing files has a git status entry or no commit, is never stale; of two committed citing files the newer by commit time is judged."""
     cites = citations(prd, repo_root)
     prd_rel = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
     out: list[str] = []
     for tid in tids:
         best: tuple[int, str, str, str] | None = None
-        for path in dict.fromkeys(f for f, _ in cites.get(tid, [])):
+        files = list(dict.fromkeys(f for f, _ in cites.get(tid, [])))
+        if files:
+            st = _git(repo_root, "status", "--porcelain", "--", *files)
+            if st.returncode != 0:
+                raise RuntimeError(f"git status failed: {(st.stderr.strip().splitlines() or ['?'])[0]}")
+            if st.stdout.strip():
+                continue  # a citing test with a status entry is being written now
+        for path in files:
             last = _last_commit(repo_root, path)
             if last and (best is None or last[0] > best[0]):
                 best = (last[0], last[1], last[2], path)
         if best is None:
             continue
         _, full, short, path = best
-        st = _git(repo_root, "status", "--porcelain", "--", path)
-        if st.returncode != 0:
-            raise RuntimeError(f"git status {path} failed: {(st.stderr.strip().splitlines() or ['?'])[0]}")
-        if st.stdout.strip():
-            continue
         now = _case_entries(repo_root, None, prd_rel, tid)
         if now is _ABSENT:
             continue  # a removed case is a PRD change, not a stale test
