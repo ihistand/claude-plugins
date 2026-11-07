@@ -128,7 +128,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-003 | List the rules | verified | features/lint-cli.md |  |
 | FR-004 | Reject a bad command line | verified | features/lint-cli.md |  |
 | FR-005 | Refuse a folder without prd.md | verified | features/lint-cli.md |  |
-| FR-006 | Report an internal error without a traceback | approved | features/lint-cli.md |  |
+| FR-006 | Report an internal error without a traceback | verified | features/lint-cli.md |  |
 | FR-007 | Sample T-ids for the dry run | verified | features/lint-cli.md |  |
 | FR-008 | Mark a CI run for the rules | live | features/lint-cli.md | 1.0.0 |
 | FR-009 | Write UTF-8 in any locale | live | features/lint-cli.md | 1.0.0 |

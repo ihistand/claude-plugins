@@ -98,8 +98,8 @@ Tests: T-005.1 [integration], T-005.2 [integration], T-005.3 [integration]  (tes
 Traces: cli:prd_lint; `prdlint/model.py` NotAPrd
 
 ### FR-006 Report an internal error without a traceback
-Status: approved
-Source: prd-toolkit/scripts/prdlint/model.py:850 @adeb02a
+Status: verified
+Source: prd-toolkit/scripts/prdlint/model.py:889 @1ce0f93
 Acceptance (EARS):
 - AC-006.1 If loading the folder raises an error other than a missing prd.md, the lint command shall
   print `prd_lint: internal error: <exception type>: <message>` to stderr, print no traceback and
