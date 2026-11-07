@@ -99,7 +99,7 @@ Traces: cli:prd_lint; `prdlint/model.py` NotAPrd
 
 ### FR-006 Report an internal error without a traceback
 Status: verified
-Source: prd-toolkit/scripts/prdlint/model.py:729 @97c04e1
+Source: prd-toolkit/scripts/prdlint/model.py:889 @1ce0f93
 Acceptance (EARS):
 - AC-006.1 If loading the folder raises an error other than a missing prd.md, the lint command shall
   print `prd_lint: internal error: <exception type>: <message>` to stderr, print no traceback and
@@ -107,12 +107,14 @@ Acceptance (EARS):
 - AC-006.2 If a rule raises an error, the lint command shall print
   `prd_lint: internal error in rule <rule>: <exception type>: <message>` to stderr, print no finding
   on stdout, and exit 2.
-- AC-006.3 If an entry of the folder whose name ends in `.md` is not a regular file, the loader shall
-  report `sufficiency` at line 0 of that entry with `a .md entry that is not a file`, load no
-  document from it, and lint shall go on to run the rules.
+- AC-006.3 If an entry of the folder whose name ends in `.md`, or an entry whose name ends in `.yaml`
+  in `test-cases/` or under `contracts/` outside `contracts/fixtures/`, is not a regular file, the
+  loader shall report `sufficiency` at line 0 of that entry with `a .md entry that is not a file`
+  or `a .yaml entry that is not a file`, by the entry's suffix, load nothing from it, and lint
+  shall go on to run the rules.
 Errors: -
-Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1; a directory named `<name>.md` → AC-006.3, not an internal error (E-005, fixed in 0.7.3)
-Tests: T-006.1 [integration], T-006.2 [integration], T-006.3 [integration]  (test-cases/lint-cli.yaml)
+Edge cases: a `.md` file in the folder that is not valid UTF-8 → AC-006.1; a directory named `<name>.md` → AC-006.3, not an internal error (E-005, fixed in 0.7.3); a directory or a broken symbolic link named `<name>.yaml` in `test-cases/` or `contracts/` → AC-006.3, not an internal error (E-007); a non-file `<name>.yaml` under `contracts/fixtures/` is fixture data, never read → AC-012.2
+Tests: T-006.1 [integration], T-006.2 [integration], T-006.3 [integration], T-006.4 [integration], T-006.5 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/registry.py` RuleCrash
 
 ### FR-007 Sample T-ids for the dry run
