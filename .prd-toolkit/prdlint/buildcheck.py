@@ -1,7 +1,10 @@
 """The build's two mechanical checks: what the builder touched, and what the tester reported."""
 import os
+import json
 import re
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -36,6 +39,74 @@ def _resolve(root: Path, rng: str, rev: str) -> str:
     return p.stdout.strip()
 
 
+MANIFEST = ".claude-plugin/plugin.json"
+
+
+class ToolError(Exception):
+    """A git or vendor run the refresh check depends on failed."""
+
+
+def _first_line(text: str) -> str:
+    return (text.strip().splitlines() or ["failed"])[0]
+
+
+def plugin_dir(repo_root: Path, rev: str) -> str | None:
+    """The one directory at `rev` holding the prd-toolkit plugin (its plugin.json and scripts/prd_hooks.py); None for zero or several."""
+    p = _git(repo_root, "ls-tree", "-r", "--name-only", rev)
+    if p.returncode != 0:
+        raise ToolError(f"git ls-tree {rev}: {_first_line(p.stderr)}")
+    names = set(p.stdout.split("\n"))
+    found = []
+    for name in sorted(names):
+        if name != MANIFEST and not name.endswith("/" + MANIFEST):
+            continue
+        d = name[: -len(MANIFEST)].rstrip("/")
+        if (f"{d}/scripts/prd_hooks.py" if d else "scripts/prd_hooks.py") not in names:
+            continue
+        try:
+            data = json.loads(_show(repo_root, rev, name))
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("name") == "prd-toolkit":
+            found.append(d or ".")
+    return found[0] if len(found) == 1 else None
+
+
+def refresh_differences(repo_root: Path, head: str, plugin: str, prd_rel: str) -> list[str]:
+    """Sorted .prd-toolkit/ paths whose bytes at `head` differ from what `prd_hooks.py vendor` writes from the plugin held at `head`,
+    including paths missing at `head` or present there and not written by vendor; [] when the copy is exact."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        archive = subprocess.run(["git", "archive", head], cwd=repo_root, capture_output=True, timeout=120)
+        if archive.returncode != 0:
+            raise ToolError(f"git archive {head}: {_first_line(archive.stderr.decode('utf-8', 'replace'))}")
+        untar = subprocess.run(["tar", "-x", "-C", tmp], input=archive.stdout, capture_output=True, timeout=120)
+        if untar.returncode != 0:
+            raise ToolError(f"tar: {_first_line(untar.stderr.decode('utf-8', 'replace'))}")
+        init = _git(tmp_path, "init", "-q")
+        if init.returncode != 0:
+            raise ToolError(f"git init: {_first_line(init.stderr)}")
+        script = tmp_path / plugin / "scripts/prd_hooks.py"
+        run = subprocess.run([sys.executable, str(script), "vendor", prd_rel], cwd=tmp_path, capture_output=True,
+                             encoding="utf-8", errors="replace", timeout=120)
+        if run.returncode != 0:
+            raise ToolError(f"vendor at {head[:12]} failed: {_first_line(run.stderr or run.stdout)}")
+        expected: dict[str, bytes] = {}
+        for f in (tmp_path / ".prd-toolkit").rglob("*"):
+            if f.is_file() and "__pycache__" not in f.parts:
+                expected[f.relative_to(tmp_path).as_posix()] = f.read_bytes()
+    p = _git(repo_root, "ls-tree", "-r", "--name-only", "-z", head, "--", ".prd-toolkit")
+    if p.returncode != 0:
+        raise ToolError(f"git ls-tree {head}: {_first_line(p.stderr)}")
+    actual: dict[str, bytes] = {}
+    for name in filter(None, p.stdout.split("\0")):
+        blob = subprocess.run(["git", "show", f"{head}:{name}"], cwd=repo_root, capture_output=True, timeout=60)
+        if blob.returncode != 0:
+            raise ToolError(f"git show {head}:{name}: {_first_line(blob.stderr.decode('utf-8', 'replace'))}")
+        actual[name] = blob.stdout
+    return sorted(n for n in expected.keys() | actual.keys() if expected.get(n) != actual.get(n))
+
+
 def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
     m = _RANGE.match(rng)
     if not m or "..." in rng:
@@ -55,12 +126,13 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
     prefix = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
     levels = {tc.id: tc.data.get("level") for tc in prd.test_cases}
     findings: list[str] = []
+    vendored: list[str] = []
     for path in dict.fromkeys(paths):
         if prefix == "." or path == prefix or path.startswith(prefix + "/"):
             findings.append(f"{path}: the builder may not edit the PRD folder")
             continue
         if path == ".prd-toolkit" or path.startswith(".prd-toolkit/"):
-            findings.append(f"{path}: the builder may not edit the vendored .prd-toolkit/ copy")
+            vendored.append(path)
             continue
         cited: dict[str, None] = {}
         for rev in (base, head):
@@ -70,6 +142,13 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
         non_unit = [t for t in cited if levels.get(t) != "unit"]
         if non_unit:
             findings.append(f"{path} cites {', '.join(non_unit)}, a tester's test: the builder may not edit it")
+    if vendored:
+        plugin = plugin_dir(repo_root, head)
+        if plugin is not None:
+            findings += [f"{p}: differs from the plugin; refresh it with prd_hooks.py vendor"
+                         for p in refresh_differences(repo_root, head, plugin, prefix)]
+        else:
+            findings += [f"{p}: the builder may not edit the vendored .prd-toolkit/ copy" for p in vendored]
     return findings
 
 

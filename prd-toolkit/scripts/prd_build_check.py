@@ -53,6 +53,9 @@ def main(argv: list[str]) -> int:
         else:
             findings = buildcheck.results_findings(
                 Path(args.results).read_text(encoding="utf-8"), [t.strip() for t in args.tids.split(",") if t.strip()])
+    except buildcheck.ToolError as e:
+        print(f"prd_build_check: {e}", file=sys.stderr)
+        return 2
     except trace.BadRange as e:
         print(f"prd_build_check: {e}", file=sys.stderr)
         return 2
