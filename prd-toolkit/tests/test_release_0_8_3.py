@@ -45,7 +45,7 @@ def test_changelog_entry():
     for needle in (
         "prd_hooks.py vendor", "`vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)`",
         "`<path>: differs from the plugin; refresh it with prd_hooks.py vendor`", "--diff", "byte for byte",
-        "`.prd-toolkit/VERSION`", "`prd_change.py record`", "Since", "contract item",
+        "`prd_change.py record`", "Since", "contract item",
         "`prd_build_check: <prd> is not in a git working tree`", "`--stale`", "`--results`",
         "`base`", "`refs`", "`prd_deploy: internal error: <type>: <message>`", "`beforeDone`",
         "`prd_gates: standby: <type>: <message>`", "cannot start the inbox",

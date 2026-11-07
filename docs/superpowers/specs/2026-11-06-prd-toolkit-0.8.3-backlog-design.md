@@ -32,7 +32,6 @@ numbers its own entries.
 0.8.3 delivers:
 - a build in this repository that refreshes `.prd-toolkit/` through a new `prd_hooks.py vendor`, which
   `prd_build_check.py --diff` accepts when the refresh is exact (section 2);
-- the standby promise made only when the vendored copy has a standby (section 3);
 - `prd_change.py record` writing each live block's Since, and the IDs a changed contract item cites
   (section 4);
 - seven `prd_build_check.py` fixes (section 5);
@@ -96,19 +95,11 @@ command fails, the plugin's `prd_hooks.py` cannot run) is exit 2, `prd_build_che
   the builder like any other `--diff` finding.
 - Backlog item (i) (who re-vendors) is this section.
 
-## 3. The standby promise checks the vendored copy (k)
+## 3. The standby promise checks the vendored copy (k): removed
 
-The four decision skills tell the user, after `serve --gate`, "Leave that `serve` running: it stands
-by…" (adopting-prds, changing-prds, deploying-from-prds, handling-errors' running-an-error.md). The
-proof's `-change` worktree ran a `.prd-toolkit/` vendored before 0.8.2's section 18: its `serve --gate`
-exited 1 at once, and the skill's promise was false.
-
-In each of the four, when `<scripts>` is `.prd-toolkit`, the skill reads `.prd-toolkit/VERSION` once
-(a Read, before the first `serve`). When the file is missing or names a version below `0.8.2`, the
-skill does not promise a standby and tells the user, in place of that sentence:
-`This repository's .prd-toolkit/ is <version or "older than 0.6">, so the inbox closes with the session that started it; run prd_hooks.py install docs/prd/<slug> from the plugin to refresh it.`
-It then goes on with the inbox as 0.8.2 says. When `<scripts>` is the plugin's own directory, nothing
-changes.
+Dropped after the final review. A `.prd-toolkit/` below 0.8.2 has no `serve --gate` or `wait` (its
+`serve` exits 2 and the skills already fall back to the chat), and every released 0.8.2 copy has the
+standby, so the VERSION check could never fire. The four decision skills keep their 0.8.2 text.
 
 ## 4. `prd_change.py record` (E-016, j)
 
@@ -219,11 +210,9 @@ only a still-pending gate past the bound is exit 3.
   hand edit fails with the new line, a refresh in a repository without the plugin keeps the old line,
   two plugin directories keep the old line, a stale file `vendor` would delete fails); E-016 and (j)
   in `record`; each row of section 5; (a) to (h).
-- `tests/test_inbox_skills.py` (or its neighbour) pins the section 3 sentence in all four skills, as
-  0.8.2 pins the standby sentence.
-- The skill changes in sections 2.3 and 3 follow `superpowers:writing-skills`: a baseline run without
+- The skill change in section 2.3 follows `superpowers:writing-skills`: a baseline run without
   the change, then with it, for the builder's refresh rule (a builder whose fix breaks
-  `test_vendored_copy.py` runs `vendor` and commits it, never hand-edits) and for the standby check.
+  `test_vendored_copy.py` runs `vendor` and commits it, never hand-edits).
 - `scripts/ci-local.sh origin/main` with an empty `HOME` before any push; the inbox evals
   (`--case 'inbox-*'`) still pass.
 
