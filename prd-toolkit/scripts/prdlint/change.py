@@ -525,10 +525,32 @@ def _id_order(id_: str) -> tuple:
     return (_ID_RANK[kind], *(int(g) for g in m.groups()[1:] if g and g.isdigit()))
 
 
-def _record_ids(items: list[BumpItem], *prds: model.Prd) -> list[str]:
+_CITED_BLOCK = re.compile(r"\b((?:UJ|FR|NFR)-\d{3})\b|\bAC-(\d{3})\.\d+\b")
+
+
+def _contract_ids(prd: model.Prd, file: str, name: str, items: dict[str, dict[str, str]] | None = None) -> list[str]:
+    """The UJ, FR and NFR IDs a contract item cites, each once, kept to blocks of `prd`: an OpenAPI operation's
+    `x-prd-ids`, else every ID token in the item's text; an AC counts as the FR or NFR it belongs to."""
+    if file == "contracts/openapi.yaml":
+        found = snapshot._op(snapshot.contracts_of(prd), name)
+        listed = found[4].get("x-prd-ids") if found else None
+        text = " ".join(str(x) for x in listed) if isinstance(listed, list) else ""
+    else:
+        text = (items if items is not None else contract_items(prd)).get(file, {}).get(name, "")
+    have = {b.id for b in prd.blocks}
+    by_number = {int(b.id.split("-")[1]): b.id for b in prd.blocks if b.kind in ("FR", "NFR")}
+    out: set[str] = set()
+    for m in _CITED_BLOCK.finditer(text):
+        id_ = m.group(1) or by_number.get(int(m.group(2)))
+        if id_ in have:
+            out.add(id_)
+    return sorted(out, key=_id_order)
+
+
+def _record_ids(items: list[BumpItem], *prds: model.Prd, extra: frozenset[str] = frozenset()) -> list[str]:
     """Every requirement ID the items name, and the FR or NFR each AC and T-id belongs to, once each, in the PRD's
     natural order (UJ, FR, NFR, AC, T); a parent is looked up by number in `prds` (the working tree, then the base)."""
-    ids = {i.id for i in items if _REQ_ID.fullmatch(i.id)}
+    ids = {i.id for i in items if _REQ_ID.fullmatch(i.id)} | set(extra)
     blocks = {int(b.id.split("-")[1]): b.id for p in reversed(prds) for b in p.blocks if b.kind in ("FR", "NFR")}
     for id_ in list(ids):
         m = re.fullmatch(r"(?:AC|T)-(\d+)\.\d+", id_)
@@ -579,12 +601,12 @@ def _index_rows(base_md: str, prd: model.Prd, items: list[BumpItem]) -> list[str
         elif id_ in by_id and b:
             by_id[id_][1], by_id[id_][3] = b.title, b.file
         elif b and not removed:
-            rows.append([id_, b.title, b.status or "approved", b.file, ""])
+            rows.append([id_, b.title, b.status or "approved", b.file, b.since or ""])
             by_id[id_] = rows[-1]
     for row in rows:
         b = blocks.get(row[0].strip("`"))
         if b is not None and b.status:
-            row[2] = b.status
+            row[2], row[4] = b.status, b.since or ""
     return [_cells_line(r) for r in rows]
 
 
@@ -637,9 +659,14 @@ def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, to
     with tempfile.TemporaryDirectory(prefix="prd-record-") as tmp:
         old = _load_base(repo_root, rel, base, Path(tmp))
         base_md = old.docs["prd.md"]
+        now = model.load(prd_root)
+        cited_now, cited_old = contract_items(now), contract_items(old)
+        cited: set[str] = set()
+        for i in result.items:
+            if i.file.startswith("contracts/") and not _REQ_ID.fullmatch(i.id):
+                cited.update(_contract_ids(old, i.file, i.id, cited_old) if i.change == "removed" else _contract_ids(now, i.file, i.id, cited_now))
     version = _bumped(base_md, level)
-    now = model.load(prd_root)
-    ids = ", ".join(_record_ids(result.items, now, old)) or "-"
+    ids = ", ".join(_record_ids(result.items, now, old, extra=frozenset(cited))) or "-"
     row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"
     _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, now, result.items))
     return Recorded(version, row)

@@ -127,7 +127,7 @@ def test_section_11_rows_added_changed_removed(repo):
     md = prd_md(repo)
     assert "| FR-009 | Count orders | approved | features/api.md |  |\n" in md
     assert "| FR-002 | Get one order | verified | features/api.md | 1.0.0 |\n" in md
-    assert "| FR-003 | Delete an order | removed | features/api.md | 1.0.0 |\n" in md
+    assert "| FR-003 | Delete an order | removed | features/api.md |  |\n" in md
 
 
 def test_record_twice_gives_the_same_file(repo):
@@ -208,7 +208,7 @@ def test_a_revised_block_set_to_approved_is_approved_in_section_11(repo):
     before = change.digest(prd)
     rec(repo)
     md = prd_md(repo)
-    assert "| FR-002 | Get an order | approved | features/api.md | 1.0.0 |\n" in md
+    assert "| FR-002 | Get an order | approved | features/api.md |  |\n" in md
     assert "| FR-003 | Delete an order | verified | features/api.md | 1.0.0 |\n" in md
     assert lint_code(repo) == 0
     assert change.digest(prd) == before
@@ -220,7 +220,7 @@ def test_a_status_only_move_is_synced_to_section_11(repo):
     edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved")
     rec(repo)
     md = prd_md(repo)
-    assert "| FR-003 | Delete an order | approved | features/api.md | 1.0.0 |\n" in md
+    assert "| FR-003 | Delete an order | approved | features/api.md |  |\n" in md
     assert lint_code(repo) == 0
 
 
@@ -254,3 +254,79 @@ def test_a_usage_error_document_takes_its_kind_from_the_subcommand(repo):
     assert code == 2 and json.loads(out)["kind"] == "change.ids"
     code, out, _ = call("--json", "--bogus")  # no subcommand parses: the script's kind
     assert code == 2 and json.loads(out)["kind"] == "change"
+
+
+# --- 0.8.3: E-016 a live block's Since; (j) the IDs a changed contract item cites ---
+
+LIVE = "Status: live (since 1.1.0)"
+
+
+def row_cells(repo, id_):
+    line = next(l for l in prd_md(repo).splitlines() if l.startswith(f"| {id_} |"))
+    return [c.strip() for c in line.strip("|").split("|")]
+
+
+def test_record_writes_since_for_an_added_live_block(repo):
+    prd = repo / PRD
+    new_block(prd)
+    edit(prd, "features/api.md", "### FR-009 Count orders\nStatus: proposed", f"### FR-009 Count orders\n{LIVE}")
+    rec(repo)
+    assert row_cells(repo, "FR-009")[2:] == ["live", "features/api.md", "1.1.0"]
+
+
+def test_record_writes_since_when_an_existing_block_becomes_live(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", f"### FR-003 Delete an order\n{LIVE}")
+    rec(repo)
+    assert row_cells(repo, "FR-003")[2:] == ["live", "features/api.md", "1.1.0"]
+    assert lint_code(repo) == 0
+
+
+def test_record_clears_since_when_a_live_block_returns_to_approved(repo):
+    prd = repo / PRD
+    new_ac_with_test(prd)
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved")
+    rec(repo)
+    assert row_cells(repo, "FR-003")[2:] == ["approved", "features/api.md", ""]
+    assert lint_code(repo) == 0
+
+
+def ids_cell(r):
+    return r.row.split("|")[4].strip()
+
+
+def test_contract_only_change_lists_the_cited_requirement(repo):
+    prd = repo / PRD
+    edit(prd, "contracts/errors.yaml", "The file is zero bytes or has only a header line.", "The file is zero bytes or has only a header line (FR-001).")
+    r = rec(repo, "patch")
+    assert ids_cell(r) == "FR-001"
+
+
+def test_openapi_operation_change_lists_its_x_prd_ids(repo):
+    prd = repo / PRD
+    edit(prd, "contracts/openapi.yaml", "x-prd-ids: [FR-002, AC-002.1, AC-002.2, NFR-004]", "x-prd-ids: [FR-002, AC-002.1]")
+    r = rec(repo, "patch")
+    assert ids_cell(r) == "FR-002"
+
+
+def test_removed_contract_item_reads_its_citations_at_the_base(repo):
+    from legacy import git
+
+    prd = repo / PRD
+    edit(prd, "contracts/errors.yaml", "The file is zero bytes or has only a header line.", "The file is zero bytes or has only a header line (FR-001).")
+    git(repo, "commit", "-qam", "cite")
+    p = prd / "contracts/errors.yaml"
+    text = p.read_text()
+    a = text.index("IMPORT_EMPTY:")
+    b = text.index("ORDER_NOT_FOUND:")
+    p.write_text(text[:a] + text[b:])
+    r = rec(repo, "major")
+    assert ids_cell(r) == "FR-001"
+
+
+def test_contract_change_citing_nothing_keeps_dash(repo):
+    prd = repo / PRD
+    edit(prd, "contracts/errors.yaml", "status: 404", "status: 410")
+    r = rec(repo, "patch")
+    assert ids_cell(r) == "-"
