@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from lint_cli_support import SCRIPTS, run, s0  # noqa: E402
+from lint_cli_support import in_process, run, s0  # noqa: E402
 
 
 def test_t005_1_no_prd_md(tmp_path):
@@ -65,8 +65,8 @@ def test_t006_1_load_error_no_traceback(tmp_path, monkeypatch):
 def test_t006_2_rule_crash(tmp_path, monkeypatch, capsys):
     """@prd T-006.2"""
     s0(tmp_path, monkeypatch)
-    monkeypatch.syspath_prepend(str(SCRIPTS))
-    import prd_lint
+    # In-process call: the subprocess environment rules, through monkeypatch (testing.md, Harness).
+    prd_lint = in_process(monkeypatch)
     import prdlint.registry
 
     def zz_crash(*args, **kwargs):
@@ -78,15 +78,9 @@ def test_t006_2_rule_crash(tmp_path, monkeypatch, capsys):
         rc = prd_lint.main([str(tmp_path / "docs" / "prd" / "orders")])
         out = capsys.readouterr()
     finally:
-        rules = prdlint.registry.RULES
-        if isinstance(rules, dict):
-            rules.pop("zz-crash", None)
-        else:
-            for item in list(rules):
-                name = getattr(item, "name", None)
-                if item is zz_crash or name == "zz-crash" or (
-                    isinstance(item, tuple) and "zz-crash" in item):
-                    rules.remove(item)
+        # RULES and SEVERITY are dicts of rule name (T-001.4's setup).
+        prdlint.registry.RULES.pop("zz-crash", None)
+        prdlint.registry.SEVERITY.pop("zz-crash", None)
     assert rc == 2
     assert out.out == ""
     assert out.err == "prd_lint: internal error in rule zz-crash: ZeroDivisionError: division by zero\n"

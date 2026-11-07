@@ -1,7 +1,8 @@
 """lint-cli: a `.yaml` entry in test-cases/ or contracts/ that is not a regular file (AC-006.3).
 
-Cases T-006.4 and T-006.5 of docs/prd/prd-toolkit/test-cases/lint-cli.yaml. Both carry
-`known-failing: E-007` with a `symptom:`; only that symptom counts as the expected failure.
+Cases T-006.4 and T-006.5 of docs/prd/prd-toolkit/test-cases/lint-cli.yaml, the regression tests
+of E-007. Their expected-failure markers were removed in the E-007 fixes build; the E-007 symptom,
+if it is seen, now fails the test with E007Symptom.
 """
 import os
 
@@ -26,9 +27,8 @@ def check_symptom(r, exc_type: str) -> None:
         raise E007Symptom(lines[0])
 
 
-@pytest.mark.xfail(strict=True, raises=E007Symptom)
 def test_t006_4_yaml_directory_in_test_cases_is_a_finding(tmp_path, monkeypatch):
-    """@prd T-006.4 known-failing E-007"""
+    """@prd T-006.4"""
     root = s0(tmp_path, monkeypatch)
     (root / "test-cases" / "sub.yaml").mkdir()
     r = run(["docs/prd/orders"], cwd=tmp_path)
@@ -38,9 +38,8 @@ def test_t006_4_yaml_directory_in_test_cases_is_a_finding(tmp_path, monkeypatch)
     assert r.stderr == ""
 
 
-@pytest.mark.xfail(strict=True, raises=E007Symptom)
 def test_t006_5_broken_yaml_symlink_in_contracts_is_a_finding(tmp_path, monkeypatch):
-    """@prd T-006.5 known-failing E-007"""
+    """@prd T-006.5"""
     root = s0(tmp_path, monkeypatch)
     target = tmp_path / "missing.yaml"
     assert not target.exists()
