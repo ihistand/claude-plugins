@@ -1,7 +1,7 @@
 """Trace rules: does the code side of a PRD keep up with it? Not lint rules; they are not in registry.RULES."""
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from .findings import Finding
@@ -39,6 +39,13 @@ def _roots(prd: Prd, repo_root: Path) -> list[Path]:
     return [(repo_root / r.strip().rstrip("/")) for r in roots]
 
 
+def _line_matches(text: str, rx: re.Pattern) -> Iterator[tuple[int, re.Match]]:
+    """Every match of `rx` in `text` as (1-based line, match), each line read on its own: the one rule every citation scan shares."""
+    for n, line in enumerate(text.split("\n"), 1):
+        for m in rx.finditer(line):
+            yield n, m
+
+
 def _scan(prd: Prd, repo_root: Path, rx: re.Pattern) -> list[tuple[tuple[str, ...], str, int]]:
     """Every match of `rx` under the test roots as (groups, file relative to repo_root, line)."""
     out: list[tuple[tuple[str, ...], str, int]] = []
@@ -56,15 +63,14 @@ def _scan(prd: Prd, repo_root: Path, rx: re.Pattern) -> list[tuple[tuple[str, ..
             except (OSError, UnicodeDecodeError):
                 continue
             rel = p.relative_to(repo_root).as_posix() if p.is_relative_to(repo_root) else p.as_posix()
-            for n, line in enumerate(text.split("\n"), 1):
-                for m in rx.finditer(line):
-                    out.append((m.groups(), rel, n))
+            for n, m in _line_matches(text, rx):
+                out.append((m.groups(), rel, n))
     return out
 
 
 def cited_tids(text: str) -> list[str]:
     """The T-ids cited in `text`, read line by line as `_scan` reads a file: `@prd` and its T-id share a line."""
-    return [m.group(1) for line in text.split("\n") for m in CITE.finditer(line)]
+    return [m.group(1) for _, m in _line_matches(text, CITE)]
 
 
 def citations(prd: Prd, repo_root: Path) -> dict[str, list[tuple[str, int]]]:

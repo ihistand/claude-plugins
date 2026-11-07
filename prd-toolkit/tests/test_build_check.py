@@ -439,3 +439,12 @@ def test_e015_an_uncommitted_citing_test_silences_the_tid(srepo):
     (srepo / "tests/test_import2.py").write_text("# @" "prd T-001.1\ndef test_j():\n    pass\n")
     rc, out, err = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1")
     assert (rc, out) == (0, "")
+
+
+def test_e012_non_ascii_case_file_name_is_read_at_the_commit_end(repo):
+    # 0.8.3 spec §5, E-012 (review fix): ls-tree must not C-quote the name, or the commit end drops the file
+    d = repo / "docs/prd/orders/test-cases"
+    (d / "import.yaml").rename(d / "caf\u00e9.yaml")
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    commit(repo, "test for T-001.1")
+    assert stale(repo, "T-001.1") == []

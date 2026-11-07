@@ -203,10 +203,12 @@ def _case_entries(root: Path, rev: str | None, prd_rel: str, tid: str) -> object
     if rev is None:
         names = sorted(p.relative_to(root).as_posix() for p in (root / prd_rel / "test-cases").glob("*.yaml") if p.is_file())
     else:
-        p = _git(root, "ls-tree", "--name-only", rev, "--", f"{prd_rel}/test-cases/")
+        p = _git(root, "ls-tree", "-z", rev, "--", f"{prd_rel}/test-cases/")
         if p.returncode != 0:
             raise RuntimeError(f"git ls-tree {rev} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
-        names = [n for n in p.stdout.split("\n") if n.endswith(".yaml") and "/" not in n[len(prd_rel) + len("/test-cases/"):]]
+        # direct children only (no -r), regular files only (blob), names unquoted (-z): the set the working-tree glob reads
+        entries = [e.split("\t", 1) for e in p.stdout.split("\0") if e]
+        names = [name for meta, name in entries if meta.split()[1] == "blob" and name.endswith(".yaml")]
     for name in names:
         text = (root / name).read_text(encoding="utf-8") if rev is None else _show(root, rev, name)
         data = yaml.load(text, Loader=_Loader)  # the loader's reader: the first value of a repeated key wins
