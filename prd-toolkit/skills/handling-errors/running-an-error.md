@@ -303,7 +303,15 @@ paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
 - **`wait`, first.** Start it with the Bash tool's `run_in_background`, before the owner sees any
   URL, so no answer can come before it is watching:
   `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
-- **The URL.** Then start, also with `run_in_background`,
+- **The URL.** When `<scripts>` is `.prd-toolkit` (not the plugin's own directory), Read
+  `.prd-toolkit/VERSION` once first, before the first `serve`; a missing file or a version below
+  `0.8.2` (compare the numbers part by part: `0.8.10` is above `0.8.2`) means that copy has no
+  standby. Then tell the owner, in place of the standby promise below, and promise no standby:
+  `This repository's .prd-toolkit/ is <version or "older than 0.6">, so the inbox closes with the
+  session that started it; run prd_hooks.py install docs/prd/<slug> from the plugin to refresh
+  it.` (`older than 0.6` when the file is missing.) Go on with the inbox as below. When
+  `<scripts>` is the plugin's own directory, read nothing and change nothing. Then start, also
+  with `run_in_background`,
   `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
   and re-read its output until its first line appears:
   - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the

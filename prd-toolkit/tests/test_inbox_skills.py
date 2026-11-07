@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parent.parent
 SKILLS = ROOT / "skills"
 EVALS = ROOT / "evals"
@@ -299,3 +301,18 @@ def test_an_inbox_send_that_fails_the_check_is_confirmed_but_not_resumed():
         t = flat(path.read_text(encoding="utf-8"))
         assert SEND_FAILS_CHECK in t, path.name
     assert "resume nothing, show it to the owner and ask" not in flat(DEPLOYING.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- 0.8.3: the standby promise checks the vendored copy
+
+STALE_COPY = ("This repository's .prd-toolkit/ is <version or \"older than 0.6\">, so the inbox closes with the session that "
+              "started it; run prd_hooks.py install docs/prd/<slug> from the plugin to refresh it.")
+
+
+@pytest.mark.parametrize("path", DECISION_SKILLS, ids=lambda p: p.name)
+def test_standby_promise_checks_the_vendored_version(path):
+    s = flat(inbox(path))
+    for needle in (".prd-toolkit/VERSION", "below `0.8.2`", STALE_COPY):
+        assert needle in s, needle
+    assert s.index(".prd-toolkit/VERSION") < s.index(STALE_COPY) < s.index("Leave that `serve` running"), path.name
+    assert s.index(".prd-toolkit/VERSION") < s.index("prd_gates.py serve"), path.name  # read before the first serve
