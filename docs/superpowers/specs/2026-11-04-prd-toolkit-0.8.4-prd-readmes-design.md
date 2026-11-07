@@ -2,13 +2,19 @@
 
 > **Date:** 2026-11-04
 > **Author:** Ivan Histand & Claude Code
-> **Status:** Draft, awaiting review
+> **Status:** Approved by the owner 2026-11-04 (sections 1 to 15); section 16 approved in the brainstorm
+> of 2026-11-07, the written text awaiting review
 > **Extends:** `2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md` and the specs it extends,
 > under `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.8.4.
 > **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.3 merged.
 >
 > **Revisions.**
+> - Section 16 and the scope (owner, 2026-11-07): the fixes from the 0.8.3 proof and its residuals
+>   join 0.8.4 as section 16. The six deploy and pack items that section 16 held move to 0.8.5
+>   (`2026-11-07-prd-toolkit-0.8.5-deploy-and-packs-design.md`), best practices to 0.8.6 and
+>   conversion to 0.8.7. A removed block's §11 Since stays as 0.8.3 writes it: the `since` of its
+>   `Status:` line, empty when that line has none.
 > - Renumbered (owner, 2026-11-06): the fixes from the 0.8.2 proof are inserted as 0.8.3
 >   (`2026-11-06-prd-toolkit-0.8.3-backlog-design.md`), so this release is 0.8.4, best practices 0.8.5
 >   and conversion 0.8.6. The file was `2026-11-04-prd-toolkit-0.8.3-prd-readmes-design.md`; its
@@ -41,7 +47,9 @@ outside the PRD folder, so `prd.md` §2 gains two optional parts the format had 
 - the optional `Principles:` and `Getting started:` parts of §2 (section 7);
 - the published page's Overview tab (section 8);
 - one module that gathers the facts both the README and the tab show (section 9);
-- the toolkit's own PRD with its principles and getting-started steps in §2 (section 10).
+- the toolkit's own PRD with its principles and getting-started steps in §2 (section 10);
+- ten fixes from the 0.8.3 proof and the residuals 0.8.3 parked, none of them in an adopted area
+  (section 16).
 
 **Success:** someone new who opens either folder on GitHub, or a published page, understands within
 a minute what it is and how it is used, and neither README is ever stale on `main`.
@@ -58,7 +66,7 @@ a minute what it is and how it is used, and neither README is ever stale on `mai
 | Where the overview goes on the page | Its own tab, first and opened by default. Not the top of the Business tab: engineers go straight to Technical and would miss it |
 | The overview's source | The PRD only, as the publish rules require: §2, §4, §11 and the block statuses, `adoption.md`, `errors.md`, `links.md`. No Claude-written introduction; a better introduction is a better §2 |
 | What the PRD lacked | Principles and getting-started steps: two optional labelled parts of §2, written like `Goals:` and `Personas:`, so no section is added or renumbered and no existing PRD breaks |
-| Release vehicle | 0.8.4, after 0.8.3, with the Overview tab folded in because it shows the same facts as the README from the same sections. Best practices move to 0.8.5 and conversion to 0.8.6. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
+| Release vehicle | 0.8.4, after 0.8.3, with the Overview tab folded in because it shows the same facts as the README from the same sections, and the small fixes of section 16. The deploy and pack items move to 0.8.5, best practices to 0.8.6 and conversion to 0.8.7. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
 
 ## 2. Components
 
@@ -317,8 +325,8 @@ change, and `/prd-build` builds the lint requirement; §2's parts need no build.
 
 ## 11. Changes to the 0.8.2 spec and the umbrella
 
-- **The umbrella's §4:** 0.8.4 is this release, 0.8.5 best practices, 0.8.6 conversion, with their
-  "Needs" columns moved; a Revisions line records it.
+- **The umbrella's §4:** 0.8.4 is this release, 0.8.5 the deploy and pack items, 0.8.6 best
+  practices, 0.8.7 conversion, with their "Needs" columns moved; a Revisions line records it.
 - **The 0.8.2 spec and plan:** the retarget refusal becomes
   `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both
   places), its test pin and the eval's expected text, in place of the text naming 0.8.4. Their
@@ -369,6 +377,10 @@ Fixture PRDs `greet`, `orders` and `notes`.
 4. `/prd-publish` on the toolkit's own PRD opens on the Overview tab, with its principles, its
    architecture diagram drawn, its one adopted area and its getting-started steps. Republished into
    the design artifact's PRD page, it replaces the 2.1.0 snapshot there; the owner confirms it.
+5. Three of section 16's fixes on this repository: the build's own `.prd-toolkit/` refresh passes
+   `prd_build_check.py --diff` with exit 0 (fix 6); the tester, dispatched for one T-id, runs its one
+   test file under the harness's `uv run --directory` and finds the citing tests with Bash `grep`
+   (fixes 2 and 3).
 
 ## 14. Upgrade
 
@@ -388,35 +400,117 @@ Fixture PRDs `greet`, `orders` and `notes`.
 - Requirement statuses in the README; `/prd-status` gives them.
 - More than one PRD in `CLAUDE.md`'s block.
 
-## 16. Backlog: fixes from the first private-pack loop
+## 16. Fixes from the 0.8.3 proof
 
-The owner put these on the backlog on 2026-11-05, for 0.8.3; 0.8.3 shipped without them, so
-they are 0.8.4's. They come from the first full change, build and deploy loop on a private pack,
-where a service's own UI does part of each deploy, and from the pack's first releases. They are
-not designed yet: each becomes a section and plan tasks before the 0.8.4 build, or moves to a
-later release.
+The E-007 proof (PR #18) ran one defect through the toolkit's own PRD and found three gaps; 0.8.3
+parked six residuals; one message dates from 0.8.1. None of them is in an adopted area (only
+`lint-cli` is), so each is built from this spec and its commits carry
+`Refs: none (no behaviour change)`, as 0.8.3's were. Fix 8 edits the PRD, through Task 1's
+`/prd-change`. Every fix is test-first: its test fails before the change.
 
-1. **Human steps done in one pass.** The owner did three consecutive human steps in one UI
-   session, before the run asked for the first. The run still asked for each reply in turn, which
-   took three extra round-trips. `prd_deploy.py confirm` could take a range of consecutive human
-   steps when the owner's reply names each one.
-2. **An error found mid-run.** Recording an `errors.md` entry during a run moves HEAD, and a
-   moved HEAD blocks `resume`, so the entry had to wait for the close. `prd_error.py new` could
-   leave its write uncommitted while a run is open, to be committed with the run's close.
-3. **A `tests` step's timeout.** A live suite took 609 seconds against the 600-second default,
-   so every `run` and `resume` needed `--timeout`. A `tests` step could declare its own timeout in
-   the runbook, or `prd_deploy.py` could read one from testing.md's Levels.
-4. **A close on the wrong branch.** The close commit lands on whatever branch ran the deploy.
-   Where deploying means merging to an environment's branch and promoting in a UI, the close
-   still needs a second push. `prd_deploy.py` could report `the close is on <branch>, not
-   <the environment's branch>`.
-5. **A Check that `prints` a line with a SHA.** A runbook Check's `prints` must match a whole
-   output line exactly (`prdlint/deploy.py`). A check whose output carries a commit SHA or
-   another changing value cannot use it, so such Checks fall back to the exit code alone.
-   `prints` could take a prefix or a regular expression.
-6. **A pack bump forces a PRD patch.** §1's `Pack:` line, or an area's `Target:` line, names an
-   exact pack version, and `prd_hooks.py install` refuses a vendored pack whose version differs.
-   So every pack release, even a fix that changes nothing the area relies on, needs a
-   `/prd-change` at the next re-vendor just to move the line. The install could offer that edit
-   as a ready-made patch for the owner to approve. A compatible-range declaration in the pack is
-   the other way, but it lets an area run under a pack version it was never checked against.
+1. **A regression marker comes off with its symptom.** `running-a-build.md` says to remove a
+   regression case's `known-failing: E-nnn` line "and no other test-case line". Lint then fails
+   `test-refs: T-006.4: symptom: needs known-failing: on the same case`, so the E-007 build removed
+   the `symptom:` lines as well, outside the procedure. Fix: both removals (step 4's deploy-gate
+   lines and step 5's build-gate and unit lines) remove the case's `known-failing: E-nnn` line and
+   its `symptom:` line when it has one, and no other test-case line. The caller's Red Flags in
+   `building-from-prds/SKILL.md` say the same. Test: a skill-text pin on both steps and the Red
+   Flag.
+
+2. **A single test file under `uv run --directory`.** The tester's guard checks a path argument
+   after a harness command from the hook's `cwd`, the worktree root. The toolkit's harness is
+   `uv run --directory prd-toolkit pytest -q tests/prd`, so pytest reads the path from
+   `prd-toolkit/` and the guard from the root: `… tests/prd/test_x.py` is refused, though it names a
+   file under a test root. Fix: when the matched harness command holds uv's `--directory <d>` (or
+   `--directory=<d>`), `_check_harness_args` resolves each path argument from `<d>`, itself resolved
+   from `cwd`. Every other check stands: the resolved path must be inside a write root, and a glob
+   is refused. Tests: that command with `tests/prd/test_x.py` is allowed; with
+   `../prd-toolkit/scripts/prd_lint.py` and with `tests/prd/*.py` it is refused; a harness without
+   `--directory` resolves from `cwd` as before.
+
+3. **Searching without a Grep tool.** `prd-tester` lists Read, Glob and Grep, but a Claude Code
+   build that exposes no Grep tool gives it none, and the skill and the guard bar Bash `grep`. The
+   E-007 tester opened test files one by one to find the citing tests. Fix (owner, 2026-11-07): the
+   guard accepts a Bash `grep` segment whose every file operand is readable (the PRD folder, the
+   test roots, the scratchpad):
+   - its options come from one list: `-r`, `-n`, `-l`, `-L`, `-c`, `-i`, `-w`, `-x`, `-v`, `-o`,
+     `-q`, `-s`, `-H`, `-h`, `-E`, `-F`, `-e <pattern>`, `-f <file>`, `-m <n>`, `-A <n>`, `-B <n>`,
+     `-C <n>`, `--include=<glob>`, `--exclude=<glob>`, and short flags from the list clustered
+     (`-rn`). Any other option is refused, `-R` and `--dereference-recursive` among them, so a
+     symbolic link inside a root is never followed out of it;
+   - the pattern is the first operand, unless an `-e` or `-f` gives it; `-f`'s file must be readable;
+   - at least one file operand, none holding a glob character, each resolved from `cwd` and readable.
+   The skill's rule 6 and the agent's text become: search with the Grep tool, or, when there is
+   none, with Bash `grep` naming each path; `cat`, `head`, `sed` and `find` stay barred. Tests:
+   `grep -rn '@prd T-006' prd-toolkit/tests/prd` is allowed; `grep -R …`, `grep -rn x .` from a root
+   above the test roots, `grep x prd-toolkit/scripts/prd_lint.py`, `grep x 'tests/*.py'`, `grep x`
+   with no path and `grep -f prd-toolkit/scripts/x y` are refused; a skill-text pin on the rule.
+
+4. **`_last_commit` reads a path as a pathspec.** `buildcheck._last_commit` runs
+   `git log -1 -- <path>`, so a citing test whose name holds `[`, `*` or `?` is read as a glob and
+   can match another file's commits. Fix: `git --literal-pathspecs log -1 -- <path>`. Test: with
+   `tests/test_x.py` committed after `tests/test_[x].py`, `--stale` judges `tests/test_[x].py` by its
+   own last commit.
+
+5. **`_contract_ids` keeps IDs of one PRD.** 0.8.3's (j) says a cited ID is added when it is a block
+   in either PRD, the base or the working tree. `change._contract_ids` keeps only the blocks of the
+   PRD it reads the item from. Fix: the set it filters against is the union of both PRDs' blocks.
+   Test: a changed contract item that cites an FR the same change removes lists that FR in the §14
+   IDs cell.
+
+6. **`--diff`'s refresh check.** `buildcheck.refresh_differences` rebuilds the expected
+   `.prd-toolkit/` from `git archive <head>`, untarred in a temporary directory. Four faults:
+   - `git archive` honours `export-ignore` and `export-subst`, so a repository that sets either on a
+     plugin file vendors a different tree from the one the builder ran `vendor` on;
+   - the archive is held in memory whole;
+   - only bytes are compared, so a vendored file whose executable bit changed passes;
+   - a `subprocess.TimeoutExpired` escapes as an internal error, and a failing `vendor` reads
+     `vendor at <sha> failed: failed: …` when its own line starts `failed:`.
+   Fix: check `<head>` out into the temporary directory through a temporary index
+   (`GIT_INDEX_FILE` in that directory, `git read-tree <head>`, then
+   `git checkout-index -a --prefix=<dir>/`), which applies no export attribute and streams to disk;
+   compare each path's bytes and executable bit, a vendored file's from its mode on disk and a
+   committed one's from `ls-tree` (`100755` or `100644`); every subprocess the check runs that times
+   out raises a tool error, `<command> timed out after <n> s`; a failing vendor reads
+   `vendor at <sha>: <its first line>`. Tests: an `export-ignore` on a vendored plugin file gives
+   exit 0 for an exact refresh; a committed `.prd-toolkit/` file made executable is reported; a
+   timeout (a stub `git` that sleeps) gives exit 2 with that line and no traceback; the vendor
+   message.
+
+7. **A corrupt deploy run log hides its gate.** `gates._deploy_step` skips a run log it cannot read,
+   so the gate leaves the list, and the inbox, which still shows the card it loaded, gets a 409 when
+   the owner answers it. Fix: such a log gives a gate `deploy-step:<run id>:unreadable`, titled
+   `run log <run id> could not be read`, whose question is the reason (its first line). Answering it
+   is refused with `refused: run log <run id> could not be read: <reason>`; the inbox shows the
+   reason and no answer controls. Tests: a log with a bad JSON line is listed with that title;
+   `prd_gates.py answer` on it exits 1 with that line; a readable log is unchanged.
+
+8. **Scripts in no area.** Thirteen scripts are in no Boundary of the toolkit's `adoption.md`, so no
+   area will ever adopt them. Fix: four `not started` rows, added in Task 1's `/prd-change`:
+   - `gates`: `prd_gates.py`, `prdlint/gates.py`, `prdlint/formserver.py`, `prd_confirm.py`,
+     `prdlint/confirm.py`;
+   - `change`: `prd_change.py`, `prdlint/change.py`, `prdlint/change_approve.py`;
+   - `judge`: `prd_judge.py`, `prdlint/judge.py`;
+   - `packs`: `prdlint/packs.py`, `prdlint/languages.py`, `prdlint/rules/packs.py`.
+   0.8.4's new `prdlint/overview.py` and the two README templates join the `status` row, beside
+   `prd_block.py`. A `not started` row changes no behaviour and no commit rule. Test: a repository
+   test that every `prd-toolkit/scripts/**/*.py` is named in exactly one row. Adopting `build-check`
+   is a later release.
+
+9. **A pack validator's failure says only its exit.** `contracts-valid` prints the first non-blank
+   stderr line of a failing validator, else `validator failed: exit <n>`, so a validator that
+   reports on stdout says nothing useful. Fix: the first non-blank stderr line, else the first
+   non-blank stdout line, else `exit <n>`. Test: a stub validator that prints to stdout and exits 1
+   gives `validator failed: <that line>`.
+
+10. **The E-007 fix's release.** PR #18 changed lint's behaviour (E-007, PRD 5.0.0) after 0.8.3
+    shipped, with no version bump; its line sits in the 0.8.3 changelog. The 0.8.4 entry says so:
+    the fix first ships to installs in 0.8.4.
+
+**Closed with no change.** A removed block's §11 Since (0.8.3's residual): it stays the `since` of
+the block's `Status:` line, empty for a bare `removed` (owner, 2026-11-07). `changing-prds` writes
+`removed (since X.Y.Z)`, so in use the cell holds the removal version.
+
+**Moved to 0.8.5:** the six deploy and pack items this section held, and two later-release
+candidates: `prd_context` judging STALE by the cited line's text, and `--diff` checking that each
+SOURCES line falls inside the builder's hunks.
