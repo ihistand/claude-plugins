@@ -56,3 +56,15 @@ Touches: FR-007
 Diagnosis: The sample keeps every loaded case whose `str(level).strip()` is not `unit` (prd_lint.py:67). A case with no `level` gives `""` and one with `level: Unit` gives `Unit`, so both are sampled. T-007.5 printed `T-009.1 test-cases/odd.yaml` and `T-009.2 test-cases/odd.yaml` beside the nine expected lines, where AC-007.4 (the owner's answer to Q-02) samples neither.
 Resolution: T-007.5 [integration], PRD 1.0.1, fixed in dcfcd15
 Recurrence of: -
+
+### E-007 lint crashes (internal error, exit 2) on a directory or broken symlink named `<name>.yaml` in test-cases/ or contracts/
+Detected: 2026-11-07, user report (/prd-error)
+Classification: unclassified
+Touches: FR-006
+Evidence: User report (/prd-error), verbatim:
+    lint-cli: a directory or broken symlink named <name>.yaml in test-cases/ or contracts/ crashes lint
+    (internal error, exit 2) instead of a sufficiency finding like AC-006.3.
+    Repro: /private/tmp/claude-502/-Users-ihistand-projects/70d5ca74-4580-4373-ba48-6ff35310fa48/scratchpad/lintbug/ydir
+Diagnosis: -
+Resolution: -
+Recurrence of: -
