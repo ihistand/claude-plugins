@@ -401,6 +401,50 @@ T-006.3:
     effects: []
     errors: []
     leaks: none
+T-006.4:
+  ac: AC-006.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  known-failing: E-007
+  symptom: "lint exits 2 and its stderr is one line that starts with `prd_lint: internal error: IsADirectoryError: ` (as stderr_single_line_starts in testing.md Assertions), instead of the finding"
+  input:
+    setup: [S0, create the empty directory <tmp>/docs/prd/orders/test-cases/sub.yaml]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: with the directory gone the folder lints clean (T-001.1), so the one line is the loader's
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/test-cases/sub.yaml:0: sufficiency: a .yaml entry that is not a file\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-006.5:
+  ac: AC-006.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  known-failing: E-007
+  symptom: "lint exits 2 and its stderr is one line that starts with `prd_lint: internal error: FileNotFoundError: ` (as stderr_single_line_starts in testing.md Assertions), instead of the finding"
+  input:
+    setup: [S0, create a symbolic link <tmp>/docs/prd/orders/contracts/gone.yaml whose target <tmp>/missing.yaml does not exist]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: with the link gone the folder lints clean (T-001.1), so the one line is the loader's
+  expect:
+    output:
+      exit: 1
+      stdout_exact: "docs/prd/orders/contracts/gone.yaml:0: sufficiency: a .yaml entry that is not a file\n"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
 T-007.1:
   ac: AC-007.1
   level: integration
