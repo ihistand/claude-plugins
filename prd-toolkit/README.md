@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Version 0.8.2.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Version 0.8.3.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -18,7 +18,8 @@ for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/su
 for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md),
 for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md),
 for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md),
-and for 0.8.2 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
+for 0.8.2 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md),
+and for 0.8.3 [docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md).
 
 ## Install
 
@@ -203,13 +204,25 @@ uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/p
 ```
 
 After a plugin upgrade, `check` names every vendored file that differs from the plugin (exit 1);
-run `install` from the plugin again to refresh the copy, and commit it. `uninstall` removes only
+run `install` from the plugin again to refresh the copy, and commit it. In the repository that holds the
+plugin itself, `vendor` refreshes the copy instead (see below). `uninstall` removes only
 the hooks it wrote and leaves `.prd-toolkit/`:
 
 ```
 uv run --script ~/.claude/plugins/cache/ihistand/prd-toolkit/<version>/scripts/prd_hooks.py check docs/prd/<slug>
 uv run --script .prd-toolkit/prd_hooks.py uninstall docs/prd/<slug>
 ```
+
+`prd_hooks.py vendor` writes `.prd-toolkit/` exactly as `install` does, packs included, and nothing
+else: no git hook, no CLAUDE.md block, no CI file. This repository, which holds the plugin, refreshes
+its own copy with it, run from the plugin's directory:
+
+```
+uv run --script prd-toolkit/scripts/prd_hooks.py vendor docs/prd/<slug>
+```
+
+It prints `vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)` and exits 0. Run from a vendored
+copy it prints `prd_hooks: vendor runs from the plugin, not from .prd-toolkit/` and exits 2.
 
 The hooks and every CI job need only `uv`: CI runs on a bare runner, so each standards linter
 and each build-gate Levels harness command must run there too (for example `uv run ...`). A hook
@@ -636,6 +649,7 @@ uv run --script .prd-toolkit/prd_deploy.py record docs/prd/<slug> --env <env> --
 | `prd_gates.py serve` | Prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open` (the page opens on `--gate` when given), and serves until Ctrl-C, SIGTERM or `--idle-minutes` (default 120) without a request. With `--gate`, when an inbox for the PRD is already live, it prints `prd_gates: an inbox is already serving at <url>` and stands by: if that inbox stops before the gate is answered, it takes over at the same URL (the same port and token; it prints `url=<url>#gate=<id>` and opens no browser) and serves from then on as any `serve` does. A standby lives at most `--idle-minutes`, counted from when it began standing by | `serve` exits 3 when stopped (Ctrl-C, SIGTERM or the idle time), 1 when refused (a `--gate` that is not pending, or `prd_gates: an inbox is already serving at <url>` without `--gate`) and when a standby's gate is answered or gone (`prd_gates: <gate id> is not pending`, 5 seconds after it left the list), 2 when it cannot start (usage, a port in use, `prd_gates: cannot start the inbox: …`) or cannot take over (`prd_gates: cannot take over the inbox at port <N>: …`); a standby stopped by Ctrl-C or SIGTERM, or at the end of its `--idle-minutes`, exits 3 too; it has no Done, so it never exits 0 |
 | `prd_gates.py wait` | Blocks until the gate is answered by any client and prints `{"interface": 1, "kind": "gates.outcome", "gate", "worktree", "choice", "reply", "by", "at"}` | `wait` exits 0 when answered, 1 when the gate is not pending, 3 on timeout, 2 on usage (at exit 0 `choice` is the answer's, `confirm` for a deploy step; a gate that is not pending prints `choice` null: it was answered before `wait` began with nothing logged, or the PRD changed under it) |
 | `prd_build_check.py --stale` | Prints `stale <T-id> <test path>: its test case changed after the test (last changed in <sha>)` for each dispatched T-id whose test case changed after its test's last commit; a suite prompt then carries one `Rewrite: <T-id>` line for each | `--stale` exits 0 when nothing is stale, 1 when any is, 2 on a usage or tool error (which stops the dispatch) |
+| `prd_hooks.py vendor` | Writes `.prd-toolkit/` as `install` does and nothing else (no hook, block or CI file); the way the repository that holds the plugin refreshes its own copy, and the one change a build's `--diff` accepts under `.prd-toolkit/` | `vendor` exits 0 and prints `vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)`; 2 from a vendored copy (`prd_hooks: vendor runs from the plugin, not from .prd-toolkit/`) or when the PRD's pack cannot be resolved |
 | `prd_deploy.py record` | Records a deploy the owner did by hand: a run log marked `by: hand` and the environment's Deployed row, left uncommitted; it runs nothing and moves no status | `record` exits 0, 1 when refused (an environment not in both Environments tables, a commit not in the repository, an empty reply), 2 on usage; it prints `run=<id>` on success |
 
 The inbox page is vendored at `.prd-toolkit/gates/inbox.html`. It passes the question it showed with
@@ -748,6 +762,16 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.3:** The fixes from the 0.8.2 proof, and a way for the toolkit's own repository to refresh its vendored copy. See the [design spec](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md).
+  - `prd_hooks.py vendor <prd>` writes `.prd-toolkit/` exactly as `install` does and nothing else, prints `vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)`, and refuses from a vendored copy (`prd_hooks: vendor runs from the plugin, not from .prd-toolkit/`, exit 2).
+  - `prd_build_check.py --diff` accepts a change under `.prd-toolkit/` when the repository holds exactly one prd-toolkit plugin directory and `.prd-toolkit/` at `<head>` is, byte for byte, what `vendor` writes from that directory at `<head>` (read from `<head>`'s tree, never the working tree), with no path `vendor` would delete. Otherwise each differing path is `<path>: differs from the plugin; refresh it with prd_hooks.py vendor`, exit 1; in any other repository the old refusal stands unchanged.
+  - The builder refreshes: in a repository that holds the plugin, a change to a file `vendor` copies is followed, before the commit, by `prd_hooks.py vendor` in its own Bash call, and `.prd-toolkit/` is committed with the change. Never a hand edit under `.prd-toolkit/`, never `install`.
+  - The four decision skills read `.prd-toolkit/VERSION` before the first `serve`: a missing file or a version below `0.8.2` has no standby, so the skill says so instead of promising one.
+  - `prd_change.py record` writes a block's Since in the §11 row (`live (since 5.1.0)` gives `5.1.0`; a status without one leaves it empty), so a `live` block no longer fails `index-consistent`. When a contract item changes, the §14 IDs cell also lists the UJ, FR and NFR IDs the item cites (an OpenAPI operation's `x-prd-ids`, or the IDs in any other item's text), not `-`.
+  - Seven `prd_build_check.py` fixes: `--stale` outside a git working tree is `prd_build_check: <prd> is not in a git working tree`, exit 2; `--results` reads no result line after the first blank or non-result line that follows the first result line; `--stale` reads a repeated key in a test case as the PRD loader does (the first value wins); it reads only files directly in `test-cases/` named `*.yaml`, at a commit and in the working tree alike; it skips a directory or broken link named `<name>.yaml`; `--diff`, `--stale` and `prd_trace.py` read citations line by line with one shared scan, so `@prd` at a line's end and a T-id on the next line is no citation; and a test that cites the T-id and is untracked or changed in the working tree silences the T-id's stale line.
+  - The approval card diffs against the base the review read: the verdict gains an optional `base` (a full SHA from `git rev-parse <base>`), and a verdict with no `base`, or one no longer in the repository, falls back to the branch's upstream, else `main`, else `HEAD`. A multi-line `refs` makes the verdict the wrong shape: no gate. A run log that does not parse is `prd_deploy: internal error: <type>: <message>` (exit 2), which the inbox answers 500, not 400. The page's `beforeDone` is optional: Done awaits it only when it is a function.
+  - Standby: a PRD that vanishes during a takeover keeps the standby, and a first `serve` with an unreadable PRD says `prd_gates: cannot start the inbox: …`, exit 2; an unexpected error during a takeover is said once, as `prd_gates: standby: <type>: <message>`, and the standby goes on; a gate that left the list wins over the idle bound (exit 1, not 3).
+  - Upgrading from 0.8.2: re-run `prd_hooks.py install docs/prd/<slug>`, which vendors the fixed `prd_build_check.py`, `prd_change.py`, `prd_gates.py` and `prd_deploy.py` into `.prd-toolkit/` (commit it); the repository that holds the plugin runs `prd_hooks.py vendor` instead. No PRD needs an edit. A verdict written before the upgrade still makes a gate, and its card uses the fallback base.
 - **0.8.2:** A local decision inbox, and the fixes from the first real adoption. The sections named below are those of the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
   - `prd_gates.py serve` is the inbox (see Decision inbox): one page for every pending gate across the worktrees, with the approval's diff. `prd_gates.py wait` blocks until a gate is answered by any client and prints `gates.outcome`; both read and write `prd-gates-log.jsonl` in the git common directory. `gates.answer` gains `by` (`form` or `cli`), a reply from a button ends with ` (form)`, and the vendored page is `.prd-toolkit/gates/inbox.html`. The skills route each decision through the inbox and fall back to the chat.
   - The shared inbox outlives its starter (section 18): a `serve --gate` that finds a live inbox stands by and, when that inbox stops before its gate is answered, takes it over at the same URL; each card says when no session's `wait` holds its gate.
@@ -883,6 +907,9 @@ The exact syntax lint parses is `references/prd-format.md`. The starting files a
 ```
 uv run --directory prd-toolkit pytest -q
 ```
+
+Under `claude --plugin-dir <path>` the commands answer only to their namespaced form, such as
+`/prd-toolkit:prd-change`; the bare `/prd-change` that the skills print is the installed form.
 
 The plugin eval: run the command recorded in `evals/BASELINE.md` (0.2 baseline; the 0.8.0 and 0.8.1 sections run one case at a time). The `--scaffold`
 flag is required by the scaffolded cases, `Agent` lets the caller dispatch `prd-tester`, and the

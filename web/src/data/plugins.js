@@ -41,7 +41,7 @@ export const plugins = [
   {
     id: 'prd-toolkit',
     name: 'prd-toolkit',
-    version: '0.8.2',
+    version: '0.8.3',
     description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 40-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, a builder that takes an approved change to verified code, a deploy script that takes it live, an error ledger from record to checked fix, a publisher that renders the PRD as one page, packs, languages and judged test cases that extend it to documents in other languages, a change-set coordinator that links PRDs across repositories, and a machine interface (JSON scripts for changes and gates). Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status, /prd-deploy, /prd-error, /prd-publish and /prd-change-set.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
@@ -78,6 +78,7 @@ export const plugins = [
       { label: 'Design spec (0.8)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md' },
       { label: 'Design spec (0.8.1)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md' },
       { label: 'Design spec (0.8.2)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md' },
+      { label: 'Design spec (0.8.3)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md' },
     ],
   },
 ]
