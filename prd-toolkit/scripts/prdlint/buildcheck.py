@@ -1,5 +1,6 @@
 """The build's two mechanical checks: what the builder touched, and what the tester reported."""
 import os
+import shutil
 import json
 import re
 import subprocess
@@ -85,6 +86,7 @@ def refresh_differences(repo_root: Path, head: str, plugin: str, prd_rel: str) -
         untar = subprocess.run(["tar", "-x", "-C", tmp], input=archive.stdout, capture_output=True, timeout=120)
         if untar.returncode != 0:
             raise ToolError(f"tar: {_first_line(untar.stderr.decode('utf-8', 'replace'))}")
+        shutil.rmtree(tmp_path / ".prd-toolkit", ignore_errors=True)  # the expected tree is what a fresh vendor writes
         init = _git(tmp_path, "init", "-q")
         if init.returncode != 0:
             raise ToolError(f"git init: {_first_line(init.stderr)}")
@@ -222,7 +224,9 @@ _ABSENT = object()
 
 def stale_findings(prd: Prd, repo_root: Path, tids: list[str]) -> list[str]:
     """One line per T-id of `tids` whose test case differs, as parsed YAML, between the commit that last changed
-    its test and the working tree. A T-id with no test, or any of whose citing files has a git status entry or no commit, is never stale; of two committed citing files the newer by commit time is judged."""
+    its test and the working tree. A T-id with no test, or any of whose citing files has a git status entry, is
+    never stale. A citing file with no commit (a git-ignored one has no status entry) is skipped, and the other
+    committed citing files are still judged; of two committed citing files the newer by commit time is judged."""
     cites = citations(prd, repo_root)
     prd_rel = Path(os.path.relpath(prd.root.resolve(), repo_root.resolve())).as_posix()
     out: list[str] = []
@@ -230,7 +234,7 @@ def stale_findings(prd: Prd, repo_root: Path, tids: list[str]) -> list[str]:
         best: tuple[int, str, str, str] | None = None
         files = list(dict.fromkeys(f for f, _ in cites.get(tid, [])))
         if files:
-            st = _git(repo_root, "status", "--porcelain", "--", *files)
+            st = _git(repo_root, "--literal-pathspecs", "status", "--porcelain", "--", *files)
             if st.returncode != 0:
                 raise RuntimeError(f"git status failed: {(st.stderr.strip().splitlines() or ['?'])[0]}")
             if st.stdout.strip():

@@ -97,6 +97,15 @@ def test_refresh_is_judged_at_head_not_the_working_tree(plugin_repo):
     assert diff(plugin_repo) == []
 
 
+@pytest.mark.parametrize("name", ["helper.py", "notes/x.txt"])
+def test_hand_added_file_outside_the_pruned_folders_fails(plugin_repo, name):
+    f = plugin_repo / ".prd-toolkit" / name
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("x = 1\n")
+    commit(plugin_repo, "add")
+    assert diff(plugin_repo) == [f".prd-toolkit/{name}: differs from the plugin; refresh it with prd_hooks.py vendor"]
+
+
 def test_without_the_plugin_the_old_refusal_stands(tmp_path):
     git(tmp_path, "init", "-q")
     shutil.copytree(FIXTURE, tmp_path / PRD)
@@ -131,3 +140,4 @@ def test_cli_tool_error_is_exit_2(plugin_repo):
     p = subprocess.run([sys.executable, str(SCRIPT), PRD, "--diff", "base..HEAD"], cwd=plugin_repo, capture_output=True, text=True)
     assert p.returncode == 2
     assert p.stderr.startswith("prd_build_check: ")
+    assert "internal error" not in p.stderr
