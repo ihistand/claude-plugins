@@ -129,8 +129,8 @@ def _start(prd: model.Prd, args) -> int:
     except gates.Refused as e:
         print(f"prd_gates: {e}", file=sys.stderr)
         return 1
-    except (OSError, formserver.PageError) as e:
-        if isinstance(e, formserver.PageError) or not args.port:
+    except (OSError, formserver.PageError, gates.PrdUnreadable) as e:
+        if isinstance(e, (formserver.PageError, gates.PrdUnreadable)) or not args.port:
             print(f"prd_gates: cannot start the inbox: {e}", file=sys.stderr)
         elif e.errno == errno.EADDRINUSE:
             print(f"prd_gates: port {args.port} is in use", file=sys.stderr)

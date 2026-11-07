@@ -520,3 +520,14 @@ def test_still_pending_past_the_bound_exits_3(made, monkeypatch, capsys):
     code, err, _ = _drive_standby(made, monkeypatch, capsys, make=lambda *a, **k: pytest.fail("no takeover"),
                                   pending=[True], idle_minutes=1e-9)
     assert code == 3
+
+
+def test_a_first_serve_whose_prd_is_unreadable_is_exit_2_cannot_start(made, monkeypatch):
+    def boom(*a, **k):
+        raise gates.PrdUnreadable("prd.md: No such file or directory")
+
+    monkeypatch.setattr(gates, "make_inbox", boom)
+    for extra in ((), ("--port", "51999")):
+        code, out, err = call("serve", str(made["repo"] / PRD), "--no-open", *extra)
+        assert code == 2 and err.startswith("prd_gates: cannot start the inbox"), err
+        assert "internal error" not in err
