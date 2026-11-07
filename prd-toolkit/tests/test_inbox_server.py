@@ -611,3 +611,25 @@ def test_fallback_ignores_origin_head_and_default_branch(tmp_path):
     git(repo, "config", "init.defaultBranch", "trunk")
     card = _card(repo)
     assert card["version"]["from"] == "1.0.0" and "Repeat" in card["diff"]
+
+
+def test_deploy_step_corrupt_log_answers_500(inbox, monkeypatch):
+    real = gates._run
+
+    def corrupt(*argv):
+        from prdlint import deploy
+
+        path = deploy.log_dir(inbox.repo) / f"{inbox.run_id}.jsonl"
+        path.write_text(path.read_text(encoding="utf-8").splitlines()[0] + "\n{not json\n", encoding="utf-8")
+        return real(*argv)
+
+    monkeypatch.setattr(gates, "_run", corrupt)
+    status, out = inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")
+    assert status == 500 and "CorruptLog: cannot read the log" in out["error"], out
+
+
+def test_deploy_step_usage_refusal_and_late_internal_error_are_400(inbox, monkeypatch):
+    monkeypatch.setattr(gates, "_run", lambda *a: {"stdout": [], "exit": 2, "stderr": ["prd_deploy: step 3 is not the stopped step"]})
+    assert inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")[0] == 400
+    monkeypatch.setattr(gates, "_run", lambda *a: {"stdout": [], "exit": 2, "stderr": ["prd_deploy: refused: internal error is not the prefix"]})
+    assert inbox.post(f"deploy-step:{inbox.run_id}:3", "send", "deploy production")[0] == 400

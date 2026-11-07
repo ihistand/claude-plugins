@@ -991,7 +991,8 @@ class _Inbox:
             return 200, done
         why = "\n".join(done["result"].get("stderr") or done["result"]["stdout"]) or f"the owner exited {code}"
         # an owner's refusal is 400, its tool error 500; prd_deploy.py confirm refuses with exit 2 (a usage error), not 1
-        refused = code == 1 or (gate.kind == "deploy-step" and code == 2 and "internal error" not in why)
+        first = ((done["result"].get("stderr") or [""])[0])
+        refused = code == 1 or (gate.kind == "deploy-step" and code == 2 and not first.startswith("prd_deploy: internal error:"))
         return (400 if refused else 500), {**done, "error": why}
 
     def done(self, prd: Prd, wt: Path, area: str, routes, body: dict) -> tuple[int, dict]:

@@ -149,3 +149,17 @@ def test_finished_envs_after_recover(repo):
     assert "staging" not in deploy.finished_envs(deploy.read_log(repo, run_id)[1:], prd)
     recover(repo, run_id)
     assert "staging" not in deploy.finished_envs(deploy.read_log(repo, run_id)[1:], prd)
+
+
+def test_corrupt_run_log_is_an_internal_error(repo):
+    run_id = killed_run(repo)
+    path = deploy.log_dir(repo) / f"{run_id}.jsonl"
+    header = path.read_text(encoding="utf-8").splitlines()[0]
+    path.write_text(header + "\n{not json\n", encoding="utf-8")
+    r = cli(repo, "confirm", "--run", run_id, "--step", "1", "--reply", "checked")
+    assert r.returncode == 2 and r.stderr.startswith(f"prd_deploy: internal error: CorruptLog: cannot read the log of run {run_id}"), r.stderr
+    path.write_text("", encoding="utf-8")
+    r = cli(repo, "confirm", "--run", run_id, "--step", "1", "--reply", "checked")
+    assert r.returncode == 2 and r.stderr.startswith(f"prd_deploy: internal error: CorruptLog: the log of run {run_id} has no header"), r.stderr
+    r = cli(repo, "confirm", "--run", "nosuch", "--step", "1", "--reply", "checked")
+    assert r.returncode == 2 and r.stderr.strip() == "prd_deploy: no log for run nosuch"
