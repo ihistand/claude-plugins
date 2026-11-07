@@ -886,6 +886,9 @@ def load(prd_dir: Path) -> Prd:
     test_cases: list[TestCase] = []
     for p in sorted((prd_dir / "test-cases").glob("*.yaml")):
         rel = p.relative_to(prd_dir).as_posix()
+        if not p.is_file():
+            findings.append(Finding(rel, 0, "sufficiency", "a .yaml entry that is not a file"))
+            continue
         data, fs = load_yaml(p, rel)
         findings += fs
         for tid, val in (data or {}).items():
@@ -898,7 +901,12 @@ def load(prd_dir: Path) -> Prd:
     yml: dict[str, Any] = {}
     for p in sorted((prd_dir / "contracts").rglob("*.yaml")):
         rel = p.relative_to(prd_dir).as_posix()
-        if _linked_dir(prd_dir, p) or _fixture(rel):
+        if _fixture(rel):
+            continue
+        if not p.is_file():
+            findings.append(Finding(rel, 0, "sufficiency", "a .yaml entry that is not a file"))
+            continue
+        if _linked_dir(prd_dir, p):
             continue
         data, fs = load_yaml(p, rel)
         findings += fs
