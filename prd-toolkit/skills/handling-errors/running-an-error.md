@@ -304,22 +304,22 @@ paths, written with the skill's `<scripts>` path, never `${CLAUDE_PLUGIN_ROOT}`.
   URL, so no answer can come before it is watching:
   `uv run --script <scripts>/prd_gates.py wait docs/prd/<slug> <gate id>`
 - **The URL.** When `<scripts>` is `.prd-toolkit` (not the plugin's own directory), Read
-  `.prd-toolkit/VERSION` once first, before the first `serve`; a missing file or a version below
-  `0.8.2` (compare the numbers part by part: `0.8.10` is above `0.8.2`) means that copy has no
-  standby. Then tell the owner, in place of the standby promise below, and promise no standby:
-  `This repository's .prd-toolkit/ is <version or "older than 0.6">, so the inbox closes with the
-  session that started it; run prd_hooks.py install docs/prd/<slug> from the plugin to refresh
-  it.` (`older than 0.6` when the file is missing.) Go on with the inbox as below. When
-  `<scripts>` is the plugin's own directory, read nothing and change nothing. Then start, also
-  with `run_in_background`,
+  `.prd-toolkit/VERSION` once first, before the first `serve`; when `<scripts>` is the plugin's
+  own directory, read nothing. Then start, also with `run_in_background`,
   `uv run --script <scripts>/prd_gates.py serve docs/prd/<slug> --gate <gate id>`
   and re-read its output until its first line appears:
   - `url=<url>`: give the owner that URL as a clickable link, beside what the step shows in the
     chat.
   - `prd_gates: an inbox is already serving at <url>`: the inbox that
-    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too. Give the owner
-    `<url>#gate=<gate id>`. Leave that `serve` running: it stands by, and if that inbox stops before
-    this gate is answered it takes over at the same URL.
+    `<git common dir>/prd-inbox-<slug>.json` names is live and lists this gate too.
+    When `<scripts>` is `.prd-toolkit` and its `VERSION` file is missing or names a version below
+    `0.8.2` (compare part by part: `0.8.10` is above `0.8.2`), say `This repository's .prd-toolkit/
+    is <version or "older than 0.6">, so the inbox closes with the session that started it; run
+    prd_hooks.py install docs/prd/<slug> from the plugin to refresh it.` (`older than 0.6` when the
+    file is missing) instead of the standby clause below: the `serve` may stay running, but promise
+    nothing about standing by or taking over. Give the owner `<url>#gate=<gate id>`. Leave that
+    `serve` running: it stands by, and if that inbox stops before this gate is answered it takes
+    over at the same URL.
   - `prd_gates: <gate id> is not pending`: the gate changed; take it as `wait`'s exit 1.
   - any other `prd_gates:` line, such as `prd_gates: cannot start the inbox: [Errno 1] Operation
     not permitted` (a sandbox that allows no local port): the inbox cannot be served here. Say so

@@ -316,3 +316,14 @@ def test_standby_promise_checks_the_vendored_version(path):
         assert needle in s, needle
     assert s.index(".prd-toolkit/VERSION") < s.index(STALE_COPY) < s.index("Leave that `serve` running"), path.name
     assert s.index(".prd-toolkit/VERSION") < s.index("prd_gates.py serve"), path.name  # read before the first serve
+
+
+@pytest.mark.parametrize("path", DECISION_SKILLS, ids=lambda p: p.name)
+def test_the_already_serving_case_is_conditional_on_the_vendored_version(path):
+    s = flat(inbox(path))
+    live, stale = s.index(LIVE), s.index(STALE_COPY)
+    give, nxt = s.index("Give the owner `<url>#gate=<gate id>`"), s.index("`prd_gates: <gate id> is not pending`")
+    assert live < s.index("below `0.8.2`", live) < stale < give <= s.index(STANDBY) < nxt, path.name
+    between = s[stale:give]
+    assert "instead of the standby clause below" in between, path.name
+    assert "promise nothing about standing by or taking over" in between, path.name
