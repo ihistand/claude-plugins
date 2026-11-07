@@ -721,7 +721,7 @@ REFRESH_PINS = [
     "prd_hooks.py vendor docs/prd/<slug>",
     "in the same commit",
     "never prd_hooks.py install",
-    "a repository that holds the plugin",
+    "Where it does (one directory with `.claude-plugin/plugin.json` named `prd-toolkit`",
 ]
 
 
@@ -742,11 +742,14 @@ def test_vendored_copy_rule_keeps_the_ban_for_every_other_repository():
     for path in (SKILL, AGENT):
         t = flat(path)
         assert "Never an edit under `.prd-toolkit/` by hand" in t, path.name
-        assert "any other repository" in t, path.name
+        assert "by hand, in any repository" in t, path.name
+        assert "does not hold the plugin, the copy is the caller's to refresh" in t, path.name
 
 
 def test_red_flag_quotes_a_hand_edit_under_the_vendored_copy():
     t = flat(SKILL)
     red = t[t.index("## Red Flags - STOP"):]
-    assert "hand-ran" in red and "`.prd-toolkit/`" in red
-    assert red.index("hand-ran") < red.index("## Common Rationalizations")
+    quote = ("the vendored copy, refreshed with the repo's vendor-only snippet "
+             "(not prd_hooks.py install).")
+    assert quote in red and "`.prd-toolkit/`" in red
+    assert red.index(quote) < red.index("## Common Rationalizations")

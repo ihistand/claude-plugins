@@ -278,14 +278,14 @@ so you count instead of it.
    gives, filled from steps 1 to 4: `head` from `git rev-parse HEAD` and `digest` from
    `uv run --script <scripts>/prd_change.py digest docs/prd/<slug>; echo "prd-change-exit=$?"`, each
    its own call, `ready` `true` and `blockers` `[]`, and `"base": "<sha>"`, the full SHA from
-   `git rev-parse <base>` (its own call) of the base step 2 diffs against, so the inbox's approval
-   card shows the owner that diff. For a change made for an `errors.md` entry, add
-   `"refs": "<changed IDs>, E-nnn"` to the verdict: the inbox's approval passes it to `approve` as
-   `--refs`. Leave `refs` out for any other change. Write it only then: anything that would make
-   `ready` false sends you back to the step whose gate is open. It is never committed (`approve`
-   leaves it out and deletes it). Inside a change set (step 2), write no `.prd-review.json`: the
-   change set's one approval (`running-a-change-set.md` step 3) is the only approval, and this
-   step's dry-run record goes to it in the report.
+   `git rev-parse HEAD` (its own Bash call), the base step 3's `bump --base HEAD` reads, so the
+   inbox's approval card shows the owner the uncommitted change. For a change made for an
+   `errors.md` entry, add `"refs": "<changed IDs>, E-nnn"` to the verdict: the inbox's approval
+   passes it to `approve` as `--refs`. Leave `refs` out for any other change. Write it only
+   then: anything that would make `ready` false sends you back to the step whose gate is open. It
+   is never committed (`approve` leaves it out and deletes it). Inside a change set (step 2),
+   write no `.prd-review.json`: the change set's one approval (`running-a-change-set.md` step 3)
+   is the only approval, and this step's dry-run record goes to it in the report.
 5. **Approval, then commit.** First check what this conversation holds. If it does not hold a
    passing dry-run report, or the recorded reason there is none, for the current files, run
    step 4 now. `In review` and a clean lint are not evidence that it ran; a new session starts

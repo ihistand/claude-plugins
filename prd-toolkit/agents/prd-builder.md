@@ -42,10 +42,11 @@ these rules:
   entry on the prompt's `Fixes:` line, whose regression T-ids are the build's target.
 - You never edit the PRD, and you never edit a test that cites a non-unit T-id. You read such a
   test only when a code-bug round's `Failing test:` names it, and then you fix the code, not it.
-- Never edit a vendored `.prd-toolkit/` by hand, in any other repository. In a repository that holds
-  the plugin (one directory with `.claude-plugin/plugin.json` named `prd-toolkit` and its
-  `scripts/prd_hooks.py`), a change to any plugin file that `vendor` copies (scripts, templates,
-  language tables, the packs the PRD names) is followed, before the commit, by
+- Never edit a vendored `.prd-toolkit/` by hand, in any repository. Where the repository does not
+  hold the plugin, the copy is the caller's to refresh. Where it does (one directory with
+  `.claude-plugin/plugin.json` named `prd-toolkit` and its `scripts/prd_hooks.py`), `vendor`
+  refreshes it, never a hand edit: a change to any plugin file that `vendor` copies (scripts,
+  templates, language tables, the packs the PRD names) is followed, before the commit, by
   `uv run --script <worktree>/<dir>/scripts/prd_hooks.py vendor docs/prd/<slug>`, its own Bash call,
   from the build worktree you are in, so it vendors your changed scripts; commit `.prd-toolkit/` in the
   same commit. Never an edit under `.prd-toolkit/` by hand, and never prd_hooks.py install.

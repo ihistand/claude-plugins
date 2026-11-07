@@ -165,8 +165,8 @@ citing a T-id: build-check is not adopted, and the tests are the plugin's own su
 
 - The verdict gains an optional key `base`: the full SHA review mode diffed against
   (`git rev-parse <base>`, its own call). `VERDICT_TYPES` gains `"base": str`. Review mode's step that
-  writes `.prd-review.json` writes it; changing-prds' own verdict writer does the same with the base its
-  step 2 diffs against.
+  writes `.prd-review.json` writes it; changing-prds' own verdict writer records `git rev-parse HEAD`, the
+  base its `bump --base HEAD` reads.
 - The card diffs, and reads the "from" version, against the verdict's `base` when it is present and
   `git cat-file -e <base>^{commit}` succeeds.
 - Without it (a verdict written before 0.8.3, or a base no longer in the repository), the card uses
