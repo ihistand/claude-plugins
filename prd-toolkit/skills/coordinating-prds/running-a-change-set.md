@@ -39,9 +39,10 @@ any member from this session: the member's `<root>/.prd-toolkit/…` scripts, it
 commit (`changing-prds` step 5) takes `<scripts>` as `<root>/.prd-toolkit` and the PRD folder as
 `<root>/docs/prd/<prd>`; `/prd-deploy`'s likewise (`prd_deploy.py` dispatches no agent). Anything
 that dispatches an agent runs in a session started in that member's root: `changing-prds` step 4's
-dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the
-session's own repository. A session never begins a step it cannot finish, so a member's whole step
-2 runs in that member's own session, as its step 4 does. Before step 2 or step 4 of a member that
+dry run and `/prd-build`, because the builder's round is cut as a `prd-round/<area>-<n>` branch
+in the session's own worktree and the tester's guard binds to the session's own repository. A
+session never begins a step it cannot finish, so a member's whole step 2 runs in that member's own
+session, as its step 4 does. Before step 2 or step 4 of a member that
 is not this session's repository, log where the chain stops, `<n>` being the step:
 
 ```bash

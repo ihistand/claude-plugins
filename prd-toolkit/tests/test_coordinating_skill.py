@@ -364,7 +364,7 @@ def test_changing_prds_red_flag_for_a_cited_item():
 def test_running_a_build_on_a_change_set_branch():
     t = BUILD_RUN.read_text(encoding="utf-8")
     para_at = t.index("**On a change-set branch.**")
-    assert para_at < t.index("3. **Dispatch both in one message**")
+    assert para_at < t.index("3. **Dispatch the builder's round, then the tester.**")
     para = " ".join(t[para_at:t.index("\n\n**", para_at + 10)].split())
     assert ('uv run --script <scripts>/prd_links.py sync docs/prd/<slug> <upstream> --ref <branch>; '
             'echo "prd-links-exit=$?"') in t
@@ -405,7 +405,7 @@ def test_block_names_the_coordination_role_only_with_links(prd):
     assert ROLE not in prd_block.render_block(model.load(prd), "docs/prd/orders")
     (prd / "links.md").write_text(LINKS, encoding="utf-8")
     block = prd_block.render_block(model.load(prd), "docs/prd/orders")
-    assert ROLE in block and "another PRD cites" in block
+    assert ROLE in block and "a cited item" in block
     assert "{{" not in block and "\n\n\n" not in block
 
 
@@ -446,8 +446,8 @@ def test_r11c_one_record_drives_agent_steps_run_from_the_members_root():
     assert "`git -C <root>`, never a `cd`" in para
     assert "(`prd_deploy.py` dispatches no agent)" in para
     assert ("Anything that dispatches an agent runs in a session started in that member's root: `changing-prds` "
-            "step 4's dry run and `/prd-build`, because the builder's worktree and the tester's guard bind to the "
-            "session's own repository.") in para
+            "step 4's dry run and `/prd-build`, because the builder's round is cut as a `prd-round/<area>-<n>` branch "
+            "in the session's own worktree and the tester's guard binds to the session's own repository.") in para
     assert "changeset log <record> '<prd>: step <n> runs from <root>'" in para  # R-11e's Log line
     assert '"Continue with `/prd-change-set CS-<nnn>` from `<root>`" (headless: `prd-toolkit:prd-change-set CS-<nnn>`)' in para
     assert "A build or a deploy dispatches" not in t and "A build or deploy of a member" not in t

@@ -212,7 +212,7 @@ def test_a_form_save_keeps_summaries_and_done(tmp_path):
     server, _ = confirm.make_server(p, "notes", items, {}, "<html></html>")
     try:
         server.state.answer({"id": "FR-002", "decision": "confirm"})
-        server.state.answer({"id": "Q-01", "decision": "fix"})
+        server.state.answer({"id": "Q-01", "decision": "fix", "text": "none"})
     finally:
         server.server_close()
     d = data(repo)

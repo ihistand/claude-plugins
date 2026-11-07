@@ -323,3 +323,37 @@ def test_existing_findings_elsewhere_do_not_block_a_write(prd):
     assert r.returncode == 0, r.stderr
     r = run(prd, "confirm", str(prd), "E-002", "--reply", "yes")
     assert r.returncode == 0, r.stderr
+
+
+def test_parse_touches():
+    assert errors.parse_touches("") == []
+    assert errors.parse_touches(" - ") == ["-"]
+    assert errors.parse_touches("FR-001, UJ-01") == ["FR-001", "UJ-01"]
+    for raw in ("-,FR-001", "-, FR-001"):
+        assert refused(errors.parse_touches, raw) == ["Touches: - cannot be combined with IDs"]
+
+
+def test_new_touches_dash(prd):
+    new(prd, touches=["-"])
+    text = (prd / "errors.md").read_text()
+    assert "Touches: -\n" in text and ledger(prd)["E-002"].touches == []
+
+
+def test_propose_touches_dash(prd):
+    new(prd, touches=[])
+    errors.propose(model.load(prd), "E-002", "code bug", "d", None, ["-"])
+    assert "Touches: -\n" in (prd / "errors.md").read_text()
+
+
+def test_no_touches_writes_no_line(prd):
+    new(prd, touches=[])
+    assert "Touches:" not in (prd / "errors.md").read_text()
+
+
+def test_cli_touches_dash(prd):
+    r = run(prd, "new", str(prd), "--title", "T", "--source", "s", "--touches", " - ")
+    assert (r.returncode, r.stdout.strip()) == (0, "E-002")
+    assert "Touches: -\n" in (prd / "errors.md").read_text()
+    for raw in ("-,FR-001", "-, FR-001"):
+        r = run(prd, "new", str(prd), "--title", "T", "--source", "s", "--touches", raw)
+        assert r.returncode == 1 and r.stderr.strip() == "refused: Touches: - cannot be combined with IDs"

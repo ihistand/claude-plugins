@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it. Version 0.8.1.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Version 0.8.2.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -17,7 +17,8 @@ for 0.6 [docs/superpowers/specs/2026-11-01-prd-toolkit-0.6-design.md](../docs/su
 for 0.7 [docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md](../docs/superpowers/specs/2026-11-02-prd-toolkit-0.7-design.md),
 for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-design.md),
 for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md),
-and for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md).
+for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md),
+and for 0.8.2 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
 
 ## Install
 
@@ -39,7 +40,7 @@ install hint and exits 2.
 | `/prd-adopt [area]` | `prd-toolkit:adopting-prds` | Bring an existing repo under a PRD one area at a time, from the code, with the user's word on each requirement |
 | `/prd-change <description>` | `prd-toolkit:changing-prds` | Change the PRD first, with new IDs and a version bump, before any code; `prd_change.py` keeps the books. `/prd-change --review <dir>` reviews a change, edits nothing and writes one JSON verdict (see Machine interface) |
 | `/prd-context [area] [IDs] [implement]` | `prd_context.py` | Print the focused context pack for one task: the decide pack, or with `implement` the implement pack |
-| `/prd-build <area> <IDs>` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works in its own worktree while `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
+| `/prd-build <area> <IDs>` | `prd-toolkit:building-from-prds` | Take approved requirements to verified code: `prd-builder` works on a round branch the build cuts and merges `--ff-only`, then `prd-tester` writes the tests in its `write` mode; the build reconciles by quote and moves statuses `approved`, `built`, `verified` with no version bump |
 | `/prd-status` | `prd_status.py` | Show where each requirement stands, and the version each environment runs |
 | `/prd-deploy [--until <env>] [<run id>]` | `prd-toolkit:deploying-from-prds` | Deploy a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, then record the run (see Deploying) |
 | `/prd-error [<E-nnn> \| <run id> \| <text>]` | `prd-toolkit:handling-errors` | Record an error in `errors.md` with `prd_error.py`, diagnose it, propose its class and wait for the user's confirmation; the fix starts from a failing test and goes through `/prd-change` and `/prd-build --fixes E-nnn`, and the close is checked with `prd_error.py check` |
@@ -589,7 +590,8 @@ the verdict): it restates the change, runs `prd_links.py impact` when `links.md`
 decides each `needs judgment` item, dry-runs the new and revised non-unit T-ids through `prd-tester`,
 and writes `.prd-review.json` in the PRD folder: `{"interface": 1, "kind": "review", "head",
 "digest", "restate", "touches", "impact", "bump": {"level", "decided"}, "dry_run", "ready",
-"blockers"}`. Run it headless as `claude -p "/prd-change --review <dir>" --output-format json` with
+"blockers"}`, plus an optional `"refs"` (0.8.2) that `changing-prds` step 4 sets for a change made for an
+`errors.md` entry, the approval commit's `Refs:` IDs. Run it headless as `claude -p "/prd-change --review <dir>" --output-format json` with
 the plugin loaded and the tools `Read`, `Grep`, `Glob`, `Bash` and `Agent`. The order a client runs: `bump`, then the review, then `record` at the level the verdict gives, then lint and trace; `record` does not change the digest, so the verdict stays valid.
 
 **Pending decisions.** `prd_gates.py list <prd dir> [--worktrees] --json` prints every decision a
@@ -614,6 +616,59 @@ a `--worktrees` approval gate, run `answer` on that worktree's PRD folder: the g
 worktree) joined with the PRD's path in the repository. Beside the form,
 `prd_confirm.py answer` (one item), `prd_confirm.py open` (a new answers file) and
 `prd_confirm.py done` (the area finished) write the 0.7.1 answers file, under its lock.
+
+## Decision inbox
+
+`prd_gates.py serve` is a local page that lists every decision a person owes (the gates of
+`prd_gates.py list`, across the repository's worktrees) and answers each one: an approval with its
+diff, an error class, a deploy step, an adoption area and a sign-off. The session starts `wait` on
+a gate before it gives you the URL, so it learns of the answer whichever client gave it.
+
+```
+uv run --script .prd-toolkit/prd_gates.py serve docs/prd/<slug> [--gate <id>] [--port N] [--no-open] [--idle-minutes N]
+uv run --script .prd-toolkit/prd_gates.py wait docs/prd/<slug> <gate id> [--worktree <path>] [--timeout S]
+uv run --script .prd-toolkit/prd_build_check.py docs/prd/<slug> --stale --tids <T-ids>
+uv run --script .prd-toolkit/prd_deploy.py record docs/prd/<slug> --env <env> --commit <sha> --reply "<owner's words>"
+```
+
+| Command | Does | Exit codes |
+|---|---|---|
+| `prd_gates.py serve` | Prints `url=http://127.0.0.1:<port>/?token=<token>` as its first stdout line, opens the browser unless `--no-open` (the page opens on `--gate` when given), and serves until Ctrl-C, SIGTERM or `--idle-minutes` (default 120) without a request. With `--gate`, when an inbox for the PRD is already live, it prints `prd_gates: an inbox is already serving at <url>` and stands by: if that inbox stops before the gate is answered, it takes over at the same URL (the same port and token; it prints `url=<url>#gate=<id>` and opens no browser) and serves from then on as any `serve` does. A standby lives at most `--idle-minutes`, counted from when it began standing by | `serve` exits 3 when stopped (Ctrl-C, SIGTERM or the idle time), 1 when refused (a `--gate` that is not pending, or `prd_gates: an inbox is already serving at <url>` without `--gate`) and when a standby's gate is answered or gone (`prd_gates: <gate id> is not pending`, 5 seconds after it left the list), 2 when it cannot start (usage, a port in use, `prd_gates: cannot start the inbox: …`) or cannot take over (`prd_gates: cannot take over the inbox at port <N>: …`); a standby stopped by Ctrl-C or SIGTERM, or at the end of its `--idle-minutes`, exits 3 too; it has no Done, so it never exits 0 |
+| `prd_gates.py wait` | Blocks until the gate is answered by any client and prints `{"interface": 1, "kind": "gates.outcome", "gate", "worktree", "choice", "reply", "by", "at"}` | `wait` exits 0 when answered, 1 when the gate is not pending, 3 on timeout, 2 on usage (at exit 0 `choice` is the answer's, `confirm` for a deploy step; a gate that is not pending prints `choice` null: it was answered before `wait` began with nothing logged, or the PRD changed under it) |
+| `prd_build_check.py --stale` | Prints `stale <T-id> <test path>: its test case changed after the test (last changed in <sha>)` for each dispatched T-id whose test case changed after its test's last commit; a suite prompt then carries one `Rewrite: <T-id>` line for each | `--stale` exits 0 when nothing is stale, 1 when any is, 2 on a usage or tool error (which stops the dispatch) |
+| `prd_deploy.py record` | Records a deploy the owner did by hand: a run log marked `by: hand` and the environment's Deployed row, left uncommitted; it runs nothing and moves no status | `record` exits 0, 1 when refused (an environment not in both Environments tables, a commit not in the repository, an empty reply), 2 on usage; it prints `run=<id>` on success |
+
+The inbox page is vendored at `.prd-toolkit/gates/inbox.html`. It passes the question it showed with
+every answer, so an answer to a gate that changed is refused. The page asks for a new list every 5
+seconds. A reply from a button ends with ` (form)` and the answer log's `by` is `form`; an answer by
+`prd_gates.py answer` has `by` `cli`.
+
+These files live in the git common directory, so every worktree of the repository shares them:
+
+- `prd-inbox-<slug>.json` (mode 0600): the lock file of the live inbox, with its port, token and pid. A second
+  `serve` for the PRD finds it live and refuses, or with `--gate` stands by behind it; a dead one is deleted.
+- `prd-gates-log.jsonl`: the answer log, one line per accepted answer (an adoption's per-item answers
+  excepted; only its `done` is logged). `wait` reads it, never the page.
+- `prd-gates-answering/`: one marker for each answer in progress. `wait` waits while a live marker
+  exists. A marker older than 15 minutes, or whose process is gone (a dead pid), is ignored and removed.
+- `prd-gates-waiting/`: one marker for each running `wait`, `<key>-<pid>`, keyed as the answering marker
+  is. A card whose gate no live `wait` holds says `No session is waiting on this gate. Answering it still
+  records the answer.` A marker whose process is gone is removed when read; a marker has no age limit.
+
+The skills route each decision through the inbox and fall back to the chat when `serve` cannot start; the
+page is never the only route.
+
+## Known limits (0.8.2)
+
+- The form cannot prove a person clicked, as in 0.7.1. The page needs the token, which only the session that
+  started the inbox and the inbox file (mode 0600) hold.
+- "Signing as `<owner>`" names the owner; it does not check who is at the keyboard.
+- A new gate takes up to 5 seconds to appear.
+- The answer log grows without bound; it is a few hundred bytes per decision.
+- A sandbox that forbids a local port makes `serve` exit with `cannot start the inbox: …`; the skills then
+  ask in the chat.
+- An owner whose commit hooks run longer than 15 minutes gets `wait` exit 1, because its answering marker
+  has expired; the session then lists the gates again.
 
 ## Known limits (0.8.1)
 
@@ -693,6 +748,24 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.2:** A local decision inbox, and the fixes from the first real adoption. The sections named below are those of the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md).
+  - `prd_gates.py serve` is the inbox (see Decision inbox): one page for every pending gate across the worktrees, with the approval's diff. `prd_gates.py wait` blocks until a gate is answered by any client and prints `gates.outcome`; both read and write `prd-gates-log.jsonl` in the git common directory. `gates.answer` gains `by` (`form` or `cli`), a reply from a button ends with ` (form)`, and the vendored page is `.prd-toolkit/gates/inbox.html`. The skills route each decision through the inbox and fall back to the chat.
+  - The shared inbox outlives its starter (section 18): a `serve --gate` that finds a live inbox stands by and, when that inbox stops before its gate is answered, takes it over at the same URL; each card says when no session's `wait` holds its gate.
+  - It builds on three changes to the 0.8.1 interface, made before 0.8.1 shipped (`interface` stays 1): the approval gate has two choices, `approve` and `changes`; the adoption gate stays pending until `done`; and `prd_confirm.py open` writes a new answers file.
+  - The 0.8.0 retarget refusal names no release number now: `retargeting an area is a conversion, which a later prd-toolkit release brings`.
+  - The confirm form (section 13): the page asks `/ping` every 60 seconds, so the idle time counts from the last page closing and not from the last answer; the question choices read `Keep it as it is`, `Change it…` (words required) and `Answer in my own words`; a confirmed bug counts as answered after the answers file is deleted.
+  - `Touches: -` (section 13): `prd_error.py new` and `propose` take `--touches -` and write `Touches: -`; `-` with an ID is refused. `error-entries` reports a gap or an entry out of order, such as `E-012 follows E-010: E-011 is missing; entries are never deleted, restore it from git`.
+  - The tester's reading (section 14): the guard lets it Read a background task's `<id>.output` file and read the vendored `.prd-toolkit/packs/`; the references say a helper a pack ships has its parameters and result stated in the pack's `harness`.
+  - `prd_build_check.py --stale` (section 15) lists a T-id whose test case changed after its test; the caller adds a `Rewrite:` line for each to the suite prompt, and the tester rewrites that test from the case as it stands.
+  - `symptom:` (section 16): a known-failing case names what the run shows while the bug is open, and the test accepts only that failure. `symptom:` without `known-failing:` is an error; a known-failing case that names no symptom gets the warning `known-failing E-nnn names no symptom; any failure would pass as it`. The checklist asks how each precondition is confirmed.
+  - Section 17: a pack's shipped helper is imported, never copied, in a dry run; the Leaks slot says how a failure report avoids printing test values (`--tb=short` for pytest); a dry run that failed only on Harness conventions is a harness-only round that keeps the status `In review`; the CLAUDE.md block's change line covers only the adopted areas of a partly adopted PRD (`prd_block.change_line`); `prd_deploy.py record` records a deploy done by hand and moves no status; the build's close names a `verified` block with no build-gate test (`<ID>: verified with no build-gate test; its proof is the deploy gate at /prd-deploy`); and every builder round runs on a round branch, `prd-round/<area>-<n>`, cut in the build worktree, merged `--ff-only` after the check, with no Agent isolation.
+  - Upgrading from 0.8.1: re-run `prd_hooks.py install`, which vendors `gates/inbox.html` and the new script versions into `.prd-toolkit/` (commit it). Re-run `prd_block.py` to pick up the new change line: until then `prd_block.py --check` reports a CLAUDE.md block stale. `prd_confirm.py serve` stays for a session that prefers the single-area form. A PRD with a gap in `errors.md` restores the entry from git; a known-failing case without `symptom:` still lints clean (a warning). No PRD needs an edit.
+  - Proven on 2026-11-06, on the toolkit's own PRD, in two worktrees on proof branches that stay unpublished (their SHAs are local) and in a fixture:
+    - The `deploy-step`, `signoff` and `adoption` cards, each answered in the inbox and checked in the owner's file: `inbox-deploy-step.gif`, `inbox-signoff.gif`, `inbox-adoption.gif`.
+    - Two worktrees' gates in one inbox: an approval from each, answered in the inbox at 14:58:51Z and 15:05:48Z (`60d0b6d`, `cd1d4ec`).
+    - A `/prd-change` approved in the inbox after a Request changes round: the gate log holds `changes` with the owner's words (21:57:23Z), then `approve` (21:58:10Z), in `215e297`.
+    - A `/prd-error` class confirmed on the inbox card, not in the chat: E-008 at 17:30:58Z (`844037a`), and eight more entries the same way.
+    - The proof found that a shared inbox died with the session that started it, and that the owner could answer a gate no session still waited on; section 18 fixes both (`3870060`, `560265b`).
 - **0.8.1:** The machine interface: JSON output, the change bookkeeping as code, one list of pending decisions and a review mode.
   - `--json` and `--interface` on `prd_lint.py`, `prd_trace.py`, `prd_status.py`, `prd_context.py`, `prd_change.py` and `prd_gates.py`; every document starts `{"interface": 1, "kind": …}` (see Machine interface). The toolkit's own PRD is at 4.0.0, with `lint-cli` FR-014 (lint `--json` and `--interface`) verified and FR-001 and FR-004 revised for them.
   - A break: in 0.8.0 `prd_status.py --json` and `prd_context.py --json` printed a bare JSON list. In 0.8.1 they print a wrapped document, `{"interface": 1, "kind": …}` (the status items under `items`, the context pack's parts under `parts`, one entry per item), so anything that parses them must change.

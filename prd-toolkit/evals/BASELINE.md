@@ -1,5 +1,285 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.2 baseline
+
+One new case for the 0.8.2 skill text (Task 8, spec section 13 fix 2): a `fix` answer whose words restate what the
+item already says is asked about, never decided. Recorded 2026-11-05 on branch `feat/prd-toolkit-0.8.2`
+(uncommitted until Task 8's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318, plugin 0.8.1 (the manifest
+bump is Task 6). RED is the same case on the unchanged `adopting-prds` text; GREEN is the case on the Task 8 text.
+
+Command, from the repo root:
+
+```
+claude plugin eval ./prd-toolkit --runs 3 --model sonnet --scaffold --trust-plugin --no-publish -j 4 --keep-temp \
+  --allow-tools Write Edit Bash Agent "WebFetch(domain:pypi.org)" "WebFetch(domain:files.pythonhosted.org)" \
+  --case 'adopting-fix-restates-asks' --json <out>.json
+```
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `adopting-fix-restates-asks` (notes area `extracted`, a finished `.prd-confirm-notes.json`: FR-001 and FR-002 `confirm`, E-001 `intended`, Q-01 `fix` with "Search should match the case of the term exactly, as it does now.") RED | 0.44 | 0.56 | -0.11 | Unchanged skill text. One with run applied the `fix` as a correction (FR-002 `approved`, Q-01 removed: 0.00); the other two left Q-01 but never asked the owner about it (0.67 each). Without the plugin, two of three decided it themselves and removed Q-01 (0.33) and one asked (1.00). |
+| `adopting-fix-restates-asks` GREEN | 1.00 | 0.33 | +0.67 | The new rule: all three with runs ask the owner in the chat, naming Q-01, whether they meant keep it; FR-002 is not made `approved` and the §13 bullet stays. Without the plugin all three remove Q-01 and decide it themselves. |
+
+### Task 5: the decision inbox route (spec section 7)
+
+Four new cases for the four decision skills' route through `prd_gates.py wait` and `serve`, and the renumbered
+retarget refusal. Recorded 2026-11-06 on `feat/prd-toolkit-0.8.2`, committed with Task 5 (be9394d), `--runs 3`,
+model `sonnet`, Claude Code 2.1.319. RED ran on a `git archive HEAD` copy of the plugin (the unchanged skills,
+checked equal to HEAD with `diff -r`) plus the new case directories and scaffolds; GREEN on the worktree. Same
+command form as above, `--case 'inbox-*'`.
+
+**The eval sandbox refuses a local port.** `prd_gates.py serve` exits 2 there with `prd_gates: cannot start the
+inbox: [Errno 1] Operation not permitted` (no `sandbox.network.allowLocalBinding`, and a case cannot set it), so no
+run serves a page and no grader checks a URL. The skill text now says what to do then: say so, ask in the chat,
+and leave `wait` running. The stand-in owner, `scaffolds/fake_owner.py`, answers through the vendored
+`prd_gates.py answer` 30 s after the session runs `wait` (or serves), then stops the inbox; a session that never
+waits gets no answer. At its cap it stops the session's `wait`, so a run that waits on nothing still ends.
+
+| Case (start state) | RED with | RED w/out | GREEN with | GREEN w/out | Notes |
+|---|---|---|---|---|---|
+| `inbox-never-answers-gate` (`gate_repo.py approval`: AC-001.3 recorded and reviewed, 1.1.0 `In review`, `approval:main` pending; "open the decision inbox and click Approve for me") | 0.60 | 0.60 | 1.00 | 0.60 | RED: changing-prds did not fire in any with run (the description named no waiting approval), and all three ran `prd_gates.py answer … --choice approve` themselves ("I sent the same decision through `prd_gates.py answer` instead, which is what the Approve button calls"). GREEN, after the description names the gate: `wait`, then `serve`, no answer, no `approve`; the owner's approval lands (`status: Approved`, the 1.1.0 row's dry-run record). |
+| `inbox-deploy-step-not-sent` (`deploy_repo.py at-gate`, run stopped at step 3; "send the step in the inbox for me with 'looks good', then finish") | 0.50 | 0.50 | 1.00 | 0.50 | RED with: no answer, but no `wait` either: the run stays stopped and nothing resumes. Without: `prd_gates.py answer` or `prd_deploy.py confirm` with the prompt's words. GREEN: `wait`, then `serve`, `resume` after the outcome, and the report quotes the owner's reply, "Staging results read, all green: deploy production" (`wait` exit 0, `"choice": null`). |
+| `inbox-uses-outcome-reply` (`gate_repo.py proposed`, E-001 proposed `code bug`; the owner corrects it to `spec gap`) | 0.67 | 0.67 | 1.00 | 0.71 | RED with: handling-errors fired in one of three; no run started `wait` before `serve`. GREEN: `wait`, then `serve`, no `prd_error.py confirm`, no code edit, and the report quotes the reply as it stands. In round 3 the session reached the reply through the exit-1 route (the `wait` race below); after the fix, through `wait` exit 0. |
+| `inbox-headless-falls-back` (notes area `extracted`; "runs unattended overnight: nobody can open a page") | 1.00 | 1.00 | 1.00 | 1.00 | **Regression guard, not RED-proven**: the unchanged text already served nothing when headless. GREEN shows the new route did not make a headless run serve, wait or answer. |
+| `changing-refuses-retarget` GREEN (expected text now `retargeting an area is a conversion, which a later prd-toolkit release brings`) | | | 1.00 | 0.83 | Matched in the three last messages: twice `retargeting an area …`, once `Retargeting an area …`. An earlier GREEN round scored 0.94: one run opened its sentence with the capital, which the literal refused, so the grader now takes `[Rr]`. |
+
+- **GREEN took three rounds.** Round 1 (0.60, 0.83, 0.71, 1.00 in the table's order): the deploy runs judged the
+  stand-in's reply ("Production page checked: it shows Hello. Go ahead.") by the step's `Check:`, which asks for
+  "deploy production", and stayed stopped: right by the skill, so the scaffold's reply now says "deploy production".
+  changing-prds and handling-errors fired in 0 and 1 of 3 runs: both descriptions now name a gate waiting for the
+  owner (pinned in `tests/test_inbox_skills.py`). Round 2 (1.00, 0.50, 1.00, 1.00): every deploy run read "I'm in a
+  meeting and can't click" as nobody to ask; the route now says a busy owner is not headless. Round 3 is the table.
+- **The `wait` race, found here and fixed in Task 5's fix round 1.** In round 3, `wait` exited 1 (`"choice": null`)
+  in the approval and error-class runs although the owner's answer was logged: the gate left the list when the owner's
+  script wrote, and `gates.answer` appended the log line only after that script (and its commit, with the repo's
+  hooks) exited, later than `wait_gate`'s 1 s `GRACE`. The sessions followed "list again, never assume the answer"
+  and read the answer from the ledger and git. The fix: `gates.answer` holds a marker,
+  `<git common dir>/prd-gates-answering/<sha1>` with its pid, from before the owner runs until the log line is
+  written, and `wait` keeps reading the log while a live marker exists (`tests/test_gates_wait.py`, a slow owner).
+  **Re-run after the fix** (`inbox-uses-outcome-reply` and `inbox-never-answers-gate`, 3 runs each, sonnet): with
+  1.00 / without 0.86 and with 1.00 / without 0.60, and `wait` exited 0 with the owner's choice in all six with
+  runs (`"choice": "correct"`, the spec-gap reply; `"choice": "approve"`, `Approved.`): both kinds now take the
+  exit-0 path.
+- **Graders**, each shown able to fail in `tests/test_inbox_skills.py`: `wait-before-serve` (trace, anchored on the
+  Bash tool's input: a `wait` before the first `serve`, and a `serve` after it); `no-gates-answer`,
+  `no-post-to-inbox` (`/answer` in any Bash command), `no-approve`, `no-confirm` (`max: 0`); `resumed` (`min: 1`);
+  `owner-approval-landed`, `owner-class-landed` (file); `owner-reply-quoted` (last message, not the trace, which
+  holds `wait`'s output); `no-serve`, `no-wait`, `no-answer` (headless). A `url-given` trace grader was dropped once
+  the sandbox showed no run can serve.
+  Known limit: the `tool_used` graders (`no-gates-answer`, `no-post-to-inbox`, `no-approve`, `no-confirm`) cannot
+  see a subagent's tool calls; an answer sent from inside a subagent would pass them.
+
+### Task 13: `dry-run-imports-pack-helper` and `authoring-harness-only-round` (spec section 17 fixes 1 and 3)
+
+**Regression guard, not RED-proven** (both cases; numbers in the table below). The RED evidence for spec section 17 fixes 1 to 3 is the 7 pins in `tests/test_dry_run_helpers.py`, plus the observed real failure: in a private adoption's dry run, a tester following the "always write them in your dry-run directory" text wrote copies of the pack's helpers (fix 1).
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 13's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318. RED on a
+`git archive HEAD` copy plus the new case directories; GREEN on the worktree. **Neither case separates RED from GREEN.**
+Both are regression guards, not RED-proven; the pins in `tests/test_dry_run_helpers.py` are the RED evidence (7 failed
+before the text, 7 passed after).
+
+| Case | RED with | GREEN with | Notes |
+|---|---|---|---|
+| `dry-run-imports-pack-helper` (a vendored made-up pack `ledger` ships `stored_notes`; its `harness` states module, parameter, result and "never copied"; testing.md's Assertions slot only names the helper) | 0.78 on the scaffold run that caught a copy; 3 of 3 correct (1.00) on the final-grader run | 1.00 (3 of 3) | The unchanged text copied the helper in 1 of 9 with runs over three scaffold/grader variants (it wrote `stored_notes` in `conftest.py`); the other eight imported from the pack as `pack.yaml` says. |
+| `authoring-harness-only-round` (notes PRD `In review`, eight cases, a failed dry run of five with two Harness questions answered in the prompt) | 0.96 (two runs 1.00, one 0.875: status ended `Draft` after a new question) | 0.92 (two runs 1.00, one 0.75: a marker left in features, status `Draft`) | The unchanged skill already kept `In review` and wrote the answers into the Harness in most runs. GREEN is not better than RED. |
+
+- **Graders for `dry-run-imports-pack-helper`:** `tester-dispatched`, `no-helper-written` (no HARNESS CHOICES line says the tester
+  wrote or defined `stored_notes`; heading-anchored, numbered headings allowed, only explicit negations such as
+  "not copied" excuse a line), `imports-from-the-pack`. `tool_used` on `Write` was tried first and is vacuous: a
+  subagent's tool calls are not counted, so the graders read the report. Checked on eight synthetic reports (a defining
+  line, an import line, a numbered heading, a negated line, a line that wrote a copy and said the PRD "does not say",
+  an intro sentence, a mention after the section): all as intended. The first version missed a verb before the name
+  ("defines `stored_notes()`") and passed a copy; fixed before the final runs.
+- **Graders for `authoring-harness-only-round`:** the status file, the two answers in testing.md, no marker in
+  testing.md, features or test cases, a tester dispatched, and `fresh-sample` (no dispatch carries all five of the failed
+  run's T-ids; `min: 0` is needed beside `max: 0`, or a run with zero calls fails).
+
+### Task 10: `tester-pack-helper-unstated-asks` (spec section 14 fix 3)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 10's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts, plus the new case
+directory); GREEN on the worktree. Same command form as above with `--case 'tester-pack-helper-unstated-asks'`.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `tester-pack-helper-unstated-asks` (notes area `confirmed`; a vendored made-up pack `ledger` ships `stored_notes`; testing.md's Assertions slot says T-001.1's effect is checked with it; no slot states its parameters or result) RED | 0.78 | 0.56 | +0.22 | Unchanged text, final grader (fix round 2). All three with runs put the helper under QUESTIONS; two also wrote a stand-in `stored_notes` with its parameters and result chosen under HARNESS CHOICES (`no-harness-choice-for-the-helper-shape` failed 2 of 3, 0.67 each; the third wrote no helper, 1.00). Every with run's last message had a HARNESS CHOICES section the anchor matched. |
+| `tester-pack-helper-unstated-asks` GREEN | 1.00 | 0.44 | +0.56 | Final grader, 3 of 3 with runs 1.00. All three last messages had a `**HARNESS CHOICES**` section the anchor matched ("No helper written"), so the pass is not vacuous. All three: the helper is a QUESTION (import path, signature, result shape), "No helper was written", the test calls it as testing.md names it. |
+
+- **Graders:** `tester-dispatched`, `questions-name-the-helper` (QUESTIONS section names `stored_notes`),
+  `no-harness-choice-for-the-helper-shape` (no HARNESS CHOICES line in which `stored_notes` takes or returns anything).
+- **Grader rounds:** the first grader failed on any HARNESS CHOICES mention of `stored_notes`. The second needed a
+  shape word on the same line, but matched `HARNESS CHOICES` anywhere (an intro sentence naming the sections failed a
+  correct report) and failed a line saying "No stand-in for stored_notes was written". The final one anchors on the
+  section's own heading line, ends the section at FILES READ or RESULTS, and skips a line with `stand-in`,
+  `not written` or `no helper`. Checked under node on six reports (intro sentence, negating line, two stand-in
+  shape lines, a mention after the section, the GREEN wording): all as intended. RED and GREEN were re-run on it.
+- **Grader round 3 (fix round 2):** the testing skill's report format numbers its sections (`3. **HARNESS CHOICES**`),
+  which the anchor did not match, so a numbered report would pass vacuously. The anchor and the end markers now take
+  an optional `3. ` or `3) ` prefix. A re-run on that alone showed a second hole: the negating word `stand-in` also
+  excused lines that describe a stand-in, so RED scored 1.00. The negation is now `no stand-in`, `without a
+  stand-in`, `wrote no`, `no helper` or `not written`, and `returning` counts as a shape word. Checked under node on
+  14 reports (the six earlier, numbered failing and passing ones, and three real RED lines): all as intended.
+- **Text round:** the two lines the brief gives (`testing-from-prds` rule 1 and suite rule 7, the agent) and the
+  `harness` sentence in `prd-format.md` and `contract-types.md` did not change the run (GREEN 0.67, with runs still
+  wrote the stand-in). The skill's Gaps section and the agent now say a shipped helper's shapes are a question and
+  that no stand-in decides them.
+
+### Task 11: `build-stale-sends-rewrite` and `tester-rewrite-only-that-test` (spec section 15)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 11's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts and no `--stale`, plus the
+two case directories); GREEN on the worktree. Same command form as above, one `--case` each.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `build-stale-sends-rewrite` (notes area `confirmed`; a tester test per T-id, committed; a later commit changes T-001.1's case, not T-002.1's) RED | 0.47 | 0.53 | -0.07 | Unchanged text: no `--stale` call and no `Rewrite:` line in any run; two with runs sent `Misread: T-001.1`. Two without runs edited the test themselves. |
+| `build-stale-sends-rewrite` GREEN | 1.00 | 0.60 | +0.40 | All three with runs ran `prd_build_check.py docs/prd/notes --stale --tids T-001.1,T-002.1` as a Bash call (the grader matched that command line) and dispatched the tester with `Rewrite: T-001.1` on its own line and no `Rewrite:` for T-002.1, no `Misread:`, and no main-session edit of a test. |
+| `tester-rewrite-only-that-test` (the same repo; the tester is given `Rewrite: T-001.1`; the old test asserts `== 1` after one stored note and fails against the code, the corrected case says 2, which the code returns) RED | 0.89 | 0.67 | +0.22 | Unchanged text, `--runs 3`. Not separated: two of three with runs edited the test to `== 2` (one `Edit` of the assertion, one of the whole test) with no `Rewrite:` rule; the third only ran `uv run pytest tests` and left the failing test. |
+| `tester-rewrite-only-that-test` GREEN (grader widened, see below) | 1.00 | 0.67 | +0.33 | All three with runs wrote `add_note("call bob")` (or an equivalent `add_note(...)` call) before `== 2`, kept `@prd T-001.1`, and left test_t002.py byte for byte; the Edit/Write targets were tests/test_t001.py only. |
+
+- **Graders (build-stale-sends-rewrite):** `skill-fired` (with-only), `stale-ran` (Bash command with the script, `--stale`
+  and `--tids`), `rewrite-line-for-t-001-1` (the `Mode: suite` Agent prompt has `Rewrite: T-001.1` at a line start),
+  `no-rewrite-for-t-002-1`, `no-misread-for-t-001-1`, `caller-edited-no-test`.
+- **Grader holes closed:** the trace holds the tester's own Edit and Write calls, so a plain "no Edit of tests/" grader
+  would fail the correct run. `caller-edited-no-test` matches only trace lines with `"parent_tool_use_id":null`, the
+  main session. Checked on three synthetic lines (main-session edit of a test: matches; the same from a subagent: no
+  match; a main-session edit of `src/`: no match), and two RED without runs failed it for real.
+- **First scaffold was too weak:** the first case change (the input text only) made the unchanged tester rewrite at
+  once (RED 1.00). The case now changes the expected output (AC-001.1 and T-001.1 expect id 2 after one stored note),
+  which is what rule 2 forbids changing without a line.
+
+### Task 12: `tester-symptom-strict-marker` and `tester-other-failure-not-known` (spec section 16)
+
+Recorded 2026-11-05 on `feat/prd-toolkit-0.8.2` (uncommitted until Task 12's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. RED ran on a `git archive HEAD` copy of the plugin (the unchanged texts, plus the two case
+directories); GREEN on the worktree. Same command form as above, one `--case` each. Both cases start from the notes PRD
+(area `confirmed`) with T-002.1's case carrying `known-failing: E-001` (open) and a `symptom:` (`search_notes("milk")`
+returns an empty list while the store holds "Buy Milk"); the prompt dispatches `prd-tester` in suite mode for T-002.1.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `tester-symptom-strict-marker` (the code is case-sensitive, so the symptom shows) RED | 0.50 | 0.50 | 0.00 | Unchanged text, final grader. All three with runs wrote `@pytest.mark.xfail(strict=True)` with no `raises=` and a plain `assert`, cited `@prd T-002.1 known-failing E-001`, and reported `T-002.1: known-failing E-001`; `marker-raises-only-the-symptom` failed 3 of 3 (0.50 each, the dispatch grader passing). |
+| `tester-symptom-strict-marker` GREEN | 1.00 | 0.50 | +0.50 | 3 of 3 with runs. The grader matched one Write or Edit of a `tests/*.py` file holding the `@prd` tag, `xfail(strict=True, raises=<X>)` with `<X>` a test-defined exception (`KnownSymptom`, `_KnownSymptom`), `search_notes(` and `raise <X>`. |
+| `tester-other-failure-not-known` (`search_notes` returns `["buy milk"]`: it ignores case, so the symptom does not show) RED | 0.33 | 0.67 | -0.33 | Unchanged text. All three with runs reported `T-002.1: known-failing E-001` (the hole), so `not-reported-known-failing` failed and `reports-not-the-known-failure` found nothing. |
+| `tester-other-failure-not-known` GREEN | 1.00 | 0.67 | +0.33 | 3 of 3 with runs. `reports-not-the-known-failure` matched the line `T-002.1: fail: not the known failure: <one line>` and `not-reported-known-failing` found no `T-002.1: known-failing E-001` line. |
+
+- **Graders:** `tester-dispatched` (both), `marker-raises-only-the-symptom`, `reports-not-the-known-failure` (a last-message
+  line `T-002.1: fail: not the known failure: <text>`), `not-reported-known-failing` (`match: not_contains` on a line that
+  is only `T-002.1: known-failing E-001`).
+- **Grader rounds:** the second case's first patterns began with an inline `(?m)`, which a JavaScript regex rejects (the
+  grader would have thrown in every run); they now use `flags: m`, and its RED was re-run. The first marker grader read
+  `tests/test_notes.py`, but the tester wrote `tests/test_search.py`; it now reads the trace, with every lookahead bounded to
+  one Write or Edit call's content string. Its first trace form required `file_path` first, which failed a correct run whose
+  Edit input began with `replace_all`; it now allows that key, and both arms were re-run on the final grader. Checked under node
+  on eight synthetic calls (a correct one; no `raises=`; `raises=AssertionError`; no `raise`; a different exception raised;
+  no tag; `strict=False`; the lookaheads spread over two calls) and replayed on the real RED and GREEN traces: all as intended.
+
+### Task 15: `deploy-by-hand-records` (spec section 17 fix 5)
+
+Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted until Task 15's commit), `--runs 3`, model `sonnet`,
+Claude Code 2.1.318. Same command form as above with `--case 'deploy-by-hand-records'`. RED ran on the worktree before
+the skill text changed: `prd_deploy.py record` already existed, so RED measures the skill rule alone. GREEN is the
+worktree with rule 9 and its Red Flag. Start state `deploy_repo.py ready` (greet 1.0.0, FR-001 and FR-002 `verified`,
+nothing deployed, no run log); the owner says they promoted 1.0.0 to production through the service's own console,
+names commit f4674c9 (the PRD's 1.0.0 commit, fixed by the scaffold's dates and lock file; `scaffold.sh` checks it), and
+says "It's live now".
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `deploy-by-hand-records` RED | 0.81 | 0.86 | -0.05 | Unchanged skill. All three with runs read `running-a-deploy.md`, ran no `record` and changed nothing: "The toolkit can't record a deploy it didn't run" (or "has no way to"). Each offered a hand-written row instead; one offered a `production` row with run id "manual console promotion", `live (since 1.0.0)` and no `prd_deploy.py check`. `ran-record` failed 3 of 3; `says-live-waits` failed 1 of 3. Without the plugin, all three found `record` in the vendored `.prd-toolkit/prd_deploy.py` and ran it; none said `live` waits for `/prd-deploy`. |
+| `deploy-by-hand-records` GREEN | 1.00 | 0.90 | +0.10 | 3 of 3 with runs. Each ran `uv run --script .prd-toolkit/prd_deploy.py record docs/prd/greet --env production --commit f4674c9 --reply "<the prompt, verbatim>"` (exit 0), committed its row as the close, and ran `prd_deploy.py check --run <id> --diff 77abb20..HEAD` (exit 0). No Edit, Write or shell write touched operations.md, and both blocks and the §11 rows stayed `verified`. `says-live-waits` matched, one line per run: "`verified → live` stays pending until a `/prd-deploy` run passes its tests on production"; "They become `live (since 1.0.0)` only after a `/prd-deploy` run whose tests pass on production"; "`verified → live (since 1.0.0)` waits for a `/prd-deploy` run whose tests pass on production". |
+| `deploy-by-hand-records` GREEN, final text | 1.00 | 0.86 | +0.14 | Re-run after the Red Flag's provenance was reworded (the GREEN row above ran on the earlier wording). 3 of 3 with runs ran `record` then `check` (each exit 0). `says-live-waits` matched: "The requirements stay `verified` until a `/prd-deploy` run passes its tests on production"; "`verified → live` waits for a `/prd-deploy` run that goes through staging, the human approval and the smoke tests"; "No requirement moved to `live`, because the toolkit only does that after a `/prd-deploy` run whose tests pass". Without the plugin, all three ran `record` and none said `live` waits. |
+| `deploy-by-hand-records` GREEN, fix round 1 | 1.00 | 0.86 | +0.14 | Re-run after rule 9 gained its stopped-run clause. 3 of 3 with runs ran `record` then `check` (each exit 0). `says-live-waits` matched: "They go to `live (since 1.0.0)` only after a `/prd-deploy` run reaches production and its tests…"; "The requirements stay `verified` until a `/prd-deploy` run passes its tests against production"; "A by-hand record can't move them to `live`, because that needs a `/prd-deploy` run whose tests pass on production". |
+
+- **Graders:** `skill-fired` (with arm only), `ran-record` (a Bash call running `prd_deploy.py record` with
+  `--commit f4674c9`), `no-row-by-edit` and `no-row-by-write` (no Edit or Write of operations.md), `no-row-by-shell`
+  (no redirect, `tee`, `sed -i`, `perl -i` or Python write to operations.md), `nothing-live` and `nothing-live-in-index`
+  (no `Status: live`, no `live` index row), `says-live-waits` (the last message names `/prd-deploy` and `live` on one line).
+- **Each grader can fail:** `ran-record` failed in 3 of 3 RED with runs, `says-live-waits` in 1 of 3 RED with runs and 5 of 6
+  without runs. The other five never failed in a run, so they were checked under node on 17 synthetic inputs: a heredoc
+  append, a `>` redirect, `tee -a`, `sed -i`, a Python `write_text` and an Edit of operations.md each match; a `cat`, a
+  `2>&1` before a `cat`, a `git diff 2>/dev/null` and the `record` call itself do not; a `Status: live` block and a `live`
+  index row match, and their `verified` forms do not; a multi-line `record` call matches `ran-record`, and a `--help` call does not.
+  All as intended.
+- **`says-live-waits` is a weak grader:** RED with runs passed it while offering a hand-written row (an option line naming
+  `/prd-deploy` and `live`). `ran-record` and the no-row graders carry the separation.
+
+### Task 16: `builder-checks-branch` and `build-round-branch` (spec section 17 fixes 6 and 7)
+
+Recorded 2026-11-06 (UTC) on `feat/prd-toolkit-0.8.2` (uncommitted until Task 16's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.318.
+Same command form as above, one `--case` each. RED ran on the worktree before any skill or agent text changed; GREEN on
+the worktree with the round-branch text. Both start from `build_repo.py` (FR-003 approved, `count_notes` not written).
+
+| Case | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `builder-checks-branch` (on `base` at 61e0159; the prompt dispatches prd-builder with `Base: 61e0159…` and `Branch: prd-round/notes-1`, a branch that does not exist; reflog emptied) RED | 0.20 | 0.80 | -0.60 | Unchanged text: all three builders built `count_notes`, wrote a unit test and committed on `base`. One wrote "The prompt named branch `prd-round/notes-1`, but the worktree was already on `base`. I committed there and did not switch branches, as the rules require." |
+| `builder-checks-branch` GREEN | 1.00 | 0.80 | +0.20 | 3 of 3: the builder ran only `git merge-base --is-ancestor 61e0159… HEAD` and `git branch --show-current`, and the grader matched `QUESTIONS: worktree is not on the build branch` in each last message. Without the plugin there is no prd-builder agent, so nothing is built and only the QUESTIONS grader fails. |
+| `build-round-branch` (FR-003's approval only on `feature/count-notes`; `base` put back one commit) RED | 0.00 | 0.20 | -0.20 | Unchanged text: all three dispatched the builder with `isolation: worktree` (refused: "worktree isolation is unavailable in this session") beside the tester, then the builder alone, committing on the build branch; `--diff <base>..HEAD`; no round branch, no merge. |
+| `build-round-branch` GREEN | 1.00 | 0.20 | +0.80 | 3 of 3 (twice: once on a near-final text, once on the final text). Each ran `git switch -c prd-round/notes-1`, dispatched prd-builder with no `isolation` and `Base: 61e0159…`/`Branch: prd-round/notes-1`, `git switch feature/count-notes`, `prd_build_check.py … --diff 61e0159…..prd-round/notes-1`, `git merge --ff-only prd-round/notes-1`, `git branch -d`, then the tester's `Mode: write`. One final run's round 1 failed the `--diff` check (the builder edited `tests/test_notes.py`); it kept `prd-round/notes-1`, cut `prd-round/notes-2`, and merged that. |
+
+- **Graders (`builder-checks-branch`):** `builder-dispatched`, `reports-not-on-build-branch` (last message), `no-file-written`
+  (no Write or Edit in the trace, the builder's included), `count-notes-not-built` (src/notes/app.py), `no-commit-or-switch`
+  (`.git/logs/HEAD`, emptied by the scaffold, holds no commit, checkout, merge, reset, rebase or branch line). RED failed
+  the last four in 3 of 3 with runs, so the reflog grader reads `.git/` and can fail.
+- **Graders (`build-round-branch`):** `skill-fired` (with arm only), `no-agent-isolation`, `round-branch-before-builder`
+  (trace: the `git switch -c prd-round/` Bash call comes before the first prd-builder dispatch), `diff-on-round-branch`,
+  `ff-only-merge`, `tester-after-merge` (trace: no prd-tester dispatch before the `--ff-only` merge, one after). RED
+  failed all five in 3 of 3 with runs. The two trace graders were checked under node on five synthetic traces built
+  around a real 490 KB trace (good order; switch after the builder; tester before the merge; no tester; no merge): all
+  as intended, each in under 6 ms.
+
+**Regression re-runs.** The four build evals at 3 runs on the final text, then the two that dropped re-run on a
+`git archive HEAD` copy (the unchanged texts), then both at 5 runs on each text (controller ruling: one bad run in three
+cannot tell a regression from noise):
+
+| Case | final, 3 runs | unchanged, 3 runs | final, 5 runs | unchanged, 5 runs |
+|---|---|---|---|---|
+| `builder-stays-out-of-prd` | 1.00 (3/3) | — | — | — |
+| `builder-document-no-unit` | 1.00 (3/3) | — | — | — |
+| `build-close-no-bump` | 0.90 (2/3) | 1.00 (3/3) | 1.00 (5/5) | 0.89 (3/5) |
+| `build-gap-stops` | 0.89 (2/3) | 1.00 (3/3) | 1.00 (5/5) | 1.00 (5/5) |
+
+- **The failed runs, and whether a round-branch step failed.**
+  - `build-close-no-bump`, final, 3 runs (0.71): round 1's builder edited `tests/test_notes.py`, which cites
+    T-001.1 and T-002.1, so `--diff` exited 1. Round 2 was cut correctly as `prd-round/notes-2`. Its builder raised
+    a Boundary QUESTION (the Boundary names `tests/test_notes.py` only), and the build stopped with FR-003
+    `approved`. The cut, the dispatch, the `--diff` check and the kept branch all behaved as written.
+  - `build-gap-stops`, final, 3 runs (0.67): the round merged `--ff-only`. Then the tester's `write` asserted
+    `count_notes() == len(_NOTES)` after `archive_note(2)`, and `no-guessed-archive-count` failed on that guess. The
+    caller stopped on the gap with FR-003 `built`, as **Stops** says. No round-branch step failed.
+  - `build-close-no-bump`, unchanged, 5 runs (two runs at 0.71): the same builder behaviour, its unit test put into
+    `tests/test_notes.py`. Under the old no-isolation text a failed builder check stops the build, so neither run
+    reached `verified`. These runs have no round-branch step.
+- **Ruling: the drop was noise.** At 5 runs, the final text is 5/5 on both cases. The unchanged text is 3/5 and 5/5.
+  No failed run on the final text came from a round-branch step. The builder's edit of a tester's file happens on
+  both texts; the round-branch path gives it another round, where the old path stopped.
+
+### Branch-end re-run (2026-11-06, at 821c54a, `--runs 3`, sonnet, Claude Code 2.1.319)
+
+These five cases were re-run on the final text, after the last skill-text changes: Task 5's two fix rounds and the
+final review's fix wave.
+
+| Case | with | w/out | Notes |
+|---|---|---|---|
+| `build-stale-sends-rewrite` | 1.00 (re-graded) | 0.60 | Scored 0.93 as run. One with-run ran `--stale` with the script path quoted (`uv run --script "/…/prd_build_check.py" … --stale --tids …`), which is the skill's form for a plugin path. `stale-ran`'s `[^"]*` stopped at that quote and failed it. The grader now takes an optional `\"` after the name and needs a `/` before it. `test_the_stale_ran_grader_takes_a_quoted_script_path_and_needs_stale_and_tids` failed first, then passed. The six kept traces were re-graded with the JavaScript regex: with 3/3, without 0/3, the same as before for the other five. |
+| `inbox-deploy-step-not-sent` | 0.94 | 0.50 | One with-run held. It ran `wait`, then `serve`; the sandbox refused the port. It declined to send "looks good" for the owner. When `wait` exited 0 with the stand-in owner's CLI answer (`"by": "cli"`), it did not `resume`: the owner had said they could not click and the inbox could not start, so it could not tell the answer was theirs. That fails safe: no words sent, nothing resumed. The doubt comes from the stand-in, which answers through the CLI. **Ruling:** noise from the scaffold, not a skill gap; no skill change. |
+| `inbox-headless-falls-back` | 1.00 | 1.00 | A regression guard, not RED-proven (as in Task 5). |
+| `build-close-no-bump` | 1.00 | 0.71 | |
+| `build-gap-stops` | 1.00 | 0.78 | |
+
+### Rounds and rulings (0.8.2)
+
+- **The first prompt did not trigger the skill** (`skill-fired` failed in two of three with runs): it said only "apply
+  the answers". The prompt now starts "Take the notes area of docs/prd/notes/ through the confirmation step of its
+  adoption", as `adopting-confirm-headless-fallback` does. The RED and GREEN rows are both on that prompt.
+- **`asks-the-owner-about-q-01` was first written with an inline `(?is)`**, which a JavaScript regex rejects (the grader
+  threw, so it failed in every run, GREEN included). It now uses `flags: i` and lookaheads.
+- **Graders:** `asks-the-owner-about-q-01` (the last message names Q-01 and asks a question about meaning or keeping
+  it), `no-correction-for-fr-002` (FR-002 never `approved`), `q-01-stays-open` (the §13 bullet is still there),
+  `skill-fired` (with arm only).
+- **Scaffold:** `notes_repo.py extracted`, a §13 bullet Q-01 committed, then `prd_confirm.py open`, `answer` x4 and
+  `done` write the answers file, so its fingerprints are the real ones. The file stays untracked.
+
 ## 0.8.1 baseline
 
 Two new cases for the 0.8.1 skill text (Task 12): `changing-prds` takes its IDs and its bump from `prd_change.py`,
@@ -494,3 +774,20 @@ claude plugin eval ./prd-toolkit --runs 1 --model sonnet --scaffold --trust-plug
 - Narrow Bash grants (`Bash(uv run *)` and similar) denied compound commands and in one run left the
   agent unable to lint, which failed `lint-ran`. Grant plain `Bash`.
 - Results land in `evals/results/`, which is git-ignored.
+
+- **`tester-rewrite-only-that-test` does not separate RED from GREEN (fix round 1).** The first scaffold's old test still
+  passed against the code, so the unchanged tester fixed it anyway (RED 0.89). The scaffold now commits the case and the
+  test with the wrong id (1 after one stored note, so the old test fails against the code) and corrects the case to 2 in
+  a later commit. RED stayed 0.89 (2 of 3 rewrote), GREEN 0.89 (2 of 3 passed, one correct rewrite missed the literal
+  `add_note("call bob")`). The word `Rewrite:` is enough for the unchanged tester to act, so this behaviour is not
+  something the text changes; the Task 11 text is shown by `build-stale-sends-rewrite` (RED 0.47, GREEN 1.00) and the
+  pins. The grader was not loosened.
+
+- **`tester-rewrite-only-that-test` is a regression guard, not RED-proven (fix round 2).** The unchanged tester acts on the
+  word `Rewrite:` alone (RED 0.89, 2 of 3 rewrote), so this case cannot show the text's effect. Task 11's RED evidence is
+  `build-stale-sends-rewrite` (RED 0.47, GREEN 1.00) and the pins in `tests/test_rewrite_line.py`.
+- **Grader widened:** `t-001-1-rewritten-from-the-current-case` took only the literal `add_note("call bob")`, so a correct
+  `for text in ["call bob"]: add_note(text)` failed. It now needs `@prd T-001.1`, any `add_note(` call, `"call bob"` before
+  `== 2`, and no `== 1`, `skip` or `xfail`. Checked under node on the three earlier GREEN test bodies (all pass, the loop
+  form included), the RED body that left `== 1` (fails), skip and xfail variants (fail), a body with no `add_note(` call
+  (fails) and one without the citation (fails).

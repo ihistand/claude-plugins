@@ -89,6 +89,21 @@ def test_step_4_writes_the_verdict_after_lint_and_dry_run():
     assert "reviewing-a-change.md" in s and "`ready`" in s
 
 
+
+def test_step_4_puts_an_error_entrys_refs_in_the_verdict():
+    s = step(4)
+    assert ("For a change made for an `errors.md` entry, add `\"refs\": \"<changed IDs>, E-nnn\"` to the verdict: the "
+            "inbox's approval passes it to `approve` as `--refs`. Leave `refs` out for any other change.") in s
+    assert s.index("`blockers` `[]`") < s.index('`\"refs\"')
+
+
+def test_step_5_says_the_inbox_approval_carries_the_verdicts_refs():
+    s = step(5)
+    assert ("An outcome `approve`: the inbox already ran `prd_change.py approve` with the owner's reply, step 4's record "
+            "and the verdict's `refs` (step 4 sets it for a change made for an `errors.md` entry: "
+            "`'<changed IDs>, E-nnn'`), and made the approval commit.") in s
+
+
 def test_step_5_approves_through_the_script_with_the_reply_verbatim():
     s = step(5)
     approve = next(c for c in commands(SKILL.read_text(encoding="utf-8"), "prd_change.py") if " approve " in c)

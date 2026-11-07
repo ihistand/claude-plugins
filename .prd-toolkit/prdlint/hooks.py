@@ -14,6 +14,8 @@ VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "p
 MARKER = "# prd-toolkit hook"
 HOOKS = ("commit-msg", "pre-commit")
 BLOCK_TEMPLATE = "claude-block.md"
+CONFIRM_PANEL = "confirm/panel.html"
+INBOX_PAGE = "gates/inbox.html"  # templates/gates/inbox.html in the plugin, .prd-toolkit/gates/inbox.html vendored
 CONFIRM_PAGE = "confirm/form.html"  # templates/confirm/form.html in the plugin, .prd-toolkit/confirm/form.html vendored
 JUDGE_DIR = "judge"  # templates/judge/ in the plugin, .prd-toolkit/judge/ vendored
 LANGUAGES_DIR = "languages"  # references/languages/ in the plugin, .prd-toolkit/languages/ vendored
@@ -72,6 +74,8 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
     files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
+    files[CONFIRM_PANEL] = templates.parent / CONFIRM_PANEL  # form.html includes it
+    files[INBOX_PAGE] = templates.parent / INBOX_PAGE  # and so does the inbox page
     for f in sorted((templates.parent / JUDGE_DIR).rglob("*")):
         if f.is_file():
             files[f"{JUDGE_DIR}/{f.relative_to(templates.parent / JUDGE_DIR).as_posix()}"] = f
@@ -148,7 +152,7 @@ def _vendor(repo_root: Path, sources_packs=()) -> None:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
-    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", JUDGE_DIR, LANGUAGES_DIR):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", "gates", JUDGE_DIR, LANGUAGES_DIR):
         base = dest / sub
         if base.is_dir():
             for f in sorted(base.rglob("*"), reverse=True):
@@ -293,7 +297,7 @@ def check(repo_root: Path, plugin_root: Path, prd=None, prd_rel: str = "") -> li
             problems.append(f"{VENDOR_DIR}/{rel} is missing")
         elif target.read_bytes() != src.read_bytes():
             problems.append(f"{VENDOR_DIR}/{rel} differs from the plugin copy")
-    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", JUDGE_DIR, LANGUAGES_DIR):
+    for sub in ("prdlint", VENDORED_TEMPLATES, "confirm", "gates", JUDGE_DIR, LANGUAGES_DIR):
         for f in sorted((dest / sub).rglob("*")) if (dest / sub).is_dir() else []:
             rel = f.relative_to(dest).as_posix()
             if f.is_file() and "__pycache__" not in f.parts and rel not in sources:

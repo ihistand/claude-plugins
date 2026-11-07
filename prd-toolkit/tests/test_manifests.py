@@ -36,6 +36,12 @@ def test_description_says_links_across_repositories():
     assert "links PRDs across repositories" in plugin["description"]
 
 
-def test_version_is_0_8_1():
+def test_version_is_a_release():
+    # the current release is pinned in the newest test_release_*.py; here the three places that name it agree
     plugin = json.loads((ROOT / "prd-toolkit/.claude-plugin/plugin.json").read_text())
-    assert plugin["version"] == "0.8.1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", plugin["version"])
+    market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
+    assert [p["version"] for p in market["plugins"] if p["name"] == "prd-toolkit"] == [plugin["version"]]
+    js = (ROOT / "web/src/data/plugins.js").read_text()
+    block = js[js.index("id: 'prd-toolkit'"):]
+    assert re.search(r"version: '([^']+)'", block).group(1) == plugin["version"]

@@ -299,3 +299,16 @@ def test_lint_exit_0_graders_need_a_lint_of_the_prd_folder():
         assert pattern.search(t), t
     for t in failing:
         assert not pattern.search(t), t
+
+
+def test_the_stale_ran_grader_takes_a_quoted_script_path_and_needs_stale_and_tids():
+    def counts(cmd: str) -> bool:
+        return _tool_input_counts("build-stale-sends-rewrite", "stale-ran", {"command": cmd})
+
+    gate = '; echo "prd-build-check-exit=$?"'
+    # the skill's form for a plugin path: a literal absolute path in double quotes (branch-end run, 2026-11-06)
+    assert counts('uv run --script "/p q/scripts/prd_build_check.py" docs/prd/notes --stale --tids T-001.1,T-002.1' + gate)
+    assert counts("uv run --script .prd-toolkit/prd_build_check.py docs/prd/notes --stale --tids T-001.1" + gate)
+    assert not counts('uv run --script "/p/prd_build_check.py" docs/prd/notes --diff --snapshot s' + gate)
+    assert not counts('uv run --script "/p/prd_build_check.py" docs/prd/notes --stale' + gate)
+    assert not counts('echo "prd_build_check.py" --stale --tids')

@@ -54,8 +54,11 @@ def test_reconcile_table_and_quote_rule():
     assert "A classification without its quote does not count." in t
 
 
-def test_no_worktree_fallback():
-    assert "When the Agent tool offers no worktree isolation, dispatch the builder first" in RUN.read_text(encoding="utf-8")
+def test_every_round_runs_on_a_round_branch():
+    # 0.8.2 (spec section 17 fix 7): the no-isolation fallback is gone; every round is cut, checked and merged
+    t = RUN.read_text(encoding="utf-8")
+    assert "When the Agent tool offers no worktree isolation" not in t
+    assert "git switch -c prd-round/<area>-<n>" in t and "git merge --ff-only prd-round/<area>-<n>" in t
 
 
 def test_command():
@@ -121,7 +124,7 @@ def test_gate_forms_in_both_files():
                 if f"<scripts>/{script}" in line:
                     assert f'echo "{gate}=$?"' in line, (path.name, line)
     t = RUN.read_text(encoding="utf-8")
-    assert '--diff <base>..<builder branch>; echo "prd-build-check-exit=$?"' in t
+    assert '--diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"' in t
     assert '--results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"' in t
 
 
@@ -144,7 +147,8 @@ def test_procedure_has_the_eight_steps_in_order():
     text = RUN.read_text(encoding="utf-8")
     titles = re.findall(r"^(\d+)\. \*\*(.+?)\*\*", text, re.M)
     names = [t.rstrip(".").lower() for _, t in titles]
-    for want in ("preflight", "snapshot", "dispatch both in one message", "check the state", "run", "reconcile",
+    for want in ("preflight", "snapshot", "dispatch the builder's round, then the tester", "check the state", "run",
+                 "reconcile",
                  "full run", "close"):
         assert any(n.startswith(want) for n in names), (want, names)
     assert [int(n) for n, _ in titles] == list(range(1, len(titles) + 1))
@@ -289,12 +293,12 @@ def test_reconcile_record_quotes_the_tests_assertion():
             "`ac:` line, the `expect` entry and the test's assertion.") in flat(RUN)
 
 
-def test_r26_no_worktree_fallback_stops_on_a_failed_check():
+def test_r26_a_failed_builder_check_is_a_failed_round():
+    # 0.8.2: the no-isolation path (commits straight onto the build branch, a failed check stops) is gone
     t = flat(RUN)
-    assert "there is no merge: its commits land on the build branch" in t
-    assert "`git log --format=%B <base>..HEAD`" in t
-    assert ("Without worktree isolation, a builder round that fails its state check stops the build and "
-            "reports its commits to the user; never re-record `<base>` past them.") in t
+    assert "there is no merge: its commits land on the build branch" not in t
+    assert "git log --format=%B <base>..prd-round/<area>-<n>" in t
+    assert "A failed builder check is not a stop: it is a failed round (**Rounds**)." in t
 
 
 def test_r27_rounds_are_counted_from_the_first_dispatch():
@@ -350,7 +354,7 @@ def test_g3_snapshot_and_full_run_are_never_skipped():
 def test_minors_rounds_branches_trace_and_agent_skills():
     t = flat(RUN)
     assert "A builder round runs steps 4 and 5 again: the suite reruns." in t
-    assert "A failed round's builder branch is kept and listed in the report; never delete one with `-D`." in t
+    assert "A kept branch stays: never delete one with `-D`." in t
     assert "`prd-trace-exit=1` after writing `verified` reverts those blocks to `built` and stops the build" in t
     assert "required" in flat(AGENT) and "Skills-registry row" in flat(AGENT)
 
@@ -371,8 +375,7 @@ def test_b_stops_scopes_the_state_check():
     stops = flat(RUN).split("**Stops.**", 1)[1].split("1. **Preflight.**", 1)[0]
     assert "a failed state check," not in stops
     assert "on a failed tester state check (`dispatching.md` step 4)" in stops
-    assert ("on a failed builder state check only without worktree isolation; with it, a failed builder "
-            "check is a failed round (**Rounds**)") in stops
+    assert "A failed builder check is not a stop: it is a failed round (**Rounds**)." in stops
     assert "steps 2 and 4 are the snapshot and state check for the tester's rounds" in flat(SKILL)
 
 
@@ -401,12 +404,11 @@ def test_minor4_trace_runs_before_the_close_commit():
     assert trace < commit
 
 
-def test_minor5_failed_round_rules_apply_with_isolation_only():
+def test_minor5_a_failed_round_reruns_on_a_new_round_branch():
     step4 = flat(RUN).split("4. **Check the state.**", 1)[1].split("5. **Run.**", 1)[0]
-    assert "With worktree isolation, a failed round merges nothing" in step4
-    assert "Without worktree isolation, a failed builder check stops the build instead" in step4
-    assert ("Without worktree isolation, `<base>` does not move on a UNIT-failure round: the range keeps the "
-            "earlier commits, and the check covers them all.") in step4
+    assert ("A failed round merges nothing (step 3): run step 3's round again, on a new round branch from the "
+            "unchanged build branch, as the next round of each of its unit T-ids.") in step4
+    assert "Without worktree isolation" not in step4
 
 
 def test_minor6_prose_lines_are_wrapped():
@@ -457,7 +459,7 @@ def test_g5_no_tester_tids_skips_step5():
     assert ("When the build has no non-unit build-gate T-ids, step 5 is skipped: there is nothing to dispatch, "
             "and the close's `verified` needs only the builder's UNIT lines, your step 7 run and "
             "`prd-trace-exit=0`.") in t
-    step3 = t.split("3. **Dispatch both in one message**", 1)[1].split("4. **Check the state.**", 1)[0]
+    step3 = t.split("3. **Dispatch the builder's round, then the tester.**", 1)[1].split("4. **Check the state.**", 1)[0]
     # R28: the builder goes alone only when there is no non-unit T-id at all, build gate or deploy gate
     assert "With no non-unit T-ids, dispatch the builder alone: the tester has no `write`." in step3
     assert "With no non-unit build-gate T-ids, dispatch the builder alone" not in step3
@@ -551,7 +553,7 @@ def test_r28_split_gives_the_tester_every_non_unit_tid():
 
 
 def test_r28_step3_dispatches_the_tester_with_every_non_unit_tid():
-    step3 = _step(flat(RUN), 3, "Dispatch both in one message**", "4. **Check the state.**")
+    step3 = _step(flat(RUN), 3, "Dispatch the builder's round, then the tester.**", "4. **Check the state.**")
     assert ("`prd-toolkit:prd-tester`, with the tester prompt (below) as `Mode: write` and every non-unit "
             "T-id, build gate and deploy gate, each with its test-case file.") in step3
     assert ("When every non-unit T-id is deploy-gate, dispatch the tester all the same: it writes their "

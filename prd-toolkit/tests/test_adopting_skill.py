@@ -277,10 +277,11 @@ def test_the_form_is_the_first_route_and_its_summaries_sit_outside_the_prd_and_t
     assert "one or two plain sentences" in f and "contains its ID" in f and "at most 400 characters" in f
 
 
-def test_the_form_is_served_in_the_background_one_command_per_call_never_with_the_plugin_root_variable():
-    f = form_part()
-    assert ("uv run --script <scripts>/prd_confirm.py serve docs/prd/<slug> --area <area> "
+def test_the_form_is_opened_then_served_through_the_inbox_in_the_background_never_with_the_plugin_root_variable():
+    f = form_part()  # 0.8.2: `prd_confirm.py open`, then the decision inbox's `wait` and `serve` (spec section 6, change 3)
+    assert ("uv run --script <scripts>/prd_confirm.py open docs/prd/<slug> --area <area> "
             "--summaries .prd-confirm-<area>-summaries.json") in f
+    assert "prd_confirm.py serve" not in f and "with the gate `adoption:<area>`" in f
     assert "`run_in_background`" in f and "one command per Bash call" in f
     assert "first line of its output" in f and "`url=`" in f
     assert "clickable link" in f
@@ -290,10 +291,11 @@ def test_the_form_is_served_in_the_background_one_command_per_call_never_with_th
 
 def test_the_form_exit_codes_are_handled_and_exit_three_leaves_the_area_extracted():
     f = form_part()
-    assert "exit `0`" in f and "exit `3`" in f and "exit `2`" in f
+    assert "exit `0`" in f and "exit `1`" in f and "exit `3`" in f and "exit `2`" in f
     assert "Run `prd_confirm.py status docs/prd/<slug> --area <area>`" in f
     assert "leave the area `extracted`" in f.split("exit `3`", 1)[1]
-    assert "prd_confirm:" in f.split("exit `2`", 1)[1]
+    assert "leave the area `extracted`" in f.split("exit `1`", 1)[1].split("exit `3`", 1)[0]
+    assert "prd_gates:" in f.split("exit `2`", 1)[1] and "prd_confirm:" in f.split("exit `2`", 1)[1]
 
 
 def test_exit_zero_rechecks_with_status_and_a_changed_item_is_no_answer():
@@ -354,7 +356,8 @@ def test_intended_on_a_question_and_ask_on_an_entry_have_their_own_instruction()
 def test_each_field_of_an_answer_is_named():
     f = form_part()
     assert ("`text` is the intended behaviour for `correct` and `bug`, the person for `ask`, the answer for a "
-            "question's `answer`, the value for a marker's `answer`, and an optional note for `intended` and `fix`") in f
+            "question's `answer`, the value for a marker's `answer`, an optional note for `intended`, and what it "
+            "should do instead for `fix`") in f
     assert "`acs` (`correct` only) maps an AC ID to its full new text, which replaces that AC verbatim" in f
     after = f.split("exit `0`", 1)[1].split("exit `3`", 1)[0]
     assert "run `prd_confirm.py status docs/prd/<slug> --area <area>`" in after
@@ -408,11 +411,11 @@ def test_the_summaries_file_is_deleted_on_exit_two_and_on_a_fallback():
     assert "delete `.prd-confirm-<area>-summaries.json` and take the fallbacks" in two
 
 
-def test_fix_with_no_note_asks_and_every_question_answer_removes_its_bullet():
+def test_fix_is_a_correction_and_every_question_answer_removes_its_bullet():
     f = form_part()
-    assert ("when `fix` carries no note and the intended behaviour is not evident from the question, ask the owner "
-            "for it in the chat, for that one item") in f
-    assert "`answer`, `fix` and `intended` on a question each remove the §13 bullet" in f
+    assert "`fix` on a question: the requirement it blocks becomes a correction to what `text` says" in f
+    assert "`answer`, a `fix` that is applied and `intended` on a question each remove the §13 bullet" in f
+    assert "Leave that item's §13 bullet in place until they answer" in f
 
 
 def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
@@ -420,3 +423,12 @@ def test_the_url_line_may_be_re_read_and_only_the_exit_is_never_polled():
     assert "re-read the output until the `url=` line appears" in f
     assert "never poll for the exit and never sleep" in f
     assert "never poll it and never sleep" not in f
+
+
+# ---- 0.8.2: a fix that restates the item ----
+
+def test_a_fix_that_restates_the_item_is_asked_about_never_decided():
+    f = " ".join(form_part().split())
+    assert ("A `fix` whose words describe the behaviour the item already states is not applied as a correction: "
+            "ask the owner in the chat, for that one item, whether they meant keep it. Never decide it yourself.") in f
+    assert "refuse a `fix` without words" in f

@@ -42,7 +42,7 @@ what a suite may read and writes to the test roots, and it does not run them. Th
 know the mode: write mode's no-run rule, like the dry run's, is held by instruction, and the
 caller fails a `write` round whose report holds RESULTS. A suite after a write finds the tests
 written and runs them; it revises one only on a test-misread round: a `Mode: suite` dispatch whose prompt carries a
-`Misread:` line for that T-id (rule 2).
+`Misread:` line for that T-id (rule 2), and rewrites one on a `Rewrite:` line for that T-id.
 
 A dry run tests the PRD: can a stranger write every test from it alone? Running those tests
 against the system would test the code instead, and its output would leak the code's answers
@@ -54,13 +54,15 @@ into your report.
    dry-run directory; do not list or read the test roots. In a suite, you may also read the
    helpers testing.md names and the test files that cite one of your T-ids (for example
    `tests/conftest.py`, and a test whose docstring holds `@prd T-…`), plus the files you write; a write reads the same.
+   In a write or a suite you may read the vendored pack's files under `.prd-toolkit/packs/`; in a dry run, only its `pack.yaml`.
    Never `src/`, other tests, README, CLAUDE.md, git history, memory or the environment. Not "a peek", not "only the signature",
    not by `cat`, `python -c`, `grep` or a test that prints the source. Always give Glob and Grep a
    `path` inside the PRD folder or your directory.
 2. **Every expected value comes from the PRD.** Never change an expected value, an assertion or
    an input to make a test pass, except on a `Misread:` line: when a suite's prompt carries
    `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`, you may change
-   that one test, only so it matches the quoted PRD text; every value still comes from the PRD. Never add `skip`, `xfail` or a looser comparison. A test that
+   that one test, only so it matches the quoted PRD text; every value still comes from the PRD. Never add `skip`, `xfail` or a looser comparison.
+   On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison). A test that
    fails against the live system is reported as `fail`. A test case may record exact values read
    from a closed window of a live system (its `input` names the read: the query and the date
    range); they are the PRD's values, so assert them as written.
@@ -77,6 +79,11 @@ into your report.
    QUESTIONS (what you needed, and which file should have said it) and carry on.
 6. Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
    never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those.
+7. **Background runs (suite mode).** A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output. The `tasks` folder also holds the caller's background tasks; the guard lets you read only an `<id>.output` file there.
+8. **A sign-off is its owner's.** A `signoff:` case is answered by its owner, in the inbox or in
+   the chat, and never by the tester or the session. Its result is a person's walk through its
+   `steps:`, recorded in testing.md's Sign-offs by the owner's answer to its `signoff:<T-id>` gate:
+   you write no Sign-offs row and no `pass` or `fail` for it, and never run `prd_gates.py answer`.
 
 ## Citations
 
@@ -92,12 +99,12 @@ names, and the contracts, fixtures, environments and identities it references. W
 does not tell you something you need, do not guess and do not look elsewhere: record the
 question and carry on with the next element.
 
-Test helpers that testing.md names (fixtures, clients, loaders, page objects) may not exist yet.
+Test helpers that testing.md names (fixtures, clients, loaders, page objects), other than one a pack ships, may not exist yet.
 If they do not exist yet, write them yourself, to match what testing.md says about them: in a
 dry run, always write them in your dry-run directory, without looking whether they exist; in a write or a
 suite, in the test roots. A detail testing.md leaves open about a
 helper's own internals (a method signature, a return value, a default such as following
-redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. Anything else the
+redirects) is yours to choose: list it under HARNESS CHOICES, not QUESTIONS. A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says. A helper a pack ships already exists, so its parameters and the shape of its result are not yours to choose. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. Record the question, call the helper as testing.md names it, and do not write a stand-in for it that decides its shapes. Anything else the
 PRD does not tell you is a question: behaviour, payloads, status codes, error codes, fixture
 contents, environments, identities, or a convention testing.md should state.
 
@@ -112,6 +119,9 @@ citation too: `@prd <T-id> known-failing <E-nnn>`, for example `"""@prd T-002.1 
 it (the harness's marker and where it sits), one line per test. In a suite, an expected failure
 still reports `<T-id>: known-failing E-nnn`, never `pass`; a strict marker that reports an
 unexpected pass is `fail: unexpected pass`.
+
+On a case with `symptom:`, the test treats only that symptom as the expected failure. It checks for the symptom and, when it sees it, raises the harness's own expected-failure exception. The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the harness's equivalent, recorded under HARNESS CHOICES. Any other failure reports `<T-id>: fail: not the known failure: <one line>`. A case with no `symptom:` keeps today's rule. Without it, a test broken in some
+other way would count as the known bug.
 
 In a `--fixes` build's `write` round you are given the regression tests of the entry being
 fixed: the tester removes the marker and the tag from each regression test it is given, a

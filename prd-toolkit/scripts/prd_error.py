@@ -72,14 +72,14 @@ def _level(prd: model.Prd, tid: str) -> str:
 def _run(args: argparse.Namespace, prd: model.Prd, today: date) -> list[str]:
     if args.cmd == "new":
         evidence = Path(args.evidence_file).read_text(encoding="utf-8").splitlines() if args.evidence_file else []
-        touches = [t.strip() for t in args.touches.split(",") if t.strip()]
+        touches = errors.parse_touches(args.touches)
         return [errors.new(prd, args.title, args.source, touches, evidence, today)]
     if args.cmd == "check":
         return errors.check_findings(prd, model.repo_root(prd.root), args.range)
     if args.cmd == "list":
         return errors.list_lines(prd, args.open)
     if args.cmd == "propose":
-        touches = [t.strip() for t in args.touches.split(",") if t.strip()]
+        touches = errors.parse_touches(args.touches)
         errors.propose(prd, args.eid, args.cls, args.diagnosis, args.recurrence, touches)
     elif args.cmd == "confirm":
         errors.confirm(prd, args.eid, args.reply, today, args.cls)
@@ -139,7 +139,19 @@ def _restore(path: Path, original: bytes | None) -> None:
         path.write_bytes(original)
 
 
+def _glue_touches(argv: list[str]) -> list[str]:
+    """`--touches -,FR-001` reads as an option to argparse; make it `--touches=-,FR-001`."""
+    out: list[str] = []
+    for i, a in enumerate(argv):
+        if i and argv[i - 1] == "--touches" and a.startswith("-") and a != "-":
+            out[-1] = f"--touches={a}"
+        else:
+            out.append(a)
+    return out
+
+
 def main(argv: list[str], today: date | None = None) -> int:
+    argv = _glue_touches(argv)
     try:
         args = _parser().parse_args(argv)
     except SystemExit as e:

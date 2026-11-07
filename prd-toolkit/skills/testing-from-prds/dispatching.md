@@ -66,6 +66,7 @@ calling the API's SDK.
    T-ids (one per line, each with its test-case file, as --sample-tids prints them):
    <T_IDS>
    Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"   (suite only, optional, one line per affected T-id)
+   Rewrite: <T-id>   (suite only; one line per stale T-id)
    ```
 
    Dispatch with the Agent tool; under `claude --agent` the `skills:` preload does not load.
@@ -74,6 +75,7 @@ calling the API's SDK.
    test-case file; a write runs none of them.
    A `Misread:` line makes the dispatch a test-misread round: the tester may change that one test, only so it
    matches the quote. Add it only after you have checked the test against the PRD.
+   A `Rewrite:` line lets the tester rewrite that one test from the case as it now stands. It carries no quote, and the state check allows changes to that test only.
    A dry run's T-ids are the ones `--sample-tids` printed. A suite's T-id list is every non-unit
    T-id in `test-cases/<area>.yaml`, which the caller reads; `--sample-tids` is for dry runs only.
 

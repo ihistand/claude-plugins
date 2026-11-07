@@ -9,6 +9,7 @@ import argparse
 import os
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -59,14 +60,26 @@ def _adopted_areas(prd: model.Prd) -> str:
 
 # The change rule; with links.md it also names the coordination role, and the skill name gives way to keep the block small.
 CHANGE_RULE = "`/prd-change` (`prd-toolkit:changing-prds`), before code"
-CHANGE_RULE_LINKED = ("`/prd-change`, before code; one to an item another PRD cites,\n"
+CHANGE_RULE_SHORT = "`/prd-change`, before code"
+CHANGE_RULE_LINKED = ("`/prd-change`, before code; one to a cited item,\n"
                       "  with `/prd-change-set`")
+
+
+def change_line(prd: model.Prd) -> str:
+    """The block's change sentence (no bullet, no trailing newline); on an adopted PRD it covers only the adopted areas.
+    An adopted PRD's line is short (no skill name) and wrapped at 100 columns, to keep the block under 1,536 bytes."""
+    if prd.adoption is None:
+        return f"Every behaviour change starts with {CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE}."
+    rule = CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE_SHORT
+    text = f"Every behaviour change in an adopted area starts with {rule}."
+    return textwrap.fill("- " + " ".join(text.split()), width=100, subsequent_indent="  ",
+                         break_long_words=False, break_on_hyphens=False)[2:]
 
 
 def render_block(prd: model.Prd, prd_rel: str) -> str:
     text = TEMPLATE.read_text(encoding="utf-8")
     slots = {
-        "change_rule": CHANGE_RULE_LINKED if prd.links is not None else CHANGE_RULE,
+        "change_line": change_line(prd),
         "prd_path": prd_rel,
         "version": prd.frontmatter.get("version", "unknown").strip(),
         "required_skills": _required_skills(prd),

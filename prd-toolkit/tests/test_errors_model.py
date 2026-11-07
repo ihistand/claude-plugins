@@ -118,3 +118,51 @@ def test_unknown_class(prd):
     assert [(x.message, x.line) for x in f] == [(
         "E-002: Classification: 'typo' is not one of code bug, spec gap, invalid requirement, environment, standard, unclassified",
         line_of(prd, "Classification: typo"))]
+
+
+def _bare(n, fence=False):
+    body = f"### E-{n:03d} Entry {n}\nDetected: 2026-11-03, report\nClassification: code bug\nResolution: -\n"
+    return "```\n" + body + "```\n" if fence else body
+
+
+def _ledger_findings(prd):
+    return [(f.line, f.message) for f in lint(prd) if f.rule == "error-entries"]
+
+
+def test_gap_none_when_consecutive(prd):
+    append(prd, _bare(2))
+    append(prd, _bare(3))
+    assert _ledger_findings(prd) == []
+
+
+def test_gap_names_the_missing_entry(prd):
+    append(prd, _bare(3))
+    n = line_of(prd, "### E-003")
+    assert _ledger_findings(prd) == [
+        (n, "E-003 follows E-001: E-002 is missing; entries are never deleted, restore it from git")]
+
+
+def test_gap_of_several(prd):
+    append(prd, _bare(5))
+    assert _ledger_findings(prd)[0][1] == "E-005 follows E-001: E-002 to E-004 are missing; entries are never deleted, restore them from git"
+    (prd / "errors.md").write_text((prd / "errors.md").read_text().replace("E-005", "E-004"))
+    assert _ledger_findings(prd)[0][1] == "E-004 follows E-001: E-002, E-003 are missing; entries are never deleted, restore them from git"
+
+
+def test_first_entry_above_one(prd):
+    p = prd / "errors.md"
+    p.write_text("# Error ledger\n\n" + _bare(12))
+    assert _ledger_findings(prd) == [
+        (3, "E-012 is the first entry: E-001 to E-011 are missing; entries are never deleted, restore them from git")]
+
+
+def test_out_of_order(prd):
+    append(prd, _bare(3))
+    append(prd, _bare(2))
+    n = line_of(prd, "### E-002")
+    assert _ledger_findings(prd)[1:] == [(n, "E-002 follows E-003: entries run from E-001 upward, newest last")]
+
+
+def test_heading_in_fence_is_no_entry(prd):
+    append(prd, _bare(99, fence=True))
+    assert _ledger_findings(prd) == []

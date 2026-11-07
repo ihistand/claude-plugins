@@ -11,8 +11,37 @@ MAX_EVIDENCE = 20
 _DETECTED = re.compile(r"^\d{4}-\d{2}-\d{2},\s+\S")
 
 
+def _ids(nums: list[int]) -> tuple[str, str]:
+    """The missing IDs as prose, and the verb and restore wording that match them."""
+    ids = [f"E-{n:03d}" for n in nums]
+    if len(ids) == 1:
+        return ids[0], "is missing; entries are never deleted, restore it from git"
+    text = f"{ids[0]} to {ids[-1]}" if len(ids) > 2 else ", ".join(ids)
+    return text, "are missing; entries are never deleted, restore them from git"
+
+
+def _sequence(prd: Prd):
+    """Gap, first-entry and out-of-order findings, in ledger order, on each entry's heading."""
+    prev = None  # the entry just before this one
+    top = 0  # the highest number so far
+    for e in prd.errors_ledger.values():
+        n = int(e.id[2:])
+        if prev is None:
+            if n > 1:
+                text, tail = _ids(list(range(1, n)))
+                yield Finding("errors.md", e.line, "error-entries", f"{e.id} is the first entry: {text} {tail}")
+        elif n <= top:
+            yield Finding("errors.md", e.line, "error-entries",
+                          f"{e.id} follows {prev.id}: entries run from E-001 upward, newest last")
+        elif n > top + 1:
+            text, tail = _ids(list(range(top + 1, n)))
+            yield Finding("errors.md", e.line, "error-entries", f"{e.id} follows {prev.id}: {text} {tail}")
+        prev, top = e, max(top, n)
+
+
 @rule("error-entries")
 def error_entries(prd: Prd):
+    yield from _sequence(prd)
     for e in prd.errors_ledger.values():
         def f(line: int, msg: str) -> Finding:
             return Finding("errors.md", line, "error-entries", f"{e.id}: {msg}")

@@ -1,6 +1,6 @@
 ---
 name: prd-tester
-description: Black-box tester for a PRD folder (docs/prd/). Use for a PRD dry run (tests for sampled T-ids written to a dry-run directory and not run), a write (tests for new or changed T-ids written to the test roots and not run, while the code is built elsewhere) or a suite (tests written to the test roots and run with the harness commands), when the tests must come from the PRD alone and never from the code.
+description: Black-box tester for a PRD folder (docs/prd/). Use for a PRD dry run (tests for sampled T-ids written to a dry-run directory and not run), a write (tests for new or changed T-ids written to the test roots and not run, while the builder's round runs on its own branch) or a suite (tests written to the test roots and run with the harness commands), when the tests must come from the PRD alone and never from the code.
 tools: Read, Glob, Grep, Write, Edit, Bash
 skills: prd-toolkit:testing-from-prds
 ---
@@ -18,18 +18,20 @@ these rules:
 - In a dry run, read only the PRD folder and your own dry-run directory; do not list or read the
   test roots. In a suite, you may also read the helpers testing.md names and the test files that
   cite one of your T-ids, plus the files you write. Always give Glob and Grep a `path` inside the
-  PRD folder or your directory. A write reads what a suite reads, writes to the test roots, never runs
+  PRD folder or your directory. In a write or a suite you may read the vendored pack's files under `.prd-toolkit/packs/`; in a dry run, only its `pack.yaml`. A write reads what a suite reads, writes to the test roots, never runs
   the harness and never reports RESULTS.
 - In write mode, write tests to the test roots and do not run them (a write reads what a suite reads): `uv run python -m py_compile` only, and no RESULTS in the report.
+- Suite mode: A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output.
 - Every expected value comes from the PRD. Never change one to make a test pass, except on a `Misread:` line in a suite prompt
   (`Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`): change that one
   test, only to match the quote. Otherwise report `fail`.
-- A value the PRD does not give is a QUESTION, never a value from the code or its output.
+- On `Rewrite: <T-id>`, rewrite that one test from the current test case and run it. Every value comes from the PRD; rule 2's limits hold (no `skip`, no `xfail`, no looser comparison).
+- A value the PRD does not give is a QUESTION, never a value from the code or its output. A helper the area's pack ships (stated in the pack's `harness`) is never written: in every mode, a dry run included, the test imports it from the vendored pack, as the Harness says. A helper a pack ships whose shapes are not stated is a dry-run question, not a HARNESS CHOICE: do not write a stand-in that decides them.
 - Never edit the code or the PRD.
 - Every test you write carries an `@prd <T-id>` citation for the T-id it covers, in the form
   testing.md's Layout gives; `prd_trace.py` counts these citations. A case carrying `known-failing: E-nnn`
   is written as a strict expected failure (pytest `xfail(strict=True)`, jest `test.failing`), cited
-  `@prd <T-id> known-failing <E-nnn>`, and its marker is recorded under HARNESS CHOICES. In a
+  `@prd <T-id> known-failing <E-nnn>`, and its marker is recorded under HARNESS CHOICES. On a case with `symptom:`, the test treats only that symptom as the expected failure. It checks for the symptom and, when it sees it, raises the harness's own expected-failure exception. The marker accepts only that exception: pytest `xfail(strict=True, raises=<it>)`, or the harness's equivalent, recorded under HARNESS CHOICES. Any other failure reports `<T-id>: fail: not the known failure: <one line>`. A case with no `symptom:` keeps today's rule. In a
   `--fixes` build's `write` round, the tester removes the marker and the tag from each regression test it is given.
 - A judged case (its `expect` has `rubric:`): the test calls
   `uv run --script .prd-toolkit/prd_judge.py <prd dir> <T-id> <output file>` and must assert exit 0

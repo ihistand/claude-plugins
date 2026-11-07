@@ -19,7 +19,7 @@ from prdlint import deps  # noqa: E402
 for _module, _package in (("yaml", "pyyaml"), ("sqlglot", "sqlglot"), ("openapi_spec_validator", "openapi-spec-validator")):
     deps.require(_module, _package)
 
-from prdlint import confirm, model  # noqa: E402
+from prdlint import confirm, formserver, model  # noqa: E402
 
 
 def _fail(message: str) -> int:
@@ -57,15 +57,10 @@ def _serve_items(prd, args) -> int:
     if args.summaries:
         summaries = confirm.load_summaries(Path(args.summaries), items, args.area)
     else:  # the file `open` wrote carries them
-        saved = confirm.load_answers(confirm.answers_path(model.repo_root(prd.root), args.area)).get("summaries")
-        where = confirm.answers_path(model.repo_root(prd.root), args.area).name
-        try:
-            summaries = confirm.check_summaries(saved, items, args.area, f"summaries in {where}") if saved else {}
-        except confirm.Refused as e:
-            raise confirm.Refused(f"the summaries saved in the answers file {where} are not valid: {e}; fix or remove them") from e
+        summaries = confirm.saved_summaries(items, args.area, model.repo_root(prd.root))
     try:
-        page = confirm.page_path().read_text(encoding="utf-8")
-    except OSError as e:
+        page = formserver.assemble(confirm.page_path())
+    except (OSError, formserver.PageError) as e:
         return _fail(f"cannot read the form page: {e}")
     try:
         server, token = confirm.make_server(prd, args.area, items, summaries, page, port=args.port or 0, idle_minutes=args.idle_minutes)
@@ -83,9 +78,22 @@ def _serve_items(prd, args) -> int:
                 webbrowser.open(f"http://127.0.0.1:{server.server_address[1]}/?token={token}")
             except Exception:
                 pass
-        return confirm.run(server)
+        code = confirm.run(server)
+        if server.end == "idle":
+            _say_idle(args, items, model.repo_root(prd.root))
+        return code
     finally:
         server.server_close()
+
+
+def _say_idle(args, items, root: Path) -> None:
+    try:
+        left = len(confirm.open_ids(items, confirm.load_answers(confirm.answers_path(root, args.area))))
+    except confirm.Refused:
+        left = len(items)
+    print(f"prd_confirm: stopped after {args.idle_minutes:g} minutes with no page open; {len(items) - left} of "
+          f"{len(items)} answered, kept in {confirm.answers_path(root, args.area).name}; serve again to go on",
+          file=sys.stderr)
 
 
 def _write_command(prd, args) -> int:

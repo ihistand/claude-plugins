@@ -354,6 +354,10 @@ T-012.2:
   `xfail(strict=True)`, jest `test.failing`) and its citation reads `@prd <T-id> known-failing <E-nnn>`.
   A `/prd-build --fixes E-nnn` removes the line before its step 7 trace: once its T-id passes, or, at a
   deploy-gate level, once the tester's un-mark is committed; no other build edits one.
+- `symptom:` (optional, beside `known-failing:` only) is what the run shows while the bug is open, in plain
+  language, one observable symptom. The test then treats only that symptom as the expected failure. A
+  `known-failing:` case with no `symptom:` is a `test-refs` warning (any failure would pass as the known one);
+  a `symptom:` without `known-failing:` is a `test-refs` error. A blank `symptom:` counts as absent.
 - A custom contract type whose files are YAML mappings makes `<type>:<name>` resolvable: `<name>`
   must be a top-level key of one of the type's `.yaml` files under `contracts/` (`test-refs`). A
   type whose files are not YAML mappings there is not checked. A custom type whose glob matches no file is a `contracts-valid`
@@ -507,7 +511,7 @@ refer to (levels, environments, fixtures).
   Environment switch, Database access, Tools on the runner, Clean state, Persistent environments,
   Layout, HTTP requests, Fixtures, Browser identity, Assertions, Waits, Effects, Leaks, Acceptance.
   Each states the convention, not a helper's code; a helper's internals are the dry-run tester's
-  HARNESS CHOICES. A slot that does not apply reads `Not applicable: <reason>`. The Layout
+  HARNESS CHOICES. A helper a pack ships is stated in the pack's `harness` (the Assertions or Fixtures slot) with its parameters, their types and the shape of its result. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE. A slot that does not apply reads `Not applicable: <reason>`. The Layout
   bullet also ends with `Test roots: ` and the test directories, each in backticks (for example
   `tests/`); the loader reads those as the roots the tester may write under. Anything inside a
   `[NEEDS CLARIFICATION: …]` marker is ignored, so an unfilled template has no roots. The loader
@@ -519,6 +523,7 @@ refer to (levels, environments, fixtures).
   `Test roots:` that lists no backticked directory and holds no marker is a finding, because the
   guard would then block every write); `[NEEDS CLARIFICATION]` markers block `In review` until
   every slot is answered.
+- The Leaks slot of the Harness also says how a failure's traceback is kept free of test values. Say how a failure report avoids printing the values a test passes: for pytest, the harness commands carry `--tb=short`, or each helper that takes a value sets `__tracebackhide__ = True`; another harness names its own equivalent.
 - Leak checks define `expect.leaks: none`: one row per sink a test scans (application logs, error
   bodies, and any other output such as metrics labels or events), where the test reads it, and
   which classified columns from `contracts/data-classification.yaml` must not appear in it.
@@ -590,7 +595,9 @@ Two optional tables follow the runbook.
 
 `## Deployed` is the PRD's record of what each environment runs: the caller writes one row per
 environment at a deploy run's close, replacing that environment's earlier row. A missing table
-means nothing is deployed yet. `## Drift` lists the checks run against a live environment; `Check`
+means nothing is deployed yet. A deploy the owner did by hand, outside `/prd-deploy`, is recorded with
+`prd_deploy.py record <prd dir> --env <env> --commit <sha> --reply "<owner's words>"`, which writes a
+run log marked `by: hand` and that environment's row, runs nothing and moves no status; the caller never writes that row directly. `## Drift` lists the checks run against a live environment; `Check`
 is `version` or `config` (`drift-rows`; a `schema` row is reported as arriving in prd-toolkit 0.6,
 and a `config` row needs `contracts/config.yaml`). Without the table there is no drift check. A
 Deployed or Drift row's environment must be in both Environments tables (`runbook-env`).
@@ -624,6 +631,8 @@ or `pii`. `Classification:` is one of `code bug`, `spec gap`, `invalid requireme
 `environment`, `standard`, `unclassified`. The `error-entries` rule reports a malformed `Detected:`
 or `Confirmed:`, an unknown class, an `Evidence:` over 20 lines, a `Recurrence of:` that names no
 entry, and a `Confirmed:` on an `unclassified` entry.
+
+Entries run from E-001 upward with no gap, newest last; lint reports a gap or an entry out of order. `Touches: -` means none.
 
 The **state** of an entry is derived from its lines and never written:
 

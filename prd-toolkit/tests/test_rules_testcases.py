@@ -337,3 +337,56 @@ def test_an_option_value_is_never_the_path(prd):
 def test_python_dash_m_names_the_runner_not_a_selection(prd):
     _harness("unit", "python -m pytest tests")(prd)
     assert len(overlap(prd)) == 3
+
+
+# 0.8.2, spec section 16: a known-failing case names its symptom.
+def _symptom(text):
+    return _edit("test-cases/import.yaml", T1_TARGET, f"symptom: {text}\n  {T1_TARGET}")
+
+
+def _open_e001(prd):
+    _edit("errors.md", "Resolution: the importer returns status `empty` before reading rows; T-001.3 passes", "Resolution: open")(prd)
+
+
+def _with_warnings(prd):
+    from prdlint import model, registry
+
+    return [f for f in registry.run(model.load(prd), warnings=True) if f.rule == "test-refs"]
+
+
+def test_a_symptom_without_known_failing_is_an_error(prd):
+    _symptom('"the importer prints nothing"')(prd)
+    found = [f for f in lint(prd) if f.rule == "test-refs" and "symptom" in f.message]
+    assert [(f.severity, f.message) for f in found] == [("error", "T-001.3: symptom: needs known-failing: on the same case")]
+
+
+def test_known_failing_without_a_symptom_is_a_warning_and_lints_exit_0(prd, capsys):
+    _open_e001(prd)
+    _known_failing("E-001")(prd)
+    assert not [f for f in lint(prd) if f.rule == "test-refs"]  # errors only: nothing here
+    warns = [f for f in _with_warnings(prd) if f.severity == "warn"]
+    assert [f.message for f in warns] == ["T-001.3: known-failing E-001 names no symptom; any failure would pass as it"]
+    from prd_lint import main
+
+    assert main([str(prd)]) == 0
+    assert "warn: test-refs: T-001.3: known-failing E-001 names no symptom" in capsys.readouterr().out
+
+
+def test_known_failing_with_a_symptom_is_clean(prd):
+    _open_e001(prd)
+    _known_failing("E-001")(prd)
+    _symptom('"the importer prints nothing"')(prd)
+    assert not _with_warnings(prd)
+
+
+@pytest.mark.parametrize("blank", ['""', '"  "', "[]", "~", "3"])
+def test_a_blank_symptom_beside_known_failing_is_the_warning(prd, blank):  # Review Focus 10
+    _open_e001(prd)
+    _known_failing("E-001")(prd)
+    _symptom(blank)(prd)
+    assert [f.severity for f in _with_warnings(prd)] == ["warn"]
+
+
+def test_a_blank_symptom_without_known_failing_is_the_error(prd):
+    _symptom('""')(prd)
+    assert [f.severity for f in lint(prd) if f.rule == "test-refs" and "symptom" in f.message] == ["error"]

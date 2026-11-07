@@ -37,7 +37,7 @@ for example Browser identity when there is no UI.
 - **Assertions.** [NEEDS CLARIFICATION: whether fields a case does not list are asserted, how list responses and their items compare, how text and content types match, and what "above" means on a page]
 - **Waits.** [NEEDS CLARIFICATION: how long an expectation waits for an element, a state or a log line before it fails, unless the case says otherwise]
 - **Effects.** [NEEDS CLARIFICATION: which columns an effect checks, what "unchanged" compares, and how fixture text compares to typed columns]
-- **Leaks.** [NEEDS CLARIFICATION: which values a leak check scans for, how they match (exact, case), how long to wait for logs, and how logs are read on each environment]
+- **Leaks.** [NEEDS CLARIFICATION: which values a leak check scans for, how they match (exact, case), how long to wait for logs, and how logs are read on each environment. Say how a failure report avoids printing the values a test passes: for pytest, the harness commands carry `--tb=short`, or each helper that takes a value sets `__tracebackhide__ = True`; another harness names its own equivalent.]
 - **Acceptance.** [NEEDS CLARIFICATION: how a signer runs an acceptance case and records the result, and how a case on a persistent environment uses fresh data on every run]
 
 ## Environments

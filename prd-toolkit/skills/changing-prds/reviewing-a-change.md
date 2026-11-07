@@ -72,6 +72,7 @@ item is undecided, the dry run has no open question and its state check passed, 
 not move. Otherwise `ready` is `false` and `blockers` holds one line per reason: `lint exits 1`,
 `impact exits 3`, `undecided: <ID> <reason>`, `open question: <T-id>: <question>`,
 `the PRD changed during the review`. Never write `ready: true` over a blocker.
+Review mode writes no `refs`; `changing-prds` step 4 adds it for a change made for an `errors.md` entry.
 
 The order a client runs: `bump`, then this review, then `record` at the level the verdict gives, then lint and trace; `record` does not change the digest, so the verdict stays valid.
 A client starts it headless as `claude -p "/prd-change --review <dir>" --output-format json`, with

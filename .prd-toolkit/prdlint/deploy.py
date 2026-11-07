@@ -24,7 +24,7 @@ except ImportError:  # Windows
 
 from . import registry, trace
 from .buildcheck import _resolve, _show
-from .markdown import sections
+from .markdown import frontmatter, sections
 from .model import Prd, Step, gate_of, load, production_envs
 from .trace import BadRange
 
@@ -562,9 +562,73 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
     return 0 if ok else (rec["exit"] if rec["exit"] not in (None, 0) else -1)
 
 
+# ---- a deploy done by hand (spec section 17, fix 5) ----
+
+def write_deployed_row(prd: Prd, env: str, version: str, commit7: str, date: str, run_id: str) -> None:
+    """Replace `env`'s Deployed row in operations.md, or add it; creates `## Deployed` at the file's end when missing."""
+    path = prd.root / "operations.md"
+    text = path.read_text(encoding="utf-8")
+    row = f"| {env} | {version} | {commit7} | {date} | {run_id} |"
+    lines = text.split("\n")
+    s = _deployed_section(text)
+    if s is None:
+        body = text.rstrip("\n")
+        path.write_text(f"{body}\n\n## Deployed\n\n| {' | '.join(_HEADER)} |\n|---|---|---|---|---|\n{row}\n", encoding="utf-8")
+        return
+    mine = [r.line for r in prd.operations.deployed if r.env == env]
+    if mine:
+        lines[mine[0] - 1] = row
+        for n in sorted(mine[1:], reverse=True):  # one row per environment
+            del lines[n - 1]
+    else:
+        table = [n for n, t in s.body if t.strip().startswith("|")]
+        if table:
+            lines.insert(table[-1], row)  # after the table's last line
+        else:
+            lines.insert(s.line, f"\n| {' | '.join(_HEADER)} |\n|---|---|---|---|---|\n{row}")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def record(prd: Prd, repo_root: Path, env: str, commit: str, reply: str) -> str:
+    """Record a deploy the owner did by hand: a `by: hand` run log and `env`'s Deployed row, left uncommitted.
+
+    Runs nothing and moves no status. Returns the run id; Refused for an environment not in both Environments tables,
+    a commit not in the repository, an empty reply, a commit whose prd.md has no version, or a held repository lock,
+    with nothing written. Takes the repository lock after those checks, as `recover` does.
+    """
+    if env not in prd.operations.environments or env not in prd.testing.environments:
+        raise Refused([f"environment {env} is not in both Environments tables"])
+    p = subprocess.run(["git", "rev-parse", "--verify", "--quiet", "--end-of-options", f"{commit}^{{commit}}"], cwd=repo_root,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+    if p.returncode != 0:
+        raise Refused([f"commit {commit} is not in the repository"])
+    full = p.stdout.strip()
+    if not reply.strip():
+        raise Refused(["the reply is empty"])
+    prefix = prd_rel(prd, repo_root)
+    version = frontmatter(_show(repo_root, full, "prd.md" if prefix == "." else f"{prefix}/prd.md"))[0].get("version")
+    if not version:
+        raise Refused([f"commit {commit} has no {prefix}/prd.md version"])
+    with repo_lock(repo_root):  # as recover: one prd_deploy command at a time in the repository
+        run_id = new_run_id(repo_root, env)
+        try:
+            now = _iso()
+            append(repo_root, run_id, {
+                "kind": "header", "by": "hand", "run": run_id, "head": _git(repo_root, "rev-parse", "HEAD").strip(), "commit": full,
+                "prd": prefix, "runbook": runbook_hash(prd.root), "version": version, "until": env, "started": now,
+            })
+            append(repo_root, run_id, {"kind": "hand", "env": env, "commit": full, "reply": reply, "at": now})
+        except Exception:
+            _log_path(repo_root, run_id).unlink(missing_ok=True)
+            raise
+        write_deployed_row(prd, env, version, full[:7], f"{run_id[:4]}-{run_id[4:6]}-{run_id[6:8]}", run_id)
+    return run_id
+
+
 # ---- the close check (spec section 5, step 4) ----
 
 ONLY = "only Deployed rows and Status: lines may change"
+BY_HAND_STATUS = "a by-hand record moves no status"
 # templates/prd/errors.md's placeholder; the close that adds the ledger's first entry may remove it
 LEDGER_PLACEHOLDER = "No entries yet. Add `### E-001 <title>` when the first error is diagnosed."
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -700,8 +764,14 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             raise BadRange(f"cannot load the PRD at {base[:7]} and {head[:7]}: {e}") from None
     out: list[str] = []
     version = header.get("version")
-    finished = finished_envs(recs, b_prd)
-    prod_finished = bool(production_envs(b_prd) & set(finished))
+    by_hand = header.get("by") == "hand"
+    if by_hand:  # record's log: its one environment is finished, at the recorded commit, and no status may move
+        finished = [r.get("env") for r in recs if r.get("kind") == "hand"][:1]
+        deployed_commit, commit_name = str(header.get("commit")), f"the recorded commit {str(header.get('commit'))[:7]}"
+    else:
+        finished = finished_envs(recs, b_prd)
+        deployed_commit, commit_name = run_head, "the run's HEAD"
+    prod_finished = not by_hand and bool(production_envs(b_prd) & set(finished))
     failed = next((r for r in recs if r.get("kind") == "step" and r.get("result") == "fail"), None)
     if failed is None:  # a step that started and has no record (its record could not be written, or the call was killed) failed too
         failed = next(iter(unfinished_starts(recs)), None)
@@ -721,8 +791,8 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
             continue
         if r.version != version:
             out.append(f"Deployed {r.env}: version {r.version}, the run deployed {version}")
-        if len(r.commit) < 7 or not run_head.startswith(r.commit.lower()):
-            out.append(f"Deployed {r.env}: commit {r.commit} is not the run's HEAD")
+        if len(r.commit) < 7 or not deployed_commit.startswith(r.commit.lower()):
+            out.append(f"Deployed {r.env}: commit {r.commit} is not {commit_name}")
         if r.run != run_id:
             out.append(f"Deployed {r.env}: run {r.run} is not {run_id}")
         if not _DATE.fullmatch(r.date):
@@ -741,7 +811,9 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
     for bid, hb in head_blocks.items():
         bb = base_blocks.get(bid)
         if bb is not None and (bb.status, bb.since) != (hb.status, hb.since):
-            if not prod_finished:
+            if by_hand:
+                out.append(f"{bid}: {BY_HAND_STATUS}")
+            elif not prod_finished:
                 out.append(f"{bid}: {hb.status} after a run that did not finish production")
             elif bb.status != "verified" or hb.status != "live":
                 out.append(f"{bid}: {bb.status} to {hb.status}; only verified to live may change")
