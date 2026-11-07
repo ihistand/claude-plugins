@@ -1,14 +1,18 @@
-# prd-toolkit 0.8.3: README files and an Overview tab for each PRD — design
+# prd-toolkit 0.8.4: README files and an Overview tab for each PRD — design
 
 > **Date:** 2026-11-04
 > **Author:** Ivan Histand & Claude Code
 > **Status:** Draft, awaiting review
 > **Extends:** `2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md` and the specs it extends,
 > under `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this addendum and any of them disagree, this
-> addendum wins for 0.8.3.
-> **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.2 merged.
+> addendum wins for 0.8.4.
+> **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.3 merged.
 >
 > **Revisions.**
+> - Renumbered (owner, 2026-11-06): the fixes from the 0.8.2 proof are inserted as 0.8.3
+>   (`2026-11-06-prd-toolkit-0.8.3-backlog-design.md`), so this release is 0.8.4, best practices 0.8.5
+>   and conversion 0.8.6. The file was `2026-11-04-prd-toolkit-0.8.3-prd-readmes-design.md`; its
+>   content is unchanged.
 > - Sections 1, 2 and 7 to 15 (owner, 2026-11-04): the published page's Overview tab is folded in,
 >   with §2's optional `Principles:` and `Getting started:` parts and one set of facts for the README
 >   and the tab; the toolkit's own PRD gains both parts in the same `/prd-change` as its `lint-cli`
@@ -18,16 +22,16 @@
 
 A person who browses a repository the toolkit manages finds `docs/prd/` and `docs/prd/<slug>/` with
 no explanation: a dozen Markdown and YAML files, IDs like `FR-013` and `T-004.3`, and nothing that
-says what the folder is, whether to edit it, or how. 0.8.3 gives both folders a README.
+says what the folder is, whether to edit it, or how. 0.8.4 gives both folders a README.
 
 A person who opens a page from `/prd-publish` meets the same gap one level up: a Business and a
 Technical tab, each a deep dive, and nothing that says in one screen what the system is, what it
-holds to, how it is built and where it stands. 0.8.3 gives the page an **Overview** tab, opened by
+holds to, how it is built and where it stands. 0.8.4 gives the page an **Overview** tab, opened by
 default. Both the README and the tab are assembled from the PRD's own sections, never from text
 outside the PRD folder, so `prd.md` §2 gains two optional parts the format had no place for:
 **Principles** and **Getting started**.
 
-0.8.3 delivers:
+0.8.4 delivers:
 - a managed block in `docs/prd/<slug>/README.md` and in `docs/prd/README.md`, written by
   `prd_block.py` beside the `CLAUDE.md` block (sections 3 and 4);
 - the PRD folder's root `README.md` skipped by lint, the change digest, the bump and the tester
@@ -54,7 +58,7 @@ a minute what it is and how it is used, and neither README is ever stale on `mai
 | Where the overview goes on the page | Its own tab, first and opened by default. Not the top of the Business tab: engineers go straight to Technical and would miss it |
 | The overview's source | The PRD only, as the publish rules require: §2, §4, §11 and the block statuses, `adoption.md`, `errors.md`, `links.md`. No Claude-written introduction; a better introduction is a better §2 |
 | What the PRD lacked | Principles and getting-started steps: two optional labelled parts of §2, written like `Goals:` and `Personas:`, so no section is added or renumbered and no existing PRD breaks |
-| Release vehicle | 0.8.3, after 0.8.2, with the Overview tab folded in because it shows the same facts as the README from the same sections. Best practices move to 0.8.4 and conversion to 0.8.5. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
+| Release vehicle | 0.8.4, after 0.8.3, with the Overview tab folded in because it shows the same facts as the README from the same sections. Best practices move to 0.8.5 and conversion to 0.8.6. The 0.8.0 retarget refusal names no release number from 0.8.2 on, so renumbering never again changes shipped text |
 
 ## 2. Components
 
@@ -76,7 +80,7 @@ a minute what it is and how it is used, and neither README is ever stale on `mai
 | `skills/authoring-prds/SKILL.md`, `skills/adopting-prds/SKILL.md` | changed | Phase 2 and the bootstrap offer the two parts; neither is ever required |
 | `skills/publishing-prds/SKILL.md` | changed | Three tabs; the Overview needs no summary and gets none |
 | `docs/prd/prd-toolkit/` (the toolkit's own PRD) | changed | The `lint-cli` requirement of section 5 and §2's two parts (section 10), in one `/prd-change` |
-| `README.md`, version files | changed | The READMEs, the Overview tab, the upgrade note, the 0.8.3 changelog |
+| `README.md`, version files | changed | The READMEs, the Overview tab, the upgrade note, the 0.8.4 changelog |
 
 ## 3. The PRD's README
 
@@ -220,7 +224,7 @@ runs `check --ci`, so a stale README fails the PR; `CLAUDE.md`, which nothing ch
 covered too.
 
 **Upgrading.** `prd_hooks.py install`, the documented upgrade step, refreshes the three blocks after
-it vendors the copy (new in 0.8.3: before, it only vendored the block template). An upgrade
+it vendors the copy (new in 0.8.4: before, it only vendored the block template). An upgrade
 therefore writes both READMEs in the same commit as the vendored copy, and the next PR does not fail
 the new check.
 
@@ -299,7 +303,7 @@ disagree:
 
 ## 10. The toolkit's own PRD
 
-One `/prd-change` on the toolkit's own PRD carries both of its 0.8.3 changes, before any code:
+One `/prd-change` on the toolkit's own PRD carries both of its 0.8.4 changes, before any code:
 
 - the `lint-cli` requirement of section 5;
 - §2's `Principles:` part (the seven principles of the design binder's Overview: the PRD is the
@@ -313,7 +317,7 @@ change, and `/prd-build` builds the lint requirement; §2's parts need no build.
 
 ## 11. Changes to the 0.8.2 spec and the umbrella
 
-- **The umbrella's §4:** 0.8.3 is this release, 0.8.4 best practices, 0.8.5 conversion, with their
+- **The umbrella's §4:** 0.8.4 is this release, 0.8.5 best practices, 0.8.6 conversion, with their
   "Needs" columns moved; a Revisions line records it.
 - **The 0.8.2 spec and plan:** the retarget refusal becomes
   `retargeting an area is a conversion, which a later prd-toolkit release brings`, in the skill (both

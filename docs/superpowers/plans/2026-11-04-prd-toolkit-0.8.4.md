@@ -1,4 +1,4 @@
-# prd-toolkit 0.8.3: README files and an Overview tab for each PRD Implementation Plan
+# prd-toolkit 0.8.4: README files and an Overview tab for each PRD Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,11 +8,11 @@
 
 **Tech Stack:** Python 3.11+ (`uv run --script`), pyyaml, pytest; git; Claude Code CLI (`claude plugin eval`).
 
-**Spec:** `docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.3-prd-readmes-design.md` (governed by `docs/superpowers/specs/2026-11-03-prd-toolkit-0.8-umbrella.md`)
+**Spec:** `docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md` (governed by `docs/superpowers/specs/2026-11-03-prd-toolkit-0.8-umbrella.md`)
 
 ## Global Constraints
 
-- **Starts only after 0.8.2 is on `main`.** Work in `/Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.8.3`, branch `feat/prd-toolkit-0.8.3`, cut from that `main`. The spec, the umbrella and this plan reach `main` with 0.8.2 (its branch merged the spec branch). Never push, open a PR, or touch another repo without Ivan's request in his own words.
+- **Starts only after 0.8.3 is on `main`.** Work in `/Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.8.4`, branch `feat/prd-toolkit-0.8.4`, cut from that `main`. The spec, the umbrella and this plan reach `main` with 0.8.3 (renumbered there from 0.8.3 to 0.8.4 on 2026-11-06). Never push, open a PR, or touch another repo without Ivan's request in his own words.
 - Commit as Ivan Histand <ihistand@rotoplas.com>; every message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Stage by path; never `git add -A`. One implementer at a time in this worktree.
 - **The toolkit's own PRD binds this branch.** `prdlint/model.py` is a `lint-cli` Boundary file: only Task 2 touches it, with the live ID Task 1 adds. Every other commit carries `Refs: none (no behaviour change)`. Never `--no-verify`. **The builder runs without isolation**: the Agent tool's `isolation: worktree` cuts from the main checkout's HEAD, not from this branch.
 - The repo is public and the toolkit names no client: no app, editor or organization name in code, docs, tests or evals. Example slugs `greet`, `orders`, `notes`.
@@ -46,9 +46,9 @@
 
 **Files:** none.
 
-- [ ] **Step 1:** Check `main` holds 0.8.2 (`prd-toolkit/.claude-plugin/plugin.json` says `0.8.2`) and 0.8.1's `prdlint/change.py` with `digest` and `_skipped`. Create the worktree and branch from `main`.
+- [ ] **Step 1:** Check `main` holds 0.8.3 (`prd-toolkit/.claude-plugin/plugin.json` says `0.8.3`) and 0.8.1's `prdlint/change.py` with `digest` and `_skipped`. Create the worktree and branch from `main`.
 - [ ] **Step 2:** Run `uv run --script prd-toolkit/scripts/prd_change.py ids next docs/prd/prd-toolkit FR` and `… T-<that FR's number>`, each its own call; write the next FR, AC and T-ids to the ledger for Task 1.
-- [ ] **Step 3:** If 0.8.2 is not on `main`, stop and tell Ivan.
+- [ ] **Step 3:** If 0.8.3 is not on `main`, stop and tell Ivan.
 
 ### Task 1 (controller-run, stops for Ivan): the toolkit PRD's `/prd-change`
 
@@ -194,17 +194,17 @@ Required skill: `superpowers:writing-skills`.
 - [ ] **Step 5: Run the pins, then the eval at 3 runs** (`claude plugin eval`); record the with/without scores. Below 3/3 is fixed in the skill text, never the grader.
 - [ ] **Step 6: CI parity. Commit** `feat(prd-toolkit): the skills stage the READMEs, offer §2's parts and publish three tabs; the tester never reads a README`.
 
-### Task 9: release text, 0.8.3, and this repository's READMEs
+### Task 9: release text, 0.8.4, and this repository's READMEs
 
 **Files:**
-- Modify: `prd-toolkit/README.md` (the READMEs, the Overview tab, §2's two parts, the upgrade note of spec section 14 with the `CLAUDE.md` watch item, the known limit, the 0.8.3 changelog entry), `prd-toolkit/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `web/src/data/plugins.js` (version `0.8.3`), the repo's `.prd-toolkit/` (vendor-only snippet)
+- Modify: `prd-toolkit/README.md` (the READMEs, the Overview tab, §2's two parts, the upgrade note of spec section 14 with the `CLAUDE.md` watch item, the known limit, the 0.8.4 changelog entry), `prd-toolkit/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `web/src/data/plugins.js` (version `0.8.4`), the repo's `.prd-toolkit/` (vendor-only snippet)
 - Create: `prd-toolkit/tests/test_release_0_8_3.py` (as `test_release_0_7_1.py`), `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md` (by `prd_block.py`, never by hand)
 
-- [ ] **Step 1: Write the failing pins:** the three version files say `0.8.3`; the README names both READMEs, the markers, `check --ci`'s new failure, the upgrade watch item, the Overview tab and §2's two optional parts; the changelog entry names the `lint-cli` FR of Task 1.
+- [ ] **Step 1: Write the failing pins:** the three version files say `0.8.4`; the README names both READMEs, the markers, `check --ci`'s new failure, the upgrade watch item, the Overview tab and §2's two optional parts; the changelog entry names the `lint-cli` FR of Task 1.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: Write the text; bump the versions; run the vendor-only snippet;** then `uv run --script .prd-toolkit/prd_block.py docs/prd/prd-toolkit`, its own call, which writes the two READMEs and refreshes `CLAUDE.md`.
 - [ ] **Step 4: Run the pins, CI parity,** `uv run --script .prd-toolkit/prd_block.py --check docs/prd/prd-toolkit; echo "prd-block-exit=$?"` (0), lint and trace (each `; echo "prd-…-exit=$?"`, both 0).
-- [ ] **Step 5: Commit** `feat(prd-toolkit): 0.8.3 release text, version and the PRD READMEs`, staging `docs/prd/README.md`, `docs/prd/prd-toolkit/README.md` and `CLAUDE.md` by path.
+- [ ] **Step 5: Commit** `feat(prd-toolkit): 0.8.4 release text, version and the PRD READMEs`, staging `docs/prd/README.md`, `docs/prd/prd-toolkit/README.md` and `CLAUDE.md` by path.
 
 ### Task 10 (controller-run, with Ivan): Proof
 
@@ -213,4 +213,4 @@ Required skill: `superpowers:writing-skills`.
 - [ ] **Step 1:** Make the PRD's README stale on purpose in the working tree (edit a line inside the block); run `scripts/ci-local.sh`: the `check --ci` job fails with `stale: docs/prd/prd-toolkit/README.md; run prd_block.py docs/prd/prd-toolkit`. Restore with `prd_block.py`; the job passes. Nothing is committed.
 - [ ] **Step 2 (Ivan):** reads `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md`. On his request in his own words, push and open the PR; CI passes; he reads both on GitHub and confirms they explain the folders to someone new.
 - [ ] **Step 3:** `/prd-publish` on the toolkit's own PRD: the page opens on the Overview tab with its principles, its architecture, `lint-cli` as the adopted area and its getting-started steps. Drive Chrome over the page published into the design artifact (`prd-toolkit-prd.html`, replacing the 2.1.0 snapshot) and check the mermaid diagram draws; show Ivan the page and the `es` label values; he confirms it.
-- [ ] **Step 4:** Record what was proven (the commits, the CI run, the published version) in the changelog entry. Commit `docs(prd-toolkit): 0.8.3 proof record`.
+- [ ] **Step 4:** Record what was proven (the commits, the CI run, the published version) in the changelog entry. Commit `docs(prd-toolkit): 0.8.4 proof record`.
