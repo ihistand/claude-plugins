@@ -1,6 +1,6 @@
 ---
 prd: prd-toolkit
-version: 5.0.0
+version: 5.1.0
 status: Approved
 owner: Ivan Histand
 updated: 2026-11-07
@@ -36,6 +36,23 @@ author, adopt, change, build, deploy, handle errors in, publish and link PRDs.
 Goals:
 
 - Self-hosting: every area of the toolkit's own PRD (`adoption.md`) is `adopted`, with its characterization suite run in CI, before the plugin's version reaches 1.0.0.
+
+Principles:
+
+- The PRD is the authority: code implements what the PRD folder says and never defines behaviour it lacks.
+- Spec-first, enforced: a behaviour change starts as a PRD change the owner approves, and the git hooks and CI refuse a commit that skips it.
+- Black-box testable: every acceptance criterion has a test case a tester can write from the PRD alone, without reading the code.
+- Error-Driven Development: every defect becomes an `errors.md` entry, and its fix starts from a test that fails first.
+- The owner's word decides: approvals, error classes and human deploy steps are answered by the owner, never by an agent.
+- Mechanical gates before judgement: lint, trace and the build checks run before any agent or person judges the work.
+- The toolkit stays generic: it names no organization or platform; packs and wrapper plugins carry the specifics.
+
+Getting started:
+
+1. Install the plugin: `/plugin marketplace add ihistand/claude-plugins`, then `/plugin install prd-toolkit@ihistand`.
+2. Start a PRD with `/prd-new`, or bring an existing repository under one with `/prd-adopt`.
+3. Install the hooks once per clone: `uv run --script .prd-toolkit/prd_hooks.py install docs/prd/<slug>`.
+4. Change behaviour with `/prd-change`, then build it with `/prd-build`; report a bug with `/prd-error`.
 
 Personas: an engineer working in a repository with Claude Code; the agents the toolkit
 dispatches (`prd-builder`, `prd-tester`); a reviewer reading a published PRD page.
@@ -137,6 +154,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-012 | Load the contract YAML files | verified | features/lint-cli.md |  |
 | FR-013 | List the packs | verified | features/lint-cli.md |  |
 | FR-014 | Print the lint result as a JSON document | verified | features/lint-cli.md |  |
+| FR-015 | Leave the PRD folder's root README out of the lint | approved | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 
@@ -159,3 +177,4 @@ None.
 | 3.0.0 | 2026-11-03 | lint-cli for prd-toolkit 0.8.1: `--json` prints one `lint` JSON document (FR-014) and `--interface` prints the interface number; FR-001's line output is scoped to a run without `--json`; the one-line usage names both options (AC-004.1, a changed usage line T-004.1 and T-004.3 assert, so major); `prdlint/interface.py` joins the Boundary; testing.md gains the `stdout_json` keys; dry run T-004.1, T-004.3, T-014.1, T-014.2, T-014.3, T-014.4, T-014.5, T-014.6, T-014.7, 0 open questions, 1 dismissed by quote (an earlier dry run's 2 gaps fixed) | FR-001, AC-001.1, AC-001.2, AC-001.4, AC-001.5, FR-004, AC-004.1, T-004.1, T-004.3, FR-014, AC-014.1, AC-014.2, AC-014.3, AC-014.4, AC-014.5, AC-014.6, T-014.1, T-014.2, T-014.3, T-014.4, T-014.5, T-014.6, T-014.7 |
 | 4.0.0 | 2026-11-04 | lint-cli FR-014: `--interface` wins over an unsupported `--json=<N>` (AC-014.4 no longer applies when `--interface` is given, so major; AC-014.5 says it), a gap the 0.8.1 build found; cli.yaml says it; dry run T-014.4, T-014.5, T-014.8, 0 open questions, 0 dismissed by quote | FR-014, AC-014.4, AC-014.5, T-014.8 |
 | 5.0.0 | 2026-11-07 | lint-cli FR-006 for E-007: AC-006.3 widened so an entry named `<name>.yaml` in test-cases/ or under contracts/ outside contracts/fixtures/ that is not a regular file is a sufficiency finding at line 0 (`a .yaml entry that is not a file`), not an internal error (an input that exited 2 now exits 1, so major); regression tests T-006.4 and T-006.5 known-failing E-007; testing.md Tools on the runner names macOS or Linux with symbolic links and the pyproject.toml environment the Levels commands run in, two gaps the dry runs found; the STALE Source: line of FR-006 refreshed; dry run T-006.4, T-006.5, 0 open questions, 2 dismissed by quote (three earlier dry runs' 3 gaps fixed) | FR-006, AC-006.3, T-006.4, T-006.5 |
+| 5.1.0 | 2026-11-07 | lint-cli FR-015 for prd-toolkit 0.8.4: lint reports no finding in the PRD folder's root README.md, which prd_block.py generates, and reads every other README.md as before (T-015.1, T-015.2, with the new fixture lint-cli/readme_markers in testing.md); §2 gains its Principles and Getting started parts; adoption.md maps 13 unmapped scripts in four not started rows (gates, change, judge, packs) and adds the 0.8.4 overview and README templates to the status row; dry run T-015.1, T-015.2, 0 open questions, 0 dismissed by quote (an earlier dry run's 1 gap fixed, 1 question dismissed by quote) | FR-015 |
