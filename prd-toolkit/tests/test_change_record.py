@@ -6,6 +6,7 @@ import json
 import pytest
 from conftest import edit
 from deploy_fixture import deploy_repo
+from legacy import commit
 from prd_change import main as change_main
 from prd_lint import main as lint_main
 from prdlint import change
@@ -290,6 +291,16 @@ def test_record_clears_since_when_a_live_block_returns_to_approved(repo):
     rec(repo)
     assert row_cells(repo, "FR-003")[2:] == ["approved", "features/api.md", ""]
     assert lint_code(repo) == 0
+
+
+def test_record_keeps_since_on_an_unchanged_removed_row(repo):
+    prd = repo / PRD
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed")
+    edit(prd, "prd.md", "| FR-003 | Delete an order | verified | features/api.md | 1.0.0 |", "| FR-003 | Delete an order | removed | features/api.md | 1.0.0 |")
+    commit(repo, "remove FR-003", "docs")
+    new_ac_with_test(prd)
+    rec(repo)
+    assert row_cells(repo, "FR-003")[2:] == ["removed", "features/api.md", "1.0.0"]
 
 
 def ids_cell(r):

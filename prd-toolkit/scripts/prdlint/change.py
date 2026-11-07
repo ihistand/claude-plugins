@@ -603,10 +603,14 @@ def _index_rows(base_md: str, prd: model.Prd, items: list[BumpItem]) -> list[str
         elif b and not removed:
             rows.append([id_, b.title, b.status or "approved", b.file, b.since or ""])
             by_id[id_] = rows[-1]
+    changed = {i.id for i in items}
     for row in rows:
         b = blocks.get(row[0].strip("`"))
         if b is not None and b.status:
-            row[2], row[4] = b.status, b.since or ""
+            moved = row[0].strip("`") in changed or b.status == "live" or row[2] != b.status
+            row[2] = b.status
+            if moved:  # a row whose block is unchanged keeps its Since
+                row[4] = b.since or ""
     return [_cells_line(r) for r in rows]
 
 

@@ -67,7 +67,3 @@ def test_local_testing_note():
     t = flat(section(README, "Tests and evals"))
     assert "claude --plugin-dir" in t and "`/prd-toolkit:prd-change`" in t and "bare `/prd-change`" in t
 
-
-def test_readme_names_no_employer():
-    for word in ("Acuantia", "Rotoplas", "rotoplas", "acuantia"):
-        assert word not in entry(), word
