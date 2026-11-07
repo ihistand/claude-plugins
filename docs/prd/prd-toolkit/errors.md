@@ -60,6 +60,7 @@ Recurrence of: -
 ### E-007 lint crashes (internal error, exit 2) on a directory or broken symlink named `<name>.yaml` in test-cases/ or contracts/
 Detected: 2026-11-07, user report (/prd-error)
 Classification: invalid requirement
+Confirmed: 2026-11-07, "Confirm the class (form)"
 Touches: FR-006
 Evidence: User report (/prd-error), verbatim:
     lint-cli: a directory or broken symlink named <name>.yaml in test-cases/ or contracts/ crashes lint
