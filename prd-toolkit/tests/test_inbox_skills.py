@@ -327,3 +327,16 @@ def test_the_already_serving_case_is_conditional_on_the_vendored_version(path):
     between = s[stale:give]
     assert "instead of the standby clause below" in between, path.name
     assert "promise nothing about standing by or taking over" in between, path.name
+
+
+# ---------------------------------------------------------------- the verdict's base (0.8.3)
+
+REVIEWING = SKILLS / "changing-prds/reviewing-a-change.md"
+
+
+def test_the_verdict_carries_the_base_the_diff_read():
+    example = REVIEWING.read_text(encoding="utf-8")
+    assert '"base": "<sha>"' in example
+    for path in (REVIEWING, CHANGING):
+        text = flat(path.read_text(encoding="utf-8"))
+        assert re.search(r'"base": "<sha>".{0,200}`git rev-parse <base>`.{0,80}its own (Bash )?call', text), path.name

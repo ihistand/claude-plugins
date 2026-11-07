@@ -65,9 +65,10 @@ def _last_row(prd: Prd):
 
 
 # the verdict keys `list` reads or a client may, with the type each must have; `touches` and `dry_run` are required;
-# `refs` (0.8.2, optional) is the approval commit's trailer IDs for a change made for an errors.md entry
+# `refs` (0.8.2, optional) is the approval commit's trailer IDs for a change made for an errors.md entry (one line);
+# `base` (0.8.3, optional) is the full SHA the review diffed against
 VERDICT_TYPES = {"interface": int, "kind": str, "head": str, "digest": str, "restate": str, "touches": list, "impact": dict,
-                 "bump": dict, "dry_run": dict, "ready": bool, "blockers": list, "owner": dict, "refs": str}
+                 "bump": dict, "dry_run": dict, "ready": bool, "blockers": list, "owner": dict, "refs": str, "base": str}
 VERDICT_REQUIRED = ("digest", "touches", "dry_run", "ready")
 
 
@@ -79,6 +80,8 @@ def verdict_shape_ok(verdict) -> bool:
         value = verdict.get(key)
         if key in verdict and (not isinstance(value, kind) or (kind is int and isinstance(value, bool))):
             return False
+    if "\n" in verdict.get("refs", "") or "\r" in verdict.get("refs", ""):
+        return False
     record = verdict["dry_run"].get("record")
     return record is None or isinstance(record, str)
 
@@ -855,16 +858,16 @@ def _git_text(cwd: Path, *args: str) -> str:
     return run.stdout if run.returncode == 0 else ""
 
 
-def _diff_base(root: Path) -> str | None:
-    """`git merge-base HEAD <target>` for the first target that has one: the branch's upstream, `origin/HEAD`, the
-    default branch (`init.defaultBranch`), then `main`."""
+def _diff_base(root: Path, verdict: dict | None = None) -> str | None:
+    """The base the approval card diffs against, as review mode reads it: the verdict's `base` when it is a commit of
+    this repository (any commit-ish), else the branch's upstream, else `main` when it is a commit, else None (HEAD)."""
+    base = (verdict or {}).get("base")
+    if isinstance(base, str) and base and _git_text(root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").strip():
+        return base
     upstream = _git_text(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}").strip()
-    default = _git_text(root, "config", "--get", "init.defaultBranch").strip()
-    for target in [t for t in (upstream, "origin/HEAD", default) if t] + ["main"]:
-        base = _git_text(root, "merge-base", "HEAD", target).strip()
-        if base:
-            return base
-    return None
+    if upstream:
+        return upstream
+    return "main" if _git_text(root, "rev-parse", "--verify", "--quiet", "main^{commit}").strip() else None
 
 
 def _version_at(root: Path, rev: str, rel: str) -> str | None:
@@ -877,7 +880,7 @@ def _version_at(root: Path, rev: str, rel: str) -> str | None:
 def _approval_card(prd: Prd, root: Path, rel: str) -> dict:
     verdict = json.loads((Path(prd.root) / REVIEW_FILE).read_text(encoding="utf-8"))
     out = {k: verdict.get(k) for k in ("restate", "touches", "bump", "impact", "dry_run")}
-    base = _diff_base(root)
+    base = _diff_base(root, verdict)
     diff = _git_text(root, "diff", "--no-color", "--no-ext-diff", base or "HEAD", "--", rel)
     raw = diff.encode("utf-8")
     out["diff_truncated"] = len(raw) > DIFF_MAX

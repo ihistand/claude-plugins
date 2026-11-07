@@ -277,7 +277,9 @@ so you count instead of it.
    in the shape **The verdict** of `${CLAUDE_PLUGIN_ROOT}/skills/changing-prds/reviewing-a-change.md`
    gives, filled from steps 1 to 4: `head` from `git rev-parse HEAD` and `digest` from
    `uv run --script <scripts>/prd_change.py digest docs/prd/<slug>; echo "prd-change-exit=$?"`, each
-   its own call, `ready` `true` and `blockers` `[]`. For a change made for an `errors.md` entry, add
+   its own call, `ready` `true` and `blockers` `[]`, and `"base": "<sha>"`, the full SHA from
+   `git rev-parse <base>` (its own call) of the base step 2 diffs against, so the inbox's approval
+   card shows the owner that diff. For a change made for an `errors.md` entry, add
    `"refs": "<changed IDs>, E-nnn"` to the verdict: the inbox's approval passes it to `approve` as
    `--refs`. Leave `refs` out for any other change. Write it only then: anything that would make
    `ready` false sends you back to the step whose gate is open. It is never committed (`approve`

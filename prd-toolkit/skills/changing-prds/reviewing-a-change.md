@@ -56,12 +56,14 @@ command gives one; otherwise the branch's upstream, from `git rev-parse --abbrev
    first; when it differs, the PRD moved during the review: name it in `blockers`. Write the file
    with the Write tool, or, where Write is not among your tools, with one Bash call,
    `cat > <dir>/.prd-review.json <<'VERDICT'`, the JSON, then `VERDICT`. It replaces any earlier
-   verdict.
+   verdict. Write `"base": "<sha>"` too: the full SHA from `git rev-parse <base>` (its own Bash
+   call) of the base step 2's diff read, so the inbox's approval card shows the owner that same
+   diff.
 
 ## The verdict
 
 ```json
-{"interface": 1, "kind": "review", "head": "<sha>", "digest": "<prd_change.py digest>", "restate": "…", "touches": ["FR-015", "AC-015.1"],
+{"interface": 1, "kind": "review", "head": "<sha>", "digest": "<prd_change.py digest>", "base": "<sha>", "restate": "…", "touches": ["FR-015", "AC-015.1"],
  "impact": {"exit": 0, "lines": []}, "bump": {"level": "minor", "decided": []},
  "dry_run": {"tids": ["T-015.1", "T-015.2"], "open": 0, "dismissed": 1, "record": "dry run T-015.1, T-015.2, 0 open questions, 1 dismissed by quote"},
  "ready": true, "blockers": []}

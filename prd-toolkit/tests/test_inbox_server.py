@@ -542,3 +542,72 @@ def test_the_list_command_and_its_document_carry_no_waiting(inbox):
     with contextlib.redirect_stdout(out):
         assert gates_main(["list", str(inbox.repo / PRD), "--json"]) == 0
     assert all("waiting" not in g for g in json.loads(out.getvalue())["gates"])
+
+
+# --- (a)/(e) the card diffs against the base the review read ---
+
+def _card_repo(tmp_path):
+    """main at c0 (the fixture's), then c1 (the recorded change, PRD only) and c2 (a note) on `feat`."""
+    repo = make_inbox_repo(tmp_path)["repo"]
+    c0 = git(repo, "rev-parse", "HEAD").strip()
+    git(repo, "checkout", "-q", "--no-track", "-b", "feat")
+    git(repo, "add", "-u", PRD)
+    git(repo, "commit", "-q", "-m", "c1")
+    c1 = git(repo, "rev-parse", "HEAD").strip()
+    (repo / PRD / "note2.md").write_text("second\n", encoding="utf-8")
+    git(repo, "add", PRD + "/note2.md")
+    git(repo, "commit", "-q", "-m", "c2")
+    return repo, c0, c1
+
+
+def _card(repo, **verdict_over):
+    path = repo / PRD / ".prd-review.json"
+    v = json.loads(path.read_text(encoding="utf-8"))
+    v.pop("base", None)
+    v.update(verdict_over)
+    path.write_text(json.dumps(v), encoding="utf-8")
+    return gates._approval_card(model.load(repo / PRD), repo, PRD)
+
+
+def test_card_diffs_against_the_verdict_base(tmp_path):
+    repo, c0, c1 = _card_repo(tmp_path)
+    card = _card(repo, base=c1)
+    assert "note2.md" in card["diff"] and "Repeat" not in card["diff"]
+    assert card["version"]["from"] == gates._version_at(repo, c1, PRD) != "1.0.0"
+
+
+def test_card_accepts_a_ref_name_as_base(tmp_path):
+    repo, c0, c1 = _card_repo(tmp_path)
+    git(repo, "branch", "mid", c1)
+    assert _card(repo, base="mid") == _card(repo, base=c1) == _card(repo, base=c1[:10])
+
+
+def test_card_without_base_uses_upstream_else_main(tmp_path):
+    repo, c0, c1 = _card_repo(tmp_path)
+    # a commit on main after the branch point: a merge-base would hide it, `main` itself shows it reversed
+    git(repo, "checkout", "-q", "main")
+    (repo / PRD / "onmain.md").write_text("m\n", encoding="utf-8")
+    git(repo, "add", PRD + "/onmain.md")
+    git(repo, "commit", "-q", "-m", "m1")
+    git(repo, "checkout", "-q", "feat")
+    card = _card(repo)
+    assert "onmain.md" in card["diff"] and "note2.md" in card["diff"] and card["version"]["from"] == "1.0.0"
+    git(repo, "branch", "up", c1)
+    git(repo, "branch", "--set-upstream-to=up", "feat")
+    card = _card(repo)
+    assert "note2.md" in card["diff"] and "onmain.md" not in card["diff"]
+    assert card["version"]["from"] == gates._version_at(repo, c1, PRD)
+
+
+def test_card_ignores_a_base_missing_from_the_repo(tmp_path):
+    repo, c0, c1 = _card_repo(tmp_path)
+    assert _card(repo, base="0" * 40) == _card(repo)
+    assert _card(repo)["version"]["from"] == "1.0.0"
+
+
+def test_fallback_ignores_origin_head_and_default_branch(tmp_path):
+    repo, c0, c1 = _card_repo(tmp_path)
+    git(repo, "branch", "trunk", c1)
+    git(repo, "config", "init.defaultBranch", "trunk")
+    card = _card(repo)
+    assert card["version"]["from"] == "1.0.0" and "Repeat" in card["diff"]
