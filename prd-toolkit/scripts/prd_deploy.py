@@ -26,6 +26,13 @@ def _fail(message: str) -> int:
     return deploy.EXIT["usage"]
 
 
+def _value_error(e: ValueError) -> int:
+    """A corrupt run log is a tool error (the inbox answers 500); every other ValueError is a usage refusal."""
+    if isinstance(e, deploy.CorruptLog):
+        return _fail(f"internal error: {type(e).__name__}: {e}")
+    return _fail(str(e))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="prd_deploy.py", description="Plan and run a PRD's deploy runbook.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -113,7 +120,7 @@ def _existing_run(args, prd: model.Prd) -> int:
         except deploy.Refused as e:
             return _refuse(e.reasons, args.step if args.command == "rollback" else 0, args.run)
     except ValueError as e:
-        return _fail(str(e))
+        return _value_error(e)
     except Exception as e:
         return _fail(f"internal error: {type(e).__name__}: {e}")
 
@@ -203,6 +210,8 @@ def main(argv: list[str]) -> int:
     if args.command == "check":
         try:
             found = deploy.close_findings(prd, model.repo_root(prd.root), args.run, args.diff)
+        except deploy.CorruptLog as e:
+            return _value_error(e)
         except (ValueError, trace.BadRange) as e:
             return _fail(str(e))
         except Exception as e:

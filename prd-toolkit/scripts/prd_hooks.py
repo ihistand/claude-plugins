@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7"]
 # ///
-"""Vendor the toolkit into a repo and manage its git hooks: install | check | uninstall <prd-folder>; ci --gitlab|--github [--force] <prd-folder> writes the merge-gate CI include file. Exit 0 clean, 1 findings, 2 usage, dependency or internal error."""
+"""Vendor the toolkit into a repo and manage its git hooks: install | check | uninstall | vendor <prd-folder> (vendor refreshes .prd-toolkit/ alone, from the plugin); ci --gitlab|--github [--force] <prd-folder> writes the merge-gate CI include file. Exit 0 clean, 1 findings, 2 usage, dependency or internal error."""
 import argparse
 import sys
 from pathlib import Path
@@ -20,7 +20,7 @@ from prdlint import hooks, model  # noqa: E402
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="prd_hooks.py", description="Vendor the PRD toolkit and install its git hooks.")
-    parser.add_argument("action", choices=("install", "check", "uninstall", "ci"))
+    parser.add_argument("action", choices=("install", "check", "uninstall", "ci", "vendor"))
     parser.add_argument("prd_dir")
     parser.add_argument("--gitlab", action="store_true")
     parser.add_argument("--github", action="store_true")
@@ -66,13 +66,16 @@ def main(argv: list[str]) -> int:
             for line in out:
                 print(line)
             return code
-        if args.action == "install":
+        if args.action == "vendor" and not hooks.is_plugin():
+            print("prd_hooks: vendor runs from the plugin, not from .prd-toolkit/", file=sys.stderr)
+            return 2
+        if args.action in ("install", "vendor"):
             try:
                 prd_rel = prd.root.resolve().relative_to(root).as_posix()
             except ValueError:
                 print(f"prd_hooks: {prd.root} is not inside the repository at {root}", file=sys.stderr)
                 return 2
-            out = hooks.install(root, prd_rel)
+            out = (hooks.vendor if args.action == "vendor" else hooks.install)(root, prd_rel)
         elif args.action == "check":
             try:
                 prd_rel = prd.root.resolve().relative_to(root).as_posix()

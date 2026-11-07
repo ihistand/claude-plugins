@@ -303,6 +303,10 @@ def check_run_id(run_id: str) -> str:
 RUN_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]*")
 
 
+class CorruptLog(ValueError):
+    """The run's log exists but cannot be read or has no header: a tool error, not the caller's refusal."""
+
+
 def _load_log(repo_root: Path, run_id: str) -> tuple[dict, list[dict]]:
     """The header and the records after it; ValueError when the run has no usable log."""
     check_run_id(run_id)
@@ -311,9 +315,9 @@ def _load_log(repo_root: Path, run_id: str) -> tuple[dict, list[dict]]:
     except FileNotFoundError:
         raise ValueError(f"no log for run {run_id}") from None
     except (ValueError, OSError) as e:
-        raise ValueError(f"cannot read the log of run {run_id}: {e}") from None
+        raise CorruptLog(f"cannot read the log of run {run_id}: {e}") from None
     if not recs or recs[0].get("kind") != "header":
-        raise ValueError(f"the log of run {run_id} has no header")
+        raise CorruptLog(f"the log of run {run_id} has no header")
     return recs[0], recs[1:]
 
 

@@ -372,3 +372,79 @@ def test_stale_git_failure_raises_so_the_cli_exits_2(tmp_path, monkeypatch):
     (tmp_path / STALE_TEST).write_text("# @" "prd T-001.1\n")
     with pytest.raises(RuntimeError):
         stale(tmp_path, "T-001.1")
+
+
+# --- 0.8.3 spec section 5 (E-009 to E-015) ---
+
+def test_e009_stale_outside_git_exits_2(tmp_path, monkeypatch):
+    # 0.8.3 spec §5, E-009
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(PLUGINS_FILE))
+    dest = tmp_path / "orders"
+    shutil.copytree(FIXTURE, dest)
+    rc, out, err = run(tmp_path, str(dest), "--stale", "--tids", "T-001.1")
+    assert (rc, out) == (2, "")
+    assert f"prd_build_check: {dest.as_posix()} is not in a git working tree" in err
+
+
+def test_e010_blank_line_after_results_ends_the_block():
+    # 0.8.3 spec §5, E-010
+    assert buildcheck.results_findings("RESULTS\n\nT-001.1: pass\n\nT-001.2: pass", ["T-001.1", "T-001.2"]) == [
+        "T-001.2 has no RESULTS line"]
+    assert buildcheck.results_findings("RESULTS\n\n\nT-001.1: pass\nT-001.2: pass", ["T-001.1", "T-001.2"]) == []
+
+
+def test_e011_duplicated_tid_key_keeps_the_first_value(srepo):
+    # 0.8.3 spec §5, E-011
+    p = srepo / CASES
+    s = p.read_text()
+    head = s.split("\nT-001.2:", 1)[0]
+    assert "inserted: 1," in head
+    p.write_text(s.rstrip("\n") + "\n" + head.replace("inserted: 1,", "inserted: 9,") + "\n")
+    assert stale(srepo, "T-001.1") == []
+
+
+def test_e012_subfolder_case_files_are_not_read_at_either_end(repo):
+    # 0.8.3 spec §5, E-012
+    sub = repo / "docs/prd/orders/test-cases/aaa"
+    sub.mkdir()
+    (sub / "x.yaml").write_text("T-001.1: {level: unit, input: 5}\n")
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    commit(repo, "test for T-001.1")
+    (sub / "x.yaml").write_text("T-001.1: {level: unit, input: 6}\n")
+    commit(repo, "edit the subfolder copy")
+    assert stale(repo, "T-001.1") == []
+
+
+def test_e013_non_file_yaml_entry_is_skipped(srepo):
+    # 0.8.3 spec §5, E-013. The PRD is loaded before the directory exists: model.load's own handling of such an entry is E-007's.
+    prd = model.load(srepo / "docs/prd/orders")
+    (srepo / "docs/prd/orders/test-cases/bad.yaml").mkdir()
+    assert buildcheck.stale_findings(prd, srepo, ["T-001.1"]) == []
+    edit_case(srepo)
+    assert len(buildcheck.stale_findings(prd, srepo, ["T-001.1"])) == 1
+
+
+def test_e014_citation_split_across_lines_is_not_a_citation(repo):
+    # 0.8.3 spec §5, E-014
+    (repo / "tests/test_split.py").write_text("# @" "prd\nT-002.1\n")  # CITE's \s+ spans a newline; a trace per-line scan does not
+    commit(repo, "split citation")
+    assert diff(repo) == []
+
+
+def test_e015_an_uncommitted_citing_test_silences_the_tid(srepo):
+    # 0.8.3 spec §5, E-015
+    edit_case(srepo)
+    commit(srepo, "fix the case")
+    assert len(stale(srepo, "T-001.1")) == 1
+    (srepo / "tests/test_import2.py").write_text("# @" "prd T-001.1\ndef test_j():\n    pass\n")
+    rc, out, err = run(srepo, "docs/prd/orders", "--stale", "--tids", "T-001.1")
+    assert (rc, out) == (0, "")
+
+
+def test_e012_non_ascii_case_file_name_is_read_at_the_commit_end(repo):
+    # 0.8.3 spec §5, E-012 (review fix): ls-tree must not C-quote the name, or the commit end drops the file
+    d = repo / "docs/prd/orders/test-cases"
+    (d / "import.yaml").rename(d / "caf\u00e9.yaml")
+    (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    commit(repo, "test for T-001.1")
+    assert stale(repo, "T-001.1") == []

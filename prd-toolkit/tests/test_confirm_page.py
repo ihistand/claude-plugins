@@ -361,3 +361,9 @@ def test_a_confirmed_bug_shows_its_reply_and_no_choice_keys():
     js = scripts()
     assert "Confirmed in errors.md; change it through /prd-error" in js
     assert "it.confirmed" in js
+
+
+def test_panel_awaits_before_done_only_when_it_is_a_function():
+    js = scripts()
+    assert 'if (HOST && typeof HOST.beforeDone === "function") await HOST.beforeDone();' in js
+    assert "if (HOST) await HOST.beforeDone()" not in js

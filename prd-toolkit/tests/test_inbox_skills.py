@@ -299,3 +299,19 @@ def test_an_inbox_send_that_fails_the_check_is_confirmed_but_not_resumed():
         t = flat(path.read_text(encoding="utf-8"))
         assert SEND_FAILS_CHECK in t, path.name
     assert "resume nothing, show it to the owner and ask" not in flat(DEPLOYING.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- the verdict's base (0.8.3)
+
+REVIEWING = SKILLS / "changing-prds/reviewing-a-change.md"
+
+
+def test_the_verdict_carries_the_base_the_diff_read():
+    example = REVIEWING.read_text(encoding="utf-8")
+    assert '"base": "<sha>"' in example
+    review = flat(REVIEWING.read_text(encoding="utf-8"))
+    assert re.search(r'"base": "<sha>".{0,200}`git rev-parse <base>`.{0,80}its own (Bash )?call', review)
+    change = flat(CHANGING.read_text(encoding="utf-8"))
+    assert re.search(r'"base": "<sha>".{0,200}`git rev-parse HEAD`.{0,40}its own Bash call.{0,40}'
+                     r"`bump --base HEAD`", change)
+    assert "step 2 diffs against" not in change

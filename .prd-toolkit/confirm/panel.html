@@ -394,7 +394,7 @@ function submitBox(it) {
 async function finish() {
   if (S.busy) return;
   S.busy = true; render();
-  if (HOST) await HOST.beforeDone(); // the host lists its gates again, so HOST.question is the current one
+  if (HOST && typeof HOST.beforeDone === "function") await HOST.beforeDone(); // the host lists its gates again, so HOST.question is the current one
   const r = await call('POST', '/done', HOST ? { question: HOST.question } : {});
   S.busy = false;
   if (!r) return;

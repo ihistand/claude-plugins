@@ -176,6 +176,7 @@ def test_review_verdict_keys_equal_the_spec():
     spec = SPEC.read_text(encoding="utf-8")
     want = _verdict(spec[spec.index("## 6. Review mode"):spec.index("## 7.")])
     got = _verdict(REVIEW.read_text(encoding="utf-8"))
+    got.pop("base")  # 0.8.3's optional key, which the 0.7 spec predates
     assert list(got) == list(want)
     for key in ("impact", "bump", "dry_run"):
         assert list(got[key]) == list(want[key]), key

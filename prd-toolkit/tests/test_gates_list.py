@@ -295,23 +295,47 @@ def _change_on_a_branch(repo):
     _git(repo, "commit", "-q", "-m", "b")
 
 
-def test_the_diff_base_falls_back_to_origin_head(tmp_path):
+def test_the_diff_base_ignores_origin_head(tmp_path):
     from prdlint import gates
 
     origin = _trunk_repo(tmp_path / "origin")
     _git(tmp_path, "clone", "-q", str(origin), "clone")
     repo = tmp_path / "clone"
-    base = _git(repo, "rev-parse", "HEAD")
-    _change_on_a_branch(repo)  # no upstream and no main: only origin/HEAD (origin/trunk) knows the base
+    _change_on_a_branch(repo)  # no upstream and no main: origin/HEAD alone no longer names a base
     assert _git(repo, "branch", "--list", "main") == ""
-    assert gates._diff_base(repo) == base
+    assert gates._diff_base(repo) is None
 
 
-def test_the_diff_base_falls_back_to_the_default_branch(tmp_path):
+def test_the_diff_base_ignores_the_default_branch(tmp_path):
     from prdlint import gates
 
     repo = _trunk_repo(tmp_path / "repo")
     _git(repo, "config", "init.defaultBranch", "trunk")
-    base = _git(repo, "rev-parse", "HEAD")
     _change_on_a_branch(repo)  # no remote, no main
-    assert gates._diff_base(repo) == base
+    assert gates._diff_base(repo) is None
+
+
+def test_the_diff_base_is_the_verdicts_base_else_main(tmp_path):
+    from prdlint import gates
+
+    repo = _trunk_repo(tmp_path / "repo")
+    _git(repo, "branch", "main")
+    first = _git(repo, "rev-parse", "HEAD")
+    _change_on_a_branch(repo)
+    assert gates._diff_base(repo) == "main"
+    assert gates._diff_base(repo, {"base": first}) == first
+    assert gates._diff_base(repo, {"base": "0" * 40}) == "main"
+
+
+# --- (c) a multi-line refs, and a mistyped base, make the verdict the wrong shape ---
+
+def test_multiline_refs_is_no_gate(recorded):
+    _write_verdict(recorded, {"refs": "FR-001, FR-002"})
+    assert len(listed(recorded / PRD)) == 1
+    for bad in ("FR-001\nFR-002", "FR-001\rFR-002"):
+        _write_verdict(recorded, {"refs": bad})
+        assert listed(recorded / PRD) == []
+    _write_verdict(recorded, {"base": 5})
+    assert listed(recorded / PRD) == []
+    _write_verdict(recorded, {"base": "0" * 40})
+    assert len(listed(recorded / PRD)) == 1
