@@ -195,16 +195,26 @@ def _append_message(hook: str, prd_rel: str, shown: str, why: str) -> str:
             + _append_line(hook, prd_rel))
 
 
+def _vendor_from_plugin(repo_root: Path, prd_rel: str) -> str:
+    """Resolve the PRD's packs, then write .prd-toolkit/; the one path `install` and `vendor` share. Returns the report line."""
+    from .model import load  # local: the model imports this package
+
+    sources_packs = _resolve_sources(repo_root, load(repo_root / prd_rel))  # before anything is copied
+    _vendor(repo_root, sources_packs)
+    return f"vendored the toolkit into {VENDOR_DIR}/ (version {plugin_version(PLUGIN_ROOT)})"
+
+
+def vendor(repo_root: Path, prd_rel: str) -> list[str]:
+    """Refresh .prd-toolkit/ exactly as `install` does, and write nothing else: no hooks, no .gitignore entries."""
+    return [_vendor_from_plugin(Path(repo_root), prd_rel)]
+
+
 def install(repo_root: Path, prd_rel: str) -> list[str]:
     repo_root = Path(repo_root)
     lines: list[str] = []
     if is_plugin():
-        from .model import load  # local: the model imports this package
-
-        sources_packs = _resolve_sources(repo_root, load(repo_root / prd_rel))  # before anything is copied
-        _vendor(repo_root, sources_packs)
+        lines.append(_vendor_from_plugin(repo_root, prd_rel))
         _ignore_record(repo_root)
-        lines.append(f"vendored the toolkit into {VENDOR_DIR}/ (version {plugin_version(PLUGIN_ROOT)})")
     configured = _hooks_path_config(repo_root)
     hooks_dir, shown = _hooks_dir(repo_root)
     if configured:
