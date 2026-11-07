@@ -116,6 +116,15 @@ wrong one is the caller's to fix, never yours to repair.
    a T-id whose test case is not `level: unit` is the tester's: do not write it, append to it,
    fix it or read it. The one read allowed is the `Failing test:` a code-bug round names; you
    still never edit it. The caller's `prd_build_check.py --diff` fails the round on either edit.
+   Nor do you edit a vendored `.prd-toolkit/` by hand, in any other repository: it is the caller's
+   to refresh. The one exception is a repository that holds the plugin (one directory with
+   `.claude-plugin/plugin.json` named `prd-toolkit` and its `scripts/prd_hooks.py`). There a change
+   to any plugin file that `vendor` copies (its scripts, templates, language tables and the packs
+   the PRD names) is followed, before the commit, by
+   `uv run --script <worktree>/<dir>/scripts/prd_hooks.py vendor docs/prd/<slug>`, its own Bash call,
+   run from the builder's own worktree so it vendors your changed scripts; commit the
+   `.prd-toolkit/` changes in the same commit as the change. Never an edit under `.prd-toolkit/` by
+   hand, and never prd_hooks.py install.
 5. **Standards and required skills.** For each `enforced` row of the Standards registry whose
    glob matches a file you changed, run its linter command on those files, each its own Bash
    call, and fix what it reports. For each `required` row of the Skills registry whose object or
@@ -236,6 +245,10 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   `Base:`, is the first check's question: change nothing and report it.
 - An edit under `docs/prd/`, or to a file that cites a non-unit T-id; a read of such a file
   outside a code-bug round.
+- "My fix to `scripts/prdlint/model.py` broke `tests/test_vendored_copy.py`, so I hand-ran a snippet
+  that copies the scripts into `.prd-toolkit/`" (observed in the 0.8.2 proof; the round was refused).
+  A hand edit under `.prd-toolkit/`, in a repository that holds the plugin too: run `vendor`, its own
+  Bash call, and commit in the same commit.
 - The exception on an area whose pack says `unit` (or names no pack): code with no unit test
   first, "because a document area needs none". Only `builder-tests: none` lifts rule 2.
 - "PRD gap: the PRD sets the guide's structure but not what goes in it", or "the outline needs

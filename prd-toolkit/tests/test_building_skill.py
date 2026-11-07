@@ -713,3 +713,40 @@ def test_r21_exceptions_in_the_callers_rules():
     k = flat(SKILL)
     assert "a deploy-gate one's right after the tester's un-mark commit" in k
     assert "for a build-gate or unit T-id that is not `pass`" in k
+
+
+# --- 0.8.3: the builder refreshes the vendored copy in the toolkit's own repository ---
+
+REFRESH_PINS = [
+    "prd_hooks.py vendor docs/prd/<slug>",
+    "in the same commit",
+    "never prd_hooks.py install",
+    "a repository that holds the plugin",
+]
+
+
+def test_builder_refreshes_the_vendored_copy_with_vendor():
+    for path in (SKILL, AGENT):
+        t = flat(path)
+        for s in REFRESH_PINS:
+            assert s in t, (path.name, s)
+
+
+def test_vendor_runs_from_the_worktree_that_holds_the_changed_scripts():
+    # the agent may not name a worktree "of its own" (test_round_branch), so it says the build worktree
+    assert "from the builder's own worktree" in flat(SKILL)
+    assert "from the build worktree you are in" in flat(AGENT)
+
+
+def test_vendored_copy_rule_keeps_the_ban_for_every_other_repository():
+    for path in (SKILL, AGENT):
+        t = flat(path)
+        assert "Never an edit under `.prd-toolkit/` by hand" in t, path.name
+        assert "any other repository" in t, path.name
+
+
+def test_red_flag_quotes_a_hand_edit_under_the_vendored_copy():
+    t = flat(SKILL)
+    red = t[t.index("## Red Flags - STOP"):]
+    assert "hand-ran" in red and "`.prd-toolkit/`" in red
+    assert red.index("hand-ran") < red.index("## Common Rationalizations")
