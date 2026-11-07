@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `prd_block.py` writes and checks a managed block in `docs/prd/README.md` and `docs/prd/<slug>/README.md` beside the `CLAUDE.md` block, the PRD's root README is skipped by everything that reads the PRD as its source, CI fails when any of the three blocks is stale, and the published page opens on an Overview tab built from the same facts, with §2's optional `Principles:` and `Getting started:` parts.
+**Goal:** `prd_block.py` writes and checks a managed block in `docs/prd/README.md` and `docs/prd/<slug>/README.md` beside the `CLAUDE.md` block, the PRD's root README is skipped by everything that reads the PRD as its source, CI fails when any of the three blocks is stale, and the published page opens on an Overview tab built from the same facts, with §2's optional `Principles:` and `Getting started:` parts; plus the ten small fixes of spec section 16.
 
-**Architecture:** `prdlint/overview.py` gathers the facts (§2's summary and parts, the areas and their states, open errors, links, existing files) once. `prd_block.py` fills two README templates from them and walks one list of targets, each `(path, block, position)`, for writing and `--check`; `publish.py` fills the Overview tab from them. Lint's skip goes through the toolkit's own PRD first (`lint-cli`), in the same `/prd-change` that gives that PRD its principles and getting-started steps; the digest and bump skip goes into 0.8.1's `prdlint/change.py`. `prd_hooks.py` vendors the templates and the home page, refreshes the blocks on `install`, and reports stale ones in `check --ci`.
+**Architecture:** `prdlint/overview.py` gathers the facts (§2's summary and parts, the areas and their states, open errors, links, existing files) once. `prd_block.py` fills two README templates from them and walks one list of targets, each `(path, block, position)`, for writing and `--check`; `publish.py` fills the Overview tab from them. Lint's skip goes through the toolkit's own PRD first (`lint-cli`), in the same `/prd-change` that gives that PRD its principles and getting-started steps; the digest and bump skip goes into 0.8.1's `prdlint/change.py`. `prd_hooks.py` vendors the templates and the home page, refreshes the blocks on `install`, and reports stale ones in `check --ci`. The fixes land in their own modules (Tasks 3a and 3b, the skill text in Task 8); none is in an adopted area.
 
 **Tech Stack:** Python 3.11+ (`uv run --script`), pyyaml, pytest; git; Claude Code CLI (`claude plugin eval`).
 
@@ -12,21 +12,21 @@
 
 ## Global Constraints
 
-- **Starts only after 0.8.3 is on `main`.** Work in `/Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.8.4`, branch `feat/prd-toolkit-0.8.4`, cut from that `main`. The spec, the umbrella and this plan reach `main` with 0.8.3 (renumbered there from 0.8.3 to 0.8.4 on 2026-11-06). Never push, open a PR, or touch another repo without Ivan's request in his own words.
+- **Starts from `main` with 0.8.3 (ca2945e), the E-007 proof (PR #18) and this plan's refresh merged.** Work in `/Users/ihistand/projects/claude-plugins/.worktrees/prd-toolkit-0.8.4`, branch `feat/prd-toolkit-0.8.4`, cut from that `main`. The toolkit's own PRD is at 5.0.0. Never push, open a PR, or touch another repo without Ivan's request in his own words.
 - Commit as Ivan Histand <ihistand@rotoplas.com>; every message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Stage by path; never `git add -A`. One implementer at a time in this worktree.
-- **The toolkit's own PRD binds this branch.** `prdlint/model.py` is a `lint-cli` Boundary file: only Task 2 touches it, with the live ID Task 1 adds. Every other commit carries `Refs: none (no behaviour change)`. Never `--no-verify`. **The builder runs without isolation**: the Agent tool's `isolation: worktree` cuts from the main checkout's HEAD, not from this branch.
+- **The toolkit's own PRD binds this branch.** `prdlint/model.py` is a `lint-cli` Boundary file: only Task 2 touches it, with the live ID Task 1 adds. Every other commit carries `Refs: none (no behaviour change)`. Never `--no-verify`. **The builder runs without isolation**: the Agent tool's `isolation: worktree` cuts from the main checkout's HEAD, not from this branch. Its round follows `running-a-build.md` as the E-007 build did: the caller cuts `prd-round/lint-cli-<n>` from this branch, the builder commits its code with its `prd_hooks.py vendor` refresh of `.prd-toolkit/` in one commit, and the round merges `--ff-only` after `prd_build_check.py --diff` exits 0.
 - The repo is public and the toolkit names no client: no app, editor or organization name in code, docs, tests or evals. Example slugs `greet`, `orders`, `notes`.
 - Test-first: every behaviour and skill-text pin fails before its change. Run it once to see it fail.
 - No new third-party dependency. Every file write goes through a temporary file in the same folder and `os.replace`, writing through a symlink and keeping the file's mode, as `prd_block.apply_block` does today.
 - **CI parity before every commit that touches code:** `scripts/ci-local.sh`, with `HOME` set to an empty directory under the session scratchpad.
-- **Vendoring:** the repo's own `.prd-toolkit/` is refreshed only by the vendor-only snippet, never by `prd_hooks.py install` (it rewrites the clone's shared `.git/hooks`):
-  `uv run --project prd-toolkit python -c "import sys; from pathlib import Path; sys.path.insert(0, str(Path('prd-toolkit/scripts').resolve())); from prdlint import hooks; from prdlint.model import load; r = Path('.').resolve(); s = hooks._resolve_sources(r, load(r / 'docs/prd/prd-toolkit')); hooks._vendor(r, s); hooks._ignore_record(r)"`
+- **Vendoring:** the repo's own `.prd-toolkit/` is refreshed only by `uv run --script prd-toolkit/scripts/prd_hooks.py vendor docs/prd/prd-toolkit` (0.8.3), its own Bash call, never by `prd_hooks.py install` (it rewrites the clone's shared `.git/hooks`).
 - **Exact names and copy** (from the spec):
   - templates `prd-toolkit/templates/readme-prd.md` and `readme-prds.md`, holding the blocks of spec sections 3 and 4 with their `{{slot}}` names, vendored to `.prd-toolkit/templates/`;
   - the vendored home page file `.prd-toolkit/HOMEPAGE`, one line; `plugin.json`'s `"homepage": "https://github.com/ihistand/claude-plugins/tree/main/prd-toolkit"`;
   - the lines `_No summary yet: prd.md §2 is empty._`, `Install the prd-toolkit plugin for Claude Code.` (no home page), and the parent row `| <slug> | - | could not be read | - |`;
   - `--check` prints `stale: <path relative to the repo root>` per stale block; `prd_hooks.py check --ci` prints `stale: <path>; run prd_block.py <prd dir>`;
-  - the `files` texts: spec section 3's table, verbatim, in its order.
+  - the `files` texts: spec section 3's table, verbatim, in its order;
+  - the fixes' lines (spec section 16): `<command> timed out after <n> s`, `vendor at <sha>: <first line>`, the gate id `deploy-step:<run id>:unreadable` titled `run log <run id> could not be read`, `refused: run log <run id> could not be read: <reason>`, `validator failed: <line>`; the grep option list of fix 3, verbatim.
 - **Ruling (plan, spec sections 3 and 9): §2's first paragraph** is the first run of non-blank lines in §2's body after removing HTML comments (`<!-- … -->`, single or multi-line) and blank lines before it, ending at the next blank line or heading, and never a paragraph that starts with a labelled part (`Goals:`, `Personas:`, `Out of scope:`, `Principles:`, `Getting started:`, or the language table's labels). In the README its lines are prefixed `> ` as they stand.
 - **Ruling (plan, spec section 8): the Overview's language keys** are `overview`, `what_it_is`, `principles`, `areas`, `open_errors`, `linked_prds`, `getting_started`, `snapshot_line`, plus `part_principles` and `part_getting_started` for §2's labels (`en`: `Principles`, `Getting started`; `es`: `Principios`, `Primeros pasos`). `en` values are the spec's English text; `es` values are written in Task 4 and shown to Ivan with the Task 10 proof.
 - **Ruling (plan, spec section 6): where a block goes.** `CLAUDE.md` keeps today's position (appended at the end of an existing file). A README without markers gets the block at the top: the block, a blank line, then the existing text byte for byte.
@@ -46,19 +46,20 @@
 
 **Files:** none.
 
-- [ ] **Step 1:** Check `main` holds 0.8.3 (`prd-toolkit/.claude-plugin/plugin.json` says `0.8.3`) and 0.8.1's `prdlint/change.py` with `digest` and `_skipped`. Create the worktree and branch from `main`.
+- [ ] **Step 1:** Check `main` holds 0.8.3 (`prd-toolkit/.claude-plugin/plugin.json` says `0.8.3`), the PRD at 5.0.0, `prd_hooks.py vendor`, and 0.8.1's `prdlint/change.py` with `digest` and `_skipped`. Create the worktree and branch from `main`.
 - [ ] **Step 2:** Run `uv run --script prd-toolkit/scripts/prd_change.py ids next docs/prd/prd-toolkit FR` and `… T-<that FR's number>`, each its own call; write the next FR, AC and T-ids to the ledger for Task 1.
 - [ ] **Step 3:** If 0.8.3 is not on `main`, stop and tell Ivan.
 
 ### Task 1 (controller-run, stops for Ivan): the toolkit PRD's `/prd-change`
 
-**Files:** `docs/prd/prd-toolkit/features/lint-cli.md`, `test-cases/lint-cli.yaml`, `prd.md` (§2, §11, §14, version), through `/prd-change`.
+**Files:** `docs/prd/prd-toolkit/features/lint-cli.md`, `test-cases/lint-cli.yaml`, `prd.md` (§2, §11, §14, version), `adoption.md`, through `/prd-change`.
 
 - [ ] **Step 1:** Run `/prd-change` with both parts of spec section 10, as one change:
   - on `lint-cli`, one new requirement, the next FR from Task 0, "lint reports no finding in the PRD folder's root `README.md`; any other `README.md` in the folder is linted as before", with one AC and one test case: a root README that holds a vague word, `FR-999` and `[NEEDS CLARIFICATION: x]` and a `contracts/dependencies/README.md` that holds a vague word: lint reports only the second;
-  - in `prd.md` §2, after `Goals:`, a `Principles:` part with the seven principles of spec section 10 and a `Getting started:` part with its four steps, drafted from the design binder's Overview and shown to Ivan word for word with the diff.
-  
-  Minor bump (behaviour added, none changed).
+  - in `prd.md` §2, after `Goals:`, a `Principles:` part with the seven principles of spec section 10 and a `Getting started:` part with its four steps, drafted from the design binder's Overview and shown to Ivan word for word with the diff;
+  - in `adoption.md`, spec section 16 fix 8: the `not started` rows `gates`, `change`, `judge` and `packs` with their files, and `prdlint/overview.py`, `templates/readme-prd.md` and `templates/readme-prds.md` added to the `status` row.
+
+  Minor bump (behaviour added, none changed): 5.0.0 → 5.1.0. The `adoption.md` rows are a `needs judgment` item, decided patch (no behaviour, no commit rule changes).
 - [ ] **Step 2:** The dry run through `prd-tester`, as `dispatching.md` says. Ivan approves in his own words, §2's wording included; the approval commit as step 5 says.
 
 ### Task 2 (controller-run): `/prd-build lint-cli <FR>`
@@ -86,6 +87,45 @@
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them, then CI parity.**
 - [ ] **Step 5: Commit** `feat(prd-toolkit): the digest and bump skip the PRD's root README`.
+
+### Task 3a: build-check and change fixes (spec section 16, fixes 4, 5 and 6)
+
+**Files:**
+- Modify: `prd-toolkit/scripts/prdlint/buildcheck.py` (`_last_commit`, `refresh_differences`), `prd-toolkit/scripts/prdlint/change.py` (`_contract_ids`)
+- Test: `prd-toolkit/tests/test_build_check.py`, `prd-toolkit/tests/test_change_record.py`
+
+**Interfaces:**
+- Produces: `refresh_differences(repo_root, head, plugin, prd_rel) -> list[str]` keeps its signature and return; a difference is now bytes or executable bit. `ToolError` messages per the Global Constraints.
+
+- [ ] **Step 1: Write the failing tests:**
+  - fix 4: `tests/test_[x].py` cites T-001.1 and is committed before `tests/test_x.py`; after `edit_case`, `--stale --tids T-001.1` reports `tests/test_[x].py` with its own commit's short sha;
+  - fix 5: a change that removes FR-002 and changes a contract item whose text cites FR-002: `record`'s §14 IDs cell lists FR-002;
+  - fix 6: a repo whose `.gitattributes` sets `export-ignore` on `prd-toolkit/templates/claude-block.md`, with an exact vendor refresh committed: `--diff` exits 0; a committed `.prd-toolkit/` file set to `100755` that vendor writes `100644`: reported; a stub `git` on PATH that sleeps past the timeout for `checkout-index`: exit 2, stderr `prd_build_check: … timed out after <n> s`, no traceback (shorten the timeout through a module constant the test monkeypatches); a vendor whose stderr's first line is `failed: x`: `vendor at <sha>: failed: x`.
+- [ ] **Step 2: Run them to see them fail.**
+- [ ] **Step 3: Implement** as spec section 16 says: `git --literal-pathspecs log`; the union of base and working-tree blocks; the temporary-index checkout (`GIT_INDEX_FILE` inside the temp dir, `git read-tree <head>`, `git checkout-index -a --prefix=<dir>/`), the mode comparison, one helper that wraps every `subprocess.run` of the check and turns `TimeoutExpired` into `ToolError`.
+- [ ] **Step 4: Run them and the whole `test_build_check.py`, then CI parity.**
+- [ ] **Step 5: Commit** `fix(prd-toolkit): build-check reads paths literally and rebuilds the refresh from a checkout; record keeps either PRD's IDs`.
+
+### Task 3b: guard, gates and contracts fixes (spec section 16, fixes 2, 3, 7, 8's test and 9)
+
+**Files:**
+- Modify: `prd-toolkit/scripts/prd_tester_guard.py` (`_check_segment`, `_check_harness_args`), `prd-toolkit/scripts/prdlint/gates.py` (`_deploy_step`, the deploy-step answerer), `prd-toolkit/scripts/prdlint/formserver.py` or the inbox page template (a gate with no answer controls), `prd-toolkit/scripts/prdlint/rules/contracts.py` (the validator message)
+- Test: `prd-toolkit/tests/test_guard.py`, `prd-toolkit/tests/test_gates_list.py`, `prd-toolkit/tests/test_gates_answer.py`, `prd-toolkit/tests/test_rules_contracts.py`; Create: `prd-toolkit/tests/test_adoption_map.py`
+
+**Interfaces:**
+- Consumes: Task 1's `adoption.md` rows (fix 8's test reads them).
+- Produces: `_check_harness_args(ctx, rest, base: Path)`, `base` being `cwd` joined with the harness's `--directory` value when it has one, else `cwd`; a `grep` branch in `_check_segment`; the unreadable gate of fix 7.
+
+- [ ] **Step 1: Write the failing tests:**
+  - fix 2: every case spec section 16 lists, against the toolkit's own testing.md harness;
+  - fix 3: every allowed and refused `grep` of spec section 16, plus a clustered `-rn`, `--include=*.py` (a glob in an option value is allowed), `-e '@prd T-'` with the path after it, and an option outside the list (`--null-data`) refused;
+  - fix 7: a run log with one bad JSON line: `prd_gates.py list` shows `deploy-step:<run id>:unreadable` with the title and the reason; `prd_gates.py answer` on it exits 1 with `refused: run log <run id> could not be read: <reason>`; the inbox page renders the card with the reason and no answer controls; a readable log's gates are unchanged;
+  - fix 8: every `prd-toolkit/scripts/**/*.py` is named in exactly one `adoption.md` row;
+  - fix 9: a stub validator that prints `bad: x` on stdout and exits 1 gives `validator failed: bad: x`; one that prints nothing gives `validator failed: exit 1`; one that writes stderr keeps the stderr line.
+- [ ] **Step 2: Run them to see them fail.**
+- [ ] **Step 3: Implement** as spec section 16 says.
+- [ ] **Step 4: Run them and each module's existing tests, then CI parity.**
+- [ ] **Step 5: Commit** `fix(prd-toolkit): the tester guard resolves --directory and allows checked grep; an unreadable run log is a gate; validator messages fall back to stdout`.
 
 ### Task 4: one set of facts, and §2's two parts
 
@@ -183,11 +223,13 @@
 
 Required skill: `superpowers:writing-skills`.
 
+This task also carries the skill text of spec section 16's fixes 1 and 3 (Task 3b changes the guard for fix 3).
+
 **Files:**
-- Modify: `prd-toolkit/skills/authoring-prds/SKILL.md` (phase 2 and phase 7), `prd-toolkit/skills/adopting-prds/SKILL.md` (the bootstrap and the step 5 commit), `prd-toolkit/skills/changing-prds/SKILL.md` (step 5), `prd-toolkit/skills/coordinating-prds/running-a-change-set.md` (the close), `prd-toolkit/skills/testing-from-prds/SKILL.md`, `prd-toolkit/agents/prd-tester.md`, `prd-toolkit/skills/publishing-prds/SKILL.md`, `prd-toolkit/tests/test_publishing_skill.py`
+- Modify: `prd-toolkit/skills/building-from-prds/running-a-build.md` (steps 4 and 5, fix 1), `prd-toolkit/skills/building-from-prds/SKILL.md` (the caller's Red Flags, fix 1), `prd-toolkit/skills/authoring-prds/SKILL.md` (phase 2 and phase 7), `prd-toolkit/skills/adopting-prds/SKILL.md` (the bootstrap and the step 5 commit), `prd-toolkit/skills/changing-prds/SKILL.md` (step 5), `prd-toolkit/skills/coordinating-prds/running-a-change-set.md` (the close), `prd-toolkit/skills/testing-from-prds/SKILL.md`, `prd-toolkit/agents/prd-tester.md`, `prd-toolkit/skills/publishing-prds/SKILL.md`, `prd-toolkit/tests/test_publishing_skill.py`
 - Create: `prd-toolkit/tests/test_readme_skills.py`; eval `prd-toolkit/evals/tester-ignores-readme/` (`case.yaml`, `prompt.md`, `scaffold.sh`, `graders/`, as `adopting-confirm-headless-fallback/`)
 
-- [ ] **Step 1: Write the failing pins:** each of the four skills, where it commits after `prd_block.py`, names `docs/prd/README.md` among the files it stages, "when it exists"; `testing-from-prds` and `prd-tester.md` hold the rule "The PRD folder's root `README.md` is a guide generated from the PRD, never a source for a test or a question."; authoring phase 2 and the adoption bootstrap offer `Principles:` and `Getting started:` and say neither is required; `publishing-prds` names three tabs, Overview first, and says the Overview takes no summary; no `${CLAUDE_PLUGIN_ROOT}` inside a Bash command.
+- [ ] **Step 1: Write the failing pins:** each of the four skills, where it commits after `prd_block.py`, names `docs/prd/README.md` among the files it stages, "when it exists"; `testing-from-prds` and `prd-tester.md` hold the rule "The PRD folder's root `README.md` is a guide generated from the PRD, never a source for a test or a question."; authoring phase 2 and the adoption bootstrap offer `Principles:` and `Getting started:` and say neither is required; `publishing-prds` names three tabs, Overview first, and says the Overview takes no summary; no `${CLAUDE_PLUGIN_ROOT}` inside a Bash command; fix 1: both marker removals in `running-a-build.md` and the caller's Red Flag name the case's `symptom:` line beside its `known-failing:` line; fix 3: `testing-from-prds` rule 6 and `prd-tester.md` say to search with the Grep tool or, when there is none, Bash `grep` naming each path, with `cat`, `head`, `sed` and `find` still barred.
 - [ ] **Step 2: Run them to see them fail.**
 - [ ] **Step 3: The eval's RED baseline:** scaffold a PRD whose root README states a behaviour (`greet` answers in French) that no feature file states; dispatch the tester in write mode for the area's T-ids on the unchanged skills; record in `evals/BASELINE.md` whether a test or question drew on the README.
 - [ ] **Step 4: Edit the skills and the agent.**
@@ -197,12 +239,12 @@ Required skill: `superpowers:writing-skills`.
 ### Task 9: release text, 0.8.4, and this repository's READMEs
 
 **Files:**
-- Modify: `prd-toolkit/README.md` (the READMEs, the Overview tab, §2's two parts, the upgrade note of spec section 14 with the `CLAUDE.md` watch item, the known limit, the 0.8.4 changelog entry), `prd-toolkit/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `web/src/data/plugins.js` (version `0.8.4`), the repo's `.prd-toolkit/` (vendor-only snippet)
-- Create: `prd-toolkit/tests/test_release_0_8_3.py` (as `test_release_0_7_1.py`), `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md` (by `prd_block.py`, never by hand)
+- Modify: `prd-toolkit/README.md` (the READMEs, the Overview tab, §2's two parts, the upgrade note of spec section 14 with the `CLAUDE.md` watch item, the known limit, the 0.8.4 changelog entry), `prd-toolkit/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `web/src/data/plugins.js` (version `0.8.4`), the repo's `.prd-toolkit/` (`prd_hooks.py vendor`)
+- Create: `prd-toolkit/tests/test_release_0_8_4.py` (as `test_release_0_7_1.py`), `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md` (by `prd_block.py`, never by hand)
 
-- [ ] **Step 1: Write the failing pins:** the three version files say `0.8.4`; the README names both READMEs, the markers, `check --ci`'s new failure, the upgrade watch item, the Overview tab and §2's two optional parts; the changelog entry names the `lint-cli` FR of Task 1.
+- [ ] **Step 1: Write the failing pins:** the three version files say `0.8.4`; the README names both READMEs, the markers, `check --ci`'s new failure, the upgrade watch item, the Overview tab and §2's two optional parts; the changelog entry names the `lint-cli` FR of Task 1, one line per fix of spec section 16 (1 to 9), and fix 10's note that the E-007 fix (PR #18, PRD 5.0.0) first ships to installs in 0.8.4.
 - [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Write the text; bump the versions; run the vendor-only snippet;** then `uv run --script .prd-toolkit/prd_block.py docs/prd/prd-toolkit`, its own call, which writes the two READMEs and refreshes `CLAUDE.md`.
+- [ ] **Step 3: Write the text; bump the versions; run `uv run --script prd-toolkit/scripts/prd_hooks.py vendor docs/prd/prd-toolkit`, its own call;** then `uv run --script .prd-toolkit/prd_block.py docs/prd/prd-toolkit`, its own call, which writes the two READMEs and refreshes `CLAUDE.md`.
 - [ ] **Step 4: Run the pins, CI parity,** `uv run --script .prd-toolkit/prd_block.py --check docs/prd/prd-toolkit; echo "prd-block-exit=$?"` (0), lint and trace (each `; echo "prd-…-exit=$?"`, both 0).
 - [ ] **Step 5: Commit** `feat(prd-toolkit): 0.8.4 release text, version and the PRD READMEs`, staging `docs/prd/README.md`, `docs/prd/prd-toolkit/README.md` and `CLAUDE.md` by path.
 
@@ -213,4 +255,5 @@ Required skill: `superpowers:writing-skills`.
 - [ ] **Step 1:** Make the PRD's README stale on purpose in the working tree (edit a line inside the block); run `scripts/ci-local.sh`: the `check --ci` job fails with `stale: docs/prd/prd-toolkit/README.md; run prd_block.py docs/prd/prd-toolkit`. Restore with `prd_block.py`; the job passes. Nothing is committed.
 - [ ] **Step 2 (Ivan):** reads `docs/prd/README.md` and `docs/prd/prd-toolkit/README.md`. On his request in his own words, push and open the PR; CI passes; he reads both on GitHub and confirms they explain the folders to someone new.
 - [ ] **Step 3:** `/prd-publish` on the toolkit's own PRD: the page opens on the Overview tab with its principles, its architecture, `lint-cli` as the adopted area and its getting-started steps. Drive Chrome over the page published into the design artifact (`prd-toolkit-prd.html`, replacing the 2.1.0 snapshot) and check the mermaid diagram draws; show Ivan the page and the `es` label values; he confirms it.
+- [ ] **Step 3a:** Spec section 13 item 5, the fixes on this repository: Task 2's round passed `prd_build_check.py --diff` with exit 0 on its vendor refresh (fix 6; record the round's commit); dispatch `prd-tester` in `suite` mode for one T-id of Task 1's FR and check, from its transcript, that it ran its one test file under `uv run --directory prd-toolkit` and found the citing tests with Bash `grep` with no guard refusal (fixes 2 and 3).
 - [ ] **Step 4:** Record what was proven (the commits, the CI run, the published version) in the changelog entry. Commit `docs(prd-toolkit): 0.8.4 proof record`.
