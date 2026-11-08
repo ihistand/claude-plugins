@@ -17,6 +17,7 @@ from .rules.contracts import custom_types
 yaml = require("yaml", "pyyaml")
 
 REVIEW_FILE = ".prd-review.json"
+README = "README.md"  # the folder's generated root guide (prd_block.py): never part of the PRD's source
 _NUM = re.compile(r"(?:UJ|FR|NFR)-(\d+)")
 _KIND = re.compile(r"^(?:(UJ|FR|NFR)|(AC|T)-(\d+))$")
 _FM_DROP = re.compile(r"^(?:version|updated):")
@@ -79,6 +80,8 @@ def _listed(root: Path) -> list[Path]:
 def _skipped(rel: str) -> bool:
     parts = rel.split("/")
     if parts[-1] == REVIEW_FILE and len(parts) == 1:
+        return True
+    if rel == README:
         return True
     return any(p == "__pycache__" or (p.startswith(".") and p != ".gitkeep") for p in parts)
 
