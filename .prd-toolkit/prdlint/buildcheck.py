@@ -19,8 +19,24 @@ RESULT = re.compile(r"^(T-\d{3}\.\d+): (pass|fail: .+|known-failing E-\d+)$")
 _LINE_TID = re.compile(r"^(T-\d{3}\.\d+)\b")
 
 
+TIMEOUT = 120  # seconds any one subprocess of these checks may run; a test shortens it
+
+
+class ToolError(Exception):
+    """A git or vendor run the refresh check depends on failed."""
+
+
+def _run(cmd: list[str], what: str | None = None, **kw) -> subprocess.CompletedProcess:
+    """subprocess.run with the module timeout; a run that exceeds it is a ToolError, not an internal error."""
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=TIMEOUT, **kw)
+    except subprocess.TimeoutExpired:
+        name = what or " ".join(["git", next((a for a in cmd[1:] if not a.startswith("-")), "")]).strip()
+        raise ToolError(f"{name} timed out after {TIMEOUT:g} s") from None
+
+
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+    return _run(["git", *args], cwd=root, encoding="utf-8", errors="replace")
 
 
 def _show(root: Path, rev: str, path: str) -> str:
@@ -43,10 +59,6 @@ def _resolve(root: Path, rng: str, rev: str) -> str:
 
 
 MANIFEST = ".claude-plugin/plugin.json"
-
-
-class ToolError(Exception):
-    """A git or vendor run the refresh check depends on failed."""
 
 
 def _first_line(text: str) -> str:
@@ -79,35 +91,34 @@ def refresh_differences(repo_root: Path, head: str, plugin: str, prd_rel: str) -
     """Sorted .prd-toolkit/ paths whose bytes at `head` differ from what `prd_hooks.py vendor` writes from the plugin held at `head`,
     including paths missing at `head` or present there and not written by vendor; [] when the copy is exact."""
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        archive = subprocess.run(["git", "archive", head], cwd=repo_root, capture_output=True, timeout=120)
-        if archive.returncode != 0:
-            raise ToolError(f"git archive {head}: {_first_line(archive.stderr.decode('utf-8', 'replace'))}")
-        untar = subprocess.run(["tar", "-x", "-C", tmp], input=archive.stdout, capture_output=True, timeout=120)
-        if untar.returncode != 0:
-            raise ToolError(f"tar: {_first_line(untar.stderr.decode('utf-8', 'replace'))}")
+        tmp_path = Path(tmp) / "work"
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}  # a throwaway index: the checkout touches no real one
+        for cmd in (["read-tree", head], ["checkout-index", "-a", f"--prefix={tmp_path}/"]):
+            p = _run(["git", *cmd], cwd=repo_root, env=env)
+            if p.returncode != 0:
+                raise ToolError(f"git {cmd[0]} {head}: {_first_line(p.stderr.decode('utf-8', 'replace'))}")
         shutil.rmtree(tmp_path / ".prd-toolkit", ignore_errors=True)  # the expected tree is what a fresh vendor writes
         init = _git(tmp_path, "init", "-q")
         if init.returncode != 0:
             raise ToolError(f"git init: {_first_line(init.stderr)}")
         script = tmp_path / plugin / "scripts/prd_hooks.py"
-        run = subprocess.run([sys.executable, str(script), "vendor", prd_rel], cwd=tmp_path, capture_output=True,
-                             encoding="utf-8", errors="replace", timeout=120)
+        run = _run([sys.executable, str(script), "vendor", prd_rel], "vendor", cwd=tmp_path, encoding="utf-8", errors="replace")
         if run.returncode != 0:
-            raise ToolError(f"vendor at {head[:12]} failed: {_first_line(run.stderr or run.stdout)}")
-        expected: dict[str, bytes] = {}
+            raise ToolError(f"vendor at {head[:12]}: {_first_line(run.stderr or run.stdout)}")
+        expected: dict[str, tuple[bytes, bool]] = {}
         for f in (tmp_path / ".prd-toolkit").rglob("*"):
             if f.is_file() and "__pycache__" not in f.parts:
-                expected[f.relative_to(tmp_path).as_posix()] = f.read_bytes()
-    p = _git(repo_root, "ls-tree", "-r", "--name-only", "-z", head, "--", ".prd-toolkit")
+                expected[f.relative_to(tmp_path).as_posix()] = (f.read_bytes(), bool(f.stat().st_mode & 0o100))
+    p = _git(repo_root, "ls-tree", "-r", "-z", head, "--", ".prd-toolkit")
     if p.returncode != 0:
         raise ToolError(f"git ls-tree {head}: {_first_line(p.stderr)}")
-    actual: dict[str, bytes] = {}
-    for name in filter(None, p.stdout.split("\0")):
-        blob = subprocess.run(["git", "show", f"{head}:{name}"], cwd=repo_root, capture_output=True, timeout=60)
+    actual: dict[str, tuple[bytes, bool]] = {}
+    for entry in filter(None, p.stdout.split("\0")):
+        meta, name = entry.split("\t", 1)
+        blob = _run(["git", "show", f"{head}:{name}"], cwd=repo_root)
         if blob.returncode != 0:
             raise ToolError(f"git show {head}:{name}: {_first_line(blob.stderr.decode('utf-8', 'replace'))}")
-        actual[name] = blob.stdout
+        actual[name] = (blob.stdout, meta.split()[0] == "100755")
     return sorted(n for n in expected.keys() | actual.keys() if expected.get(n) != actual.get(n))
 
 
@@ -192,7 +203,7 @@ def results_findings(report: str, tids: list[str]) -> list[str]:
 
 def _last_commit(root: Path, path: str) -> tuple[int, str, str] | None:
     """(commit time, full sha, short sha) of the last commit that changed `path`, None when it has none."""
-    p = _git(root, "log", "-1", "--format=%ct %H %h", "--", path)
+    p = _git(root, "--literal-pathspecs", "log", "-1", "--format=%ct %H %h", "--", path)
     if p.returncode != 0:
         raise RuntimeError(f"git log {path} failed: {(p.stderr.strip().splitlines() or ['?'])[0]}")
     parts = p.stdout.split()

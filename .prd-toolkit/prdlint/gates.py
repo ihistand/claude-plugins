@@ -149,8 +149,12 @@ def _deploy_step(prd: Prd, repo_root: Path) -> list[Gate]:
     out = []
     for run_id in run_ids:
         try:
-            recs = deploy.read_log(repo_root, run_id)
-        except Exception:
+            recs = _read_run_log(repo_root, run_id)
+        except FileNotFoundError:
+            continue  # removed since the listing
+        except Exception as e:  # noqa: BLE001 - a log that cannot be read is a gate of its own, never no gate
+            if _header_prd(repo_root, run_id) in (None, mine):
+                out.append(_unreadable_gate(run_id, e))
             continue
         if not recs or recs[0].get("kind") != "header" or recs[0].get("prd") != mine:
             continue
@@ -165,6 +169,44 @@ def _deploy_step(prd: Prd, repo_root: Path) -> list[Gate]:
         out.append(Gate(f"deploy-step:{run_id}:{n}", "deploy-step", title, question,
                         [f"Check: {check}"] if check else [], ["confirm"], "operations.md"))
     return out
+
+
+UNREADABLE = "unreadable"
+
+
+def _read_run_log(repo_root: Path, run_id: str) -> list[dict]:
+    """The run's records; ValueError when a line is not JSON or a record is not a JSON object."""
+    recs = deploy.read_log(repo_root, run_id)
+    bad = next((n for n, rec in enumerate(recs, 1) if not isinstance(rec, dict)), None)
+    if bad is not None:
+        raise ValueError(f"record {bad} is not a JSON object")
+    return recs
+
+
+def _header_prd(repo_root: Path, run_id: str) -> str | None:
+    """The PRD folder the first line of an unreadable log names, when that line is a readable header; else None."""
+    try:
+        text = deploy._log_path(repo_root, run_id).read_text(encoding="utf-8", errors="replace")
+        first = next((line for line in text.split("\n") if line.strip()), "")
+        head = json.loads(first)
+    except (OSError, ValueError):
+        return None
+    prd = head.get("prd") if isinstance(head, dict) and head.get("kind") == "header" else None
+    return prd if isinstance(prd, str) and prd else None
+
+
+def _unreadable_gate(run_id: str, error: Exception) -> Gate:
+    """A run log that cannot be read (fix 7 of 0.8.4): listed with the reason, its first line, and answered by nothing."""
+    reason = next((line.strip() for line in str(error).splitlines() if line.strip()), type(error).__name__)
+    return Gate(f"deploy-step:{run_id}:{UNREADABLE}", "deploy-step", f"run log {run_id} could not be read", reason, [], [],
+                "operations.md")
+
+
+def unreadable_run(gate: Gate) -> str | None:
+    """The run id of an unreadable run log's gate; None for any other gate."""
+    if gate.kind != "deploy-step" or not gate.id.endswith(f":{UNREADABLE}"):
+        return None
+    return gate.id.split(":", 1)[1].rsplit(":", 1)[0]
 
 
 def _adoption(prd: Prd, repo_root: Path) -> list[Gate]:
@@ -430,6 +472,9 @@ def answer(prd: Prd, repo_root: Path, gate_id: str, reply: str, choice: str | No
     gate = next((g for g in list_gates(prd, repo_root) if g.id == gate_id), None)
     if gate is None or (question is not None and gate.question != question):
         raise Refused(REFUSED_CHANGED)
+    unreadable = unreadable_run(gate)
+    if unreadable:
+        raise Refused(f"run log {unreadable} could not be read: {gate.question}")
     given = {"choice": choice, "cls": cls, "result": result, "item": item, "correction": correction}
     for key, value in given.items():
         if value is not None and key not in FLAGS[gate.kind]:
@@ -907,6 +952,8 @@ def card(gate: Gate, prd: Prd, root: Path, rel: str) -> dict:
     elif gate.kind == "error-class":
         e = prd.errors_ledger.get(key)
         out.update({"class": e.classification, "diagnosis": e.diagnosis} if e else {})
+    elif gate.kind == "deploy-step" and unreadable_run(gate):
+        out.update({"run": unreadable_run(gate), "unreadable": True})
     elif gate.kind == "deploy-step":
         run_id, n = key.rsplit(":", 1)
         step = next((s for s in prd.operations.steps if str(s.number) == n), None)

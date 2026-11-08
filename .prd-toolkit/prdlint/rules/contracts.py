@@ -507,7 +507,9 @@ def _check_custom(prd: Prd) -> Iterator[Finding]:
             yield bad(f"validator timed out after {timeout}s")
         else:
             if done.returncode != 0:
-                first = next((x for x in done.stderr.splitlines() if x.strip()), f"exit {done.returncode}")
+                # the first non-blank stderr line, else the first non-blank stdout line, else the exit
+                lines = done.stderr.splitlines() + done.stdout.splitlines()
+                first = next((x for x in lines if x.strip()), f"exit {done.returncode}")
                 yield bad(f"validator failed: {first}")
 
 
