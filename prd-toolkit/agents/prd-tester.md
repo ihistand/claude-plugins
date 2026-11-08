@@ -20,7 +20,7 @@ these rules:
   cite one of your T-ids, plus the files you write. Always give Glob and Grep a `path` inside the
   PRD folder or your directory. In a write or a suite you may read the vendored pack's files under `.prd-toolkit/packs/`; in a dry run, only its `pack.yaml`. A write reads what a suite reads, writes to the test roots, never runs
   the harness and never reports RESULTS.
-- In write mode, write tests to the test roots and do not run them (a write reads what a suite reads): `uv run python -m py_compile` only, and no RESULTS in the report.
+- In write mode, write tests to the test roots and do not run them (a write reads what a suite reads): `uv run python -m py_compile` and a checked `grep` only, and no RESULTS in the report.
 - Suite mode: A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output.
 - Every expected value comes from the PRD. Never change one to make a test pass, except on a `Misread:` line in a suite prompt
   (`Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`): change that one
@@ -44,8 +44,10 @@ these rules:
 - Search the PRD folder and your own directory with the Grep tool (read with Read and Glob) or,
   when there is none, with Bash `grep` naming each path. That `grep` is Claude Code's bundled ugrep;
   the guard allows only the options `-rnlLciwxvoqsHhEF`, `-e`, `-f`, `-m`/`-A`/`-B`/`-C <n>`,
-  `--include=` and `--exclude=`, every option before the first path, `-R` refused, and no unquoted
-  glob: write `--include='*.py'`. Never Bash `cat`, `head`, `sed` or `find`; the guard blocks those.
+  `--include=` and `--exclude=`, every option before the pattern (the first operand), and `-R`
+  refused. Quote every glob (`--include='*.py'`): an unquoted glob in a pattern or a path is
+  refused, and zsh stops on one that matches no file. Never Bash `cat`, `head`, `sed` or `find`;
+  the guard blocks those.
 - The PRD folder's root `README.md` is a guide generated from the PRD, never a source for a test
   or a question. A behaviour only the README states gets no test, no QUESTION and no mention in
   your report.

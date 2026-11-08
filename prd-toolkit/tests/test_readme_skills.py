@@ -154,8 +154,10 @@ def test_fix3_rule_6_and_the_agent_allow_a_checked_grep():
 def test_fix3_rule_6_lists_the_guards_options():
     six = _rule6()
     for s in ("`-r -n -l -L -c -i -w -x -v -o -q -s -H -h -E -F`", "`-e <pattern>`", "`-f <file>`",
-              "`-m`, `-A`, `-B` or `-C <n>`", "`--include=<glob>`", "`--exclude=<glob>`", "every option before the first path"):
+              "`-m`, `-A`, `-B` or `-C <n>`", "`--include=<glob>`", "`--exclude=<glob>`",
+              "every option before the pattern (the first operand)", "in a write or a suite"):
         assert s in six, s
+    assert "every option before the first path" not in flat(TESTING)
 
 
 # --- the eval: the tester, given a README that states a behaviour no feature file states, never draws on it ---
@@ -172,3 +174,24 @@ def test_the_eval_exists_with_its_graders():
     assert "Mode: write" in prompt and "T-002.1" in prompt and "T-002.2" in prompt
     assert "README" not in prompt and "French" not in prompt
     assert "| `tester-ignores-readme`" in (ROOT / "evals/BASELINE.md").read_text(encoding="utf-8")
+
+
+# --- fix round 1: the run lists name the checked grep; options come before the pattern ---
+
+def test_fix3_every_run_list_names_the_checked_grep():
+    t = flat(TESTING)
+    overview = between(t, "## Overview", "## The three modes")
+    assert "`uv run python -m py_compile` or a checked `grep` (rule 6) on allowed paths" in overview
+    rules = between(t, "## Non-negotiable rules", "## Citations")
+    five = between(rules, " 5. **", " 6. **")
+    assert "you run only `ls`, `mkdir`, `uv run python -m py_compile` and a checked `grep` (rule 6)" in five
+    a = flat(AGENT)
+    assert "`uv run python -m py_compile` and a checked `grep` only" in a
+
+
+def test_fix3_agent_options_before_the_pattern_and_glob_wording():
+    a = _agent_search()
+    assert "every option before the pattern (the first operand)" in a
+    assert "every option before the first path" not in flat(AGENT)
+    assert "an unquoted glob in a pattern or a path is refused" in a
+    assert "zsh stops on one that matches no file" in a

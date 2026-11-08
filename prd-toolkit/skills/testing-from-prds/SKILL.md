@@ -25,8 +25,8 @@ changes.
 The `prd-tester` agent runs under a PreToolUse guard (`scripts/prd_tester_guard.py`). It blocks
 every read outside the PRD folder, the session's scratchpad and the test roots, every write
 outside the scratchpad and the test roots, and every Bash command that is not a Levels harness
-command, `ls`, `mkdir` or `uv run python -m py_compile` on allowed paths. A block is the rule
-working. It is not an obstacle to route around.
+command, `ls`, `mkdir`, `uv run python -m py_compile` or a checked `grep` (rule 6) on allowed
+paths. A block is the rule working. It is not an obstacle to route around.
 
 ## The three modes
 
@@ -77,17 +77,19 @@ into your report.
    (dry run) or the test roots (write, suite). A failure goes back as a change request or an `E-nnn`
    candidate, never as a fix.
 5. **Run the Levels harness commands only in a suite**, exactly as testing.md writes them; never in a
-   dry run or a write, where you run only `ls`, `mkdir` and `uv run python -m py_compile`. In a suite those
+   dry run or a write, where you run only `ls`, `mkdir`, `uv run python -m py_compile` and a checked
+   `grep` (rule 6). In a suite those
    are allowed too. When the guard blocks a path you mistyped, use the
    right path. When it blocks anything else, do not retry it another way: record it under
    QUESTIONS (what you needed, and which file should have said it) and carry on.
 6. **Search with the Grep tool or, when there is none, with Bash `grep` naming each path,** and
-   read with Read and Glob, in the PRD folder and your own directory:
-   `grep -rn '@prd T-002.1' tests/system`. That `grep` is Claude Code's bundled ugrep, and the guard
-   checks the command as written: only `-r -n -l -L -c -i -w -x -v -o -q -s -H -h -E -F` (clustered
-   as `-rn`), `-e <pattern>`, `-f <file>`, `-m`, `-A`, `-B` or `-C <n>`, `--include=<glob>` and
-   `--exclude=<glob>`, every option before the first path, and at least one path, none a glob;
-   `-R` is refused. Quote every glob (`--include='*.py'`): an unquoted one in a pattern or a path is
+   read with Read and Glob, in the PRD folder and your own directory; in a write or a suite, the
+   test roots too (`grep -rn '@prd T-002.1' tests/system`). That `grep` is Claude Code's bundled
+   ugrep, and the guard checks the command as written: only
+   `-r -n -l -L -c -i -w -x -v -o -q -s -H -h -E -F` (clustered as `-rn`), `-e <pattern>`,
+   `-f <file>`, `-m`, `-A`, `-B` or `-C <n>`, `--include=<glob>` and `--exclude=<glob>`, every
+   option before the pattern (the first operand), and at least one path, none a glob; `-R` is
+   refused. Quote every glob (`--include='*.py'`): an unquoted one in a pattern or a path is
    refused, and zsh stops on one that matches no file. Never Bash `cat`, `head`, `sed` or `find`;
    the guard blocks those.
 7. **Background runs (suite mode).** A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output. The `tasks` folder also holds the caller's background tasks; the guard lets you read only an `<id>.output` file there.
