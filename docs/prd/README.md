@@ -1,0 +1,25 @@
+<!-- prd-toolkit:start -->
+# Product requirements
+
+Each folder here is a living PRD: the requirements for one system in this repository, kept in
+step with its code. Code implements its PRD; a change in behaviour starts in the PRD.
+
+| PRD | Version | Status | Covers |
+|---|---|---|---|
+| [prd-toolkit](prd-toolkit/) | 5.1.0 | Approved | prd-toolkit keeps a living PRD folder in a repository and makes agents build, test and deploy from it: a linter and trace checks for the folder, a black-box test agent, and skills that author, adopt, change, build, deploy, handle errors in, publish and link PRDs. |
+
+## How it works
+
+- Each area of a system has requirements (`FR-nnn`); each requirement has acceptance criteria
+  (`AC-nnn.n`), and each criterion has test cases (`T-nnn.n`).
+- Tests cite the test cases they prove, and commits cite the requirements they implement
+  (`Refs: FR-012`), so a change can be traced from the PRD to the code and back.
+- Bugs are recorded in each PRD's `errors.md` before they are fixed.
+- Lint, the git hooks and CI check that the PRD, the tests and the code stay in step.
+
+## Getting started
+
+- Install the prd-toolkit plugin for Claude Code: https://github.com/ihistand/claude-plugins/tree/main/prd-toolkit
+- Once per clone: `uv run --script .prd-toolkit/prd_hooks.py install docs/prd/<slug>`
+- Then see each PRD's README.
+<!-- prd-toolkit:end -->

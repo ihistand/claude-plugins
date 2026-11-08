@@ -1,6 +1,6 @@
 {
   "name": "prd-toolkit",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 40-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, a builder that takes an approved change to verified code, a deploy script that takes it live, an error ledger from record to checked fix, a publisher that renders the PRD as one page, packs, languages and judged test cases that extend it to documents in other languages, a change-set coordinator that links PRDs across repositories, and a machine interface (JSON scripts for changes and gates). Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status, /prd-deploy, /prd-error, /prd-publish and /prd-change-set.",
   "author": {
     "name": "Ivan Histand",
