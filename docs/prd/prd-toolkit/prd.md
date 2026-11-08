@@ -154,7 +154,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-012 | Load the contract YAML files | verified | features/lint-cli.md |  |
 | FR-013 | List the packs | verified | features/lint-cli.md |  |
 | FR-014 | Print the lint result as a JSON document | verified | features/lint-cli.md |  |
-| FR-015 | Leave the PRD folder's root README out of the lint | approved | features/lint-cli.md |  |
+| FR-015 | Leave the PRD folder's root README out of the lint | verified | features/lint-cli.md |  |
 
 ## 12. Assumptions index
 
