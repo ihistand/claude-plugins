@@ -378,3 +378,24 @@ console.log(JSON.stringify({ no: lines(gateCard(entry(false, false), new Map()))
     assert got["no"] == [["muted gnowait", NO_WAIT]]
     assert got["yes"] == [] and got["gone"] == []
     assert NO_WAIT in page()
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_an_unreadable_run_log_card_shows_its_reason_and_no_answer_controls(tmp_path):
+    got = run_page(tmp_path, r"""
+const g = (extra) => ({ id: 'deploy-step:r1:3', kind: 'deploy-step', title: 't', question: 'q', evidence: [], run: 'r1', step: 3,
+  env: 'production', actor: 'human', do: 'd', check: 'c', waiting: false, ...extra });
+const bad = { id: 'deploy-step:r1:unreadable', kind: 'deploy-step', title: 'run log r1 could not be read',
+  question: 'Expecting value: line 1 column 1 (char 0)', evidence: [], choices: [], run: 'r1', unreadable: true, waiting: false };
+const entry = (gate) => ({ key: `/w\n${gate.id}`, g: gate, wt: { path: '/w', branch: 'main' }, gone: false, answer: null });
+const shape = (card) => ({
+  controls: card.all((n) => ['TEXTAREA', 'BUTTON', 'SELECT'].includes(n.tagName)).length,
+  text: card.textContent,
+  nowait: card.all((n) => n.className.split(' ').includes('gnowait')).length,
+});
+console.log(JSON.stringify({ bad: shape(gateCard(entry(bad), new Map())), good: shape(gateCard(entry(g({})), new Map())) }));
+""")
+    assert got["bad"]["controls"] == 0
+    assert "Expecting value: line 1 column 1 (char 0)" in got["bad"]["text"] and "r1" in got["bad"]["text"]
+    assert got["bad"]["nowait"] == 0  # "Answering it still records the answer" would be false
+    assert got["good"]["controls"] >= 2 and got["good"]["nowait"] == 1  # a readable step keeps its reply box

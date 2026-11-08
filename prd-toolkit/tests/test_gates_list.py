@@ -96,6 +96,55 @@ def test_another_prds_run_is_not_listed(repo):
     assert listed(repo / PRD) == []
 
 
+BAD_LINE = '{"kind": "confirm", "step": 3\n'
+
+
+def corrupt_stop(repo):
+    """A run stopped at its human step 3 whose log then gained a line that is not JSON: (run id, the reason, first line)."""
+    run_id = human_stop(repo)
+    with (deploy.log_dir(repo) / f"{run_id}.jsonl").open("a", encoding="utf-8") as f:
+        f.write(BAD_LINE)
+    with pytest.raises(ValueError) as e:
+        deploy.read_log(repo, run_id)
+    return run_id, str(e.value).splitlines()[0]
+
+
+def test_a_run_log_that_cannot_be_read_is_a_gate_with_its_reason(repo):
+    run_id, reason = corrupt_stop(repo)
+    assert reason  # the reason is the read's own first line
+    gs = by_id(listed(repo / PRD))
+    assert set(gs) == {f"deploy-step:{run_id}:unreadable"}
+    g = gs[f"deploy-step:{run_id}:unreadable"]
+    assert g["kind"] == "deploy-step" and g["title"] == f"run log {run_id} could not be read"
+    assert g["question"] == reason and g["choices"] == [] and g["source"] == "operations.md"
+    code, out, err = call("list", str(repo / PRD))
+    assert code == 0 and out == f"deploy-step:{run_id}:unreadable run log {run_id} could not be read\n", (out, err)
+
+
+def test_a_readable_log_beside_an_unreadable_one_keeps_its_gate(repo):
+    good = human_stop(repo)
+    before = by_id(listed(repo / PRD))[f"deploy-step:{good}:3"]
+    bad, _ = corrupt_stop(repo)
+    gs = by_id(listed(repo / PRD))
+    assert set(gs) == {f"deploy-step:{good}:3", f"deploy-step:{bad}:unreadable"}
+    assert gs[f"deploy-step:{good}:3"] == before
+
+
+def test_an_unreadable_log_whose_header_names_another_prd_is_not_listed(repo):
+    run_id, _ = corrupt_stop(repo)
+    log = deploy.log_dir(repo) / f"{run_id}.jsonl"
+    log.write_text(log.read_text(encoding="utf-8").replace('"prd": "docs/prd/orders"', '"prd": "docs/prd/other"'), encoding="utf-8")
+    assert listed(repo / PRD) == []
+
+
+def test_a_log_line_that_is_not_an_object_is_unreadable(repo):
+    run_id = human_stop(repo)
+    with (deploy.log_dir(repo) / f"{run_id}.jsonl").open("a", encoding="utf-8") as f:
+        f.write("[3]\n")
+    g = by_id(listed(repo / PRD))[f"deploy-step:{run_id}:unreadable"]
+    assert g["question"] == "record 3 is not a JSON object"
+
+
 # --- signoff ---
 
 def test_an_acceptance_case_without_a_signoff_row_is_a_gate(repo):

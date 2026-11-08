@@ -171,6 +171,26 @@ def test_validator_failure_reports_first_stderr_line(prd):
     assert any(m.endswith("validator failed: bad one") for m in msgs)
 
 
+def _validator_messages(prd, code: str) -> list[str]:
+    _validator(f"python3 -c '{code}'")(prd)
+    return [f.message for f in lint(prd) if f.rule == "contracts-valid" and "validator" in f.message]
+
+
+def test_a_validator_that_reports_on_stdout_says_its_first_stdout_line(prd):
+    msgs = _validator_messages(prd, 'import sys; print(\"\\n  \\nbad: x\\nsecond\"); sys.exit(1)')
+    assert msgs and all(m.endswith("validator failed: bad: x") for m in msgs), msgs
+
+
+def test_a_silent_failing_validator_says_its_exit(prd):
+    msgs = _validator_messages(prd, "import sys; sys.exit(1)")
+    assert msgs and all(m.endswith("validator failed: exit 1") for m in msgs), msgs
+
+
+def test_a_validator_stderr_line_wins_over_its_stdout(prd):
+    msgs = _validator_messages(prd, 'import sys; print(\"out line\"); print(\"err line\", file=sys.stderr); sys.exit(2)')
+    assert msgs and all(m.endswith("validator failed: err line") for m in msgs), msgs
+
+
 def test_validator_receives_files_and_runs_in_the_prd_root(prd):
     script = "import os, sys; sys.exit(0 if sys.argv[1:] == ['contracts/custom/sample.lkml'] and os.path.isfile('prd.md') else 1)"
     _validator(f"python3 -c \"{script}\"")(prd)

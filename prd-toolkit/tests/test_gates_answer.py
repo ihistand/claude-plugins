@@ -13,7 +13,7 @@ from prd_gates import main as gates_main
 from prdlint import confirm, model
 from test_change_approve import DRY, FILES, REPLY, recorded, repo, snapshot  # noqa: F401  (fixtures)
 from test_change_approve import git as git_out
-from test_gates_list import PRD, by_id, entry, human_stop, listed
+from test_gates_list import PRD, by_id, corrupt_stop, entry, human_stop, listed
 
 TODAY_RE = r"\d{4}-\d{2}-\d{2}"
 QUOTED = '"sí", then "no"'
@@ -109,6 +109,17 @@ def test_deploy_step_reply_reaches_the_log_verbatim(repo):
     from prdlint import gates
     [line] = gates.read_log(repo)
     assert line["choice"] == "confirm"  # never null at exit 0: null is wait's "not pending"
+
+
+def test_an_unreadable_run_log_is_refused_with_its_reason(repo):
+    run_id, reason = corrupt_stop(repo)
+    gate = f"deploy-step:{run_id}:unreadable"
+    why = f"refused: run log {run_id} could not be read: {reason}"
+    refuse(repo / PRD, gate, REPLY, why=why)
+    refuse(repo / PRD, gate, REPLY, "--choice=confirm", why=why)
+    from prdlint import gates
+    assert gates.read_log(repo) == []  # nothing was logged
+    assert gate in by_id(listed(repo / PRD))  # and it is still listed
 
 
 # --- Review Focus 4: a PRD path with a space ---

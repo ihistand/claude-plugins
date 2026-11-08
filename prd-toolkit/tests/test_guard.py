@@ -583,3 +583,163 @@ def test_a_background_output_stays_closed_when_degraded(tmp_path):
     repo = make_repo(tmp_path, testing=None)
     tasks = make_tasks(tmp_path)
     assert_blocked(call(repo, "Read", file_path=str(tasks / "b1x9.output")), "read")
+
+
+# --- 0.8.4 fix 2: a harness under `uv run --directory <d>` reads its path arguments from <d> ---
+
+TOOLKIT_TESTING = (ROOT.parent / "docs/prd/prd-toolkit/testing.md").read_text(encoding="utf-8")
+DIR_HARNESS = "uv run --directory prd-toolkit pytest -q tests/prd"
+
+
+def make_toolkit_repo(tmp_path: Path) -> Path:
+    """A repository laid out as the toolkit's own, with the toolkit's own testing.md (its Levels and Test roots)."""
+    repo = tmp_path / "repo"
+    (repo / "docs/prd/greet").mkdir(parents=True)
+    (repo / "docs/prd/greet/prd.md").write_text("# greet\n")
+    (repo / "docs/prd/greet/testing.md").write_text(TOOLKIT_TESTING, encoding="utf-8")
+    (repo / "prd-toolkit/tests/prd").mkdir(parents=True)
+    (repo / "prd-toolkit/scripts").mkdir()
+    (repo / "prd-toolkit/scripts/prd_lint.py").write_text("print(1)\n")
+    (tmp_path / "scratch").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    return repo
+
+
+def test_the_toolkit_harness_has_a_directory():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("guard", GUARD)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    assert DIR_HARNESS.split() in guard.parse_harness_commands(TOOLKIT_TESTING)
+
+
+def test_a_directory_harness_allows_a_test_file_named_from_its_directory(tmp_path):
+    repo = make_toolkit_repo(tmp_path)
+    for cmd in (f"{DIR_HARNESS} tests/prd/test_x.py", f"{DIR_HARNESS} tests/prd/test_x.py::test_a -x",
+                f"{DIR_HARNESS} --junitxml=tests/prd/out.xml",
+                "uv run --directory prd-toolkit pytest -q tests --ignore tests/prd tests/test_x.py"):
+        r = bash(repo, cmd)
+        assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("arg", ["../prd-toolkit/scripts/prd_lint.py", "tests/prd/*.py", "scripts/prd_lint.py",
+                                 "prd-toolkit/tests/prd/test_x.py", "--junitxml=scripts/out.xml", "../src/app.py"])
+def test_a_directory_harness_refuses_a_path_outside_the_test_roots_from_its_directory(tmp_path, arg):
+    # `prd-toolkit/tests/prd/test_x.py` names a test root from the repo root, but pytest reads it from prd-toolkit/
+    assert_blocked(bash(make_toolkit_repo(tmp_path), f"{DIR_HARNESS} {arg}"), "write")
+
+
+def test_a_directory_harness_with_an_equals_sign_reads_from_its_directory(tmp_path):
+    repo = make_toolkit_repo(tmp_path)
+    text = TOOLKIT_TESTING.replace("`uv run --directory prd-toolkit pytest -q tests/prd`", "`uv run --directory=prd-toolkit pytest -q tests/prd`")
+    assert text != TOOLKIT_TESTING
+    (repo / "docs/prd/greet/testing.md").write_text(text, encoding="utf-8")
+    assert bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd tests/prd/test_x.py").returncode == 0
+    assert_blocked(bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd prd-toolkit/tests/prd/test_x.py"))
+
+
+def test_a_harness_without_a_directory_still_reads_from_cwd(tmp_path):
+    repo = make_repo(tmp_path)
+    assert bash(repo, "uv run pytest tests/integration tests/integration/test_a.py").returncode == 0
+    assert_blocked(bash(repo, "uv run pytest tests/integration integration/test_a.py"))
+
+
+# --- 0.8.4 fix 3: a checked Bash `grep` reads only readable files ---
+
+def make_grep_repo(tmp_path: Path) -> Path:
+    repo = make_toolkit_repo(tmp_path)
+    (repo / "prd-toolkit/tests/prd/test_greet_cli.py").write_text('"""@prd T-006.1"""\n')
+    (repo / "prd-toolkit/tests/prd/pattern.txt").write_text("@prd T-\n")
+    return repo
+
+
+@pytest.mark.parametrize("cmd", [
+    "grep -rn '@prd T-006' prd-toolkit/tests/prd",
+    "grep -r -n '@prd T-006' prd-toolkit/tests/prd docs/prd/greet",
+    "grep -rn --include=*.py '@prd T-' prd-toolkit/tests",
+    "grep -rn --include='*.py' --exclude='*_support.py' '@prd T-' prd-toolkit/tests",
+    "grep -rn -e '@prd T-' prd-toolkit/tests/prd",
+    "grep -rne '@prd T-' prd-toolkit/tests/prd",
+    "grep -e '@prd T-' -e 'T-006' prd-toolkit/tests/prd/test_greet_cli.py",
+    "grep -e'@prd T-' prd-toolkit/tests/prd/test_greet_cli.py",
+    "grep -f prd-toolkit/tests/prd/pattern.txt prd-toolkit/tests/prd/test_greet_cli.py",
+    "grep -rlLciwxvoqsHhEF x prd-toolkit/tests/prd",
+    "grep -m 3 -A 2 -B1 -C4 x prd-toolkit/tests/prd/test_greet_cli.py",
+    "grep -m3 -A2 x prd-toolkit/tests/prd/test_greet_cli.py",
+    "grep -rn 'T-00[0-9]' prd-toolkit/tests/prd",
+    "grep -rn 'T-.*' prd-toolkit/tests/prd",
+    "grep -rn T-006 prd-toolkit/tests/prd",
+    "grep -rn -- -x prd-toolkit/tests/prd",
+    "grep - prd-toolkit/tests/prd",
+    "grep -rn x prd-toolkit/tests/prd 2>&1",
+    "grep -rn x prd-toolkit/tests/prd > prd-toolkit/tests/prd/out.txt",
+    "grep -rn @prd prd-toolkit/tests/prd && ls prd-toolkit/tests",
+    "grep -rn x {scratch}",
+])
+def test_a_checked_grep_is_allowed(tmp_path, cmd):
+    repo = make_grep_repo(tmp_path)
+    r = bash(repo, cmd.format(scratch=tmp_path / "scratch"))
+    assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("cmd", [
+    "grep -R '@prd T-006' prd-toolkit/tests/prd",
+    "grep -rR x prd-toolkit/tests/prd",
+    "grep --dereference-recursive x prd-toolkit/tests/prd",
+    "grep -rn x .",
+    "grep -rn x prd-toolkit",
+    "grep x prd-toolkit/scripts/prd_lint.py",
+    "grep x prd-toolkit/tests/prd prd-toolkit/scripts/prd_lint.py",
+    "grep x 'prd-toolkit/tests/*.py'",
+    "grep x prd-toolkit/tests/*.py",
+    "grep x 'prd-toolkit/tests/prd/test_[g]reet_cli.py'",
+    "grep x",
+    "grep -rn x",
+    "grep -e x",
+    "grep",
+    "grep -f prd-toolkit/scripts/x y",
+    "grep -f prd-toolkit/scripts/x prd-toolkit/tests/prd",
+    "grep -f 'prd-toolkit/tests/prd/*.txt' prd-toolkit/tests/prd",
+    "grep -f",
+    "grep -m",
+    "grep --null-data x prd-toolkit/tests/prd",
+    "grep --include *.py x prd-toolkit/tests/prd",
+    "grep --recursive x prd-toolkit/tests/prd",
+    "grep -P x prd-toolkit/tests/prd",
+    "grep -rZ x prd-toolkit/tests/prd",
+    "grep -D read x prd-toolkit/tests/prd",
+    "grep -d recurse x prd-toolkit/tests/prd",
+    "grep x - ",
+    "grep -rn x prd-toolkit/tests/prd -R",
+    "grep -rn x prd-toolkit/tests/prd -n",
+    "grep x prd-toolkit/tests/prd -- -n",
+    "grep x -- prd-toolkit/tests/prd",
+    "grep -rn x prd-toolkit/tests/../scripts",
+    "grep -rn x /etc/passwd",
+    "grep -rn x ~/notes",
+    "grep -rn x $HOME",
+    "grep -rn s* prd-toolkit/tests/prd",
+    "grep -rn -e s* prd-toolkit/tests/prd",
+    "grep -rn -m s* x prd-toolkit/tests/prd",
+    "grep -rn -A [0-9] x prd-toolkit/tests/prd",
+    "grep -rn x prd-toolkit/tests/prd < prd-toolkit/scripts/prd_lint.py",
+    "grep -rn x prd-toolkit/tests/prd && cat prd-toolkit/scripts/prd_lint.py",
+    "egrep x prd-toolkit/tests/prd",
+    "/usr/bin/grep x prd-toolkit/tests/prd",
+    "GREP_OPTIONS=-R grep x prd-toolkit/tests/prd",
+])
+def test_an_unchecked_grep_is_refused(tmp_path, cmd):
+    assert_blocked(bash(make_grep_repo(tmp_path), cmd))
+
+
+def test_grep_never_follows_a_symlinked_operand_out_of_a_root(tmp_path):
+    repo = make_grep_repo(tmp_path)
+    (repo / "prd-toolkit/tests/prd/link").symlink_to(repo / "prd-toolkit/scripts")
+    assert_blocked(bash(repo, "grep -rn x prd-toolkit/tests/prd/link"))
+    assert_blocked(bash(repo, "grep -rn x prd-toolkit/tests/prd/link/prd_lint.py"))
+
+
+def test_grep_is_closed_when_degraded(tmp_path):
+    repo = make_repo(tmp_path, testing=None)
+    assert_blocked(bash(repo, "grep -rn x docs/prd/x"))
