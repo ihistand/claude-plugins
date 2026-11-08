@@ -69,3 +69,28 @@ def test_vendored_prd_block_writes_the_same_bytes(repo, tmp_path):
     assert run(repo, repo / ".prd-toolkit/prd_block.py", PRD).returncode == 0
     assert {rel: (repo / rel).read_bytes() for rel in want} == want
     assert HOMEPAGE.encode() in want["docs/prd/README.md"]
+
+
+def broken(repo):
+    readme = repo / PRD / "README.md"
+    readme.write_text("<!-- prd-toolkit:start -->\nhand text\n<!-- prd-toolkit:start -->\n")
+    return readme
+
+
+def test_check_ci_reports_a_broken_marker_as_stale_exit_1(repo):
+    hooks.install(repo, PRD)
+    broken(repo)
+    r = check_ci(repo)
+    assert r.returncode == 1 and r.stderr == ""
+    assert f"stale: {PRD}/README.md: more than one prd-toolkit block; run prd_block.py {PRD}" in r.stdout
+
+
+def test_install_with_a_broken_marker_refuses_and_writes_nothing(repo):
+    readme = broken(repo)
+    before = readme.read_text()
+    r = run(repo, PLUGIN_ROOT / "scripts/prd_hooks.py", "install", PRD)
+    assert r.returncode == 1 and "internal error" not in r.stderr
+    assert f"install refused: {PRD}/README.md: more than one prd-toolkit block; fix the marker, then run prd_block.py {PRD}" in r.stderr
+    assert readme.read_text() == before
+    assert not (repo / ".prd-toolkit").exists() and not (repo / ".git/hooks/commit-msg").exists()
+    assert not (repo / "CLAUDE.md").exists() and not (repo / ".gitignore").exists()

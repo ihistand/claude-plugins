@@ -91,6 +91,10 @@ class InstallRefused(Exception):
     """An install that vendors nothing: a named pack cannot be resolved from its source."""
 
 
+class BlocksRefused(InstallRefused):
+    """An install that writes nothing: a managed block cannot be merged (a broken marker); exit 1, not an internal error."""
+
+
 def _pack_refs(prd) -> list:
     """Every pack to vendor: the ones the PRD names, then `service`, one per name."""
     from . import packs
@@ -179,6 +183,10 @@ def _blocks(repo_root: Path, prd_rel: str):
     return prd_block, prd_block.targets(prd, Path(repo_root).resolve(), Path(repo_root) / "CLAUDE.md")
 
 
+def _relative_message(repo_root: Path, text: str) -> str:
+    return text.replace(str(Path(repo_root).resolve()) + os.sep, "").replace(str(Path(repo_root)) + os.sep, "")
+
+
 def _shown(repo_root: Path, path: Path) -> str:
     try:
         return path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
@@ -255,18 +263,21 @@ def vendor(repo_root: Path, prd_rel: str) -> list[str]:
 def install(repo_root: Path, prd_rel: str) -> list[str]:
     repo_root = Path(repo_root)
     lines: list[str] = []
+    module = tgts = None
     if is_plugin():
+        module, tgts = _blocks(repo_root, prd_rel)
+        try:
+            module.stale(tgts)  # merges every block in memory: a broken marker refuses here, before anything is written
+        except module.BlockError as e:
+            raise BlocksRefused(f"{_relative_message(repo_root, str(e))}; fix the marker, then run prd_block.py {prd_rel}") from None
         lines.append(_vendor_from_plugin(repo_root, prd_rel))
         _ignore_record(repo_root)
-        # the vendored prd_block.py would run from this very copy, so a refresh and CI's check agree
-        module, tgts = _blocks(repo_root, prd_rel)
-        lines += [f"refreshed {_shown(repo_root, p)}" for p in module.write(tgts)]
     configured = _hooks_path_config(repo_root)
     hooks_dir, shown = _hooks_dir(repo_root)
     if configured:
         for hook in HOOKS:
             lines.append(_append_message(hook, prd_rel, shown, f"core.hooksPath is set to {configured}; no shim written"))
-        return lines
+        return lines + _refresh(repo_root, module, tgts)
     hooks_dir.mkdir(parents=True, exist_ok=True)
     for hook in HOOKS:
         path = hooks_dir / hook
@@ -278,7 +289,12 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
             f.write(text)
         path.chmod(0o755)
         lines.append(f"installed {shown}/{hook}")
-    return lines
+    return lines + _refresh(repo_root, module, tgts)
+
+
+def _refresh(repo_root: Path, module, tgts) -> list[str]:
+    """Write the managed blocks (the plugin's prd_block, so a refresh and CI's check agree); the last install step."""
+    return [f"refreshed {_shown(repo_root, p)}" for p in module.write(tgts)] if module is not None else []
 
 
 def not_a_checkout(prd) -> str:
@@ -287,12 +303,17 @@ def not_a_checkout(prd) -> str:
 
 
 def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
-    """One line per CI include present whose text differs from what `prd_hooks.py ci` would write now."""
+    """One line per stale managed block (CLAUDE.md, the PRD's README, the parent README) and per CI include present whose
+    text differs from what `prd_hooks.py ci` would write now. A block with a broken marker is one stale line naming the
+    file and the problem, so the check exits 1, not 2."""
     jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)
     out = []
     module, tgts = _blocks(repo_root, prd_rel)
-    for path in module.stale(tgts):
-        out.append(f"stale: {_shown(repo_root, path)}; run prd_block.py {prd_rel}")
+    try:
+        for path in module.stale(tgts):
+            out.append(f"stale: {_shown(repo_root, path)}; run prd_block.py {prd_rel}")
+    except module.BlockError as e:
+        out.append(f"stale: {_relative_message(repo_root, str(e))}; run prd_block.py {prd_rel}")
     for kind, rel in CI_FILES.items():
         path = Path(repo_root) / rel
         if path.is_file() and path.read_text(encoding="utf-8") != (render_gitlab if kind == "gitlab" else render_github)(jobs, prd.operations.secrets):
