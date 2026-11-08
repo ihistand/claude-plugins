@@ -9,6 +9,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import change_approve
+
 VENDOR_DIR = ".prd-toolkit"
 VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py", "prd_judge.py", "prd_change.py", "prd_gates.py")
 MARKER = "# prd-toolkit hook"
@@ -309,6 +311,9 @@ def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
     jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)
     out = []
     module, tgts = _blocks(repo_root, prd_rel)
+    if change_approve._ignored(Path(repo_root), "CLAUDE.md"):
+        # a git-ignored CLAUDE.md is absent from a CI checkout, and nothing committed holds its block
+        tgts = [t for t in tgts if Path(t[0]).name != "CLAUDE.md" or Path(t[0]).parent != Path(repo_root)]
     try:
         for path in module.stale(tgts):
             out.append(f"stale: {_shown(repo_root, path)}; run prd_block.py {prd_rel}")

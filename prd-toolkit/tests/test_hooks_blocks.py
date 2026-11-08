@@ -94,3 +94,21 @@ def test_install_with_a_broken_marker_refuses_and_writes_nothing(repo):
     assert readme.read_text() == before
     assert not (repo / ".prd-toolkit").exists() and not (repo / ".git/hooks/commit-msg").exists()
     assert not (repo / "CLAUDE.md").exists() and not (repo / ".gitignore").exists()
+
+
+def test_check_ci_skips_a_git_ignored_claude_md_in_a_fresh_clone(repo, tmp_path):
+    (repo / ".gitignore").write_text("CLAUDE.md\n")
+    hooks.install(repo, PRD)
+    assert (repo / "CLAUDE.md").exists()
+    assert check_ci(repo).returncode == 0
+    git = ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "x"], cwd=repo, check=True)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(repo), str(clone)], check=True)
+    assert not (clone / "CLAUDE.md").exists()
+    r = check_ci(clone)
+    assert (r.returncode, r.stdout) == (0, "")
+    (clone / ".gitignore").write_text("")
+    r = check_ci(clone)
+    assert r.returncode == 1 and f"stale: CLAUDE.md; run prd_block.py {PRD}" in r.stdout
