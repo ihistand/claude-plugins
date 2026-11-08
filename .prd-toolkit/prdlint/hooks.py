@@ -24,6 +24,7 @@ PACK_SOURCES = "pack-sources.json"  # .prd-toolkit/pack-sources.json: {"<pack na
 RECORD_DIR = ".prd-judge/"
 REVIEW_FILE = ".prd-review.json"  # the review verdict review mode or the changing-prds skill writes; never committed
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
+HOMEPAGE_FILE = "HOMEPAGE"  # .prd-toolkit/HOMEPAGE: the plugin's `homepage`, one line, read by a vendored prd_block.py
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
 SCRIPTS = Path(__file__).resolve().parent.parent
@@ -146,6 +147,45 @@ def _hooks_dir(repo_root: Path) -> tuple[Path, str]:
     return (p if p.is_absolute() else repo_root / p), raw
 
 
+def _plugin_homepage() -> str | None:
+    try:
+        value = json.loads((PLUGIN_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8")).get("homepage")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _write_homepage(dest: Path) -> None:
+    """Write .prd-toolkit/HOMEPAGE (via a temp file) when the plugin has a homepage; remove a stale one otherwise."""
+    home, target = _plugin_homepage(), dest / HOMEPAGE_FILE
+    if home is None:
+        target.unlink(missing_ok=True)
+        return
+    tmp = dest / f".{HOMEPAGE_FILE}.tmp"
+    tmp.write_text(home + "\n", encoding="utf-8")
+    os.replace(tmp, target)
+
+
+def _blocks(repo_root: Path, prd_rel: str):
+    """prd_block's targets for the PRD; its module comes from this copy's scripts folder (the vendored one when vendored)."""
+    import sys
+
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import prd_block
+    from .model import load
+
+    prd = load(Path(repo_root) / prd_rel)
+    return prd_block, prd_block.targets(prd, Path(repo_root).resolve(), Path(repo_root) / "CLAUDE.md")
+
+
+def _shown(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _vendor(repo_root: Path, sources_packs=()) -> None:
     dest = repo_root / VENDOR_DIR
     sources = _source_files(SCRIPTS, PLUGIN_ROOT / "templates/hooks")
@@ -176,6 +216,7 @@ def _vendor(repo_root: Path, sources_packs=()) -> None:
     record = {p.name: p.source for p in sorted(sources_packs, key=lambda p: p.name)}
     (dest / PACK_SOURCES).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     (dest / "VERSION").write_text(plugin_version(PLUGIN_ROOT) + "\n", encoding="utf-8")
+    _write_homepage(dest)
     (dest / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
 
 
@@ -217,6 +258,9 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     if is_plugin():
         lines.append(_vendor_from_plugin(repo_root, prd_rel))
         _ignore_record(repo_root)
+        # the vendored prd_block.py would run from this very copy, so a refresh and CI's check agree
+        module, tgts = _blocks(repo_root, prd_rel)
+        lines += [f"refreshed {_shown(repo_root, p)}" for p in module.write(tgts)]
     configured = _hooks_path_config(repo_root)
     hooks_dir, shown = _hooks_dir(repo_root)
     if configured:
@@ -246,6 +290,9 @@ def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
     """One line per CI include present whose text differs from what `prd_hooks.py ci` would write now."""
     jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)
     out = []
+    module, tgts = _blocks(repo_root, prd_rel)
+    for path in module.stale(tgts):
+        out.append(f"stale: {_shown(repo_root, path)}; run prd_block.py {prd_rel}")
     for kind, rel in CI_FILES.items():
         path = Path(repo_root) / rel
         if path.is_file() and path.read_text(encoding="utf-8") != (render_gitlab if kind == "gitlab" else render_github)(jobs, prd.operations.secrets):
