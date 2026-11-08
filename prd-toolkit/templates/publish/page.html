@@ -19,6 +19,7 @@ code, pre { font: .9em ui-monospace, monospace; background: var(--soft); border-
 code { padding: .1em .3em; }
 pre { padding: .75rem; overflow-x: auto; }
 pre code { padding: 0; }
+pre.mermaid { white-space: pre; }
 table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--line); padding: .3rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--soft); }
@@ -39,9 +40,9 @@ dl.facts dd { margin: 0; }
 .tabs { display: flex; gap: .25rem; margin: 1rem 0 0; border-bottom: 1px solid var(--line); }
 .tabs label { padding: .4rem 1rem; cursor: pointer; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); }
 .panel { display: none; }
-#tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
-#tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
-#tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
+#tab-overview:checked ~ .tabs label[for="tab-overview"], #tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
+#tab-overview:checked ~ main #overview, #tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
+#tab-overview:focus-visible ~ .tabs label[for="tab-overview"], #tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
 @media print { .panel { display: block; } .tabs { display: none; } }
 </style>
 </head>
@@ -49,13 +50,18 @@ dl.facts dd { margin: 0; }
 <header>
 $header
 </header>
-<input class="tab-input" type="radio" name="tab" id="tab-business" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-overview" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-business">
 <input class="tab-input" type="radio" name="tab" id="tab-technical">
 <nav class="tabs" style="max-width: 60rem; margin-left: auto; margin-right: auto; padding: 0 1rem;">
+<label for="tab-overview">$overview_label</label>
 <label for="tab-business">$business_label</label>
 <label for="tab-technical">$technical_label</label>
 </nav>
 <main>
+<section class="panel" id="overview">
+$overview
+</section>
 <section class="panel" id="business">
 $business
 </section>

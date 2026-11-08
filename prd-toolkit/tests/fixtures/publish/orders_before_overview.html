@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orders PRD 1.0.0</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --accent: #0969da; --warn-bg: #fff8c5; --warn-fg: #7d4e00; --ok: #1a7f37; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --soft: #151b23; --accent: #4493f8; --warn-bg: #3b2e00; --warn-fg: #f2cc60; --ok: #3fb950; --bad: #ff7b72; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+main, header { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
+header { padding-top: 1.5rem; }
+h1 { margin: 0 0 .5rem; font-size: 1.75rem; }
+h2 { margin: 2rem 0 .5rem; font-size: 1.3rem; border-bottom: 1px solid var(--line); padding-bottom: .25rem; }
+h3 { margin: 1.25rem 0 .25rem; font-size: 1.05rem; }
+a { color: var(--accent); }
+code, pre { font: .9em ui-monospace, monospace; background: var(--soft); border-radius: 4px; }
+code { padding: .1em .3em; }
+pre { padding: .75rem; overflow-x: auto; }
+pre code { padding: 0; }
+table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: .3rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+.status-flag { background: var(--warn-bg); color: var(--warn-fg); padding: .1rem .5rem; border-radius: 4px; font-weight: 700; }
+.chip { display: inline-block; font-size: .8rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--soft); vertical-align: middle; }
+.chip-live, .chip-verified { color: var(--ok); }
+.chip-removed { color: var(--bad); }
+.summary { border-left: 4px solid var(--accent); background: var(--soft); padding: .5rem .9rem; margin: .75rem 0; }
+.summary .label { margin: 0 0 .25rem; color: var(--muted); font-size: .85rem; }
+.summary p { margin: .25rem 0; }
+.removed { text-decoration: line-through; color: var(--muted); }
+.entry { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; margin: .75rem 0; }
+.none { color: var(--muted); }
+.tab-input { position: absolute; opacity: 0; pointer-events: none; }
+.tabs { display: flex; gap: .25rem; margin: 1rem 0 0; border-bottom: 1px solid var(--line); }
+.tabs label { padding: .4rem 1rem; cursor: pointer; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); }
+.panel { display: none; }
+#tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
+#tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
+#tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
+@media print { .panel { display: block; } .tabs { display: none; } }
+</style>
+</head>
+<body>
+<header>
+<h1>Orders service</h1>
+<dl class="facts"><dt>Project</dt><dd>orders</dd><dt>PRD version</dt><dd>1.0.0</dd><dt>Status</dt><dd>Approved</dd><dt>Commit</dt><dd>no commit</dd><dt>Generated</dt><dd>2026-11-01</dd></dl>
+</header>
+<input class="tab-input" type="radio" name="tab" id="tab-business" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-technical">
+<nav class="tabs" style="max-width: 60rem; margin-left: auto; margin-right: auto; padding: 0 1rem;">
+<label for="tab-business">Business</label>
+<label for="tab-technical">Technical</label>
+</nav>
+<main>
+<section class="panel" id="business">
+<h2>Summary and goals</h2>
+<p>The orders service imports order files from the warehouse and lets sales reps look up
+and admins delete orders through an HTTP API.</p>
+<p>Goals:</p>
+<ul>
+<li>Import a 10,000-row file in under 60 seconds.</li>
+<li>Answer an order lookup within 300 ms at p95.</li>
+<li>Skip every duplicate row and log it, with zero duplicate orders stored.</li>
+</ul>
+<p>Personas: a sales rep (looks up own orders) and an admin (also deletes orders).</p>
+<p>Out of scope: order creation through the API, payments, shipping.</p>
+
+<h2>Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+<th>Banned synonyms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>order</td>
+<td>A customer's request for goods, stored once per order_key</td>
+<td>purchase</td>
+</tr>
+<tr>
+<td>customer</td>
+<td>The person or company an order belongs to</td>
+<td>client</td>
+</tr>
+</tbody>
+</table>
+
+<h2>User journeys</h2>
+<h3 id="UJ-01">UJ-01 Rep looks up an order <span class="chip chip-live">live</span><small class="none"> since 1.0.0</small></h3><p>1. Rep asks for an order by id → 2. API returns it, or ORDER_NOT_FOUND.</p>
+<h2>Requirements: api</h2><h3 id="FR-002">FR-002 Get an order <span class="chip chip-live">live</span><small class="none"> since 1.0.0</small></h3><ul><li id="AC-002.1"><strong>AC-002.1</strong> When a rep requests an existing order through <code>op:getOrder</code>, the API shall return the order with its status.</li><li id="AC-002.2"><strong>AC-002.2</strong> If the order id does not exist, the API shall respond 404 with error ORDER_NOT_FOUND.</li></ul><h3 id="FR-003">FR-003 Delete an order <span class="chip chip-live">live</span><small class="none"> since 1.0.0</small></h3><ul><li id="AC-003.1"><strong>AC-003.1</strong> When an admin deletes an existing order through <code>op:deleteOrder</code>, the API shall remove the order and respond 204.</li><li id="AC-003.2"><strong>AC-003.2</strong> If a rep calls <code>op:deleteOrder</code>, the API shall respond 403 with error FORBIDDEN and keep the order.</li></ul><h2>Requirements: import</h2><h3 id="FR-001">FR-001 Import an orders file <span class="chip chip-live">live</span><small class="none"> since 1.0.0</small></h3><ul><li id="AC-001.1"><strong>AC-001.1</strong> When an imported row has a new order_key, the importer shall insert the row into <code>orders</code>.</li><li id="AC-001.2"><strong>AC-001.2</strong> When an imported row's order_key already exists, the importer shall skip the row and log <code>IMPORT_DUPLICATE</code> once for it.</li><li id="AC-001.3"><strong>AC-001.3</strong> If the import file is empty, the importer shall finish with status <code>empty</code>, log <code>IMPORT_EMPTY</code> and insert no rows.</li></ul>
+<h2>Open assumptions</h2>
+<p class="none">None.</p>
+<h2>Open questions</h2>
+<p>None.</p>
+
+<h2>Running in each environment</h2>
+<table><thead><tr><th>Environment</th><th>PRD version</th><th>Commit</th><th>Date</th></tr></thead><tbody><tr><td>production</td><td>1.0.0</td><td>3f2c1a9</td><td>2026-11-02</td></tr></tbody></table>
+<h2>Open error entries</h2>
+<p class="none">None.</p>
+</section>
+<section class="panel" id="technical">
+<h2>Metadata and stack</h2>
+<dl class="facts"><dt>prd</dt><dd>orders</dd><dt>version</dt><dd>1.0.0</dd><dt>status</dt><dd>Approved</dd><dt>owner</dt><dd>Sample Owner</dd><dt>updated</dt><dd>2026-10-29</dd><dt>sql-dialect</dt><dd>postgres</dd></dl>
+<ul>
+<li>Language: Python 3.12</li>
+<li>Framework: Starlette 0.41, served by uvicorn 0.32</li>
+<li>Database: PostgreSQL 16, migrations by hand-written SQL</li>
+<li>Hosting: Cloud Run, one service per environment</li>
+<li>Repository: <code>github.com/example/orders</code></li>
+<li>Not used: message brokers, ORMs, front-end frameworks</li>
+</ul>
+
+<h2>Architecture</h2>
+<pre><code class="language-mermaid">flowchart LR
+  Importer --&gt; DB[(PostgreSQL)]
+  Importer --&gt; Geocoder
+  API --&gt; DB
+</code></pre>
+<p>The importer reads a file, validates postal codes with the geocoder, and writes to the
+database. The API reads and deletes orders. The geocoder is the only external service.</p>
+
+<h2>Contracts</h2>
+<h3>Operations</h3><ul><li><code>deleteOrder</code></li><li><code>getOrder</code></li></ul><h3>Tables</h3><ul><li><code>customers (email, id, name)</code></li><li><code>orders (customer_id, id, order_key, sales_rep_name, status)</code></li></ul><h3>Events</h3><ul><li><code>import_orders</code></li></ul><h3>Error codes</h3><table><thead><tr><th>Code</th><th>Status</th><th>Meaning</th></tr></thead><tbody><tr><td><code>IMPORT_DUPLICATE</code></td><td>0</td><td>An imported row's order_key already exists.</td></tr><tr><td><code>IMPORT_EMPTY</code></td><td>0</td><td>The import file holds no rows.</td></tr><tr><td><code>ORDER_NOT_FOUND</code></td><td>404</td><td>No order has the requested id.</td></tr><tr><td><code>FORBIDDEN</code></td><td>403</td><td>The caller's role may not perform the operation.</td></tr><tr><td><code>GEOCODER_TIMEOUT</code></td><td>504</td><td>The geocoder did not answer in time or failed.</td></tr></tbody></table>
+<h2>Non-functional requirements</h2>
+<h3 id="NFR-004">NFR-004 Order lookup latency <span class="chip chip-live">live</span><small class="none"> since 1.0.0</small></h3><ul><li id="AC-004.1"><strong>AC-004.1</strong> The API shall answer getOrder within 300 ms at p95 under 50 requests/s.</li></ul>
+<h2>Test levels</h2>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Harness command</th>
+<th>Environment</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>unit</td>
+<td><code>pytest tests/unit</code></td>
+<td>local</td>
+<td>build</td>
+</tr>
+<tr>
+<td>integration</td>
+<td><code>pytest tests/integration</code></td>
+<td>ci</td>
+<td>build</td>
+</tr>
+<tr>
+<td>component</td>
+<td><code>pytest tests/component</code></td>
+<td>ci</td>
+<td>build</td>
+</tr>
+<tr>
+<td>system</td>
+<td><code>pytest tests/system</code></td>
+<td>staging</td>
+<td>deploy</td>
+</tr>
+<tr>
+<td>e2e</td>
+<td><code>pytest tests/e2e</code></td>
+<td>staging</td>
+<td>deploy</td>
+</tr>
+<tr>
+<td>acceptance</td>
+<td><code>python3 tools/acceptance_report.py</code></td>
+<td>staging</td>
+<td>deploy</td>
+</tr>
+<tr>
+<td>smoke</td>
+<td><code>pytest tests/smoke</code></td>
+<td>production</td>
+<td>deploy</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Requirement to test matrix</h2>
+<table><thead><tr><th>Requirement</th><th>Status</th><th>Test</th><th>Level</th><th>Gate</th><th>In code</th></tr></thead><tbody><tr><td>UJ-01</td><td><span class="chip chip-live">live</span></td><td>no tests</td><td></td><td></td><td></td></tr><tr><td>FR-002</td><td><span class="chip chip-live">live</span></td><td>T-002.1</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-002</td><td><span class="chip chip-live">live</span></td><td>T-002.2</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-003</td><td><span class="chip chip-live">live</span></td><td>T-003.1</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-003</td><td><span class="chip chip-live">live</span></td><td>T-003.2</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-001</td><td><span class="chip chip-live">live</span></td><td>T-001.1</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-001</td><td><span class="chip chip-live">live</span></td><td>T-001.2</td><td>integration</td><td>build</td><td>missing</td></tr><tr><td>FR-001</td><td><span class="chip chip-live">live</span></td><td>T-001.3</td><td>unit</td><td>build</td><td>missing</td></tr><tr><td>FR-001</td><td><span class="chip chip-live">live</span></td><td>T-001.4</td><td>acceptance</td><td>deploy</td><td>missing</td></tr><tr><td>NFR-004</td><td><span class="chip chip-live">live</span></td><td>T-004.1</td><td>system</td><td>deploy</td><td>missing</td></tr><tr><td>NFR-004</td><td><span class="chip chip-live">live</span></td><td>T-004.2</td><td>smoke</td><td>deploy</td><td>missing</td></tr></tbody></table>
+<h2>Environments</h2>
+<table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>URL</th>
+<th>Production</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>local</td>
+<td>http://localhost:8080</td>
+<td>no</td>
+</tr>
+<tr>
+<td>ci</td>
+<td>none; runs inside the pipeline</td>
+<td>no</td>
+</tr>
+<tr>
+<td>staging</td>
+<td>https://orders-staging.example.com</td>
+<td>no</td>
+</tr>
+<tr>
+<td>production</td>
+<td>https://orders.example.com</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Runbook</h2>
+<ol><li>Deploy to staging (agent, staging)<ul><li><strong>Run:</strong> <code>./deploy.sh staging</code></li><li><strong>Check:</strong> <code>curl -fsS https://orders-staging.example.com/health</code> prints <code>ok</code></li><li><strong>Rollback:</strong> <code>./deploy.sh staging --previous</code></li></ul></li><li>System tests on staging (agent, staging)<ul><li><strong>Run:</strong> tests system, e2e</li></ul></li><li>Approve production (human, production)<ul><li><strong>Do:</strong> read the staging results and reply &quot;deploy production&quot;</li><li><strong>Check:</strong> the reply says &quot;deploy production&quot;</li></ul></li><li>Deploy to production (agent, production)<ul><li><strong>Run:</strong> <code>./deploy.sh production</code></li><li><strong>Check:</strong> <code>curl -fsS https://orders.example.com/health</code> prints <code>ok</code></li><li><strong>Rollback:</strong> <code>./deploy.sh production --previous</code></li></ul></li><li>Smoke on production (agent, production)<ul><li><strong>Run:</strong> tests smoke</li></ul></li></ol>
+<h2>Standards registry</h2>
+<table>
+<thead>
+<tr>
+<th>Object (glob)</th>
+<th>Linter command</th>
+<th>Rules live in</th>
+<th>Applies to</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>**/*.sql</code></td>
+<td><code>python3 -m json.tool</code></td>
+<td>none; stand-in command for the fixture</td>
+<td>code, schema.sql</td>
+<td>enforced</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Skills registry</h2>
+<table>
+<thead>
+<tr>
+<th>Object or activity</th>
+<th>Skill</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>plans</td>
+<td>superpowers:writing-plans</td>
+<td>required</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Contract types</h2>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Files (glob)</th>
+<th>Validator</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>openapi</td>
+<td><code>contracts/openapi.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>schema</td>
+<td><code>contracts/schema.sql</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>events</td>
+<td><code>contracts/events.md</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>errors</td>
+<td><code>contracts/errors.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>permissions</td>
+<td><code>contracts/permissions.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>config</td>
+<td><code>contracts/config.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>classification</td>
+<td><code>contracts/data-classification.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>dependencies</td>
+<td><code>contracts/dependencies/*.yaml</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>fixtures</td>
+<td><code>contracts/fixtures/**</code></td>
+<td>built-in</td>
+</tr>
+<tr>
+<td>lookml</td>
+<td><code>contracts/custom/*.lkml</code></td>
+<td><code>python3 -c &quot;import sys; sys.exit(0)&quot;</code></td>
+</tr>
+</tbody>
+</table>
+
+<h2>Error ledger</h2>
+<div class="entry" id="E-001"><h3>E-001 Empty import file crashed the importer</h3><dl class="facts"><dt>State</dt><dd>resolved</dd><dt>Detected</dt><dd>2026-10-29, test failure in T-001.3</dd><dt>Classification</dt><dd>code bug</dd><dt>Diagnosis</dt><dd>the importer indexed the first row of an empty file; AC-001.3 was right</dd><dt>Resolution</dt><dd>the importer returns status <code>empty</code> before reading rows; T-001.3 passes</dd></dl></div>
+</section>
+</main>
+</body>
+</html>
