@@ -286,17 +286,19 @@ def test_dispatching_covers_a_remote_harness():
 
 
 RULE_TOOLS = (
-    "Read and search the PRD folder and your own directory with the Read, Glob and Grep tools, "
-    "never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those."
+    "with the Grep tool",
+    "when there is none, with Bash `grep` naming each path",
+    "Never Bash `cat`, `head`, `sed` or `find`; the guard blocks those.",
 )
 
 
 def test_rule_reads_with_the_tools_not_bash_in_skill_and_agent():
-    # the guard allows only harness commands, ls, mkdir and py_compile through Bash
+    # the guard allows harness commands, ls, mkdir, py_compile and (0.8.4) a checked grep through Bash
     skill_rules = _flat(SKILL).split("## Non-negotiable rules", 1)[1].split("## Citations", 1)[0]
     agent_rules = _flat(AGENT).split("keep to these rules:", 1)[1].split("The prompt gives the mode", 1)[0]
-    assert RULE_TOOLS in skill_rules
-    assert RULE_TOOLS in agent_rules
+    for s in RULE_TOOLS:
+        assert s in skill_rules, s
+        assert s in agent_rules, s
 
 
 def test_modes_table_has_write():

@@ -58,6 +58,10 @@ into your report.
    Never `src/`, other tests, README, CLAUDE.md, git history, memory or the environment. Not "a peek", not "only the signature",
    not by `cat`, `python -c`, `grep` or a test that prints the source. Always give Glob and Grep a
    `path` inside the PRD folder or your directory.
+   The PRD folder's root `README.md` is a guide generated from the PRD, never a source for a test
+   or a question. Hand-written text in it, above or below the generated block, is not in the PRD
+   either: a behaviour only the README states gets no test, no QUESTION and no mention in your
+   report.
 2. **Every expected value comes from the PRD.** Never change an expected value, an assertion or
    an input to make a test pass, except on a `Misread:` line: when a suite's prompt carries
    `Misread: <T-id>: "<verbatim quote of the test case's ac: line and the expect entry>"`, you may change
@@ -77,8 +81,15 @@ into your report.
    are allowed too. When the guard blocks a path you mistyped, use the
    right path. When it blocks anything else, do not retry it another way: record it under
    QUESTIONS (what you needed, and which file should have said it) and carry on.
-6. Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
-   never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those.
+6. **Search with the Grep tool or, when there is none, with Bash `grep` naming each path,** and
+   read with Read and Glob, in the PRD folder and your own directory:
+   `grep -rn '@prd T-002.1' tests/system`. That `grep` is Claude Code's bundled ugrep, and the guard
+   checks the command as written: only `-r -n -l -L -c -i -w -x -v -o -q -s -H -h -E -F` (clustered
+   as `-rn`), `-e <pattern>`, `-f <file>`, `-m`, `-A`, `-B` or `-C <n>`, `--include=<glob>` and
+   `--exclude=<glob>`, every option before the first path, and at least one path, none a glob;
+   `-R` is refused. Quote every glob (`--include='*.py'`): an unquoted one in a pattern or a path is
+   refused, and zsh stops on one that matches no file. Never Bash `cat`, `head`, `sed` or `find`;
+   the guard blocks those.
 7. **Background runs (suite mode).** A harness run longer than the Bash tool's timeout runs in the background; read its `<id>.output` file, and never another task's output. The `tasks` folder also holds the caller's background tasks; the guard lets you read only an `<id>.output` file there.
 8. **A sign-off is its owner's.** A `signoff:` case is answered by its owner, in the inbox or in
    the chat, and never by the tester or the session. Its result is a person's walk through its

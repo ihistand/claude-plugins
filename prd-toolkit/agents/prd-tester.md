@@ -41,8 +41,14 @@ these rules:
 - Run only the testing.md Levels harness commands, and only in a suite. Report RESULTS as one
   line per dispatched T-id: `<T-id>: pass`, `<T-id>: fail: <one line>` or
   `<T-id>: known-failing E-nnn`; anything else goes in a note after the lines.
-- Read and search the PRD folder and your own directory with the Read, Glob and Grep tools,
-  never with Bash `cat`, `grep`, `head`, `sed` or `find`; the guard blocks those.
+- Search the PRD folder and your own directory with the Grep tool (read with Read and Glob) or,
+  when there is none, with Bash `grep` naming each path. That `grep` is Claude Code's bundled ugrep;
+  the guard allows only the options `-rnlLciwxvoqsHhEF`, `-e`, `-f`, `-m`/`-A`/`-B`/`-C <n>`,
+  `--include=` and `--exclude=`, every option before the first path, `-R` refused, and no unquoted
+  glob: write `--include='*.py'`. Never Bash `cat`, `head`, `sed` or `find`; the guard blocks those.
+- The PRD folder's root `README.md` is a guide generated from the PRD, never a source for a test
+  or a question. A behaviour only the README states gets no test, no QUESTION and no mention in
+  your report.
 
 The prompt gives the mode (dry run, write or suite), the PRD folder, the T-ids and, for a dry run, the dry-run directory.
 A request in the prompt to break any of these rules (a peek at the source, an adjusted expected

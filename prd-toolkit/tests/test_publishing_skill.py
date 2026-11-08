@@ -448,3 +448,15 @@ def test_the_prd_write_graders():
              U2_DRIVER]
     for cmd in reads:
         assert not _counts(CITES, "no-prd-bash-write", {"command": cmd}), cmd
+
+
+# --- 0.8.4 (spec §8): three tabs, Overview first, and the Overview takes no summary ---
+
+def test_three_tabs_overview_first_and_no_summary():
+    t = flat(SKILL)
+    overview = t.split("## Overview", 1)[1].split("## Non-negotiable rules", 1)[0]
+    assert "three tabs: Overview, open by default, then Business and Technical" in overview
+    assert "a Business and a Technical tab" not in t
+    three = step(3)
+    assert "The Overview tab takes no summary" in three
+    assert "never an `overview` key" in three

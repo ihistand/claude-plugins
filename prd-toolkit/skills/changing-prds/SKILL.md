@@ -315,7 +315,8 @@ so you count instead of it.
    record, the `pending` row), then writes the record in place of `pending`, sets the status
    `Approved`, runs `prd_block.py` and commits `docs(prd): approve <slug> <version>` with the reply
    in its body. Never set the status, run `prd_block.py` or commit the PRD folder and CLAUDE.md with the trailer
-   `Refs: none (no behaviour change)` by hand: `approve` does all three (a change made for an
+   `Refs: none (no behaviour change)` by hand: `approve` does all three, and stages
+   `docs/prd/README.md` when it exists with the folder (a change made for an
    `errors.md` entry uses `Refs: <changed IDs>, E-nnn` on that commit instead: add
    `--refs '<changed IDs>, E-nnn'`). A refusal names what to fix; `the PRD changed after its
    review` means the files moved since step 4: run step 4 again for them. **Inside a change
@@ -323,7 +324,8 @@ so you count instead of it.
    the dry-run record in place of the row's `pending` (the one hand edit of a row `record` wrote),
    set the status `Approved`, check the
    `prd-lint-exit=` value is `0`, rerun `uv run --script <scripts>/prd_block.py docs/prd/<slug>`,
-   delete any stale `.prd-review.json` and make the commit `running-a-change-set.md` step 3 gives.
+   delete any stale `.prd-review.json` and make the commit `running-a-change-set.md` step 3 gives,
+   which stages `docs/prd/README.md` when it exists with the folder and CLAUDE.md.
    Only now may code change, and each
    behaviour commit cites its IDs (`Refs: FR-005`). Hand off with only the UJ, FR and NFR IDs
    (map an AC, test case or error code to its requirement): hand off

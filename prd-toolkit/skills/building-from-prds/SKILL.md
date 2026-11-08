@@ -286,8 +286,11 @@ Quoted from runs without this skill (evals/baselines/building-from-prds.md), exc
   add or weigh. The caller edits the PRD only at the close (status and `Source:`, and the entry
   `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`, that entry's `known-failing:`
   lines before step 7's trace (a build-gate or unit regression T-id's once it is `pass`, a
-  deploy-gate one's right after the tester's un-mark commit); everything else goes through
-  `/prd-change`.
+  deploy-gate one's right after the tester's un-mark commit), each with its case's `symptom:` line
+  when it has one, and no other test-case line; everything else goes through `/prd-change`.
+  (Observed in a proof: the `known-failing:` line removed alone, lint failed
+  `test-refs: <T-id>: symptom: needs known-failing: on the same case`, and the `symptom:` lines
+  came off outside the procedure.)
 - Resolving the entry after a `--fixes` build, or writing a stop's entry by hand. (Pressure, not
   observed.) The caller never resolves an entry: the build reports, and `handling-errors`
   resolves; a stop's entry is written with `prd_error.py new`, never typed into `errors.md`.

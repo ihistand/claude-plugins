@@ -324,9 +324,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    **`--fixes E-nnn` only: the deploy-gate lines.** Right after that commit, remove the
    `known-failing: E-nnn` line of each regression T-id whose test case is at a deploy-gate level,
-   and no other test-case line: the tester's `write` has un-marked its test, the build never runs
-   it, and its test proves the fix at `/prd-deploy`. Its block closes `verified` like any block
-   whose build-gate T-ids pass. Then, each its own call, with the test-case files typed out:
+   and its `symptom:` line when it has one, and no other test-case line: the tester's `write` has
+   un-marked its test, the build never runs it, and its test proves the fix at `/prd-deploy`. Its
+   block closes `verified` like any block whose build-gate T-ids pass. Then, each its own call,
+   with the test-case files typed out:
 
    ```bash
    git add docs/prd/<slug>/test-cases/<file>
@@ -377,8 +378,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
 
    **`--fixes E-nnn` only: the build-gate and unit lines.** Right after each step 5 check, remove
    the `known-failing: E-nnn` line of each build-gate or unit regression T-id that is `pass` (a
-   build-gate T-id on the suite RESULTS, a unit T-id on the builder's UNIT lines), and no other
-   test-case line, then commit it as step 4's deploy-gate removal does: the same `git add` and
+   build-gate T-id on the suite RESULTS, a unit T-id on the builder's UNIT lines), and its
+   `symptom:` line when it has one, and no other test-case line, then commit it as step 4's
+   deploy-gate removal does: the same `git add` and
    `git commit -m "docs(prd): <T-ids> no longer known-failing" -m "Refs: <IDs>, <E-nnn>"`, each its
    own call. When step 5 is skipped, do this right after step 4's commits. This edit, and step 4's,
    is allowed only for the entry named by `--fixes`; every other test-case edit still goes through
