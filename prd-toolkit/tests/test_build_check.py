@@ -461,3 +461,16 @@ def test_e012_non_ascii_case_file_name_is_read_at_the_commit_end(repo):
     (repo / STALE_TEST).write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
     commit(repo, "test for T-001.1")
     assert stale(repo, "T-001.1") == []
+
+
+def test_stale_judges_a_bracketed_test_name_by_its_own_commit(repo):
+    """0.8.4 fix 4: a path with `[` is a literal name, not a glob matching tests/test_x.py."""
+    (repo / "tests/test_[x].py").write_text("# @" "prd T-001.1\ndef test_i():\n    pass\n")
+    commit(repo, "bracketed test")
+    own = git(repo, "log", "-1", "--format=%h")
+    (repo / "tests/test_x.py").write_text("# @" "prd T-001.2\ndef test_j():\n    pass\n")
+    commit(repo, "plain test")
+    edit_case(repo)
+    commit(repo, "fix the case")
+    assert stale(repo, "T-001.1") == [
+        f"stale T-001.1 tests/test_[x].py: its test case changed after the test (last changed in {own})"]

@@ -1,4 +1,6 @@
 """prd_build_check.py --diff: an exact .prd-toolkit/ refresh is accepted, anything else under it is not."""
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -141,3 +143,51 @@ def test_cli_tool_error_is_exit_2(plugin_repo):
     assert p.returncode == 2
     assert p.stderr.startswith("prd_build_check: ")
     assert "internal error" not in p.stderr
+
+
+# --- 0.8.4 fix 6: the refresh is rebuilt from a checkout, not `git archive` ---
+
+def test_export_ignore_on_a_plugin_file_does_not_change_the_expected_tree(plugin_repo):
+    (plugin_repo / ".gitattributes").write_text("prd-toolkit/templates/claude-block.md export-ignore\n")
+    commit(plugin_repo, "attrs")
+    git(plugin_repo, "tag", "-f", "base")
+    append(plugin_repo / "prd-toolkit/scripts/prdlint/trace.py")
+    vendor(plugin_repo)
+    commit(plugin_repo, "refresh")
+    assert diff(plugin_repo) == []
+
+
+def test_a_committed_executable_bit_difference_is_reported(plugin_repo):
+    victim = ".prd-toolkit/prdlint/trace.py"
+    assert git(plugin_repo, "ls-files", "-s", victim).startswith("100644")
+    git(plugin_repo, "update-index", "--chmod=+x", victim)
+    git(plugin_repo, "commit", "-qm", "chmod")
+    assert diff(plugin_repo) == [f"{victim}: differs from the plugin; refresh it with prd_hooks.py vendor"]
+
+
+def test_a_slow_git_is_a_tool_error_with_no_traceback(plugin_repo, tmp_path):
+    stub = tmp_path / "stubbin"
+    stub.mkdir()
+    real = shutil.which("git")
+    (stub / "git").write_text(f'#!/bin/sh\nfor a in "$@"; do [ "$a" = checkout-index ] && sleep 3; done\nexec {real} "$@"\n')
+    (stub / "git").chmod(0o755)
+    append(plugin_repo / ".prd-toolkit/prdlint/trace.py")
+    commit(plugin_repo, "edit")
+    sitecustomize = tmp_path / "sc"
+    sitecustomize.mkdir()
+    (sitecustomize / "sitecustomize.py").write_text("import prdlint.buildcheck as b\nb.TIMEOUT = 1\n")
+    env = {**os.environ, "PATH": f"{stub}:{os.environ['PATH']}", "PYTHONPATH": f"{sitecustomize}:{REAL / 'scripts'}"}
+    p = subprocess.run([sys.executable, str(SCRIPT), PRD, "--diff", "base..HEAD"], cwd=plugin_repo, capture_output=True, text=True, env=env)
+    assert p.returncode == 2
+    assert re.fullmatch(r"prd_build_check: .*timed out after 1 s\n", p.stderr), p.stderr
+    assert "Traceback" not in p.stderr and "internal error" not in p.stderr
+
+
+def test_a_failing_vendor_reads_its_first_line_once(plugin_repo):
+    (plugin_repo / "prd-toolkit/scripts/prd_hooks.py").write_text("import sys\nprint('failed: x', file=sys.stderr)\nraise SystemExit(1)\n")
+    append(plugin_repo / ".prd-toolkit/prdlint/trace.py")
+    commit(plugin_repo, "broken")
+    head = git(plugin_repo, "rev-parse", "HEAD")
+    with pytest.raises(buildcheck.ToolError) as e:
+        buildcheck.refresh_differences(plugin_repo, head, "prd-toolkit", PRD)
+    assert str(e.value) == f"vendor at {head[:12]}: failed: x"

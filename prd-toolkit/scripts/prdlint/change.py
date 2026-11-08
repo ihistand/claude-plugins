@@ -531,8 +531,8 @@ def _id_order(id_: str) -> tuple:
 _CITED_BLOCK = re.compile(r"\b((?:UJ|FR|NFR)-\d{3})\b|\bAC-(\d{3})\.\d+\b")
 
 
-def _contract_ids(prd: model.Prd, file: str, name: str, items: dict[str, dict[str, str]] | None = None) -> list[str]:
-    """The UJ, FR and NFR IDs a contract item cites, each once, kept to blocks of `prd`: an OpenAPI operation's
+def _contract_ids(prd: model.Prd, file: str, name: str, items: dict[str, dict[str, str]] | None = None, also: model.Prd | None = None) -> list[str]:
+    """The UJ, FR and NFR IDs a contract item cites, each once, kept to blocks of `prd` or of `also` (the other PRD): an OpenAPI operation's
     `x-prd-ids`, else every ID token in the item's text; an AC counts as the FR or NFR it belongs to."""
     if file == "contracts/openapi.yaml":
         found = snapshot._op(snapshot.contracts_of(prd), name)
@@ -540,8 +540,9 @@ def _contract_ids(prd: model.Prd, file: str, name: str, items: dict[str, dict[st
         text = " ".join(str(x) for x in listed) if isinstance(listed, list) else ""
     else:
         text = (items if items is not None else contract_items(prd)).get(file, {}).get(name, "")
-    have = {b.id for b in prd.blocks}
-    by_number = {int(b.id.split("-")[1]): b.id for b in prd.blocks if b.kind in ("FR", "NFR")}
+    blocks = [*prd.blocks, *(also.blocks if also else [])]
+    have = {b.id for b in blocks}
+    by_number = {int(b.id.split("-")[1]): b.id for b in blocks if b.kind in ("FR", "NFR")}
     out: set[str] = set()
     for m in _CITED_BLOCK.finditer(text):
         id_ = m.group(1) or by_number.get(int(m.group(2)))
@@ -671,7 +672,7 @@ def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, to
         cited: set[str] = set()
         for i in result.items:
             if i.file.startswith("contracts/") and not _REQ_ID.fullmatch(i.id):
-                cited.update(_contract_ids(old, i.file, i.id, cited_old) if i.change == "removed" else _contract_ids(now, i.file, i.id, cited_now))
+                cited.update(_contract_ids(old, i.file, i.id, cited_old, now) if i.change == "removed" else _contract_ids(now, i.file, i.id, cited_now, old))
     version = _bumped(base_md, level)
     ids = ", ".join(_record_ids(result.items, now, old, extra=frozenset(cited))) or "-"
     row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"

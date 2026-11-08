@@ -341,3 +341,19 @@ def test_contract_change_citing_nothing_keeps_dash(repo):
     edit(prd, "contracts/errors.yaml", "status: 404", "status: 410")
     r = rec(repo, "patch")
     assert ids_cell(r) == "-"
+
+
+def test_changed_contract_item_keeps_an_id_only_the_base_has(repo):
+    """0.8.4 fix 5: an ID that is a block in either PRD is added: FR-003 is a block of the base only, already
+    `removed` there (so no item of this change names it) and gone from the working tree."""
+    import re
+
+    prd = repo / PRD
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed")
+    edit(prd, "prd.md", "| FR-003 | Delete an order | verified | features/api.md | 1.0.0 |", "| FR-003 | Delete an order | removed | features/api.md | 1.0.0 |")
+    commit(repo, "remove FR-003", "docs")
+    api = prd / "features/api.md"
+    api.write_text(re.sub(r"### FR-003 .*?(?=\n### |\Z)", "", api.read_text(), flags=re.S), encoding="utf-8")
+    edit(prd, "contracts/errors.yaml", "The file is zero bytes or has only a header line.", "The file is zero bytes or has only a header line (FR-003).")
+    r = rec(repo, "major")
+    assert "FR-003" in ids_cell(r).split(", ")
