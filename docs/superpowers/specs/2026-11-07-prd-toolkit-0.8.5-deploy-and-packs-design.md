@@ -12,7 +12,8 @@
 > - Created (owner, 2026-11-07): items 1 to 6 were the 0.8.4 spec's section 16 (PR #19), recorded on
 >   2026-11-05 for 0.8.3; 0.8.4 took the small fixes instead and moved these here. Items 7 and 8 are
 >   later-release candidates from the same loop.
-> - Item 9 (owner, 2026-11-08): drawing the mermaid diagram, from the 0.8.4 proof.
+> - Items 9 and 10 (owner, 2026-11-08): drawing the mermaid diagram, from the 0.8.4 proof, and the
+>   tester guard's bare arguments, from the 0.8.4 final review.
 
 ## 1. Backlog
 
@@ -53,3 +54,7 @@ pack's first releases.
    plain browser does. The owner put this here on 2026-11-08. Ways to weigh: render the diagram to
    inline SVG at publish time (a renderer dependency), or let the page load mermaid (it then loads
    something, which the page's "loads nothing" rule and its test refuse).
+10. **The tester guard's bare arguments.** `prd_tester_guard.py` checks the paths a harness command
+    names, but a bare argument can still reach the code: `--doctest-modules scripts`, a `..` path,
+    `--pyargs`, or a `-k` pattern such as `-k s*`. The 0.8.4 final review recommends this as 0.8.5's
+    first item; the owner put it here on 2026-11-08.
