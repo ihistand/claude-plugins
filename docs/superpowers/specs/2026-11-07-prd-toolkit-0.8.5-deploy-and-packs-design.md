@@ -12,6 +12,7 @@
 > - Created (owner, 2026-11-07): items 1 to 6 were the 0.8.4 spec's section 16 (PR #19), recorded on
 >   2026-11-05 for 0.8.3; 0.8.4 took the small fixes instead and moved these here. Items 7 and 8 are
 >   later-release candidates from the same loop.
+> - Item 9 (owner, 2026-11-08): drawing the mermaid diagram, from the 0.8.4 proof.
 
 ## 1. Backlog
 
@@ -47,3 +48,8 @@ pack's first releases.
    whether the cited line's text still stands, and scope its exit to the `--req` IDs.
 8. **SOURCES lines inside the builder's hunks.** `prd_build_check.py --diff` could check that each
    SOURCES line of the builder's report falls inside a hunk of the round's diff.
+9. **Draw the mermaid diagram.** 0.8.4 renders a mermaid fence as `<pre class="mermaid">`, expecting
+   the Artifact viewer to draw it; the 0.8.4 proof (2026-11-08) found it shows the source, as a
+   plain browser does. The owner put this here on 2026-11-08. Ways to weigh: render the diagram to
+   inline SVG at publish time (a renderer dependency), or let the page load mermaid (it then loads
+   something, which the page's "loads nothing" rule and its test refuse).

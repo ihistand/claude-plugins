@@ -679,7 +679,7 @@ page is never the only route.
   so their merge can conflict there. Rerun `prd_block.py`; never edit the table by hand.
 - The README shows no requirement statuses; `/prd-status` does. Only the PRD folder's root has a
   README: `features/`, `contracts/` and the other folders have none.
-- Since 0.8.4 a mermaid diagram on the published page is the source in a `<pre class="mermaid">` block: an Artifact viewer draws it, a plain browser shows the source. The page's labels follow the PRD's language, with English where a language table lacks a key.
+- Since 0.8.4 a mermaid diagram on the published page is the source in a `<pre class="mermaid">` block. No viewer draws it, an Artifact included: every viewer shows the source. The page's labels follow the PRD's language, with English where a language table lacks a key.
 - The description is §2's first paragraph as written. The toolkit never drafts one itself.
 
 ## Known limits (0.8.2)
@@ -759,7 +759,7 @@ page is never the only route.
 - A confirmation is trusted to be the user's, as `prd_deploy.py confirm` is.
 - `recover` never marks a step done.
 - `Evidence:` holding no secret or classified value is held by instruction; nothing scans it.
-- Mermaid diagrams on the published page are shown as source, and the page's own labels are English. (0.8.4 changes both: see Known limits (0.8.4).)
+- Mermaid diagrams on the published page are shown as source, and the page's own labels are English. (0.8.4 changes the labels: see Known limits (0.8.4).)
 - The window between reading the runbook steps and hashing them is not covered (see Deploying).
 
 ## Assumption status `awaiting <who>`
