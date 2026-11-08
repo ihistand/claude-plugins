@@ -658,7 +658,7 @@ def test_caller_never_resolves_the_entry():
 def test_caller_rules_allow_the_entry_and_the_fixes_edit():
     r = flat(RUN)
     assert ("`Source:`, and the entry `prd_error.py new` writes for a stop (never by hand). One edit comes before the "
-            "close: on a `--fixes` build, steps 4 and 5 remove that entry's `known-failing:` lines") in r
+            "close: on a `--fixes` build, steps 4 and 5 remove that entry's cases' `known-failing:` line and its `symptom:` line") in r
     assert "Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of steps 4 and 5" in r
     assert "the entry `prd_error.py new` writes (never by hand)) and, on `--fixes E-nnn`" in flat(SKILL)
 

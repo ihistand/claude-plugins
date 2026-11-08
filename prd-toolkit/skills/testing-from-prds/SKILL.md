@@ -34,7 +34,7 @@ paths. A block is the rule working. It is not an obstacle to route around.
 |---|---|---|---|
 | Called by | `prd-toolkit:authoring-prds` phase 6, `prd-toolkit:changing-prds` step 4 | building (0.4): the tester's round while the builder writes the code | adoption step 4; building (0.4), after a write; new or changed T-ids |
 | Writes tests to | the dry-run directory the caller names (`<first test root>/.prd-dry-run-<YYYYMMDDTHHMMSS>/`), never anywhere else | the test roots (testing.md Layout, `Test roots:`), named as Layout says | the test roots (testing.md Layout, `Test roots:`), named as Layout says |
-| Runs them | no; `uv run python -m py_compile <file>` only, to check syntax | no; `uv run python -m py_compile <file>` only, to check syntax | yes, with the Levels harness command for each case's level, exactly as written |
+| Runs them | no test; only `ls`, `mkdir`, `uv run python -m py_compile <file>` and a checked `grep` (rule 6) | no test; only `ls`, `mkdir`, `uv run python -m py_compile <file>` and a checked `grep` (rule 6) | yes, with the Levels harness command for each case's level, exactly as written |
 | Reports | QUESTIONS, TESTS, HARNESS CHOICES, FILES READ | the same four, never RESULTS | the same four, then RESULTS |
 
 Write mode exists because the build's tester cannot run its tests before the code exists. It reads

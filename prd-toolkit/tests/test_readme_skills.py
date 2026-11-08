@@ -195,3 +195,17 @@ def test_fix3_agent_options_before_the_pattern_and_glob_wording():
     assert "every option before the first path" not in flat(AGENT)
     assert "an unquoted glob in a pattern or a path is refused" in a
     assert "zsh stops on one that matches no file" in a
+
+
+# --- final review 0.8.4: the intro and the modes table agree with the rules they summarise ---
+
+def test_final_review_intro_names_the_symptom_line_with_the_known_failing_line():
+    intro = between(flat(RUN), "One edit comes before the close", "A test case, a `known-failing:` marker")
+    assert "steps 4 and 5 remove that entry's cases' `known-failing:` line and its `symptom:` line" in intro
+
+
+def test_final_review_modes_table_runs_row_matches_rules_5_and_6():
+    row = next(x for x in TESTING.read_text(encoding="utf-8").split("\n") if x.startswith("| Runs them"))
+    assert row.count("no test; only `ls`, `mkdir`, `uv run python -m py_compile <file>` and a checked `grep` (rule 6)") == 2
+    assert "py_compile <file>` only" not in row
+    assert row.endswith("| yes, with the Levels harness command for each case's level, exactly as written |")

@@ -66,7 +66,7 @@ def test_item1_the_close_removes_no_line():
 def test_item1_callers_allowed_edits_name_steps_4_and_5():
     r = flat(RUN)
     assert ("One edit comes before the close: on a `--fixes` build, steps 4 and 5 remove that entry's "
-            "`known-failing:` lines, each removal its own commit, before step 7's trace.") in r
+            "cases' `known-failing:` line and its `symptom:` line, each removal its own commit, before step 7's trace.") in r
     k = flat(BUILD_SKILL)
     assert ("on `--fixes E-nnn`, that entry's `known-failing:` lines before step 7's trace (a build-gate or unit "
             "regression T-id's once it is `pass`, a deploy-gate one's right after the tester's un-mark commit)") in k

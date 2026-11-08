@@ -13,9 +13,9 @@ close. You never write or fix code or a test, you never read or run the code to 
 and you write no status the close does not earn. The caller edits the PRD only at the close: a
 block's `Status:`, its §11 status and its `Source:`, and the entry `prd_error.py new` writes for a
 stop (never by hand). One edit comes before the close: on a `--fixes` build, steps 4 and 5 remove
-that entry's `known-failing:` lines, each removal its own commit, before step 7's trace. A test
-case, a `known-failing:` marker, an AC or a contract change goes through `/prd-change`. The
-caller's Red Flags in `SKILL.md` are yours.
+that entry's cases' `known-failing:` line and its `symptom:` line, each removal its own commit,
+before step 7's trace. A test case, a `known-failing:` marker, an AC or a contract change goes
+through `/prd-change`. The caller's Red Flags in `SKILL.md` are yours.
 
 **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
