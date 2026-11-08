@@ -829,6 +829,9 @@ def _targets(docs: dict[str, str], problems: list) -> dict[str, Target]:
 FIXTURES_DIR = "contracts/fixtures"
 
 
+ROOT_README = "README.md"  # the folder's root guide, written by prd_block.py from the PRD: never a source, never linted (FR-015)
+
+
 def _fixture(rel: str) -> bool:
     """A path under contracts/fixtures/: fixture data, read neither as a document nor as contract YAML."""
     return rel.startswith(FIXTURES_DIR + "/")
@@ -849,7 +852,7 @@ def load(prd_dir: Path) -> Prd:
     docs: dict[str, str] = {}
     for p in sorted(prd_dir.rglob("*.md")):
         rel = p.relative_to(prd_dir).as_posix()
-        if _fixture(rel):
+        if _fixture(rel) or rel == ROOT_README:
             continue
         if not p.is_file():
             findings.append(Finding(rel, 0, "sufficiency", "a .md entry that is not a file"))
