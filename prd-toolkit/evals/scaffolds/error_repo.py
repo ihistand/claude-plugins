@@ -65,7 +65,7 @@ def _claude_md(repo: Path, date: str) -> None:
     r = _tool(repo, str(repo / ".prd-toolkit/prd_block.py"), PRD)
     if r.returncode != 0 or not (repo / "CLAUDE.md").is_file():
         sys.exit(f"error_repo: prd_block failed:\n{r.stdout}{r.stderr}")
-    commit(repo, "Add the CLAUDE.md block\n\nRefs: none (no behaviour change)", "CLAUDE.md", date=date)
+    commit(repo, "Add the CLAUDE.md block\n\nRefs: none (no behaviour change)", "CLAUDE.md", "docs", date=date)
 
 
 def _bug(repo: Path) -> None:

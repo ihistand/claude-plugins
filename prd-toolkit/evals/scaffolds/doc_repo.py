@@ -534,7 +534,7 @@ def main(dst: str, state: str) -> None:
         block = _tool(repo, str(repo / ".prd-toolkit/prd_block.py"), PRD)
         if block.returncode != 0 or not (repo / "CLAUDE.md").is_file():
             sys.exit(f"doc_repo: prd_block failed:\n{block.stdout}{block.stderr}")
-        commit(repo, f"Add the CLAUDE.md block\n\n{NONE}", "CLAUDE.md", date="2026-01-05T13:00:00+0000")
+        commit(repo, f"Add the CLAUDE.md block\n\n{NONE}", "CLAUDE.md", "docs", date="2026-01-05T13:00:00+0000")
     if state == "built":
         _write(repo, {
             "docs/guide/install.md": GUIDE,

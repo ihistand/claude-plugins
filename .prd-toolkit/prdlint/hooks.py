@@ -73,6 +73,8 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
     for hook in HOOKS:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
+    for readme in ("readme-prd.md", "readme-prds.md"):  # the README blocks' templates, read the same way
+        files[f"{BLOCK_TEMPLATE_DIR}/{readme}"] = templates.parent / readme
     files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
     files[CONFIRM_PANEL] = templates.parent / CONFIRM_PANEL  # form.html includes it
     files[INBOX_PAGE] = templates.parent / INBOX_PAGE  # and so does the inbox page

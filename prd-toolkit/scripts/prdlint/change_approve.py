@@ -139,6 +139,11 @@ def _commit(repo_root: Path, prd_root: Path, message: str, with_claude: bool) ->
     paths = [rel, f":(exclude){review}"]
     if with_claude and not _ignored(repo_root, "CLAUDE.md"):
         paths.append("CLAUDE.md")
+    parent = prd_root.parent / "README.md"  # the parent's block, written beside the PRD's own README (which `rel` covers)
+    if prd_root.parent.name == "prd" and parent.exists():
+        parent_rel = parent.relative_to(repo_root).as_posix()
+        if not _ignored(repo_root, parent_rel):
+            paths.append(parent_rel)
     # `git add` exits 1 on a pathspec that names an ignored file, even an exclude one; git skips an ignored verdict anyway
     ignored = _ignored(repo_root, review)
     add_paths = [p for p in paths if not (ignored and p.startswith(":(exclude)"))]
@@ -163,6 +168,8 @@ def approve(repo_root: Path, prd_root: Path, reply: str, dry_run: str, refs: str
     md_path, claude = prd_root / "prd.md", repo_root / "CLAUDE.md"
     old_md = md_path.read_bytes()
     old_claude = claude.read_bytes() if claude.exists() else None
+    readmes = [prd_root / "README.md", prd_root.parent / "README.md"] if prd_root.parent.name == "prd" else [prd_root / "README.md"]
+    old_readmes = {r: r.read_bytes() if r.exists() else None for r in readmes}  # prd_block writes both; a failure puts them back
     version = last.cells[0]
     try:
         md_path.write_bytes(_approved_text(old_md.decode("utf-8"), last, dry_run).encode("utf-8"))
@@ -175,6 +182,11 @@ def approve(repo_root: Path, prd_root: Path, reply: str, dry_run: str, refs: str
             claude.unlink(missing_ok=True)
         else:
             claude.write_bytes(old_claude)
+        for r, old in old_readmes.items():
+            if old is None:
+                r.unlink(missing_ok=True)
+            else:
+                r.write_bytes(old)
         raise
     (prd_root / REVIEW_FILE).unlink(missing_ok=True)
     return Approved(sha)

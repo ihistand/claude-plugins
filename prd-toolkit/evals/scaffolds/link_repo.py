@@ -667,8 +667,8 @@ def _bump(repo: Path, prd: str, old: str, new: str, row: str, date: str = TODAY)
 
 def _claude_md(repo: Path, prd: str, date: str) -> None:
     _tool(repo, str(repo / ".prd-toolkit/prd_block.py"), prd)
-    if git(repo, "status", "--porcelain", "--", "CLAUDE.md").strip():
-        commit(repo, f"Update the CLAUDE.md block\n\n{NONE}", "CLAUDE.md", date=date)
+    if git(repo, "status", "--porcelain", "--", "CLAUDE.md", "docs").strip():
+        commit(repo, f"Update the CLAUDE.md block\n\n{NONE}", "CLAUDE.md", "docs", date=date)
 
 
 def _relpath(path: Path, start: Path) -> str:
