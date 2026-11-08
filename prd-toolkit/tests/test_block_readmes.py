@@ -16,6 +16,7 @@ START, END = "<!-- prd-toolkit:start -->", "<!-- prd-toolkit:end -->"
 def _nohome(monkeypatch, tmp_path):
     monkeypatch.setattr(prd_block, "PLUGIN_JSON", tmp_path / "no-plugin.json")
     monkeypatch.setattr(prd_block, "HOMEPAGE_FILE", tmp_path / "no-HOMEPAGE")
+    monkeypatch.setattr(prd_block, "VENDORED", False)
 
 
 def run(prd, *extra):
@@ -126,17 +127,37 @@ def test_parent_unreadable_sibling(greet, capsys):
 
 def test_homepage_sources(greet, tmp_path, monkeypatch):
     plugin = tmp_path / "plugin.json"
-    plugin.write_text(json.dumps({"homepage": "https://example.com/p"}))
+    plugin.write_text(json.dumps({"name": "prd-toolkit", "homepage": "https://example.com/p"}))
     monkeypatch.setattr(prd_block, "PLUGIN_JSON", plugin)
     assert prd_block.homepage() == "https://example.com/p"
     run(greet)
     assert "Install the prd-toolkit plugin for Claude Code: https://example.com/p\n" in parent(greet)
+    monkeypatch.setattr(prd_block, "VENDORED", True)  # a vendored run reads only HOMEPAGE
     hp = tmp_path / "HOMEPAGE"
     hp.write_text("https://example.com/v\n")
     monkeypatch.setattr(prd_block, "HOMEPAGE_FILE", hp)
     assert prd_block.homepage() == "https://example.com/v"
     run(greet)
     assert "Claude Code: https://example.com/v\n" in parent(greet)
+
+
+def test_vendored_run_ignores_a_host_plugin_manifest(tmp_path, monkeypatch):
+    host = tmp_path / "host.json"
+    host.write_text(json.dumps({"name": "host-plugin", "homepage": "https://example.com/host"}))
+    monkeypatch.setattr(prd_block, "PLUGIN_JSON", host)
+    monkeypatch.setattr(prd_block, "VENDORED", True)
+    assert prd_block.homepage() is None
+    empty = tmp_path / "HOMEPAGE"
+    empty.write_text("\n")
+    monkeypatch.setattr(prd_block, "HOMEPAGE_FILE", empty)
+    assert prd_block.homepage() is None
+
+
+def test_plugin_run_ignores_a_manifest_that_is_not_the_toolkits(tmp_path, monkeypatch):
+    host = tmp_path / "host.json"
+    host.write_text(json.dumps({"name": "host-plugin", "homepage": "https://example.com/host"}))
+    monkeypatch.setattr(prd_block, "PLUGIN_JSON", host)
+    assert prd_block.homepage() is None
 
 
 def test_no_homepage(monkeypatch):

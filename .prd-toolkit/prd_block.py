@@ -37,6 +37,7 @@ def _template(name: str) -> Path:
 
 README_TEMPLATE, PARENT_TEMPLATE = _template("readme-prd.md"), _template("readme-prds.md")
 PLUGIN_JSON = _HERE.parent / ".claude-plugin/plugin.json"
+VENDORED = _HERE.name == ".prd-toolkit"  # a vendored run: the script sits in the host repo's .prd-toolkit/
 HOMEPAGE_FILE = _HERE / "HOMEPAGE"  # written by vendoring; beside the script in a vendored copy
 
 FILES_TEXT = (
@@ -168,15 +169,17 @@ def _merged(claude_md: Path, block: str, position: str = "end") -> tuple[str, st
 
 
 def homepage() -> str | None:
-    """The vendored `.prd-toolkit/HOMEPAGE` line, else `plugin.json`'s `homepage`, else None."""
+    """A vendored run reads only `.prd-toolkit/HOMEPAGE`; a plugin run reads the toolkit's own `plugin.json`
+    (its name must be `prd-toolkit`, so a host repo's manifest is never taken). None when absent."""
     try:
-        if HOMEPAGE_FILE.is_file():
-            line = HOMEPAGE_FILE.read_text(encoding="utf-8").strip()
-            if line:
-                return line.splitlines()[0].strip()
+        if VENDORED:
+            line = HOMEPAGE_FILE.read_text(encoding="utf-8").strip() if HOMEPAGE_FILE.is_file() else ""
+            return line.splitlines()[0].strip() if line else None
         if PLUGIN_JSON.is_file():
-            value = json.loads(PLUGIN_JSON.read_text(encoding="utf-8")).get("homepage")
-            return value.strip() if isinstance(value, str) and value.strip() else None
+            data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
+            value = data.get("homepage")
+            if data.get("name") == "prd-toolkit" and isinstance(value, str) and value.strip():
+                return value.strip()
     except (OSError, ValueError, AttributeError):
         return None
     return None
