@@ -6,7 +6,7 @@ step with its code. Code implements its PRD; a change in behaviour starts in the
 
 | PRD | Version | Status | Covers |
 |---|---|---|---|
-| [prd-toolkit](prd-toolkit/) | 6.0.0 | Approved | prd-toolkit keeps a living PRD folder in a repository and makes agents build, test and deploy from it: a linter and trace checks for the folder, a black-box test agent, and skills that author, adopt, change, build, deploy, handle errors in, publish and link PRDs. |
+| [prd-toolkit](prd-toolkit/) | 6.1.0 | Approved | prd-toolkit keeps a living PRD folder in a repository and makes agents build, test and deploy from it: a linter and trace checks for the folder, a black-box test agent, and skills that author, adopt, change, build, deploy, handle errors in, publish and link PRDs. |
 
 ## How it works
 

@@ -1,0 +1,57 @@
+# Test cases for nfr.md. Format: references/prd-format.md, "Test cases".
+T-019.1:
+  ac: AC-019.1
+  level: integration
+  target: code:prd-toolkit/tests/conftest.py
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  refs: [testing.md#Harness]
+  input:
+    setup:
+      - "test cache: the folder PRD_TEST_UV_CACHE names in the test's own environment, or <repo>/prd-toolkit/.uv-test-cache when it is unset or empty, as an absolute path (a relative PRD_TEST_UV_CACHE resolved against the test process's working directory, os.path.abspath)"
+      - "from this step on, every command the test starts (git init, prd_hooks.py install and any git command it runs, git add, run_1 and run_2) runs with GIT_CONFIG_GLOBAL set to an empty file <tmp>/gitconfig and GIT_CONFIG_NOSYSTEM set to 1, so the runner's git config (core.hooksPath, commit signing) cannot change whether the hook runs"
+      - git init <tmp>/repo; load fixture lint-cli/orders into <tmp>/repo/docs/prd/orders; load fixture repo/vendored into <tmp>/repo/.prd-toolkit (testing.md Fixtures, its check included)
+      - set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_superpowers
+      - in <tmp>/repo, run python <tmp>/repo/.prd-toolkit/prd_hooks.py install docs/prd/orders; it exits 0
+      - write <tmp>/repo/notes.txt holding the line "hello", and git add it
+    notes: "run_2's hook running against the test cache is proven by T-019.2, which runs this test alone (no pytest-xdist workers) from an empty test cache; checking the shared test cache here would pass on another worker's entry"
+    runs:
+      - cwd: <tmp>
+        command: uv cache dir
+      - cwd: <tmp>/repo
+        command: 'git -c user.name=Test -c user.email=test@example.invalid commit -m "chore: add notes" -m "Refs: none (no behaviour change)"'
+  expect:
+    output:
+      run_1: {exit: 0}
+      run_2: {exit: 0}
+    effects:
+      - "run_1's first stdout line, with symlinks resolved (os.path.realpath), names the same folder as <test cache> with symlinks resolved"
+    errors: []
+    leaks: none
+T-019.2:
+  ac: AC-019.2
+  level: integration
+  target: code:prd-toolkit/tests/conftest.py
+  environment: local
+  identity: none
+  preconditions: []
+  refs: [testing.md#Harness]
+  input:
+    setup:
+      - make the empty folders <tmp>/user-cache and <tmp>/test-cache
+      - "the inner run's environment is the Subprocess environment (testing.md Harness) without PYTEST_XDIST_WORKER, PYTEST_XDIST_WORKER_COUNT, PYTEST_XDIST_TESTRUNUID and PYTEST_CURRENT_TEST, so the inner session is a whole run of its own, not an xdist worker, plus the env below"
+    env:
+      UV_CACHE_DIR: <tmp>/user-cache
+      PRD_TEST_UV_CACHE: <tmp>/test-cache
+    cwd: <repo>/prd-toolkit
+    command: "python -m pytest -q -p no:cacheprovider --basetemp <tmp>/basetemp <the test file of T-019.1> -k <the test function of T-019.1>"
+    notes: "python is the test's own interpreter (testing.md Harness, Lifecycle); <the test file of T-019.1> is that file's absolute path. In the inner run only T-019.1's git hook installs packages, so a folder in <tmp>/test-cache shows that the hook used the test cache, and an empty <tmp>/user-cache/environments-v2 shows that it did not use the cache the session was started from"
+  expect:
+    output: {exit: 0}
+    effects:
+      - "<tmp>/test-cache/environments-v2 does not exist"
+      - "<tmp>/test-cache holds at least one folder"
+      - "<tmp>/user-cache/environments-v2 does not exist, or holds no entry"
+    errors: []
+    leaks: none
