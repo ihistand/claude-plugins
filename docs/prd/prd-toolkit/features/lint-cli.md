@@ -161,8 +161,8 @@ Tests: T-009.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-010 Name a missing dependency
-Status: approved
-Source: prd-toolkit/scripts/prdlint/deps.py:12 @97c04e1
+Status: verified
+Source: prd-toolkit/scripts/prdlint/deps.py:12 @5a3bc3d
 Acceptance (EARS):
 - AC-010.1 If `pyyaml`, `sqlglot` or `openapi-spec-validator` cannot be imported, the lint command
   shall print, for the first one missing in that order,
