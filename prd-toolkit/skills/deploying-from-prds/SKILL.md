@@ -51,16 +51,23 @@ record it" change nothing below.
    confirm` with the owner's words, so the step is confirmed. When those words do not meet the
    step's `Check:` (a question, "wait", "not yet"), do not resume: tell the owner the step was
    confirmed with those words, ask in the chat whether to resume or stop, and resume only on a go.
+   A reply to the stopped step that says later human steps are done confirms them in the same
+   `confirm`: a later `--step` only for a step the owner's reply names, with the owner's words.
+   Never ask whether later steps are done. A step the reply does not name stays unconfirmed.
 5. **A failure stops the deploy.** Show the step, the output tails and the `Rollback:` command,
    and ask. Run `rollback` only on the user's yes in their own words. Every failure gets its
    open `Classification: unclassified` entry in `errors.md`, rolled back or not, then the close.
 6. **Code, tests and the runbook are never edited during a deploy.** The fix for a failed step
    is a change (`prd-toolkit:changing-prds`, then `/prd-build`, then a new run); a runbook that
-   is wrong is a gap for `prd-toolkit:changing-prds`.
+   is wrong is a gap for `prd-toolkit:changing-prds`. An error found while a run is stopped is
+   recorded with `prd_error.py new` and left uncommitted: `resume` accepts it, and the close
+   commits it.
 7. **The close is committed and checked.** Deployed rows for the environments the run reached,
    `live` only after a production finish, no version bump and no §14 row, a commit with
    `Refs:`, then `prd_deploy.py check` from the run's HEAD. A failing check is fixed and rerun
-   before the report.
+   before the report. When `prd_deploy.py` notes that the close is on another branch than an
+   environment deploys from, tell the owner to push the close commit to that branch; never push it
+   yourself.
 8. **A refusal is final.** A step that started and did not finish, a confirm already used, a
    second rollback, a resume of a failed run: the script refuses each. Report it and stop. A new
    run starts only when the user asks for one after seeing the failure.
@@ -168,6 +175,15 @@ Quoted from runs without this skill (evals/baselines/deploying-from-prds.md), ex
   `prd_deploy.py confirm` with words the owner gave in the prompt ("send it with 'looks good'"):
   the step's reply is the owner's, sent by the owner.
 
+- "Your message came before the run reached step 3, and the runbook only accepts a reply given
+  after the run stops at that step. So I didn't confirm 3 or 4 from your note about them." (RED
+  runs of `evals/deploy-confirms-named-steps`.) A reply to the stopped step that names later
+  steps is their reply too; one `confirm` carries them all.
+- A `confirm --step 5` for a step the owner's reply never named, or a question to the owner
+  whether steps 3 and 4 are done when their reply already said so. (Spec 0.8.5 §5.1.)
+- `git push` of the close commit, to the branch a `prd_deploy: the close is on …` note names or
+  any other. The push is the owner's. (Spec 0.8.5 §5.4.)
+
 **All of these mean: stop, put back what you changed outside the close, and return to the step
 of `running-a-deploy.md` whose gate is open.**
 
@@ -191,6 +207,9 @@ of `running-a-deploy.md` whose gate is open.**
 | "Staging passed, so the requirements are live." | `live` means running in production. A run that did not reach production moves no status. |
 | "Recording a deploy changes the PRD, so it gets a version." | Deployed rows and `verified → live` are progress, not behaviour: no version bump and no §14 row. |
 | "They deployed it by hand, so the toolkit cannot record it." | `prd_deploy.py record` logs the owner's words and writes that environment's row; the close is committed and checked like any other. It moves no status: `live` waits for a `/prd-deploy` run. |
+| "Their note about steps 3 and 4 came before the run reached them, so it can't confirm them." | The note is the owner's reply to the stopped step, written after the run stopped there. A later step it names goes in the same `confirm`, with the owner's words; a step it does not name stays unconfirmed. |
+| "An error turned up while the run waits; commit the entry first." | A commit moves HEAD and `resume` refuses the run. Record it with `prd_error.py new`, leave it uncommitted, resume; the close commits it. |
+| "The close has to reach the release branch; I'll push it." | The push is the owner's. Tell them which branch the note names and which commit; never push. |
 | "A fresh run will get past it." | A failed run ends. A new run starts only when the user asks after seeing the failure, and on the same commit it runs the same commands. |
 
 ## Related skills

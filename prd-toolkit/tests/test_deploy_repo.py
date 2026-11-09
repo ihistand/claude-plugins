@@ -103,3 +103,21 @@ def test_smoke_expectation_follows_the_prd_version_not_a_literal(tmp_path):
     assert subprocess.run([sys.executable, "scripts/deploy.py", "production"], cwd=repo, capture_output=True, text=True).returncode == 0
     r = subprocess.run(["uv", "run", "pytest", "-q", "tests/smoke"], cwd=repo, capture_output=True, text=True, env={**os.environ, "TEST_ENV": "production"})
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_at_ui_steps_stops_at_step_2_and_one_confirm_covers_the_named_steps(tmp_path):
+    """The deploy-confirms-named-steps eval's start state: steps 2 to 5 are human; 3 and 4 confirmed ahead stop at 5."""
+    repo, last = build(tmp_path, "at-ui-steps")
+    run_id = last.removeprefix("run=")
+    recs = records(repo, run_id)
+    assert recs[-1]["kind"] == "step" and recs[-1]["step"] == 2 and recs[-1]["result"] == "human"
+    assert subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=repo, capture_output=True, text=True).stdout == ""
+    assert tool(repo, str(ROOT / "scripts/prd_lint.py"), PRD).returncode == 0
+    plan = tool(repo, ".prd-toolkit/prd_deploy.py", "plan", PRD).stdout
+    assert all(f"{n} human production" in plan for n in (2, 3, 4, 5))
+    reply = "done with 2; 3 and 4 were done in the same session"
+    pairs = [a for n in (2, 3, 4) for a in ("--step", str(n), "--reply", reply)]
+    assert tool(repo, ".prd-toolkit/prd_deploy.py", "confirm", PRD, "--run", run_id, *pairs).returncode == 0
+    r = tool(repo, ".prd-toolkit/prd_deploy.py", "resume", PRD, "--run", run_id)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "step 4 human production: confirmed ahead" in r.stdout and "prd-deploy: human step=5" in r.stdout

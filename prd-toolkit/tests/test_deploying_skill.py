@@ -408,3 +408,94 @@ def test_by_hand_red_flag():
 def test_by_hand_record_during_a_stopped_run():
     assert ("A record made while a run is stopped at a human step falls under the Red Flag \"A close committed while a "
             "run waits at a human step\".") in flat(SKILL)
+
+
+# --- 0.8.5, spec 13 (items 1 to 5): Task 14's pins ---
+
+LATER_STEP = "a later `--step` only for a step the owner's reply names"
+NEVER_ASK = "Never ask whether later steps are done."
+MULTI_CONFIRM = ("uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply "
+                 "to step N>' --step <M> --reply '<the reply to step M>'; echo \"prd-deploy-exit=$?\"")
+MID_RUN_ENTRY = ('uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "<the error in one line>" --source '
+                 '"deploy run <run id>, step <N>"; echo "prd-error-exit=$?"')
+BRANCH_NOTE = "prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too"
+
+
+def test_085_later_steps_only_when_the_reply_names_them():
+    for path in (SKILL, RUN):
+        t = flat(path)
+        assert LATER_STEP in t, path.name
+        assert NEVER_ASK in t, path.name
+    two = step(2)
+    assert MULTI_CONFIRM in two
+    assert "by its number or its title" in two
+    assert "step <M> human <env>: confirmed ahead" in two
+
+
+def test_085_mid_run_entry_is_left_uncommitted_and_the_close_carries_it():
+    two = step(2)
+    assert MID_RUN_ENTRY in two
+    at = 0
+    for s in ("**An error found while the run is stopped.**", "prd_error.py new", "Do not commit it", "then resume",
+              "the close commit carries it", "`/prd-error E-<nnn>` after the close"):
+        at = two.index(s, at)
+    assert "the tracked tree has changes" in two
+    assert "An error found while a run is stopped is recorded with `prd_error.py new` and left uncommitted" in flat(SKILL)
+
+
+def test_085_timeout_column_and_the_flag_that_overrides_it():
+    t = flat(RUN)
+    assert "a `tests` level's own `Timeout` in testing.md's Levels" in t
+    assert "a `--timeout` given to `run` or `resume` overrides every one of them" in t
+    assert "`timed out after <N> s (the <level> level's Timeout)`" in t
+
+
+def test_085_the_owner_pushes_the_close_to_the_noted_branch():
+    t = flat(RUN)
+    assert f"`{BRANCH_NOTE}`" in t
+    five = t.split(" 5. **Report.**", 1)[1]
+    assert "tell the owner to push the close commit to `<branch>`" in five
+    assert "Never push it yourself" in five
+    rule7 = flat(SKILL).split("7. **The close is committed and checked.**", 1)[1].split("8. **", 1)[0]
+    assert "tell the owner to push the close commit to that branch; never push it yourself" in rule7
+
+
+def test_085_a_check_that_matches_by_pattern():
+    two = step(2)
+    assert "`` Check: `<command>` matches `<pattern>` ``" in two
+    assert "`no stdout line matches '<pattern>'`" in two
+    assert "`no stdout line equals '<text>'`" in two
+
+
+def test_085_eval_deploy_confirms_named_steps():
+    d = ROOT / "evals/deploy-confirms-named-steps"
+    assert {p.stem for p in (d / "graders").glob("*.md")} == {
+        "skill-fired", "confirms-named-steps-in-one-call", "later-steps-carry-the-owners-words",
+        "no-unnamed-step-confirmed", "resumed", "no-gates-answer"}
+    assert 'deploy_repo.py" "$PWD" at-ui-steps' in (d / "scaffold.sh").read_text(encoding="utf-8")
+    assert "| `deploy-confirms-named-steps`" in (ROOT / "evals/BASELINE.md").read_text(encoding="utf-8")
+
+
+def _grader_counts(case: str, name: str, command: str) -> bool:
+    import json
+    import yaml
+    text = (ROOT / "evals" / case / "graders" / f"{name}.md").read_text(encoding="utf-8")
+    cfg = yaml.safe_load(text.split("---\n")[1])
+    return bool(re.search(cfg["input_match"], json.dumps({"command": command}, separators=(",", ":"))))
+
+
+def test_085_deploy_graders_on_synthetic_commands():
+    case, reply = "deploy-confirms-named-steps", "done with 2; 3 and 4 were done in the same session"
+    good = (f".prd-toolkit/prd_deploy.py confirm docs/prd/greet --run R --step 2 --reply '{reply}' --step 3 --reply "
+            f"'{reply}' --step 4 --reply '{reply}'; echo \"prd-deploy-exit=$?\"")
+    double = good.replace("'", '"')
+    own = (".prd-toolkit/prd_deploy.py confirm docs/prd/greet --run R --step 2 --reply 'done with 2' --step 3 --reply "
+           "'confirmed' --step 4 --reply 'confirmed'")
+    single = f".prd-toolkit/prd_deploy.py confirm docs/prd/greet --run R --step 2 --reply '{reply}'"
+    assert _grader_counts(case, "confirms-named-steps-in-one-call", good)
+    assert not _grader_counts(case, "confirms-named-steps-in-one-call", single)
+    for cmd in (good, double):
+        assert _grader_counts(case, "later-steps-carry-the-owners-words", cmd), cmd
+    assert not _grader_counts(case, "later-steps-carry-the-owners-words", own)
+    assert _grader_counts(case, "no-unnamed-step-confirmed", good + " --step 5 --reply 'x'")
+    assert not _grader_counts(case, "no-unnamed-step-confirmed", good)

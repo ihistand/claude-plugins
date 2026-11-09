@@ -80,6 +80,26 @@ An output-language change, or a pack change on an area with no `built`, `verifie
 (every block `approved` or `as-built`), is a change like any other: the steps below, the version
 by the table, and the area's contracts, Levels, Harness and test cases moved to the new pack.
 
+**A new pack version is a scripted patch.** A pack release that moves only the version on a
+`Pack:` or `Target: pack` line (its name and source unchanged) is not a retarget, and the line is
+never edited by hand. Run, each its own Bash call, from the plugin's scripts (`<plugin scripts>`,
+as above: never the vendored `.prd-toolkit/` copy, whose `packs/` still holds the old version):
+
+1. `uv run --script <plugin scripts>/prd_change.py pack docs/prd/<slug> <name> <X.Y.Z>; echo "prd-change-exit=$?"`
+   moves every line naming `<name>` and records `pack <name> <old> → <new>; pending` as a patch,
+   leaving the tree uncommitted. A `refused:` line names what to fix:
+   `no Pack: or Target: pack line names <name>`, `every line naming <name> already names <X.Y.Z>`,
+   or uncommitted changes in the PRD folder (commit or set them aside first: it never mixes into
+   another change).
+2. `uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>` re-vendors the pack.
+3. Step 4's lint and verdict, with no dry run, then step 5's approval as for any patch, with
+   `--dry-run 'no dry run (pack version only)'`: §14 reads
+   `pack <name> <old> → <new>; no dry run (pack version only)`.
+
+An install refusal ending `; to move the PRD to <name> <have>, run prd_change.py pack <prd> <name> <have>`
+starts this flow. A new version that breaks what the PRD relies on (a contract type, a level, a
+harness slot) fails lint or the next build: that is a real change, through the steps below.
+
 ## Non-negotiable rules
 
 1. **PRD before code.** Do not edit source, tests or migrations until the user has approved the
@@ -217,7 +237,10 @@ so you count instead of it.
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
    step 1 listed. If a block the change touches has a `Source:` line, run the pack again with
    `--for implement` (its own Bash call, the same gate), re-read each region it marks STALE, and
-   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. A revised block keeps its
+   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. The STALE reasons:
+   `the cited line's text is gone`, `appears <N> times`, `<path> is not in <sha>`. A
+   `MOVED: line <L> is now line <M>` mark is no STALE (the exit stays `0`), but rewrite its
+   `Source:` as `<path>:<M> @<HEAD short sha>` all the same. A revised block keeps its
    `Source:` line: refresh a STALE one to the current line and sha, and never drop it, because the
    next implement pack reads FR code from it. Set the PRD status to `In review`.
    **Linked PRDs.** When `links.md` has Consumers, run, after the edits and as its own call,

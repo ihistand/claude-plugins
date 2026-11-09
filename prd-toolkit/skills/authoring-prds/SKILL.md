@@ -179,7 +179,8 @@ that `~/.claude/plugins/installed_plugins.json` records. Then, after copying the
 3. **Levels and Harness:** fill the Levels rows and the Harness slots from the pack's `levels` and
    `harness`; a slot the pack leaves out stays a `[NEEDS CLARIFICATION]` marker, and a template
    Levels row the pack does not name is dropped (no `unit` row for a pack whose
-   `builder-tests:` is `none`, unless another area of the PRD needs it). Copy its
+   `builder-tests:` is `none`, unless another area of the PRD needs it). Each copied level takes
+   its `timeout` into the level's `Timeout` cell (blank when the pack has none). Copy its
    `standards` and `skills` into §5 and §6 as `proposed` rows. The Gate of each level is still
    asked in a clarify round. An area pack's `harness` fills only slots still marked `[NEEDS CLARIFICATION]`; it never overwrites a decided slot.
 4. **Language:** write every prose line in the PRD's `language:`: features, ACs, test-case

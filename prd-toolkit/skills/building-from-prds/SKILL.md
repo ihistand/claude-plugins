@@ -92,7 +92,10 @@ wrong one is the caller's to fix, never yours to repair.
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
    `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
    `prd-context-exit=0` is current; `1` means a STALE source: re-read each code region the pack
-   marks STALE before you rely on it; `2` is a usage error: fix the command. Work from the pack.
+   marks STALE before you rely on it (`STALE: the cited line's text is gone`,
+   `STALE: the cited line's text appears <N> times`, `STALE: <path> is not in <sha>`); `2` is a
+   usage error: fix the command. A `MOVED: line <L> is now line <M>` region exits `0`: it is
+   current, at line `<M>`, so read it there. Work from the pack.
    Open a PRD file only for what the pack's closing lines name, your unit T-ids' entries in the
    test-case file the prompt names, prd.md's `## 5. Standards registry` and `## 6. Skills registry`
    (the pack does not carry them), and testing.md's `## Harness` for where a unit test goes. You
@@ -203,7 +206,9 @@ In this order, each field on its own line:
 ```
 CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
-SOURCES     <ID>: <path>:<line>, one line per built block: where its implementation starts
+SOURCES     <ID>: <path>:<line>, one line per block this round built or changed: where its
+            implementation starts, on a line this round added or changed (the caller holds each
+            line to the round's hunks); nothing after the line number
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the round branch and its commit SHAs
 ```

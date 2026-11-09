@@ -226,7 +226,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    5. Step 4's builder check, on the round branch:
 
       ```bash
-      uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"
+      uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n> --sources <SNAP>/sources-<n>.txt; echo "prd-build-check-exit=$?"
       git log --format=%B <base>..prd-round/<area>-<n>
       git status --porcelain --untracked-files=all
       ```
@@ -281,13 +281,24 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      nothing (a file the builder left uncommitted fails the round, and the next round's step 1
      stops the build as a dirty tree).
 
+     Before that check, write the report's SOURCES field verbatim, with the Write tool, to
+     `<SNAP>/sources-<n>.txt` (`<SNAP>` is outside the repository, so outside the PRD folder):
+     one `<ID>: <path>:<line>` line per block, never edited or completed by you. `--sources`
+     holds each line to a file and a hunk the round changed. A `sources:` line is a finding like
+     any other `--diff` line and fails the round: `sources: <ID>: <path> is not changed in
+     <base>..<head>`, `sources: <ID>: <path>:<line> is outside the round's changes (hunks <a>-<b>,
+     …)`, or `sources: line <n> is not '<ID>: <path>:<line>'` (prose after the line number, or no
+     line number). The next round's prompt carries it as its `Failure:`. A report whose SOURCES
+     is `none` (a round that changed nothing) passes no `--sources`.
+
      `prd-build-check-exit=1` fails the round: each line names a file in the PRD folder or a
      tester's test the builder touched; record the lines as the round's failure. `2` is a usage
      error: fix the command. Every commit message in the log carries a `Refs:` line naming the
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
-     one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
-     stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. The
+     one SOURCES line per block the round built or changed. A QUESTIONS line that is not a test
+     dispute is a PRD gap and stops the build, as **Stops** says: `built` if a merge happened,
+     otherwise no status. The
      one exception: `QUESTIONS: worktree is not on the build branch` is not a PRD gap. The round
      was cut wrong, so it fails the round, and the next round's cut is checked before its dispatch
      (step 3's round step 2). A test
@@ -464,8 +475,8 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of
    steps 4 and 5, already committed.
 
-   Run `git rev-parse --short HEAD` as its own call, after the last merge. From each SOURCES line
-   of the builder's latest report for a block, write the block's
+   Run `git rev-parse --short HEAD` as its own call, after the last merge. From each block's
+   SOURCES line in the latest builder report that holds one, write the block's
    `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
 
    **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
@@ -487,8 +498,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    ```
 
    `prd-context-exit=` must be `0`: a STALE code item for a block you just wrote means a wrong
-   line or SHA, so fix it. `prd-lint-exit=` must be `0`. `prd-trace-exit=1` after writing
-   `verified` reverts those blocks to `built` and stops the build: rewrite the status words
+   line or SHA, so fix it. A `MOVED: line <L> is now line <M>` item exits `0` too: rewrite that
+   block's `Source:` to line `<M>`, and run the pack again. `prd-lint-exit=` must be `0`.
+   `prd-trace-exit=1` after writing `verified` reverts those blocks to `built` and stops the
+   build: rewrite the status words
    before you commit. `prd-trace-exit=2` stops the build like `1`: the blocks stay `built`. On a
    stopped build's `built` close, give the trace findings to the user with the stop. Then, each
    its own call:

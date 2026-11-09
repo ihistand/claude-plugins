@@ -1,5 +1,44 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.5 baseline
+
+### Task 14: `deploy-confirms-named-steps` and `publish-own-artifact` (spec section 13)
+
+Two new cases for the two 0.8.5 skill rules with the most behaviour: a reply that names later human steps confirms
+them in the same `confirm` (spec 5.1), and the page is published as its own Artifact (spec 10). Recorded 2026-11-09
+on `feat/prd-toolkit-0.8.5` (uncommitted until Task 14's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.319,
+plugin 0.8.4 (the manifest bump is Task 15). RED ran on the worktree before any skill edit (the unchanged texts, the
+0.8.5 scripts, plus the new case directories and the new `deploy_repo.py` state); GREEN on the Task 14 text. Same
+command form as 0.8.2, `--case '<name>'`.
+
+Start states: `deploy-confirms-named-steps` is `deploy_repo.py at-ui-steps`, a runbook whose steps 2 to 5 are human
+steps done in the release UI (merge, promote, purge, announce), with a real run stopped at step 2; the prompt is the
+owner's reply, "done with 2; 3 and 4 were done in the same session", and says nobody can open a page.
+`publish-own-artifact` is `error_repo.py bug` (as `publishing-trigger`), and the prompt asks for the page "into our
+design artifact, <url>, as `prd.html` beside its main page". **No eval session has an Artifact tool** (the init
+message of every run lists none, and a `ToolSearch` for `select:Artifact` in a headless `claude -p` finds no deferred
+tool either), so no run can publish: the case grades the render and what the reply says about where the page goes.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `deploy-confirms-named-steps` RED | 0.60 | 0.80 | -0.20 | Unchanged text. All three with runs confirmed step 2 alone, resumed, and left the run stopped at step 3: "Your message came before the run reached step 3, and the runbook only accepts a reply given after the run stops at that step. So I didn't confirm 3 or 4 from your note about them." None confirmed step 5. Without the plugin, all three read `prd_deploy.py` and confirmed 2, 3 and 4 in one call, but with the reply in a shell variable (`--reply "$R"`), so `later-steps-carry-the-owners-words` fails (0.80). |
+| `publish-own-artifact` RED | 0.50 | 0.00 | +0.50 | Unchanged text. All three with runs rendered the page and, with no Artifact tool, gave its path and told the owner to put it inside the design artifact: "To publish it, upload that file to the artifact as `prd.html`. In a session that has the Artifact tool, I can do it from the rendered file." None said the page goes in as its own Artifact. Without the plugin no run rendered a page (0.00). |
+| `deploy-confirms-named-steps` GREEN | 1.00 | 0.80 | +0.20 | 3 of 3 with runs: one `confirm --step 2 --reply '<reply>' --step 3 --reply '<reply>' --step 4 --reply '<reply>'` with the owner's words typed out, then `resume`, which logged 3 and 4 `confirmed ahead` and stopped at step 5; step 5 left unconfirmed ("Your reply didn't name it, so I left it unconfirmed"), no question asked, no close. Without the plugin as RED (`--reply "$R"`). |
+| `publish-own-artifact` GREEN | 1.00 | 0.00 | +1.00 | 3 of 3 with runs rendered the page and, with no Artifact tool, said it goes in as its own Artifact: "Even with the tool, the page would go in as its own private Artifact and not as a file beside the design's main page. An Artifact only draws the PRD's `pre.mermaid` diagrams on its own main page." None told the owner to upload it as `prd.html`. Without the plugin as RED. |
+
+- **GREEN took one round** on the Task 14 text; no grader was changed after RED.
+- **Not proven with a real Artifact tool.** `publish-own-artifact` shows what the reply says; that a session with the
+  tool publishes the page as its own Artifact rests on rule 5's text and its pins, not on an eval run.
+- **Graders (`deploy-confirms-named-steps`):** `confirms-named-steps-in-one-call` (one Bash `prd_deploy.py confirm`
+  holding `--step 2`, `--step 3` and `--step 4`, in order), `later-steps-carry-the-owners-words` (in that call,
+  `--step 3` and `--step 4` each followed by a quoted `--reply` holding "same session"), `no-unnamed-step-confirmed`
+  (no `confirm` or `recover` with `--step 5`, `max: 0`), `resumed`, `no-gates-answer`, `skill-fired`. Checked under
+  Python `re` on synthetic commands in `tests/test_deploying_skill.py`: a step-2-only confirm and replies the session
+  wrote fail; single- and double-quoted owner's words pass; a `--step 5` is caught.
+- **Graders (`publish-own-artifact`):** `page-rendered` (a Bash `prd_publish.py render`),
+  `reply-names-its-own-artifact` (the last message holds `own Artifact`), `skill-fired`. The pattern is pinned on a
+  passing and a failing sentence in `tests/test_publishing_skill.py`.
+
 ## 0.8.4 baseline
 
 ### Task 8: `tester-ignores-readme` (spec sections 5 and 12)

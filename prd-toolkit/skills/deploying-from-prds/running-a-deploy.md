@@ -19,8 +19,10 @@ runbook says to run is not.
 **When the harness denies a `prd_deploy.py` command, or the script is slow, stop and tell the
 user**: name the command so they can allow it, exactly as you ran it, and wait for them. A denied
 `run` is never a reason to run its steps another way. Slow never means running the steps
-yourself. Run `run` and `resume` in the background, and wait for the exit: the script's 600 s
-timeout per command can outlive a foreground Bash call. A Bash call that timed out or was killed
+yourself. Run `run` and `resume` in the background, and wait for the exit: the script's timeout
+per command (600 s, or a `tests` level's own `Timeout` in testing.md's Levels; a `--timeout` given
+to `run` or `resume` overrides every one of them) can outlive a foreground Bash call. A `--timeout`
+goes on a command only when the user asks for it. A Bash call that timed out or was killed
 is reported to the user, never rerun, and never finished by hand: the step it was running is
 logged as started, and the next `resume` refuses with "step <N> started and did not finish"
 (the one way out is `recover`, in step 2). Never start a second `prd_deploy.py` command on a run
@@ -142,9 +144,28 @@ step 3 for a finished run they ask you to record.
      uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
      ```
 
-     Exit 0 prints `confirmed: step <N> run=<id>`. Then `prd_deploy.py resume`, in the
-     background, which continues
-     after the confirmed step and exits as `run` does; act on its exit by this list again:
+     **Later steps in the same reply.** When the reply also says later human steps are done
+     ("done with 2; 3 and 4 too"), the same `confirm` carries them: a later `--step` only for a
+     step the owner's reply names, by its number or its title, each with the owner's words for it,
+     verbatim (the whole reply when one sentence names several). The reply was written after the
+     run stopped at step N, so it is the reply to every step it names. The pairs run from the
+     stopped step through the human steps right after it, in order; the first step the reply does
+     not name ends the list, as does the first `agent` step. Never ask whether later steps are
+     done. A step the reply does not name stays unconfirmed, and the resumed run stops there.
+
+     ```bash
+     uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply to step N>' --step <M> --reply '<the reply to step M>'; echo "prd-deploy-exit=$?"
+     ```
+
+     One bad pair (a step that is not the next human step, an empty reply) refuses the whole call,
+     exit 2, and records nothing: report it. An inbox outcome confirms only the step its card
+     shows; when its reply names later steps, confirm each with that reply once `resume` stops
+     there.
+
+     Exit 0 prints `confirmed: step <N> run=<id>` (`confirmed: step <N>, <M> run=<id>` for
+     several). Then `prd_deploy.py resume`, in the background, which continues after the
+     confirmed steps, printing `step <M> human <env>: confirmed ahead` for each later one, and
+     exits as `run` does; act on its exit by this list again:
 
      ```bash
      uv run --script <scripts>/prd_deploy.py resume docs/prd/<slug> --run <id>; echo "prd-deploy-exit=$?"
@@ -157,13 +178,32 @@ step 3 for a finished run they ask you to record.
      "I'm away" leaves nobody to reply, so confirm nothing and resume nothing. Go to step 5 and
      report the run stopped at step N, with its `Do:` and the run id to carry on from.
 
+     **An error found while the run is stopped.** A defect seen while the run waits at a human
+     step (the owner's reply reports one, or the step's page shows it) is recorded at once, its
+     own Bash call, `--source` naming the run and the step:
+
+     ```bash
+     uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "<the error in one line>" --source "deploy run <run id>, step <N>"; echo "prd-error-exit=$?"
+     ```
+
+     Do not commit it, then resume as above: `resume` accepts an `errors.md` that only gained
+     open, unclassified entries naming this run and a step, and the close commit carries it (step
+     3; its `Refs:` names the `E-<nnn>`). Its diagnosis follows through `/prd-error E-<nnn>` after
+     the close, never during the run. Any other tracked change still refuses `resume` with "the
+     tracked tree has changes", and a committed entry with "HEAD moved since the run started".
+
      A run stopped at a human step is not closed: a close commit moves HEAD, and `resume` then
      refuses with "HEAD moved since the run started". Close it (step 3) only when the user
      declines the step or asks to record the run as it stands; it cannot be resumed after.
    - **4, failed.** Stop. Run `git rev-parse --git-common-dir` as its own call, from the
      repository root (a relative answer is relative to it), and Read
      `<that dir>/prd-toolkit/deploys/<run id>.jsonl`: the failed step's record holds its command,
-     exit code and the stdout and stderr tails (a `check` inside it for a failed `Check:`). Show
+     exit code and the stdout and stderr tails (a `check` inside it for a failed `Check:`). A
+     `` Check: `<command>` prints `<text>` `` fails with `no stdout line equals '<text>'`, and a
+     `` Check: `<command>` matches `<pattern>` `` (one stdout line, stripped, must match the whole
+     regular expression) with `no stdout line matches '<pattern>'`. A timed-out command names the
+     value that applied: `timed out after <N> s (the <level> level's Timeout)`, `(--timeout)` or
+     `(the default)`. Show
      the user the failed step, those output tails and its `Rollback:` command (the run printed it
      as `` rollback: `<command>` ``; a step without one has none to offer). A step with a `start`
      record and no step record (the run printed `could not write the log`) is the failed step:
@@ -287,6 +327,11 @@ step 3 for a finished run they ask you to record.
    uv run --script <scripts>/prd_deploy.py check docs/prd/<slug> --run <id> --diff <base>..HEAD; echo "prd-deploy-exit=$?"
    ```
 
+   A note on stderr from `run`, `resume` or `check`,
+   `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too`,
+   is not a finding and changes no exit: the environment deploys from `<branch>` (its `Branch` in
+   operations.md's Environments), and step 5 passes it on.
+
    `prd_deploy.py check` compares the run's HEAD with the close. Exit 0 is clean. Exit 1 prints
    one finding per line: a range that does not start at the run's HEAD, a change outside the
    `## Deployed` rows and `Status:` lines, a row the log does not support, a reached environment
@@ -300,7 +345,9 @@ step 3 for a finished run they ask you to record.
    stopped at a human step, with its `Do:`; the rollback offered and its result, or that it was
    not run and its command; the Deployed rows written; the IDs moved to `live`; any `E-nnn`
    added; a trace finding at the close, with where it went; the close commit and the close
-   check's result. A rollback not run before the close stays unrun: the close commit moved
+   check's result. For each branch note, tell the owner to push the close commit to `<branch>`,
+   naming the commit. Never push it yourself, to any branch. A rollback not run before the close
+   stays unrun: the close commit moved
    HEAD, so the rollback can no longer run through the script and is never run by hand. Name
    its command for the user only as information. After a run whose `tests` step passed, run, as
    its own call:

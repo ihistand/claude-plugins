@@ -43,9 +43,13 @@ the team can find it" change nothing below.
    denies it), deleted after the render; never `git add` or commit either file.
    Nothing under `docs/prd/` is written or edited while publishing.
 5. **The Artifact only when the session has it.** When the session has the Artifact tool, offer
-   to publish the rendered file as a private Artifact, or to update one the user names; a
-   request that already asks for an Artifact is the yes. Give the tool the rendered file
-   unchanged. Without the tool, when the user declines, or with no one to answer, give the path.
+   to publish the rendered file as a private Artifact, or to update one the user names that
+   already holds this page as its main page; a request that already asks for an Artifact is the
+   yes. Give the tool the rendered file unchanged, always as its own private Artifact, never as a
+   file inside another Artifact (a `files` entry such as `prd.html` beside a design's page): an
+   Artifact draws `pre.mermaid` diagrams only on its own main page. A request to put the page inside
+   another Artifact gets its own Artifact instead, and the reply says why in one line. Without
+   the tool, when the user declines, or with no one to answer, give the path.
 
 ## Publishing, step by step
 
@@ -91,7 +95,9 @@ this skill" when the skill loads).
    | 2 | usage, dependency or tool error | The same `rm`. Report it verbatim and stop |
 
 5. **Offer and report.** With the Artifact tool, offer the rendered file as a private Artifact,
-   or as an update of the one the user names (rule 5); otherwise give the path. Report: the
+   or as an update of the one the user names (rule 5); otherwise give the path. When the user
+   asked for the page inside another Artifact, the report says it goes in as its own Artifact,
+   never as a file inside that one, and why, with the tool or without it. Report: the
    page's absolute path (untracked in the repository: move or delete it before the next
    `/prd-build`), the PRD version, the areas summarized with their IDs, and in one line each
    what was asked for and left out, and why (no PRD line says it: `/prd-change` first; logs,
@@ -116,6 +122,10 @@ Quoted from runs without this skill (evals/baselines/publishing-prds.md), except
 - A summary saying "French is not supported yet", or citing another area's ID; the summaries in
   `docs/prd/`; `git add` of either file; a page edited after the render. (Spec §10.)
 
+- "To publish it, upload that file to the artifact as `prd.html`. In a session that has the
+  Artifact tool, I can do it from the rendered file." (RED runs of `evals/publish-own-artifact`.)
+  The page is its own Artifact, never a file inside the design one.
+
 **All of these mean: stop, put back what you changed, and return to the step whose rule you
 broke.**
 
@@ -132,6 +142,7 @@ broke.**
 | "The vendored copy can't render, so I'll write a template." | `prd_publish.py` runs from the plugin. A page you build is not the toolkit's page. |
 | "The page belongs with the PRD, in `docs/prd/`." | The renderer refuses it: the page is a generated snapshot. |
 | "Commit the page so the team can find it." | A committed snapshot goes stale on the next change. Share it as an Artifact or a file. |
+| "They asked for it inside the design artifact as `prd.html`." | An Artifact draws `pre.mermaid` diagrams only on its own main page. Publish the page as its own Artifact and say why; link it from the design if they like. |
 | "The render refused a summary, so I'll render without summaries." | Fix the summary the `refused:` line names. |
 
 ## Related skills

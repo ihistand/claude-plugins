@@ -124,7 +124,7 @@ def test_gate_forms_in_both_files():
                 if f"<scripts>/{script}" in line:
                     assert f'echo "{gate}=$?"' in line, (path.name, line)
     t = RUN.read_text(encoding="utf-8")
-    assert '--diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"' in t
+    assert '--diff <base>..prd-round/<area>-<n> --sources <SNAP>/sources-<n>.txt; echo "prd-build-check-exit=$?"' in t
     assert '--results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"' in t
 
 
@@ -753,3 +753,32 @@ def test_red_flag_quotes_a_hand_edit_under_the_vendored_copy():
              "(not prd_hooks.py install).")
     assert quote in red and "`.prd-toolkit/`" in red
     assert red.index(quote) < red.index("## Common Rationalizations")
+
+
+# --- 0.8.5, spec 13 (items 7 and 8): Task 14's pins ---
+
+MOVED = "`MOVED: line <L> is now line <M>`"
+SOURCES_FILE = "<SNAP>/sources-<n>.txt"
+SOURCES_CALL = ('uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n> '
+                f'--sources {SOURCES_FILE}; echo "prd-build-check-exit=$?"')
+
+
+def test_085_both_build_texts_name_moved():
+    for path in (SKILL, RUN):
+        assert MOVED in flat(path), path.name
+    rule1 = flat(SKILL).split("1. **The pack first.**", 1)[1].split("2. **Write the unit tests first**", 1)[0]
+    for reason in ("`STALE: the cited line's text is gone`", "`STALE: the cited line's text appears <N> times`",
+                   "`STALE: <path> is not in <sha>`", MOVED):
+        assert reason in rule1, reason
+    close = flat(RUN).split("`prd-context-exit=` must be `0`: a STALE code item", 1)[1].split("git add docs/prd/<slug>", 1)[0]
+    assert MOVED in close and "rewrite that block's `Source:` to line `<M>`" in close
+
+
+def test_085_step_4_writes_sources_outside_the_prd_folder_and_passes_it():
+    t = flat(RUN)
+    four = t.split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    assert f"with the Write tool, to `{SOURCES_FILE}`" in four
+    assert "outside the PRD folder" in four
+    assert "`sources:`" in four
+    assert SOURCES_CALL in RUN.read_text(encoding="utf-8")
+    assert "a line this round added or changed" in flat(SKILL)
