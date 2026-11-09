@@ -781,4 +781,30 @@ def test_085_step_4_writes_sources_outside_the_prd_folder_and_passes_it():
     assert "outside the PRD folder" in four
     assert "`sources:`" in four
     assert SOURCES_CALL in RUN.read_text(encoding="utf-8")
-    assert "a line this round added or changed" in flat(SKILL)
+
+
+# Fix round 1, Ruling 38: a `sources:` finding sends the report back; it never fails the round (spec 9).
+SOURCES_BACK = ("A `sources:` line is not a failed round: send the builder its report back with the finding, to "
+                "restate its SOURCES. It is not counted under **Rounds**, and no new round branch is cut.")
+OTHER_FINDINGS = "Every other `--diff` line fails the round as above."
+# Ruling 39: SOURCES names a block only when the round added or changed where its implementation starts.
+SOURCES_FIELD = ("one line per block whose implementation start this round added or changed: where its implementation "
+                 "starts, never another changed line picked to pass the check. A block whose start the round did not "
+                 "touch is left out, and SOURCES is `none` when no block's start was touched")
+
+
+def test_085_fix1_a_sources_finding_goes_back_to_the_builder():
+    four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    assert SOURCES_BACK in four and OTHER_FINDINGS in four
+    assert four.index(SOURCES_BACK) < four.index(OTHER_FINDINGS)
+    assert "is a finding like any other `--diff` line and fails the round" not in four
+    assert "restate SOURCES only: change no file and make no commit" in flat(SKILL)
+
+
+def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
+    assert SOURCES_FIELD in flat(SKILL)
+    assert "a line this round added or changed" not in flat(SKILL)
+    four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    assert "A report whose SOURCES is `none` passes no `--sources`." in four
+    assert "one SOURCES line per block whose implementation start the round added or changed" in four
+    assert "From each block's SOURCES line in the latest builder report that names it" in flat(RUN)

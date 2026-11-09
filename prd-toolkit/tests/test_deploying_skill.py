@@ -499,3 +499,15 @@ def test_085_deploy_graders_on_synthetic_commands():
     assert not _grader_counts(case, "later-steps-carry-the-owners-words", own)
     assert _grader_counts(case, "no-unnamed-step-confirmed", good + " --step 5 --reply 'x'")
     assert not _grader_counts(case, "no-unnamed-step-confirmed", good)
+
+
+# Fix round 1, Ruling 40: through the inbox each later human step is its own gate; never confirmed from an outcome.
+INBOX_GATE = ("Through the decision inbox each later human step is its own gate, which the owner answers when the run "
+              "stops there; one `confirm` for several steps is the chat route, with the owner's own reply naming each.")
+
+
+def test_085_fix1_inbox_steps_stay_the_owners():
+    two = step(2)
+    assert INBOX_GATE in two
+    assert "when its reply names later steps, confirm each with that reply" not in two
+    assert "(the chat route; through the inbox each step is its own gate)" in flat(SKILL)

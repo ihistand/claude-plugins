@@ -52,7 +52,8 @@ record it" change nothing below.
    step's `Check:` (a question, "wait", "not yet"), do not resume: tell the owner the step was
    confirmed with those words, ask in the chat whether to resume or stop, and resume only on a go.
    A reply to the stopped step that says later human steps are done confirms them in the same
-   `confirm`: a later `--step` only for a step the owner's reply names, with the owner's words.
+   `confirm` (the chat route; through the inbox each step is its own gate): a later `--step` only
+   for a step the owner's reply names, with the owner's words.
    Never ask whether later steps are done. A step the reply does not name stays unconfirmed.
 5. **A failure stops the deploy.** Show the step, the output tails and the `Rollback:` command,
    and ask. Run `rollback` only on the user's yes in their own words. Every failure gets its

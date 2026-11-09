@@ -284,19 +284,22 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      Before that check, write the report's SOURCES field verbatim, with the Write tool, to
      `<SNAP>/sources-<n>.txt` (`<SNAP>` is outside the repository, so outside the PRD folder):
      one `<ID>: <path>:<line>` line per block, never edited or completed by you. `--sources`
-     holds each line to a file and a hunk the round changed. A `sources:` line is a finding like
-     any other `--diff` line and fails the round: `sources: <ID>: <path> is not changed in
-     <base>..<head>`, `sources: <ID>: <path>:<line> is outside the round's changes (hunks <a>-<b>,
-     …)`, or `sources: line <n> is not '<ID>: <path>:<line>'` (prose after the line number, or no
-     line number). The next round's prompt carries it as its `Failure:`. A report whose SOURCES
-     is `none` (a round that changed nothing) passes no `--sources`.
+     holds each line to a file and a hunk the round changed. Its findings: `sources: <ID>: <path>
+     is not changed in <base>..<head>`, `sources: <ID>: <path>:<line> is outside the round's
+     changes (hunks <a>-<b>, …)`, or `sources: line <n> is not '<ID>: <path>:<line>'` (prose after
+     the line number, or no line number). A `sources:` line is not a failed round: send the
+     builder its report back with the finding, to restate its SOURCES. It is not counted under
+     **Rounds**, and no new round branch is cut. Write the restated field to the same file and
+     run round step 5's check again; merge only when it is clean. Every other `--diff` line fails
+     the round as above. A report whose SOURCES is `none` passes no `--sources`.
 
      `prd-build-check-exit=1` fails the round: each line names a file in the PRD folder or a
      tester's test the builder touched; record the lines as the round's failure. `2` is a usage
      error: fix the command. Every commit message in the log carries a `Refs:` line naming the
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
-     one SOURCES line per block the round built or changed. A QUESTIONS line that is not a test
+     one SOURCES line per block whose implementation start the round added or changed. A
+     QUESTIONS line that is not a test
      dispute is a PRD gap and stops the build, as **Stops** says: `built` if a merge happened,
      otherwise no status. The
      one exception: `QUESTIONS: worktree is not on the build branch` is not a PRD gap. The round
@@ -476,7 +479,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    steps 4 and 5, already committed.
 
    Run `git rev-parse --short HEAD` as its own call, after the last merge. From each block's
-   SOURCES line in the latest builder report that holds one, write the block's
+   SOURCES line in the latest builder report that names it, write the block's
    `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
 
    **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed

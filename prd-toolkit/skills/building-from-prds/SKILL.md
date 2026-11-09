@@ -193,8 +193,8 @@ On such an area, in place of writing unit tests first (R-1):
 3. **The linters.** You run the §5 standards linters that apply: each `enforced` row whose glob matches a file you
    wrote, as rule 5 says, and never the pack's `checks` level: those tests are the tester's, and they
    run at the caller's reconcile like every non-unit level.
-4. **Report and commit as always**: `UNIT none`, a SOURCES line per block (`FR-010:
-   docs/guide/install.md:1`), and the commit with `Refs: <IDs>`.
+4. **Report and commit as always**: `UNIT none`, a SOURCES line per block whose start the round
+   wrote (`FR-010: docs/guide/install.md:1`), and the commit with `Refs: <IDs>`.
 
 Every other rule stands: never the PRD folder, never a tester's test, nothing outside your IDs,
 no status.
@@ -206,12 +206,16 @@ In this order, each field on its own line:
 ```
 CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
-SOURCES     <ID>: <path>:<line>, one line per block this round built or changed: where its
-            implementation starts, on a line this round added or changed (the caller holds each
-            line to the round's hunks); nothing after the line number
+SOURCES     <ID>: <path>:<line>, one line per block whose implementation start this round added
+            or changed: where its implementation starts, never another changed line picked to
+            pass the check. A block whose start the round did not touch is left out, and SOURCES
+            is `none` when no block's start was touched. Nothing after the line number
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the round branch and its commit SHAs
 ```
+
+When the caller sends your report back with a `sources:` finding, restate SOURCES only: change
+no file and make no commit.
 
 QUESTIONS holds two kinds of line, and nothing else:
 

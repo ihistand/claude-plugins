@@ -158,9 +158,9 @@ step 3 for a finished run they ask you to record.
      ```
 
      One bad pair (a step that is not the next human step, an empty reply) refuses the whole call,
-     exit 2, and records nothing: report it. An inbox outcome confirms only the step its card
-     shows; when its reply names later steps, confirm each with that reply once `resume` stops
-     there.
+     exit 2, and records nothing: report it. Through the decision inbox each later human step is
+     its own gate, which the owner answers when the run stops there; one `confirm` for several
+     steps is the chat route, with the owner's own reply naming each.
 
      Exit 0 prints `confirmed: step <N> run=<id>` (`confirmed: step <N>, <M> run=<id>` for
      several). Then `prd_deploy.py resume`, in the background, which continues after the
