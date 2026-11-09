@@ -314,6 +314,12 @@ def test_toolkit_range_excludes_this_toolkit(prd, tmp_path, monkeypatch):
     ({"toolkit": "about 0.8"}, "toolkit", "pack demo: pack.yaml: toolkit must be a version range such as >=0.8.0,<0.9: "
      "comma-separated clauses of >=, >, <=, <, == or != and a version X, X.Y or X.Y.Z"),
     ({"colour": "blue"}, "colour", "pack demo: pack.yaml: unknown key colour"),
+    ({"levels": [{"level": "checks", "command": "x", "timeout": 0}]}, "levels",
+     "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
+    ({"levels": [{"level": "checks", "command": "x", "timeout": "x"}]}, "levels",
+     "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
+    ({"levels": [{"level": "checks", "command": "x", "timeout": True}]}, "levels",
+     "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
     ({"contract_types": [{"type": "outline"}]}, "contract-types", "pack demo: pack.yaml: contract-types[0] must be a mapping with type, files and validator"),
     ({"target_kinds": {"doc": "outline"}}, "target-kinds", "pack demo: pack.yaml: target-kinds: doc maps to outline, not a contract type of this pack"),
     ({"rubrics": "rubrics.md"}, "rubrics", "pack demo: pack.yaml: rubrics: rubrics.md is not a file in the pack"),
@@ -326,6 +332,11 @@ def test_manifest_errors(tmp_path, keys, key, message):
     with pytest.raises(packs.ManifestError) as e:
         packs.load_manifest(folder, "demo@test")
     assert (str(e.value), e.value.key) == (message, key)
+
+
+def test_a_level_timeout_loads(tmp_path):
+    folder = write_pack(tmp_path, "demo", "1.0.0", levels=[{"level": "checks", "command": "x", "timeout": 1200}])
+    assert packs.load_manifest(folder, "demo@test").levels[0]["timeout"] == 1200
 
 
 def test_manifest_error_is_a_finding(prd, tmp_path, monkeypatch):

@@ -99,3 +99,29 @@ def deploy_repo(tmp_path: Path) -> Path:
     git(repo, "init", "-q", "-b", "main")
     commit(repo, "Fixture", ".gitignore", "docs", "tests", "tools")
     return repo
+
+
+AHEAD_TAIL = """2. Approve staging (actor: human) (env: staging)
+   Do: reply "staging ok"
+   Check: the reply says "staging ok"
+3. Approve notes (actor: human) (env: staging)
+   Do: reply "notes ok"
+   Check: the reply says "notes ok"
+4. Approve production (actor: human) (env: production)
+   Do: reply "deploy production"
+   Check: the reply says "deploy production"
+5. Mark done (actor: agent) (env: production)
+   Run: `mkdir -p .deploy && touch .deploy/step5`
+   Check: `ls .deploy/step5` prints `.deploy/step5`
+
+"""
+
+
+def three_human_steps(repo: Path) -> None:
+    """Runbook of agent step 1, human steps 2, 3 (staging) and 4 (production), agent step 5."""
+    p = repo / "docs/prd/orders/operations.md"
+    text = p.read_text(encoding="utf-8")
+    head = text.split("2. System tests on staging")[0]
+    rest = text.split("## Drift", 1)[1]
+    p.write_text(head + AHEAD_TAIL + "## Drift" + rest, encoding="utf-8")
+    commit(repo, "Three human steps", "docs/prd/orders/operations.md")

@@ -474,3 +474,78 @@ def test_stale_judges_a_bracketed_test_name_by_its_own_commit(repo):
     commit(repo, "fix the case")
     assert stale(repo, "T-001.1") == [
         f"stale T-001.1 tests/test_[x].py: its test case changed after the test (last changed in {own})"]
+
+
+# --- --sources: SOURCES lines held to the round's hunks ---
+
+@pytest.fixture
+def xrepo(repo):
+    (repo / "src/x.py").write_text("".join(f"l{i}\n" for i in range(1, 91)))
+    (repo / "src/y.py").write_text("y\n")
+    (repo / "src/my file.py").write_text("a\nb\nc\n")
+    commit(repo, "x base")
+    git(repo, "tag", "xbase")
+    lines = [f"l{i}\n" for i in range(1, 91)]
+    for i in list(range(12, 31)) + list(range(55, 62)):
+        lines[i - 1] = f"new{i}\n"
+    del lines[80:]  # lines 81.. deleted
+    (repo / "src/x.py").write_text("".join(lines))
+    (repo / "src/my file.py").write_text("a\nB\nc\n")
+    commit(repo, "round")
+    return repo
+
+
+def sources(root: Path, text: str) -> list[str]:
+    return buildcheck.sources_findings(root, "xbase..HEAD", text)
+
+
+def test_sources_inside_a_hunk_passes(xrepo):
+    assert sources(xrepo, "FR-012: src/x.py:20\n") == []
+
+
+def test_sources_outside_hunks_lists_them(xrepo):
+    assert sources(xrepo, "FR-012: src/x.py:40\n") == [
+        "sources: FR-012: src/x.py:40 is outside the round's changes (hunks 12-30, 55-61, 80-81)"]
+
+
+def test_sources_unchanged_file(xrepo):
+    assert sources(xrepo, "FR-012: src/y.py:1\n") == ["sources: FR-012: src/y.py is not changed in xbase..HEAD"]
+
+
+@pytest.mark.parametrize("n", [80, 81])
+def test_sources_deletion_point_passes_at_c_and_c_plus_1(xrepo, n):
+    assert sources(xrepo, f"FR-012: src/x.py:{n}\n") == []
+
+
+def test_sources_one_line_hunk_and_path_with_spaces(xrepo):
+    assert sources(xrepo, "FR-001: src/my file.py:2\n") == []
+    assert sources(xrepo, "FR-001: src/my file.py:3\n")[0].endswith("(hunks 2-2)")
+
+
+def test_sources_malformed_line(xrepo):
+    assert sources(xrepo, "FR-001: src/x.py:20\ngarbage\n") == ["sources: line 2 is not '<ID>: <path>:<line>'"]
+
+
+def test_sources_label_indent_crlf_blank_and_empty(xrepo):
+    assert sources(xrepo, "SOURCES     FR-012: src/x.py:20\r\n   FR-013: src/x.py:56\r\n\r\n") == []
+    assert sources(xrepo, "") == []
+
+
+def test_sources_renamed_file(xrepo):
+    git(xrepo, "mv", "src/y.py", "src/z.py")
+    commit(xrepo, "rename")
+    assert sources(xrepo, "FR-001: src/z.py:1\n") == []
+
+
+def test_cli_sources(xrepo, tmp_path_factory):
+    f = tmp_path_factory.mktemp("s") / "sources.txt"
+    f.write_text("FR-012: src/x.py:40\n")
+    code, out, _ = run(xrepo, "docs/prd/orders", "--diff", "xbase..HEAD", "--sources", str(f))
+    assert code == 1 and out.startswith("sources: FR-012: src/x.py:40 is outside")
+    f.write_text("FR-012: src/x.py:20\n")
+    assert run(xrepo, "docs/prd/orders", "--diff", "xbase..HEAD", "--sources", str(f))[:2] == (0, "")
+
+
+def test_cli_sources_without_diff_is_usage_error(xrepo):
+    code, out, err = run(xrepo, "docs/prd/orders", "--stale", "--tids", "T-001.1", "--sources", "f")
+    assert code == 2 and out == "" and err

@@ -107,11 +107,11 @@ def new_section_line(prd):
 J, MIN, MAJ, PAT = "needs judgment", "minor", "major", "patch"
 # rule index in change.BUMP_RULES -> [(mutator, {every expected item id: level}, overall level, id checked for change and reason, its change)]
 CASES = {
-    0: [(new_ac, {"AC-002.3": MIN}, MIN, "AC-002.3", "added"), (new_block, {"FR-009": MIN}, MIN, "FR-009", "added")],
+    0: [(new_ac, {"AC-002.3": MIN}, MIN, "AC-002.3", "added"), (new_block, {"FR-009": MIN, "AC-009.1": MIN}, MIN, "FR-009", "added")],
     1: [(new_ac_with_test, {"AC-002.3": MIN, "T-002.3": MIN}, MIN, "T-002.3", "added")],
     2: [
         (lambda p: edit(p, "features/api.md", "- AC-002.2 If the order", "- AC-002.2 (removed in 1.1.0) If the order"), {"AC-002.2": MAJ}, MAJ, "AC-002.2", "removed"),
-        (lambda p: edit(p, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed"), {"FR-003": MAJ}, MAJ, "FR-003", "removed"),
+        (lambda p: edit(p, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: removed"), {"FR-003": MAJ, "AC-003.1": MAJ, "AC-003.2": MAJ, "T-003.1": MAJ, "T-003.2": MAJ}, MAJ, "FR-003", "removed"),
     ],
     3: [(drop_error_code, {"IMPORT_EMPTY": MAJ}, MAJ, "IMPORT_EMPTY", "removed")],
     4: [(ac_text_change, {"AC-002.2": J}, J, "AC-002.2", "changed")],
@@ -131,6 +131,14 @@ CASES = {
     9: [(regression_test, {"T-002.3": J}, J, "T-002.3", "added"),
         (lambda p: (no_touch_error(p), commit_now(p), regression_test(p)), {"T-002.3": J}, J, "T-002.3", "added")],
     10: [
+        (lambda p: (name_service_pack(p), commit_now(p), edit(p, "prd.md", "- Pack: service 1.0.0 (prd-toolkit)", "- Pack: service 1.0.1 (prd-toolkit)")),
+         {"service": PAT}, PAT, "service", "changed"),
+    ],
+    11: [
+        (lambda p: edit(p, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved"),
+         {"FR-003": PAT}, PAT, "FR-003", "changed"),
+    ],
+    12: [
         (lambda p: edit(p, "operations.md", "## Drift", "## Drift\n\nNew words."), {"operations.md": J}, J, "operations.md", "changed"),
         (new_error_code, {"NEW_CODE": J}, J, "NEW_CODE", "added"),
         (drop_case, {"T-002.2": J}, J, "T-002.2", "removed"),
@@ -147,6 +155,10 @@ CASES = {
 PARAMS = [(i, *case) for i, cases in CASES.items() for case in cases]
 
 
+def name_service_pack(prd):
+    edit(prd, "prd.md", "- Not used: message brokers", "- Pack: service 1.0.0 (prd-toolkit)\n- Not used: message brokers")
+
+
 def commit_now(prd):
     """Commit what is on disk so far, so a precondition is part of the base."""
     repo = prd.parents[2]
@@ -155,7 +167,7 @@ def commit_now(prd):
 
 def test_every_rule_has_a_case():
     assert set(CASES) == set(range(len(change.BUMP_RULES)))
-    assert [lvl for _, lvl in change.BUMP_RULES] == ["minor", "minor", "major", "major", "needs judgment", "patch", "needs judgment", "major", "patch", "needs judgment", "needs judgment"]
+    assert [lvl for _, lvl in change.BUMP_RULES] == ["minor", "minor", "major", "major", "needs judgment", "patch", "needs judgment", "major", "patch", "needs judgment", "patch", "patch", "needs judgment"]
 
 
 @pytest.mark.parametrize("index,mutate,expected,overall,item_id,kind", PARAMS, ids=[f"rule{p[0]}-{p[4]}" for p in PARAMS])
@@ -166,7 +178,9 @@ def test_each_rule(repo, index, mutate, expected, overall, item_id, kind):
     assert doc["level"] == overall
     item = next(i for i in doc["items"] if i["id"] == item_id)
     assert item["change"] == kind
-    want = f"unclassified change in {item['file']}" if expected[item_id] == J and index == 10 else change.BUMP_RULES[index][0]
+    want = f"unclassified change in {item['file']}" if expected[item_id] == J and index == change._OTHER_FILE else change.BUMP_RULES[index][0]
+    if index == change._STATUS:
+        want = "status verified (since 1.0.0) → approved"
     assert item["reason"] == want
     for i in doc["items"]:
         assert i["line"] > 0 and i["file"], i
@@ -210,7 +224,7 @@ def test_ignored_lines_do_not_appear(repo):
     edit(prd, "prd.md", "status: Approved", "status: In review")
     edit(prd, "prd.md", "| NFR-004 | Order lookup latency | verified |", "| NFR-004 | Order lookup latency | live |")
     edit(prd, "prd.md", "| 1.0.0 | 2026-10-29 | Initial release |", "| 1.1.0 | 2026-11-03 | x; pending | FR-009 |\n| 1.0.0 | 2026-10-29 | Initial release |")
-    edit(prd, "features/api.md", "### FR-002 Get an order\nStatus: verified (since 1.0.0)", "### FR-002 Get an order\nStatus: live (since 1.0.0)\nSource: src/api.py:10")
+    edit(prd, "features/api.md", "### FR-002 Get an order\nStatus: verified (since 1.0.0)", "### FR-002 Get an order\nStatus: verified (since 1.0.0)\nSource: src/api.py:10")
     (prd / ".prd-review.json").write_text("{}", encoding="utf-8")
     doc = run_bump(repo)
     assert doc["items"] == [] and doc["level"] == "patch"
@@ -333,3 +347,12 @@ def test_a_removed_case_and_its_id_dropped_from_tests_is_one_item(repo):
     edit(prd, "features/api.md", TESTS_OLD, "Tests: T-002.1 [integration]  (test-cases/api.yaml)")
     doc = run_bump(repo)
     assert [(i["id"], i["change"], i["level"]) for i in doc["items"]] == [("T-002.2", "removed", J)]
+
+
+def test_a_moved_status_prints_its_old_and_new_value(repo):
+    prd = repo / PRD
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved")
+    line = (prd / "features/api.md").read_text().split("\n").index("### FR-003 Delete an order") + 2
+    code, out, _ = call("bump", str(prd), "--base", "HEAD")
+    assert code == 0 and out.splitlines()[0] == f"patch FR-003 features/api.md:{line} status verified (since 1.0.0) → approved"
+    assert out.endswith("level patch\n")

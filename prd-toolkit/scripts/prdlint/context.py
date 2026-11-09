@@ -35,7 +35,9 @@ class Item:
     file: str  # PRD-relative; repo-relative for Code items
     line: int | None
     text: str
-    stale: bool = False
+    stale: bool = False  # the item is STALE, counted or not
+    counted: bool = True  # false for a block pulled in through another block's Traces:
+    moved: int | None = None  # a MOVED cited line's line number now
 
 
 class ContextError(Exception):
@@ -117,10 +119,11 @@ def _entry_reqs(prd: Prd, eid: str) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
-def _select(prd: Prd, area: str, req: list[str] | None) -> tuple[list[ReqBlock], set[str]]:
-    """The selected blocks, and the errors.md entries --req named."""
+def _select(prd: Prd, area: str, req: list[str] | None) -> tuple[list[ReqBlock], set[str], set[str]]:
+    """The selected blocks, the errors.md entries --req named, and the IDs asked for (the rest were pulled in by Traces:)."""
     if req is None:
-        return [b for b in prd.blocks if b.file == f"features/{area}.md" and b.kind in ("UJ", "FR")], set()
+        blocks = [b for b in prd.blocks if b.file == f"features/{area}.md" and b.kind in ("UJ", "FR")]
+        return blocks, set(), {b.id for b in blocks}
     by_id = {}
     for b in prd.blocks:
         by_id.setdefault(b.id, b)
@@ -138,7 +141,7 @@ def _select(prd: Prd, area: str, req: list[str] | None) -> tuple[list[ReqBlock],
     for i in roots:
         for _, text in _field_lines(by_id[i].lines, "Traces"):
             wanted |= {u for u in _UJ.findall(text) if u in by_id}
-    return [b for b in by_id.values() if b.id in wanted], set(entries)
+    return [b for b in by_id.values() if b.id in wanted], set(entries), set(roots)
 
 
 def _stack(prd: Prd) -> list[Item]:
@@ -336,11 +339,7 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
 
 
 def _stale_reason(root: Path, path: str, sha: str, target: Path) -> str | None:
-    ok = _git(root, "cat-file", "-e", f"{sha}^{{commit}}")
-    if ok is None or ok.returncode != 0:
-        return f"unknown commit {sha}"
-    if not target.is_file():
-        return "file missing"
+    """The whole-file rule, for a blank cited line: changed since the commit, or uncommitted changes."""
     log = _git(root, "log", "--format=%H", f"{sha}..HEAD", "--", path)
     if log is None or log.returncode != 0:
         return f"cannot compare with {sha}"
@@ -352,37 +351,88 @@ def _stale_reason(root: Path, path: str, sha: str, target: Path) -> str | None:
     return "uncommitted changes" if diff.returncode else None
 
 
-def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, context: int) -> Item:
+def _rows(data: bytes) -> list[str]:
+    rows = data.decode("utf-8", errors="replace").split("\n")
+    return [r.rstrip("\r") for r in (rows[:-1] if rows and rows[-1] == "" else rows)]
+
+
+def line_state(root: Path, path: str, line: int, sha: str) -> tuple[str, int | None, str | None]:
+    """How the cited line stands: ("current", None, None), ("moved", <new line>, None) or ("stale", None, <reason>).
+
+    The text at `<path>:<line>` in commit `sha` is compared, whitespace stripped, with the file as it is now.
+    """
     target = (root / path).resolve()
     if not target.is_relative_to(root.resolve()):
         target = root / "<outside repository>"
-    reason = _stale_reason(root, path, sha, target)
+    ok = _git(root, "cat-file", "-e", f"{sha}^{{commit}}")
+    if ok is None or ok.returncode != 0:
+        return "stale", None, f"unknown commit {sha}"
+    if not target.is_file():
+        return "stale", None, "file missing"
+    old = _git(root, "show", f"{sha}:{path}")
+    if old is None or old.returncode != 0:
+        return "stale", None, f"{path} is not in {sha}"
+    then = _rows(old.stdout.encode("utf-8", errors="replace"))
+    if line < 1 or line > len(then):
+        return "stale", None, f"line {line} is past the end ({len(then)} lines)"
+    wanted = then[line - 1].strip()
+    if not wanted:
+        reason = _stale_reason(root, path, sha, target)
+        return ("stale", None, reason) if reason else ("current", None, None)
+    now = [r.strip() for r in _rows(target.read_bytes())]
+    if line <= len(now) and now[line - 1] == wanted:
+        return "current", None, None
+    hits = [n for n, r in enumerate(now, 1) if r == wanted]
+    if len(hits) == 1:
+        return "moved", hits[0], None
+    return "stale", None, "the cited line's text is gone" if not hits else f"the cited line's text appears {len(hits)} times"
+
+
+_PULLED = " (pulled in; not counted)"
+
+
+def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, context: int, counted: bool = True) -> Item:
+    state, moved, reason = line_state(root, path, line, sha)
+    target = (root / path).resolve()
     shown: list[str] = []
-    if target.is_file():
-        rows = target.read_bytes().decode("utf-8", errors="replace").split("\n")
-        rows = [r.rstrip("\r") for r in (rows[:-1] if rows and rows[-1] == "" else rows)]
-        if reason is None and line > len(rows):
-            reason = f"line {line} is past the end ({len(rows)} lines)"
-        lo, hi = max(1, line - context), min(len(rows), line + context)
+    centre = moved or line
+    if target.is_file() and target.is_relative_to(root.resolve()):
+        rows = _rows(target.read_bytes())
+        lo, hi = max(1, centre - context), min(len(rows), centre + context)
         shown = [f"{n:>5}  {rows[n - 1]}" for n in range(lo, hi + 1)]
     head = [f"### {path}:{line} @{sha}"]
-    if reason:
-        head.append(f"STALE: {reason}; the cited line may have moved")
-    return Item("Code", block.id, path, line, "\n".join(head + shown), stale=bool(reason))
+    if state == "moved":
+        head.append(f"MOVED: line {line} is now line {moved}")
+    elif reason:
+        whole_file = reason.startswith(("changed since", "uncommitted changes", "cannot compare"))
+        head.append(f"STALE: {reason}" + ("; the cited line may have moved" if whole_file else "") + ("" if counted else _PULLED))
+    return Item("Code", block.id, path, line, "\n".join(head + shown), stale=bool(reason), counted=counted,
+                moved=moved if state == "moved" else None)
 
 
-def _code(blocks: list[ReqBlock], area: str, root: Path, context: int) -> list[Item]:
-    items, seen = [], set()
+def _refs(b: ReqBlock) -> list[tuple[str, int, str]]:
+    return [(m["path"], int(m["line"]), m["sha"]) for m in _SOURCE_REF.finditer(b.source or "")]
+
+
+def _code(blocks: list[ReqBlock], area: str, root: Path, context: int, counted: set[str] | None = None) -> list[Item]:
+    def mine(b: ReqBlock) -> bool:
+        return counted is None or b.id in counted
+
+    owner: dict[tuple[str, int, str], str] = {}  # one excerpt per ref, owned by its first asked block, else its first block
+    for b in sorted(blocks, key=lambda b: not mine(b)):  # stable: file order within asked, then pulled in
+        for ref in _refs(b):
+            owner.setdefault(ref, b.id)
+    items = []
     for b in blocks:
         if b.source and not _SOURCE_REF.search(b.source):
             line = _field_lines(b.lines, "Source")[0][0]
             items.append(Item("Code", b.id, b.file, line,
-                              f"### {b.id} Source: {b.source}\nSTALE: Source not in <path>:<line> @<sha> form", stale=True))
-        for m in _SOURCE_REF.finditer(b.source or ""):
-            ref = (m["path"], int(m["line"]), m["sha"])
-            if ref not in seen:
-                seen.add(ref)
-                items.append(_excerpt(root, b, *ref[:2], ref[2], context))
+                              f"### {b.id} Source: {b.source}\nSTALE: Source not in <path>:<line> @<sha> form" + ("" if mine(b) else _PULLED),
+                              stale=True, counted=mine(b)))
+        for ref in _refs(b):
+            if owner.get(ref) == b.id:
+                del owner[ref]  # a block citing the same ref twice gets one excerpt
+                items.append(_excerpt(root, b, *ref[:2], ref[2], context, mine(b)))
     return items or [_none("Code", f"features/{area}.md")]
 
 
@@ -426,13 +476,13 @@ def build_pack(prd: Prd, area: str | None, req: list[str] | None, mode: str = "d
 
     if mode == "implement" and not _in_git_work_tree(prd.root):
         raise ContextError("--for implement needs the PRD inside a git work tree")
-    blocks, entries = _select(prd, area, req)
+    blocks, entries, asked = _select(prd, area, req)
     texts = [_block_text(prd, b, area) for b in blocks]
     text = "\n".join(texts)
     ids = {b.id for b in blocks}
     requirements = [Item("Requirements", b.id, b.file, b.line, t) for b, t in zip(blocks, texts)]
     patterns = [_word(i) for i in sorted(ids | {ac.id for b in blocks for ac in b.acs})] + [_word(area)]
-    implement = (_code(blocks, area, repo_root or prd.root, context) + _levels(prd) + _harness(prd, area) + _rubrics(prd, area)) if mode == "implement" else []
+    implement = (_code(blocks, area, repo_root or prd.root, context, asked) + _levels(prd) + _harness(prd, area) + _rubrics(prd, area)) if mode == "implement" else []
     body = (_stack(prd) + _glossary(prd, text) + (requirements or [_none("Requirements", f"features/{area}.md")])
             + implement + _cited(prd, area, blocks, text) + _upstream_contracts(prd, blocks, text) + _defects(prd, ids, entries) + _questions(prd, patterns) + _history(prd, area))
     return [_header(prd, area, mode, display, body)] + body
@@ -451,5 +501,6 @@ def render_json(items: list[Item]) -> str:
 def render_document(prd: Prd, area: str | None, req: list[str] | None, mode: str, items: list[Item]) -> str:
     from . import interface
     fm = prd.frontmatter
-    parts = [{"title": i.part, "id": i.id, "file": i.file, "line": i.line, "text": i.text, "stale": i.stale} for i in items]
+    parts = [{"title": i.part, "id": i.id, "file": i.file, "line": i.line, "text": i.text, "stale": i.stale,
+              "counted": i.counted, "moved": i.moved} for i in items]
     return interface.dump("context", {"prd": fm.get("prd"), "mode": mode, "area": area, "ids": list(req or []), "parts": parts})

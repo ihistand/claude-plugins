@@ -300,3 +300,60 @@ def test_no_plugin_root_variable_inside_a_command():
     # the new commands are among those checked
     every = " ".join(c for p in files for c in _commands(p.read_text(encoding="utf-8")))
     assert LIST_PACKS in every and JUDGE in every
+
+
+# ---------------------------------------------------------------- 0.8.5, spec 13 (items 3, 6, A, 7): Task 14's pins
+
+PACK_CALL = 'uv run --script <plugin scripts>/prd_change.py pack docs/prd/<slug> <name> <X.Y.Z>; echo "prd-change-exit=$?"'
+PACK_INSTALL = "uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>"
+PACK_DRY_RUN = "--dry-run 'no dry run (pack version only)'"
+TIMEOUT_COPY = "its `timeout` into the level's `Timeout` cell (blank when the pack has none)"
+MOVED = "`MOVED: line <L> is now line <M>`"
+
+
+def test_085_changing_a_pack_version_runs_pack_then_install_then_the_approval():
+    s = section(CHANGING, "## Packs and retargeting")
+    at = [s.find(x) for x in (PACK_CALL, PACK_INSTALL, PACK_DRY_RUN)]
+    assert -1 not in at and at == sorted(at), at
+    assert "never the vendored `.prd-toolkit/` copy" in s
+    assert "`pack <name> <old> → <new>; no dry run (pack version only)`" in s
+    for refusal in ("`no Pack: or Target: pack line names <name>`", "`every line naming <name> already names <X.Y.Z>`",
+                    "`; to move the PRD to <name> <have>, run prd_change.py pack <prd> <name> <have>`"):
+        assert refusal in s, refusal
+    row = "| a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged | patch |"
+    assert row in CHANGING.read_text(encoding="utf-8")
+
+
+def test_085_bump_no_longer_ignores_block_status_lines():
+    t = flat(CHANGING)
+    ignores = t.split("It ignores the frontmatter", 1)[1].split("The highest level wins", 1)[0]
+    assert "`Status:`" not in ignores
+    assert "| a moved block `Status:` value | patch |" in CHANGING.read_text(encoding="utf-8")
+
+
+def test_085_changing_step_2_rewrites_a_moved_source():
+    two = flat(CHANGING).split(" 2. **Edit the PRD.**", 1)[1].split(" 3. **Bump the version**", 1)[0]
+    assert MOVED in two
+    assert "rewrite its `Source:` as `<path>:<M> @<HEAD short sha>`" in two
+
+
+def test_085_authoring_and_adoption_copy_a_levels_timeout():
+    assert TIMEOUT_COPY in section(AUTHORING, "### Applying the pack")
+    assert TIMEOUT_COPY in flat(ADOPTING)
+
+
+
+# Fix round 2 (minors): the pack flow's install gate, the uncommitted .prd-toolkit/, its refusals, no numbering.
+PACK_INSTALL_GATE = 'uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>; echo "prd-hooks-exit=$?"'
+
+
+def test_085_fix2_pack_flow_install_gate_refusals_and_no_numbers():
+    s = section(CHANGING, "## Packs and retargeting")
+    flow = s.split("**A new pack version is a scripted patch.**", 1)[1]
+    assert f"`{PACK_INSTALL_GATE}`" in flow
+    assert "On a refusal, stop" in flow
+    assert "`.prd-toolkit/` stays uncommitted" in flow and "`approve` stages" in flow
+    for refusal in ("`the lines naming <name> disagree on its version or source`",
+                    "`pack <name> <X.Y.Z> (<source>) not found; looked in: …`"):
+        assert refusal in flow, refusal
+    assert not re.search(r" [123]\. `uv run", flow)

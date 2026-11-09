@@ -81,18 +81,26 @@ allowed. Never pipe, filter or truncate a gated command's output.
 
 ## Non-negotiable rules
 
-**First, the branch.** Before rule 1 and before anything else, check where you are. Run
-`git merge-base --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash
-call; if the first fails or the second is not the `Branch:` line, change nothing and report
-`QUESTIONS: worktree is not on the build branch`. A prompt with no `Base:` or no `Branch:` line
-gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are `none`: you run no
-pack, write nothing, commit nothing, and create or switch no branch. The caller cut the round; a
-wrong one is the caller's to fix, never yours to repair.
+**First, the branch.** Before rule 1 and before anything else, except on a `Restate:` prompt
+(below), check where you are. Run `git merge-base --is-ancestor <Base> HEAD` and `git branch
+--show-current`, each its own Bash call; if the first fails or the second is not the `Branch:` line,
+change nothing and report `QUESTIONS: worktree is not on the build branch`. A prompt with no `Base:`
+or no `Branch:` line gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are
+`none`: you run no pack, write nothing, commit nothing, and create or switch no branch. The caller
+cut the round; a wrong one is the caller's to fix, never yours to repair.
+
+A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
+names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
+only. The caller's `--sources` rejected the lines the prompt quotes; give each block's line where
+its implementation starts, by this report's SOURCES rule.
 
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
    `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
    `prd-context-exit=0` is current; `1` means a STALE source: re-read each code region the pack
-   marks STALE before you rely on it; `2` is a usage error: fix the command. Work from the pack.
+   marks STALE before you rely on it (`STALE: the cited line's text is gone`,
+   `STALE: the cited line's text appears <N> times`, `STALE: <path> is not in <sha>`); `2` is a
+   usage error: fix the command. A `MOVED: line <L> is now line <M>` region exits `0`: it is
+   current, at line `<M>`, so read it there. Work from the pack.
    Open a PRD file only for what the pack's closing lines name, your unit T-ids' entries in the
    test-case file the prompt names, prd.md's `## 5. Standards registry` and `## 6. Skills registry`
    (the pack does not carry them), and testing.md's `## Harness` for where a unit test goes. You
@@ -190,8 +198,8 @@ On such an area, in place of writing unit tests first (R-1):
 3. **The linters.** You run the §5 standards linters that apply: each `enforced` row whose glob matches a file you
    wrote, as rule 5 says, and never the pack's `checks` level: those tests are the tester's, and they
    run at the caller's reconcile like every non-unit level.
-4. **Report and commit as always**: `UNIT none`, a SOURCES line per block (`FR-010:
-   docs/guide/install.md:1`), and the commit with `Refs: <IDs>`.
+4. **Report and commit as always**: `UNIT none`, a SOURCES line per block whose start the round
+   wrote (`FR-010: docs/guide/install.md:1`), and the commit with `Refs: <IDs>`.
 
 Every other rule stands: never the PRD folder, never a tester's test, nothing outside your IDs,
 no status.
@@ -203,7 +211,15 @@ In this order, each field on its own line:
 ```
 CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
-SOURCES     <ID>: <path>:<line>, one line per built block: where its implementation starts
+SOURCES     <ID>: <path>:<line>, one line per block whose implementation start this round added
+            or changed, and always one for a block with no `Source:` yet, in the round that
+            writes its implementation: where its implementation starts, never another changed
+            line picked to pass the check. For a block with no `Source:` yet that is the first
+            line the round added for it: a requirement added inside an existing function starts
+            at its first added line, not the function's `def`. A block that already has a
+            `Source:` and whose start the round did not touch is left out and keeps its
+            `Source:`, and SOURCES is `none` when no block qualifies. Nothing after the line
+            number
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the round branch and its commit SHAs
 ```

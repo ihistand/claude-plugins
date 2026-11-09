@@ -328,7 +328,6 @@ def test_shell_globs_in_path_arguments_are_blocked(tmp_path, cmd):
     "uv run pytest tests/integration -vo cache_dir=../src",
     "uv run pytest tests/integration -vc src/pytest.ini",
     "uv run pytest tests/integration -vcsrc/pytest.ini",
-    "uv run pytest tests/integration -o junit_logging=src/app.py",
     "uv run pytest tests/integration src/app.py",
     "uv run pytest tests/integration src/app.py::test_x",
     "uv run pytest tests/integration ../src/app.py",
@@ -353,7 +352,7 @@ def test_harness_ordinary_options_pass(tmp_path):
                 "uv run pytest tests/integration -vk x",
                 "uv run pytest tests/integration -vkfoo",
                 "uv run pytest tests/integration -rA -p no:cacheprovider",
-                "uv run pytest tests/integration tests/integration/test_a.py::test_x[1]",
+                "uv run pytest tests/integration 'tests/integration/test_a.py::test_x[1]'",
                 'uv run pytest tests/integration -k "a/b"'):
         r = bash(repo, cmd)
         assert r.returncode == 0, (cmd, r.stderr)
@@ -588,7 +587,7 @@ def test_a_background_output_stays_closed_when_degraded(tmp_path):
 # --- 0.8.4 fix 2: a harness under `uv run --directory <d>` reads its path arguments from <d> ---
 
 TOOLKIT_TESTING = (ROOT.parent / "docs/prd/prd-toolkit/testing.md").read_text(encoding="utf-8")
-DIR_HARNESS = "uv run --directory prd-toolkit pytest -q tests/prd"
+DIR_HARNESS = "uv run --directory prd-toolkit pytest -q -n auto tests/prd"
 
 
 def make_toolkit_repo(tmp_path: Path) -> Path:
@@ -618,12 +617,12 @@ def test_a_directory_harness_allows_a_test_file_named_from_its_directory(tmp_pat
     repo = make_toolkit_repo(tmp_path)
     for cmd in (f"{DIR_HARNESS} tests/prd/test_x.py", f"{DIR_HARNESS} tests/prd/test_x.py::test_a -x",
                 f"{DIR_HARNESS} --junitxml=tests/prd/out.xml",
-                "uv run --directory prd-toolkit pytest -q tests --ignore tests/prd tests/test_x.py"):
+                "uv run --directory prd-toolkit pytest -q -n auto tests --ignore tests/prd tests/test_x.py"):
         r = bash(repo, cmd)
         assert r.returncode == 0, (cmd, r.stderr)
 
 
-@pytest.mark.parametrize("arg", ["../prd-toolkit/scripts/prd_lint.py", "tests/prd/*.py", "scripts/prd_lint.py",
+@pytest.mark.parametrize("arg", ["../prd-toolkit/scripts/prd_lint.py", "scripts/prd_lint.py",
                                  "prd-toolkit/tests/prd/test_x.py", "--junitxml=scripts/out.xml", "../src/app.py"])
 def test_a_directory_harness_refuses_a_path_outside_the_test_roots_from_its_directory(tmp_path, arg):
     # `prd-toolkit/tests/prd/test_x.py` names a test root from the repo root, but pytest reads it from prd-toolkit/
@@ -632,11 +631,11 @@ def test_a_directory_harness_refuses_a_path_outside_the_test_roots_from_its_dire
 
 def test_a_directory_harness_with_an_equals_sign_reads_from_its_directory(tmp_path):
     repo = make_toolkit_repo(tmp_path)
-    text = TOOLKIT_TESTING.replace("`uv run --directory prd-toolkit pytest -q tests/prd`", "`uv run --directory=prd-toolkit pytest -q tests/prd`")
+    text = TOOLKIT_TESTING.replace("`uv run --directory prd-toolkit pytest -q -n auto tests/prd`", "`uv run --directory=prd-toolkit pytest -q -n auto tests/prd`")
     assert text != TOOLKIT_TESTING
     (repo / "docs/prd/greet/testing.md").write_text(text, encoding="utf-8")
-    assert bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd tests/prd/test_x.py").returncode == 0
-    assert_blocked(bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd prd-toolkit/tests/prd/test_x.py"))
+    assert bash(repo, "uv run --directory=prd-toolkit pytest -q -n auto tests/prd tests/prd/test_x.py").returncode == 0
+    assert_blocked(bash(repo, "uv run --directory=prd-toolkit pytest -q -n auto tests/prd prd-toolkit/tests/prd/test_x.py"))
 
 
 def test_a_harness_without_a_directory_still_reads_from_cwd(tmp_path):
@@ -743,3 +742,110 @@ def test_grep_never_follows_a_symlinked_operand_out_of_a_root(tmp_path):
 def test_grep_is_closed_when_degraded(tmp_path):
     repo = make_repo(tmp_path, testing=None)
     assert_blocked(bash(repo, "grep -rn x docs/prd/x"))
+
+
+# --- 0.8.5 (spec 11): every argument after a harness command is checked ---
+
+UNIT_HARNESS = "uv run --directory prd-toolkit pytest -q -n auto tests --ignore tests/prd"
+NOT_UNDER = "prd_tester_guard: {} is not under a test root"
+REFUSED = "prd_tester_guard: {} is refused after a harness command"
+UNQUOTED = "prd_tester_guard: unquoted glob in {}"
+
+
+def test_both_toolkit_harness_commands_are_in_testing_md():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("guard_levels", GUARD)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    cmds = guard.parse_harness_commands(TOOLKIT_TESTING)
+    assert UNIT_HARNESS.split() in cmds and DIR_HARNESS.split() in cmds
+
+
+def assert_reason(r, verb, reason):
+    assert_blocked(r, verb)
+    assert reason in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("harness", [UNIT_HARNESS, DIR_HARNESS])
+@pytest.mark.parametrize("arg", ["scripts", ".", "..", "prdlint", "tests/../scripts", "-- scripts",
+                                 "--ignore scripts", "--basetemp=scripts/bt", "-o cache_dir=scripts",
+                                 "--tx popen//python=python3"])
+def test_a_positional_or_path_value_outside_the_test_roots_is_refused(tmp_path, harness, arg):
+    value = {"-- scripts": "scripts", "--ignore scripts": "scripts", "--basetemp=scripts/bt": "scripts/bt",
+             "-o cache_dir=scripts": "scripts", "--tx popen//python=python3": "popen//python=python3"}.get(arg, arg)
+    assert_reason(bash(make_toolkit_repo(tmp_path), f"{harness} {arg}"), "write", NOT_UNDER.format(value))
+
+
+@pytest.mark.parametrize("arg, option", [
+    ("--pyargs", "--pyargs"), ("--pyargs prdlint", "--pyargs"), ("--doctest-modules", "--doctest-modules"),
+    ("--doctest-modules tests", "--doctest-modules"), ("--doctest-glob '*.md'", "--doctest-glob"),
+    ("--doctest-glob=x.txt", "--doctest-glob"), ("--rootdir tests", "--rootdir"), ("--rootdir=..", "--rootdir"),
+    ("--confcutdir tests", "--confcutdir"), ("--confcutdir=..", "--confcutdir"), ("-p xdist", "-p xdist"),
+    ("-pxdist", "-p xdist"), ("-vpxdist", "-p xdist"), ("-o addopts=-v", "-o addopts"),
+    ("--override-ini=addopts=-v", "--override-ini addopts"), ("-o=addopts=-v", "-o addopts"),
+    ("-o ' addopts=-v'", "-o addopts"), ("-p=xdist", "-p =xdist"), ("-n many", "-n many"), ("-nmany", "-n many"),
+    ("--numprocesses=many", "--numprocesses many"), ("-n", "-n"), ("-k", "-k"),
+])
+def test_a_refused_option_after_a_harness_command(tmp_path, arg, option):
+    assert_reason(bash(make_toolkit_repo(tmp_path), f"{DIR_HARNESS} {arg}"), "run", REFUSED.format(option))
+
+
+@pytest.mark.parametrize("arg, shown", [
+    ("-k s*", "s*"), ("tests/test_[a]*.py", "tests/test_[a]*.py"), ("tests/prd/*.py", "tests/prd/*.py"),
+    ("tests/prd/test_x.py::test_x[1]", "tests/prd/test_x.py::test_x[1]"), ("-k ^slow", "^slow"),
+    ("-k x#", "x#"), ("tests/prd/^x", "tests/prd/^x"), ("-o cache_dir=tests/c?", "cache_dir=tests/c?"),
+])
+def test_an_unquoted_glob_in_a_harness_argument_is_refused(tmp_path, arg, shown):
+    assert_reason(bash(make_toolkit_repo(tmp_path), f"{DIR_HARNESS} {arg}"), "run", UNQUOTED.format(shown))
+
+
+@pytest.mark.parametrize("args", [
+    "", "tests/prd/test_x.py", "tests", "tests/prd", "-n 3", "-n auto", "-n3", "--numprocesses=2",
+    "-p no:cacheprovider", "-pno:cacheprovider", "--tb=short", "--tb short", "-k 'T-015*'", '-k "not slow"',
+    "-q -x", "--maxfail 2", "--maxfail=2", "--durations=5", "-m 'not slow'", "-rA", "-vk x",
+    "'tests/prd/test_x.py::test_x[1]'", "-o cache_dir=tests/.cache", "-o console_output_style=classic",
+    "--junitxml=tests/prd/out.xml", "-c tests/prd/pytest.ini", "-W error", "--lf", "-- tests/prd/test_x.py",
+])
+def test_ordinary_arguments_after_a_harness_command_pass(tmp_path, args):
+    repo = make_toolkit_repo(tmp_path)
+    for harness in (UNIT_HARNESS, DIR_HARNESS):
+        r = bash(repo, f"{harness} {args}")
+        assert r.returncode == 0, (harness, args, r.stderr)
+
+
+def test_the_test_root_check_resolves_before_it_compares(tmp_path):
+    # Review Focus 4: `tests/../scripts` starts with a test root but names scripts/
+    repo = make_toolkit_repo(tmp_path)
+    assert_reason(bash(repo, f"{DIR_HARNESS} tests/../scripts/prd_lint.py"), "write",
+                  NOT_UNDER.format("tests/../scripts/prd_lint.py"))
+    assert bash(repo, f"{DIR_HARNESS} tests/../tests/prd").returncode == 0
+
+
+@pytest.mark.parametrize("cmd", [
+    "grep -e x prd-toolkit/scripts/prd_lint.py",
+    "grep -e x prd-toolkit/tests/prd prd-toolkit/scripts",
+    "grep --exclude-from=x prd-toolkit/tests/prd",
+    "grep --exclude-from=x y prd-toolkit/tests/prd",
+    "grep --exclude-dir=x y prd-toolkit/tests/prd",
+    "grep a^b prd-toolkit/tests/prd",
+    "grep -e a^b prd-toolkit/tests/prd",
+    "grep 'T-0' prd-toolkit/tests/pr#",
+    "grep a# prd-toolkit/tests/prd",
+])
+def test_the_0_8_4_grep_leftovers_are_refused(tmp_path, cmd):
+    assert_blocked(bash(make_grep_repo(tmp_path), cmd))
+
+
+def test_a_quoted_zsh_glob_character_in_grep_passes(tmp_path):
+    repo = make_grep_repo(tmp_path)
+    for cmd in ("grep 'a^b' prd-toolkit/tests/prd", "grep -e 'a#b' prd-toolkit/tests/prd", 'grep "^@prd" prd-toolkit/tests/prd'):
+        r = bash(repo, cmd)
+        assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("arg, shown", [("'--x /../scripts/prd_lint.py'", "--x /../scripts/prd_lint.py"),
+                                        ("'--x /..'", "--x /.."), ("'- /..'", "- /..")])
+def test_a_dash_led_argument_with_a_space_is_a_positional(tmp_path, arg, shown):
+    # argparse reads a `-`-led token that names no option and holds a space as a positional, and pytest collects it
+    assert_reason(bash(make_toolkit_repo(tmp_path), f"{DIR_HARNESS} {arg}"), "write", NOT_UNDER.format(shown))

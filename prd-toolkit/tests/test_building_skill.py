@@ -124,7 +124,7 @@ def test_gate_forms_in_both_files():
                 if f"<scripts>/{script}" in line:
                     assert f'echo "{gate}=$?"' in line, (path.name, line)
     t = RUN.read_text(encoding="utf-8")
-    assert '--diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"' in t
+    assert '--diff <base>..prd-round/<area>-<n> --sources <SNAP>/sources-<n>.txt; echo "prd-build-check-exit=$?"' in t
     assert '--results <SNAP>/suite-report.md --tids <T-id>,<T-id>; echo "prd-build-check-exit=$?"' in t
 
 
@@ -753,3 +753,122 @@ def test_red_flag_quotes_a_hand_edit_under_the_vendored_copy():
              "(not prd_hooks.py install).")
     assert quote in red and "`.prd-toolkit/`" in red
     assert red.index(quote) < red.index("## Common Rationalizations")
+
+
+# --- 0.8.5, spec 13 (items 7 and 8): Task 14's pins ---
+
+MOVED = "`MOVED: line <L> is now line <M>`"
+SOURCES_FILE = "<SNAP>/sources-<n>.txt"
+SOURCES_CALL = ('uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n> '
+                f'--sources {SOURCES_FILE}; echo "prd-build-check-exit=$?"')
+
+
+def test_085_both_build_texts_name_moved():
+    for path in (SKILL, RUN):
+        assert MOVED in flat(path), path.name
+    rule1 = flat(SKILL).split("1. **The pack first.**", 1)[1].split("2. **Write the unit tests first**", 1)[0]
+    for reason in ("`STALE: the cited line's text is gone`", "`STALE: the cited line's text appears <N> times`",
+                   "`STALE: <path> is not in <sha>`", MOVED):
+        assert reason in rule1, reason
+    close = flat(RUN).split("`prd-context-exit=` must be `0`: a STALE code item", 1)[1].split("git add docs/prd/<slug>", 1)[0]
+    assert MOVED in close and "rewrite that block's `Source:` as `<path>:<M> @<HEAD short sha>`" in close
+
+
+def test_085_step_4_writes_sources_outside_the_prd_folder_and_passes_it():
+    t = flat(RUN)
+    four = t.split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    assert f"with the Write tool, to `<SNAP>/builder-report-<n>.md`, and its SOURCES field verbatim to `{SOURCES_FILE}`" in four
+    assert "outside the PRD folder" in four
+    assert "`sources:`" in four
+    assert SOURCES_CALL in RUN.read_text(encoding="utf-8")
+
+
+# Fix round 1, Ruling 38, and fix round 2: a first `sources:` finding sends the report back through a Restate
+# dispatch; a second one on the same round fails it (spec 9).
+SOURCES_BACK = ("When the round's only findings are `sources:` lines, the first time on that round, it is not a failed "
+                "round: dispatch the builder again with the round's prompt plus a `Restate: <SNAP>/builder-report-<n>.md` "
+                "line and the `sources:` lines (**Prompts**).")
+SOURCES_SECOND = "A second `sources:` finding on the same round fails the round, counted under **Rounds**."
+OTHER_FINDINGS = "Otherwise `prd-build-check-exit=1` fails the round"
+GATE_IS_SOURCES = "Your gate on SOURCES is `--sources`, never a reading of the code."
+RESTATE_PROMPT = "Restate: <SNAP>/builder-report-<n>.md\n<each sources: line, verbatim>\n"
+RESTATE_RULE = ("A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it "
+                "names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field only.")
+
+
+# Ruling 39, as the final review amends it: a block with no `Source:` yet always gets a SOURCES line, at the first
+# line the round added for it; a block that has one is named only when the round touched its start, else it keeps it.
+SOURCES_FIELD = ("one line per block whose implementation start this round added or changed, and always one for a "
+                 "block with no `Source:` yet, in the round that writes its implementation: where its implementation "
+                 "starts, never another changed line picked to pass the check. For a block with no `Source:` yet that "
+                 "is the first line the round added for it: a requirement added inside an existing function starts at "
+                 "its first added line, not the function's `def`. A block that already has a `Source:` and whose start "
+                 "the round did not touch is left out and keeps its `Source:`, and SOURCES is `none` when no block "
+                 "qualifies")
+SOURCES_JUDGE = ("one SOURCES line per block with no `Source:` yet that the round implemented, at the first line the "
+                 "round added for it, and per block whose implementation start the round added or changed")
+SOURCES_AGENT = ("- SOURCES: a block with no `Source:` yet always gets a line in the round that writes its "
+                 "implementation, at the first line the round added for it (inside an existing function, its first "
+                 "added line, not the function's `def`). A block that already has a `Source:` gets a line only when "
+                 "the round added or changed where its implementation starts; otherwise it is left out and keeps its "
+                 "`Source:`.")
+SOURCES_KEPT = ("A block no SOURCES file names already has a `Source:` (a block with none always gets a SOURCES line): "
+                "keep that `Source:` as it is. The close's pack judges it: MOVED is rewritten below, and STALE means a "
+                "wrong line or sha, so fix it.")
+
+
+def test_085_fix1_a_sources_finding_goes_back_to_the_builder():
+    four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    at = [four.find(s) for s in ("`<SNAP>/builder-report-<n>.md`", GATE_IS_SOURCES, SOURCES_BACK, SOURCES_SECOND,
+                                 OTHER_FINDINGS)]
+    assert -1 not in at and at == sorted(at), at
+    assert "is not counted under **Rounds**, and no new round branch is cut" in four
+    assert "is a finding like any other `--diff` line and fails the round" not in four
+    assert RESTATE_PROMPT in RUN.read_text(encoding="utf-8")
+    assert RESTATE_RULE in flat(SKILL)
+    assert RESTATE_RULE in flat(AGENT)
+
+
+def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
+    assert SOURCES_FIELD in flat(SKILL)
+    assert "a line this round added or changed" not in flat(SKILL)
+    four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
+    assert "A report whose SOURCES is `none` passes no `--sources`." in four
+    assert SOURCES_JUDGE in four
+    assert ("From each block's line in the latest round's `<SNAP>/sources-<n>.txt` that names it (the restated "
+            "file after a restate, never the saved report)") in flat(RUN)
+
+
+# Fix round 2, item 1: the close writes an earlier round's line at that round's commit, so MOVED can fire.
+CLOSE_SHA = "`Source: <path>:<line> @<short sha>`, the short sha of the last commit that round's COMMIT names"
+MOVED_REWRITE = "rewrite that block's `Source:` as `<path>:<M> @<HEAD short sha>`"
+
+
+def test_085_fix2_the_close_writes_each_source_at_its_rounds_commit():
+    t = flat(RUN)
+    assert CLOSE_SHA in t
+    assert MOVED_REWRITE in t
+    assert "rewrite that block's `Source:` to line `<M>`, and run" not in t
+
+
+
+# Fix round 3: a Restate prompt is excepted in the branch check's own first sentence; a finding "rejected" the lines.
+RESTATE_FIRST_SKILL = ("**First, the branch.** Before rule 1 and before anything else, except on a `Restate:` prompt (below), "
+                       "check where you are.")
+RESTATE_FIRST_AGENT = ("- First, before anything else, except on a `Restate:` prompt (the next bullet): Run "
+                       "`git merge-base --is-ancestor <Base> HEAD`")
+
+
+def test_085_fix3_the_restate_exception_opens_the_branch_check():
+    assert RESTATE_FIRST_SKILL in flat(SKILL)
+    assert RESTATE_FIRST_AGENT in flat(AGENT)
+    assert "The caller's `--sources` rejected the lines the prompt quotes" in flat(SKILL)
+    assert "found the lines the prompt quotes outside the round's changes" not in flat(SKILL)
+
+
+# Final review, item 3: a new block always gets a SOURCES line; an untouched old one keeps its `Source:`.
+def test_085_final_a_new_block_always_gets_a_sources_line():
+    assert "a block with no `Source:` yet" in flat(SKILL).split("SOURCES <ID>: <path>:<line>", 1)[1].split("QUESTIONS", 1)[0]
+    assert SOURCES_AGENT in flat(AGENT)
+    close = flat(RUN).split("From each block's line in the latest round's", 1)[1].split("**`--fixes E-nnn` only:**", 1)[0]
+    assert SOURCES_KEPT in close

@@ -238,18 +238,32 @@ def test_failure_entry_accepted(repo):
     assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
 
 
-def test_two_failure_entries(repo):
+def test_a_failed_run_accepts_its_entry_with_another_of_its_entries(repo):
     run_id = failed_run(repo)
     add_entry(repo, run_id)
-    add_entry(repo, run_id, number="E-003")
+    add_entry(repo, run_id, number="E-003", text=ENTRY.format(run=run_id, step=3))
     close(repo, run_id, "Record the failure", ERRORS)
-    out = findings(check(repo, run_id))
-    assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_a_failed_run_needs_an_entry_naming_its_failed_step(repo):
+    run_id = failed_run(repo)
+    add_entry(repo, run_id, step=3)
+    add_entry(repo, run_id, number="E-003", step=4)
+    close(repo, run_id, "Record the failure", ERRORS)
+    assert findings(check(repo, run_id)) == [f"errors.md: the run failed at step 1 but no open unclassified entry names run {run_id} and that step in Detected:"]
+
+
+def test_a_failed_runs_lone_mid_run_entry_asks_for_the_failed_steps_entry(repo):
+    run_id = failed_run(repo)
+    add_entry(repo, run_id, step=3)  # an entry of this run naming another step: the failed step's entry is missing
+    close(repo, run_id, "Record a mid-run entry", ERRORS)
+    assert findings(check(repo, run_id)) == [f"errors.md: the run failed at step 1 but no open unclassified entry names run {run_id} and that step in Detected:"]
 
 
 @pytest.mark.parametrize("old,new", [
     ("Classification: unclassified", "Classification: code bug"),
-    ("step 1", "step 2"),
     ("deploy {run}", "deploy other"),
 ])
 def test_failure_entry_wrong(repo, old, new):
@@ -268,10 +282,20 @@ def test_failure_entry_resolved(repo):
     assert any(f.startswith(f"{ERRORS}:") for f in findings(check(repo, run_id)))
 
 
-def test_entry_without_a_failed_step(repo):
+def test_an_entry_on_a_run_that_did_not_fail_is_accepted(repo):
     run_id = staging_run(repo)
     add_entry(repo, run_id, text=ENTRY.format(run=run_id, step=1))
-    close(repo, run_id, "Record a failure", ERRORS)
+    add_deployed(repo, run_id, "staging")
+    close(repo, run_id, "Record an entry", ERRORS, OPS)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "", r.stdout + r.stderr
+
+
+def test_an_entry_naming_another_run_is_not_accepted_at_the_close(repo):
+    run_id = staging_run(repo)
+    add_entry(repo, run_id, text=ENTRY.format(run="20200101T000000Z", step=1))
+    add_deployed(repo, run_id, "staging")
+    close(repo, run_id, "Record an entry", ERRORS, OPS)
     out = findings(check(repo, run_id))
     assert any(re.fullmatch(rf"{ERRORS}:\d+: only Deployed rows and Status: lines may change", f) for f in out), out
 
@@ -657,3 +681,148 @@ def test_by_hand_close_wrong_commit(repo):
     p.write_text(p.read_text(encoding="utf-8").replace(f"| {old[:7]} |", f"| {new} |"), encoding="utf-8")
     close(repo, run_id, "Record the deploy done by hand")
     assert findings(check(repo, run_id)) == [f"Deployed production: commit {new} is not the recorded commit {old[:7]}"]
+
+
+def test_close_after_an_ahead_confirm(repo):
+    from test_deploy import ahead_repo, confirm_pairs
+    run_id = ahead_repo(repo)
+    assert confirm_pairs(repo, run_id, (2, "a"), (3, "b"), (4, "c")).returncode == 0
+    assert resume(repo, run_id).returncode == 0
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    close(repo, run_id)
+    r = check(repo, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+# ---- an error entry recorded while a run is stopped (0.8.5, spec 5.2) ----
+
+ERROR_SCRIPT = Path(__file__).parent.parent / "scripts/prd_error.py"
+
+
+def record_entry(repo, source: str, title: str = "Greeting is wrong") -> None:
+    """Append an entry with `prd_error.py new` and leave it uncommitted."""
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, "-B", str(ERROR_SCRIPT), "new", prd_dir(repo), "--title", title, "--source", source],
+                       capture_output=True, text=True, encoding="utf-8", cwd=repo)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def confirmed_stop(repo) -> str:
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    return run_id
+
+
+def refused_with(r, reason: str) -> None:
+    assert r.returncode == 1 and f"refused: {reason}" in r.stdout.splitlines(), r.stdout + r.stderr
+
+
+def test_an_entry_recorded_mid_run_passes_resume_and_the_close_carries_it(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    r = resume(repo, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    close(repo, run_id)
+    assert "Greeting is wrong" in git(repo, "show", "HEAD:" + ERRORS)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == "", r.stdout + r.stderr
+
+
+def test_an_entry_naming_another_run_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, "deploy run 20200101T000000Z, step 2")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_an_entry_without_a_step_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_an_entry_plus_another_file_edit_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    (repo / "tools/gate.sh").write_text("exit 0\n# changed\n", encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_an_entry_plus_one_changed_word_in_an_older_entry_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    p = repo / ERRORS
+    text = p.read_text(encoding="utf-8")
+    first = re.search(r"^Diagnosis: (\S+)", text, re.M)
+    assert first, text
+    p.write_text(text[:first.start(1)] + "changed" + text[first.end(1):], encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_a_reordered_older_entry_is_refused_at_resume(repo):
+    """The same lines in another order are a change: the old text must be kept as it was."""
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    p = repo / ERRORS
+    lines = p.read_text(encoding="utf-8").split("\n")
+    i = next(n for n, ln in enumerate(lines) if ln.startswith("Diagnosis:"))
+    lines[i], lines[i + 1] = lines[i + 1], lines[i]
+    p.write_text("\n".join(lines), encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_a_whitespace_change_in_an_older_entry_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    p = repo / ERRORS
+    p.write_text(p.read_text(encoding="utf-8").replace("Classification: code bug", "Classification:  code bug", 1), encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_a_committed_entry_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    record_entry(repo, f"deploy run {run_id}, step 2")
+    commit(repo, "Record the entry", ERRORS)
+    refused_with(resume(repo, run_id), "HEAD moved since the run started")
+
+
+def test_deleting_only_the_placeholder_is_refused_at_resume(repo):
+    p = repo / ERRORS
+    p.write_text(f"# Error ledger\n\n{PLACEHOLDER}\n", encoding="utf-8")
+    commit(repo, "Empty ledger", ERRORS)
+    run_id = confirmed_stop(repo)
+    p.write_text("# Error ledger\n\n", encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_trailing_whitespace_alone_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    p = repo / ERRORS
+    p.write_text(p.read_text(encoding="utf-8") + "  \n", encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+# ---- 0.8.5: the close-branch note ----
+
+def test_check_prints_the_branch_note_and_still_passes(repo):
+    from test_deploy import NOTE, env_branches
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    close(repo, run_id)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == NOTE.format(current="work") + "\n", (r.returncode, r.stdout, r.stderr)
+
+
+def test_check_prints_the_note_beside_its_findings(repo):
+    from test_deploy import NOTE, env_branches
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = staging_run(repo)
+    # no close commit and no Deployed row: a finding
+    r = check(repo, run_id)
+    assert r.returncode == 1 and r.stdout.strip() and r.stderr == NOTE.format(current="work") + "\n", (r.returncode, r.stdout, r.stderr)

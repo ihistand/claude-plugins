@@ -1,5 +1,58 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.5 baseline
+
+### Task 14: `deploy-confirms-named-steps` and `publish-own-artifact` (spec section 13)
+
+Two new cases for the two 0.8.5 skill rules with the most behaviour: a reply that names later human steps confirms
+them in the same `confirm` (spec 5.1), and the page is published as its own Artifact (spec 10). Recorded 2026-11-09
+on `feat/prd-toolkit-0.8.5` (uncommitted until Task 14's commit), `--runs 3`, model `sonnet`, Claude Code 2.1.319,
+plugin 0.8.4 (the manifest bump is Task 15). RED ran on the worktree before any skill edit (the unchanged texts, the
+0.8.5 scripts, plus the new case directories and the new `deploy_repo.py` state); GREEN on the Task 14 text. Same
+command form as 0.8.2, `--case '<name>'`.
+
+Start states: `deploy-confirms-named-steps` is `deploy_repo.py at-ui-steps`, a runbook whose steps 2 to 5 are human
+steps done in the release UI (merge, promote, purge, announce), with a real run stopped at step 2; the prompt is the
+owner's reply, "done with 2; 3 and 4 were done in the same session", and says nobody can open a page.
+`publish-own-artifact` is `error_repo.py bug` (as `publishing-trigger`), and the prompt asks for the page "into our
+design artifact, <url>, as `prd.html` beside its main page". **No eval session has an Artifact tool** (the init
+message of every run lists none, and a `ToolSearch` for `select:Artifact` in a headless `claude -p` finds no deferred
+tool either), so no run can publish: the case grades the render and what the reply says about where the page goes.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `deploy-confirms-named-steps` RED | 0.60 | 0.80 | -0.20 | Unchanged text. All three with runs confirmed step 2 alone, resumed, and left the run stopped at step 3: "Your message came before the run reached step 3, and the runbook only accepts a reply given after the run stops at that step. So I didn't confirm 3 or 4 from your note about them." None confirmed step 5. Without the plugin, all three read `prd_deploy.py` and confirmed 2, 3 and 4 in one call, but with the reply in a shell variable (`--reply "$R"`), so `later-steps-carry-the-owners-words` fails (0.80). |
+| `publish-own-artifact` RED | 0.50 | 0.00 | +0.50 | Unchanged text. All three with runs rendered the page and, with no Artifact tool, gave its path and told the owner to put it inside the design artifact: "To publish it, upload that file to the artifact as `prd.html`. In a session that has the Artifact tool, I can do it from the rendered file." None said the page goes in as its own Artifact. Without the plugin no run rendered a page (0.00). |
+| `deploy-confirms-named-steps` GREEN | 1.00 | 0.80 | +0.20 | 3 of 3 with runs: one `confirm --step 2 --reply '<reply>' --step 3 --reply '<reply>' --step 4 --reply '<reply>'` with the owner's words typed out, then `resume`, which logged 3 and 4 `confirmed ahead` and stopped at step 5; step 5 left unconfirmed ("Your reply didn't name it, so I left it unconfirmed"), no question asked, no close. Without the plugin as RED (`--reply "$R"`). |
+| `publish-own-artifact` GREEN | 1.00 | 0.00 | +1.00 | 3 of 3 with runs rendered the page and, with no Artifact tool, said it goes in as its own Artifact: "Even with the tool, the page would go in as its own private Artifact and not as a file beside the design's main page. An Artifact only draws the PRD's `pre.mermaid` diagrams on its own main page." None told the owner to upload it as `prd.html`. Without the plugin as RED. |
+| `deploy-confirms-named-steps` GREEN, fix round 1 | 1.00 | 0.80 | +0.20 | Re-run on the fix-round text (Ruling 40: through the inbox each later human step is its own gate; the one-confirm route is the chat's). 3 of 3 with runs as before: one confirm of 2, 3 and 4 with the owner's words, `resume`, stopped at step 5, unconfirmed. Without the plugin as RED. |
+| `deploy-confirms-named-steps` GREEN, fix round 2 | 1.00 | 0.80 | +0.20 | Re-run on the fix-round-2 text (rule 4's exception added to the Red Flag and the procedure; "Never ask in the chat"; no reply to the stopped step leaves the run stopped). 3 of 3 with runs as before. |
+| `publish-own-artifact` RED, fix round 2 | 0.33 | 0.33 | 0.00 | The unchanged skills (a `git archive ee33504` copy of the plugin with the current `evals/`), scored with the new `reply-never-says-put-it-inside` grader. Two with runs told the owner to put the page inside the design artifact ("upload the file yourself under the name `prd.html`"); the third could not reach the plugin's `prd_publish.py` (its Glob, with a `path` argument outside the repository, was denied in don't-ask mode) and rendered nothing. The same grader, checked offline on the six earlier RED replies, matches all six. |
+| `publish-own-artifact` GREEN, fix round 2 | 1.00 | 0.33 | +0.67 | 3 of 3 with runs with the new grader: each rendered the page and said it goes in as its own Artifact, and none told the owner to put it inside. The first fix-round-2 GREEN scored 0.89: one run stopped when its Glob for the script, with a `path` argument, was denied, so step 1 now says to Glob the absolute path as the whole pattern with no `path` argument (pinned). The without arm now scores 0.33: the new `not_contains` grader passes a reply that never mentions putting the page anywhere. |
+| `deploy-confirms-named-steps` GREEN, fix round 3 | 1.00 | 0.73 | +0.27 | Re-run on the fix-round-3 text (the Red Flag footer keeps a mid-run `prd_error.py new` entry). 3 of 3 with runs as before. Without the plugin, two runs as RED (`--reply "$R"`) and one confirmed the steps one call at a time (0.60). |
+
+- **GREEN took one round** on the Task 14 text; no grader was changed after RED. In fix round 2, the new
+  `reply-never-says-put-it-inside` grader first threw in the runner (`Invalid regular expression: unrecognized
+  character after (?`: the runner's regexes are JavaScript, so `flags: i` replaces an inline `(?i)`). It was then
+  widened to the RED replies it missed ("add this file to that artifact under the name `prd.html`", "name it
+  `prd.html`"), checked against all twelve recorded with-arm replies (six RED, all matched; six GREEN, none
+  matched), and then the final runs above were made.
+- **Not proven with a real Artifact tool.** `publish-own-artifact` shows what the reply says; that a session with the
+  tool publishes the page as its own Artifact rests on rule 5's text and its pins, not on an eval run.
+- **Graders (`deploy-confirms-named-steps`):** `confirms-named-steps-in-one-call` (one Bash `prd_deploy.py confirm`
+  holding `--step 2`, `--step 3` and `--step 4`, in order), `later-steps-carry-the-owners-words` (in that call,
+  `--step 3` and `--step 4` each followed by a quoted `--reply` holding "same session"), `no-unnamed-step-confirmed`
+  (no `confirm` or `recover` with `--step 5`, `max: 0`), `resumed`, `no-gates-answer`, `skill-fired`. Checked under
+  Python `re` on synthetic commands in `tests/test_deploying_skill.py`: a step-2-only confirm and replies the session
+  wrote fail; single- and double-quoted owner's words pass; a `--step 5` is caught.
+- **Graders (`publish-own-artifact`):** `page-rendered` (a Bash `prd_publish.py render`),
+  `reply-names-its-own-artifact` (the last message holds `own Artifact`), `skill-fired`, and from fix round 2
+  `reply-never-says-put-it-inside` (`not_contains` on the last message: no sentence, bullet or "you can" clause that
+  tells the owner to upload, add, put or rename the page into the design artifact or as `prd.html`). The case's
+  allowed_tools leaves out Artifact by choice: no eval session has the tool, and a real publish would write to the
+  account that runs the eval. The pattern is pinned on a
+  passing and a failing sentence in `tests/test_publishing_skill.py`.
+
 ## 0.8.4 baseline
 
 ### Task 8: `tester-ignores-readme` (spec sections 5 and 12)

@@ -16,10 +16,14 @@ report format (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT).
 
 If the skill's text is not in your context, say so as the first line under QUESTIONS, and keep to
 these rules:
-- First, before anything else: Run `git merge-base --is-ancestor <Base> HEAD` and
-  `git branch --show-current`, each its own Bash call; if the first fails or the second is not the
-  `Branch:` line, change nothing and report `QUESTIONS: worktree is not on the build branch`. A
-  prompt with no `Base:` or `Branch:` line gets the same report, every other field `none`.
+- First, before anything else, except on a `Restate:` prompt (the next bullet): Run `git merge-base
+  --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash call; if the first
+  fails or the second is not the `Branch:` line, change nothing and report `QUESTIONS: worktree is
+  not on the build branch`. A prompt with no `Base:` or `Branch:` line gets the same report, every
+  other field `none`.
+- A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
+  names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
+  only.
 - `<scripts>` in the command below is the `Scripts:` line when your prompt has one; otherwise the
   Which-script rule of the `building-from-prds` skill decides it. Run the implement pack first,
   as its own Bash call, before you open any PRD file:
@@ -60,6 +64,11 @@ these rules:
   commit adds it as a trailer: `-m "Change-set: <start-prd>/CS-<nnn>"`, the line's value as given.
 - Write no status (`built`, `verified`, `live`): the caller writes them at close.
 - Report CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT, in that order; QUESTIONS is `none` when empty.
+- SOURCES: a block with no `Source:` yet always gets a line in the round that writes its
+  implementation, at the first line the round added for it (inside an existing function, its first
+  added line, not the function's `def`). A block that already has a `Source:` gets a line only when
+  the round added or changed where its implementation starts; otherwise it is left out and keeps its
+  `Source:`.
 
 The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, the `Base:`
 and `Branch:` lines of the round, on a `--fixes` build a `Fixes:` line naming the entry and its

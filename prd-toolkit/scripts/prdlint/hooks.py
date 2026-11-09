@@ -112,8 +112,12 @@ def _pack_refs(prd) -> list:
     return out
 
 
-def _resolve_sources(repo_root: Path, prd) -> list:
-    """The source Pack of each ref, or InstallRefused naming where it looked."""
+_HOLDS = re.compile(r" \(holds (\d+\.\d+\.\d+)\)$")
+
+
+def _resolve_sources(repo_root: Path, prd, prd_rel: str) -> list:
+    """The source Pack of each ref, or InstallRefused naming where it looked; when a place holds another version of a
+    versioned pack, the refusal names the `prd_change.py pack` call that moves the PRD to it."""
     from . import packs
 
     out = []
@@ -121,7 +125,9 @@ def _resolve_sources(repo_root: Path, prd) -> list:
         try:
             out.append(packs.resolve(ref, repo_root, vendored=False))
         except packs._FAILURES as e:
-            raise InstallRefused(str(e)) from None
+            have = next((m.group(1) for m in map(_HOLDS.search, getattr(e, "looked", [])) if m), None)
+            hint = f"; to move the PRD to {ref.name} {have}, run prd_change.py pack {prd_rel} {ref.name} {have}" if have and ref.version else ""
+            raise InstallRefused(str(e) + hint) from None
     return out
 
 
@@ -252,7 +258,7 @@ def _vendor_from_plugin(repo_root: Path, prd_rel: str) -> str:
     """Resolve the PRD's packs, then write .prd-toolkit/; the one path `install` and `vendor` share. Returns the report line."""
     from .model import load  # local: the model imports this package
 
-    sources_packs = _resolve_sources(repo_root, load(repo_root / prd_rel))  # before anything is copied
+    sources_packs = _resolve_sources(repo_root, load(repo_root / prd_rel), prd_rel)  # before anything is copied
     _vendor(repo_root, sources_packs)
     return f"vendored the toolkit into {VENDOR_DIR}/ (version {plugin_version(PLUGIN_ROOT)})"
 

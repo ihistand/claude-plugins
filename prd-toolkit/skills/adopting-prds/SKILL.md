@@ -116,7 +116,9 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   and skills rows from this session's skills listing (§6), every row's Decision `proposed`; the
   four `{{…}}` slots; each optional contract populated or declared `Not applicable`; the
   Harness in `testing.md`, with `Test roots:`; for the Levels table, ask the user which Gate
-  (`build` or `deploy`) each level runs at, and never keep the template's Gate silently. A
+  (`build` or `deploy`) each level runs at, and never keep the template's Gate silently. A level
+  copied from a pack's `levels` takes its `timeout` into the level's `Timeout` cell (blank when
+  the pack has none). A
   build-gate Harness command never collects a deploy-gate level's test path (`pytest tests`
   collects `tests/system`): give each level its own path. Lint reports an overlap (`test-level`).
   Anything only the user knows (the owner, intent, environments, secrets) stays a

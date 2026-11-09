@@ -20,6 +20,9 @@ code { padding: .1em .3em; }
 pre { padding: .75rem; overflow-x: auto; }
 pre code { padding: 0; }
 pre.mermaid { white-space: pre; }
+figure.diagram { margin: .75rem 0; padding: .75rem; overflow-x: auto; background: #ffffff; border: 1px solid var(--line); border-radius: 6px; }
+figure.diagram svg { display: block; margin: 0 auto; height: auto; }
+details > summary { cursor: pointer; color: var(--muted); }
 table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--line); padding: .3rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--soft); }
@@ -65,11 +68,12 @@ dl.facts dd { margin: 0; }
 <h2>What it is</h2><p>The orders service imports order files from the warehouse and lets sales reps look up
 and admins delete orders through an HTTP API.</p>
 
-<h2>Architecture</h2><pre class="mermaid">flowchart LR
+<h2>Architecture</h2><figure class="diagram"><svg id="diagram-1" viewBox="0 0 10 10"><style>#diagram-1 path{filter:url(#diagram-1-s)}</style><defs><filter id="diagram-1-s"></filter></defs><path d="M0 0L9 9" marker-end="url(#diagram-1-s)"></path><use href="#diagram-1-s"></use><text x="1" y="5">4 lines</text></svg></figure>
+<details><summary>Diagram source</summary><pre class="mermaid-source">flowchart LR
   Importer --&gt; DB[(PostgreSQL)]
   Importer --&gt; Geocoder
   API --&gt; DB
-</pre>
+</pre></details>
 <p>The importer reads a file, validates postal codes with the geocoder, and writes to the
 database. The API reads and deletes orders. The geocoder is the only external service.</p>
 
@@ -139,11 +143,12 @@ and admins delete orders through an HTTP API.</p>
 </ul>
 
 <h2>Architecture</h2>
-<pre class="mermaid">flowchart LR
+<figure class="diagram"><svg id="diagram-2" viewBox="0 0 10 10"><style>#diagram-2 path{filter:url(#diagram-2-s)}</style><defs><filter id="diagram-2-s"></filter></defs><path d="M0 0L9 9" marker-end="url(#diagram-2-s)"></path><use href="#diagram-2-s"></use><text x="1" y="5">4 lines</text></svg></figure>
+<details><summary>Diagram source</summary><pre class="mermaid-source">flowchart LR
   Importer --&gt; DB[(PostgreSQL)]
   Importer --&gt; Geocoder
   API --&gt; DB
-</pre>
+</pre></details>
 <p>The importer reads a file, validates postal codes with the geocoder, and writes to the
 database. The API reads and deletes orders. The geocoder is the only external service.</p>
 

@@ -25,7 +25,7 @@ except ImportError:  # Windows
 from . import registry, trace
 from .buildcheck import _resolve, _show
 from .markdown import frontmatter, sections
-from .model import Prd, Step, gate_of, load, production_envs
+from .model import Prd, Step, _errors_ledger, gate_of, load, production_envs
 from .trace import BadRange
 
 EXIT = {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
@@ -178,8 +178,22 @@ def _tail(data: bytes) -> str:
     return data[-TAIL:].decode("utf-8", errors="replace")
 
 
-def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int) -> dict:
-    """Run `cmd`; returns exit, full stdout bytes, stderr tail text and whether it timed out."""
+def command_timeout(given: int | None) -> tuple[int, str]:
+    """A `Run:`, `Check:` or `Rollback:` command's seconds and the timeout message's parenthesis."""
+    return (given, "--timeout") if given is not None else (DEFAULT_TIMEOUT, "the default")
+
+
+def level_timeout(prd: Prd, level: str, given: int | None) -> tuple[int, str]:
+    """A tests level's seconds and the message's parenthesis: a given --timeout, else the level's Timeout, else the default."""
+    cell = prd.testing.timeouts.get(level, "")
+    if given is None and cell:
+        return int(cell), f"the {level} level's Timeout"
+    return command_timeout(given)
+
+
+def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int, why: str | None = None) -> dict:
+    """Run `cmd`; returns exit, full stdout bytes, stderr tail text and whether it timed out. `why`, when given, names
+    where the timeout came from in the timeout message."""
     proc = subprocess.Popen(
         ["bash", "-c", cmd], cwd=repo_root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env={**{k: v for k, v in os.environ.items() if k != "TEST_ENV"}, **extra_env}, start_new_session=True,
@@ -199,7 +213,7 @@ def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int)
             out, err = b"", b""
     stderr = _tail(err)
     if timed_out:
-        stderr += ("" if not stderr or stderr.endswith("\n") else "\n") + f"timed out after {timeout} s"
+        stderr += ("" if not stderr or stderr.endswith("\n") else "\n") + f"timed out after {timeout} s" + (f" ({why})" if why else "")
     return {"exit": proc.returncode, "out": out, "stdout": _tail(out), "stderr": stderr, "timed_out": timed_out}
 
 
@@ -208,27 +222,38 @@ def _prints_ok(out: bytes, text: str) -> bool:
     return any(line.strip() == want for line in out.decode("utf-8", errors="replace").splitlines())
 
 
-def _agent_record(step: Step, repo_root: Path, timeout: int, mark) -> dict:
+def _matches_ok(out: bytes, pattern: str) -> bool:
+    """At least one stdout line, stripped, satisfies re.fullmatch(pattern, line)."""
+    return any(re.fullmatch(pattern, line.strip()) for line in out.decode("utf-8", errors="replace").splitlines())
+
+
+def _agent_record(step: Step, repo_root: Path, timeout: int | None, mark) -> dict:
     env = {"PRD_ENV": step.env or ""}
     rec = {"command": step.run, "started": _iso()}
     mark(command=step.run)  # written before the command starts; if it fails the command does not run
-    first = _execute(step.run, repo_root, env, timeout)
+    first = _execute(step.run, repo_root, env, *command_timeout(timeout))
     rec.update(exit=first["exit"], stdout=first["stdout"], stderr=first["stderr"])
     ok = first["exit"] == 0 and not first["timed_out"]
     if ok and step.check is not None:
         mark(command=step.check, check=True)
-        c = _execute(step.check, repo_root, env, timeout)
+        c = _execute(step.check, repo_root, env, *command_timeout(timeout))
         rec["check"] = {"command": step.check, "exit": c["exit"], "stdout": c["stdout"], "stderr": c["stderr"]}
-        ok = c["exit"] == 0 and not c["timed_out"] and (step.prints is None or _prints_ok(c["out"], step.prints))
-        if c["exit"] == 0 and not c["timed_out"] and not ok:
-            rec["check"]["stderr"] = (c["stderr"] + f"\nno stdout line equals {step.prints!r}").lstrip("\n")
+        ran = c["exit"] == 0 and not c["timed_out"]
+        if ran and step.prints is not None and not _prints_ok(c["out"], step.prints):
+            ok, why = False, f"no stdout line equals {step.prints!r}"
+        elif ran and step.matches is not None and not _matches_ok(c["out"], step.matches):
+            ok, why = False, f"no stdout line matches '{step.matches}'"
+        else:
+            ok, why = ran, None
+        if why:
+            rec["check"]["stderr"] = (c["stderr"] + "\n" + why).lstrip("\n")
     rec["result"] = "pass" if ok else "fail"
     rec["ended"] = _iso()
     return rec
 
 
-def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) -> list[dict]:
-    """One record per level, stopping at the first failure."""
+def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int | None, mark) -> list[dict]:
+    """One record per level, each with its own timeout (level_timeout), stopping at the first failure."""
     recs = []
     if not step.tests:
         now = _iso()
@@ -240,7 +265,7 @@ def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) ->
             rec.update(exit=None, stdout="", stderr=f"no Harness command for level {level}", result="fail")
         else:
             mark(level=level, command=command)
-            r = _execute(command, repo_root, {"PRD_ENV": step.env or "", "TEST_ENV": step.env or ""}, timeout)
+            r = _execute(command, repo_root, {"PRD_ENV": step.env or "", "TEST_ENV": step.env or ""}, *level_timeout(prd, level, timeout))
             rec.update(exit=r["exit"], stdout=r["stdout"], stderr=r["stderr"], result="pass" if r["exit"] == 0 and not r["timed_out"] else "fail")
         rec["ended"] = _iso()
         recs.append(rec)
@@ -249,8 +274,10 @@ def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) ->
     return recs
 
 
-def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: int, timeout: int) -> tuple[str, int]:
-    """Run `steps` numbered `start` onward, logging and printing each. Returns (state, step number reached)."""
+def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: int, timeout: int | None) -> tuple[str, int]:
+    """Run `steps` numbered `start` onward, logging and printing each. Returns (state, step number reached).
+
+    `timeout` is the --timeout given, or None: then each tests level takes its Timeout and every command the default."""
     reached = start
     for step in steps:
         if step.number < start:
@@ -259,6 +286,11 @@ def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: 
         base = {"kind": "step", "step": step.number, "env": step.env, "actor": step.actor}
         if step.actor == "human":
             now = _iso()
+            if any(r.get("kind") == "confirm" and r.get("step") == step.number and r.get("ahead") for r in read_log(repo_root, run_id)):
+                append(repo_root, run_id, {**base, "command": None, "exit": None, "stdout": "", "stderr": "", "started": now, "ended": now,
+                                           "result": "human", "confirmed_ahead": True})  # the owner answered this step in the stopped step's confirm
+                print(f"step {step.number} human {step.env}: confirmed ahead", flush=True)
+                continue
             append(repo_root, run_id, {**base, "command": None, "exit": None, "stdout": "", "stderr": "", "started": now, "ended": now, "result": "human"})
             print(f"step {step.number} human {step.env}: human", flush=True)
             return "human", step.number
@@ -339,8 +371,13 @@ def other_prd(prd: Prd, repo_root: Path, run_id: str, header: dict) -> str | Non
     return None if recorded == here else f"run {run_id} is for {recorded}, not {here}"
 
 
-def confirm(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> None:
-    """Record the reply to the human step the run stopped at. ValueError (a usage error) when it cannot."""
+def confirm(prd: Prd, repo_root: Path, run_id: str, pairs: list[tuple[int, str]]) -> None:
+    """Record the replies to the human step the run stopped at (the first pair) and to the human steps right after it.
+
+    All pairs are checked before any is written, under the run lock. ValueError (a usage error) when one cannot be."""
+    if not pairs:
+        raise ValueError("no step and reply given")
+    step, reply = pairs[0]
     try:
         with run_lock(repo_root, run_id):
             header, recs = _load_log(repo_root, run_id)
@@ -354,9 +391,50 @@ def confirm(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> No
                 raise ValueError("the reply is empty")
             if _confirmed(recs, step):
                 raise ValueError(f"step {step} already has a confirm record")
-            append(repo_root, run_id, {"kind": "confirm", "step": step, "reply": reply, "at": _iso()})
+            if len(pairs) > 1:
+                planned = {s.number: s for s in plan_steps(prd, header.get("until"))}
+                for (before, _), (n, text) in zip(pairs, pairs[1:]):
+                    if n != before + 1:
+                        raise ValueError(f"step {n} does not follow step {before}; a confirm covers consecutive steps")
+                    if n not in planned:
+                        raise ValueError(f"step {n} is not a step of this run (past --until or the runbook's end)")
+                    if planned[n].actor != "human":
+                        raise ValueError(f"step {n} is not a human step")
+                    if not text.strip():
+                        raise ValueError(f"the reply for step {n} is empty")
+            for n, text in pairs:
+                rec = {"kind": "confirm", "step": n, "reply": text, "at": _iso()}
+                append(repo_root, run_id, rec if n == step else {**rec, "ahead": True})
     except Refused as e:
         raise ValueError(e.reasons[0]) from None
+
+
+def run_entries_only(prd: Prd, repo_root: Path, header: dict, run_id: str) -> bool:
+    """True when the tracked tree's only change is errors.md gaining entries, each open, unclassified and with a
+    `Detected:` line naming this run and a step; the old text must be exactly as it was at the run's head."""
+    lines = _git(repo_root, "status", "--porcelain", "--untracked-files=no").splitlines()
+    rel = f"{prd_rel(prd, repo_root)}/errors.md".removeprefix("./")
+    if [ln[3:] for ln in lines] != [rel] or not all(ln[:2].strip() == "M" for ln in lines):
+        return False
+    path = repo_root / rel
+    if not path.is_file():
+        return False
+    base, now = _show(repo_root, str(header.get("head")), rel), path.read_text(encoding="utf-8")
+    base_ids, new = set(_errors_ledger(base)), _errors_ledger(now)
+    added = [e for i, e in new.items() if i not in base_ids]
+    if not added:
+        return False  # only added entries pass; any other change is refused
+    now_lines = now.split("\n")
+    for e in added:
+        detected = re.search(r"^Detected:.*$", "\n".join(now_lines[e.line - 1:e.end]), re.M)
+        if not (e.open and e.classification == "unclassified" and detected_names_failure(detected.group(0) if detected else None, run_id, None)):
+            return False
+    gone = {n for e in added for n in range(e.line, e.end + 1)}
+    kept = [t for n, t in enumerate(now_lines, 1) if n not in gone]
+    old = base.split("\n")
+    if not base_ids:
+        old = [t for t in old if t.strip() != LEDGER_PLACEHOLDER]
+    return "\n".join(kept).rstrip() == "\n".join(old).rstrip()
 
 
 def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
@@ -366,7 +444,7 @@ def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
         reasons.append("HEAD moved since the run started")
     if prd.frontmatter.get("version") != header.get("version"):
         reasons.append("the PRD version changed since the run started")
-    if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
+    if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip() and not run_entries_only(prd, repo_root, header, str(header.get("run"))):
         reasons.append("the tracked tree has changes")  # the runbook is read from the working tree
     if runbook_hash(prd.root) != header.get("runbook"):
         reasons.append("the runbook changed since the run started")  # an untracked or assume-unchanged PRD moves no HEAD
@@ -508,7 +586,7 @@ def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
         reasons.append(f"step {failed['step']} failed; a failed run ends (start a new run)")
     elif last is None:
         reasons.append("the run has no step records")
-    elif last.get("result") == "human":
+    elif last.get("result") == "human" and not last.get("confirmed_ahead"):  # an ahead-confirmed step is answered, not a stop
         if not _confirmed(recs, last["step"]):
             reasons.append(f"step {last['step']} has no confirm record")
     else:
@@ -527,7 +605,7 @@ def resume_point(repo_root: Path, run_id: str) -> tuple[int, str | None]:
     return (last["step"] if last else 0), header.get("until")
 
 
-def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) -> int:
+def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int | None) -> int:
     """Run failed step `step`'s Rollback once and log it; returns the command's exit code (-1 when it never ran to an exit).
 
     ValueError for a usage problem, Refused when the run is another PRD's, or HEAD, the PRD version, the tree or the runbook moved.
@@ -556,7 +634,7 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
         except Exception as e:
             raise ValueError(f"could not record the rollback start, so it was not run: {e}") from None
     try:
-        r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, timeout)
+        r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, *command_timeout(timeout))
         rec = {"exit": r["exit"], "stdout": r["stdout"], "stderr": r["stderr"], "ok": r["exit"] == 0 and not r["timed_out"]}
     except Exception as e:  # the command could not even start
         rec = {"exit": None, "stdout": "", "stderr": f"{type(e).__name__}: {e}", "ok": False}
@@ -564,6 +642,22 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
     append(repo_root, run_id, {"kind": "rollback", "step": step, "command": target.rollback, **rec, "started": started, "ended": _iso()})
     print(f"rollback step {step} {target.env}: {'pass' if ok else 'fail'}", flush=True)
     return 0 if ok else (rec["exit"] if rec["exit"] not in (None, 0) else -1)
+
+
+# ---- the close on another branch (0.8.5 spec 5.4) ----
+
+def reached_envs(log: list[dict]) -> list[str]:
+    """The environments a run's log has step (or by-hand) records for, in order, each once."""
+    return list(dict.fromkeys(r["env"] for r in log if r.get("kind") in ("step", "hand") and r.get("env")))
+
+
+def branch_note(prd: Prd, repo_root: Path, envs: list[str]) -> list[str]:
+    """One note line per branch, other than the current one, that one of `envs` deploys from (its Branch cell), each
+    once, in the order the environments were reached; empty when there is none. A note, never a refusal or a finding."""
+    current = _git(repo_root, "branch", "--show-current").strip()
+    other = dict.fromkeys(b for b in (prd.operations.branches.get(e, "") for e in envs) if b and b != current)
+    here = current or "a detached HEAD"
+    return [f"prd_deploy: the close is on {here}, not {b}; push the close commit to {b} too" for b in other]
 
 
 # ---- a deploy done by hand (spec section 17, fix 5) ----
@@ -661,7 +755,7 @@ def finished_envs(log: list[dict], prd: Prd) -> list[str]:
         recs = [r for r in steps if r.get("step") == number]
         if recs and recs[-1].get("result") == "human":  # a human step passes once confirmed and resumed, with nothing failing after it
             idx = [i for i, r in enumerate(log) if r.get("kind") == "confirm" and r.get("step") == number]
-            ok = bool(idx) and any(r.get("kind") == "resume" and r.get("step") == number for r in log[idx[-1] + 1:])
+            ok = bool(idx) and (bool(recs[-1].get("confirmed_ahead")) or any(r.get("kind") == "resume" and r.get("step") == number for r in log[idx[-1] + 1:]))
             later_fail = any(r.get("kind") == "step" and r.get("result") == "fail" and (r.get("step") or 0) > number for r in log)
             if ok and not later_fail:
                 out.append(env)
@@ -741,8 +835,9 @@ def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> lis
 
 
 def detected_names_failure(detected: str | None, run_id: str, step) -> bool:
-    """A failure entry's `Detected:` line names the run id and `step N`."""
-    return bool(detected and re.search(rf"\bstep\s+{step}\b", detected) and run_id in detected)
+    """A run entry's `Detected:` line names the run id and `step N`; `step` None accepts any step."""
+    pat = r"\d+" if step is None else str(step)  # outside the f-string: a backslash in its expression is a SyntaxError before 3.12
+    return bool(detected and re.search(rf"\bstep\s+{pat}\b", detected) and run_id in detected)
 
 
 def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
@@ -846,11 +941,26 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         e = new[0]
         etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
         detected = re.search(r"^Detected:.*$", etext, re.M)
-        step_ok = detected_names_failure(detected.group(0) if detected else None, run_id, failed.get("step"))
-        if not (e.open and e.classification == "unclassified" and step_ok):
+        line = detected.group(0) if detected else None
+        step_ok = detected_names_failure(line, run_id, failed.get("step"))
+        run_entry = e.open and e.classification == "unclassified" and detected_names_failure(line, run_id, None)
+        if run_entry and not step_ok:  # a mid-run entry, kept as it is: the failed step's own entry is the one missing
+            out.append(f"errors.md: the run failed at step {failed.get('step')} but no open unclassified entry names run {run_id} and that step in Detected:")
+        elif not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))
-    first_entry = failed is not None and len(new) == 1 and not b_prd.errors_ledger
+    names_failure = False
+    if failed is None or len(new) != 1:  # a run's entries, recorded while it was stopped or after it failed, ride the close
+        for e in new:
+            etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
+            detected = re.search(r"^Detected:.*$", etext, re.M)
+            line = detected.group(0) if detected else None
+            if e.open and e.classification == "unclassified" and detected_names_failure(line, run_id, None):
+                drop_errors |= set(range(e.line, e.end + 1))
+                names_failure = names_failure or (failed is not None and detected_names_failure(line, run_id, failed.get("step")))
+        if failed is not None and new and not names_failure:
+            out.append(f"errors.md: the run failed at step {failed.get('step')} but no open unclassified entry names run {run_id} and that step in Detected:")
+    first_entry = bool(drop_errors) and not b_prd.errors_ledger
 
     # every other change
     diff = _git(repo_root, "diff", "--no-renames", "--name-only", "-z", base, head).split("\0")

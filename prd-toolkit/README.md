@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Each PRD folder has a README that says what it is, and the published page opens on an Overview. Version 0.8.4.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Each PRD folder has a README that says what it is, and the published page opens on an Overview. Version 0.8.5.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -20,7 +20,8 @@ for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../doc
 for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md),
 for 0.8.2 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md),
 for 0.8.3 [docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md),
-and for 0.8.4 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
+for 0.8.4 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md),
+and for 0.8.5 [docs/superpowers/specs/2026-11-08-prd-toolkit-0.8.5-design.md](../docs/superpowers/specs/2026-11-08-prd-toolkit-0.8.5-design.md).
 
 ## Install
 
@@ -137,6 +138,14 @@ only to the scratchpad and the test roots (the PRD is read-only), and Bash only 
 `testing.md` harness commands (one simple command each) plus `ls`, `mkdir`, `uv run python -m py_compile` and, since 0.8.4, a checked `grep` (readable paths named one by one, a fixed list of options, the options before the pattern), for a session whose Claude Code build has no Grep tool. It never fails open: with `testing.md`
 missing or unparsable, only Read, Glob and Grep under the PRD folder are allowed.
 
+Since 0.8.5 the guard checks every argument after a harness command, not only those that look like
+paths. A bare positional or path value must lie under a test root or the scratch directory
+(`prd_tester_guard: <arg> is not under a test root`). `--pyargs`, `--doctest-modules`,
+`--doctest-glob`, `--rootdir`, `--confcutdir`, `-p <plugin>` (but not `-p no:<name>`) and `-o addopts`
+are refused (`prd_tester_guard: <option> is refused after a harness command`), and so is an unquoted
+glob character `*`, `?`, `[`, `^` or `#` (`prd_tester_guard: unquoted glob in <arg>`). A quoted
+`-k 'T-015*'`, `-n auto`, `-p no:cacheprovider` and `--tb=short` pass.
+
 **Limit.** The guard confines the tester's tool calls, not the processes the harness runs. A
 `conftest.py` the tester writes can touch any file when pytest runs it. So callers run an
 integrity check after each dispatch (a before and after snapshot of `git status`, the PRD folder's file list
@@ -230,6 +239,10 @@ and each build-gate Levels harness command must run there too (for example `uv r
 blocks the commit when `uv` is missing, and skips with a message on a branch that has no
 `.prd-toolkit/` or no PRD folder.
 
+Since 0.8.5 the toolkit's own `unit` and `integration` Harness commands run with `-n auto`
+(`pytest-xdist`, in the dev group of `prd-toolkit/pyproject.toml`), so the generated test jobs run in
+parallel. An adopting repository's CI changes only where its own Levels change; no path filter is added.
+
 Known limits:
 
 - A case that is `known-failing` on an open `E-nnn` is a strict expected failure that tags its
@@ -294,6 +307,30 @@ command>`, so the harness command (one simple command, such as `bash tools/gate.
 Levels rule requires) sees both variables. Both start by
 hand (`workflow_dispatch` on GitHub, `when: manual` on GitLab), stay out of the merge gate, and
 never deploy; deploying is done from a session.
+
+**Since 0.8.5.**
+
+- *Several human steps in one reply.* `prd_deploy.py confirm <prd> --run ID --step N --reply TEXT`
+  may repeat the `--step N --reply TEXT` pair. The first pair is the stopped step; each later pair is
+  the next consecutive human step, with its own non-empty reply, one record per step. The call is
+  all or nothing, and a bad pair refuses the whole call. The skill adds a later step only when the
+  owner's reply names it. The decision inbox still confirms one step at a time.
+- *An error entry recorded while a run is stopped.* `prd_error.py new` may write an entry that names
+  the run and a step; leave it uncommitted and resume. The close commits it. Any other tracked change
+  still refuses `resume`.
+- *A `tests` step's own timeout.* A `Timeout` column in Levels (`testing.md`; whole seconds, at least
+  1; a pack level's `timeout` is copied into it) bounds that level's run. `--timeout` overrides every
+  level; the default is 600 s. A timeout reads `timed out after <N> s (the <level> level's Timeout)`,
+  `(--timeout)` or `(the default)`.
+- *A close on another branch.* An optional `Branch` column in `operations.md` Environments names the
+  branch an environment deploys from. When a run finishes (done or failed) or on `check`, stderr gets
+  `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too` (`a
+  detached HEAD` for `<current>`). It is a note; the exit is unchanged, and the skill tells the owner
+  to push, never pushes itself.
+- *A Check that matches by pattern.* ``Check: `<cmd>` matches `<pattern>` `` passes when some stdout
+  line fully matches the Python regular expression (`no stdout line matches '<pattern>'` otherwise).
+  A pattern holds no backtick; lint refuses one that does not compile, and a Check with both `prints`
+  and `matches`.
 
 **What `prd_deploy.py` refuses.** Exit 1 (`refused`), with each reason printed:
 
@@ -418,6 +455,15 @@ loads nothing (no script, stylesheet, font or image from any URL), so it opens o
 on an intranet; PRD text is rendered from markdown with raw HTML escaped, and the error ledger
 appears without its `Evidence:` lines.
 
+**Diagrams (0.8.5).** A mermaid fence renders as an inline SVG in a `<figure class="diagram">`, drawn
+by the pinned renderer `mermaidx==0.11.3` named in `prd_publish.py`'s dependency header, followed by a
+closed `<details>` titled `Diagram source` that holds the source. The SVG is checked before it goes in
+(no script, event attribute, outside link, `foreignObject` or outside `url(`), so the page still loads
+nothing. A diagram that cannot render, or whose SVG fails the check, stays a `<pre class="mermaid">`
+block and prints `prd_publish: diagram at <file>:<line> shown as source: <reason>` on stderr; the
+render still exits 0. Publish the page as its own Artifact, never as a file inside another one: an
+Artifact draws a `pre.mermaid` block only on its own main page.
+
 **Summaries.** The skill writes a short plain-language summary of each area (600 characters at most,
 in the language you ask for), and the page shows it in a box labelled `Summary by Claude of
 FR-001–FR-004, PRD <version>` that cites its IDs. Summaries are written fresh for each publish and
@@ -536,6 +582,14 @@ the vendored copy is then the one lint reads, and its version must equal the nam
 `${PACK}` for its own folder. The format is `references/prd-format.md` ("Target profiles") and the manifest
 is `references/contract-types.md` ("pack"). Lint adds `pack-resolves` (a profile line or pack that does
 not resolve) and the warning `platform-word` (a word from the area's pack vocabulary in a requirement).
+
+**A pack release (0.8.5).** `prd_change.py pack <prd_dir> <name> <X.Y.Z>`, run from the plugin, moves
+every `Pack:` and `Target:` line that names the pack, records `pack <name> <old> → <new>; pending` as
+a patch with no IDs, and leaves the tree uncommitted. Then run `prd_hooks.py install docs/prd/<slug>`
+from the plugin to re-vendor the pack, and give the owner's approval with the dry-run record `no dry
+run (pack version only)`. It refuses a PRD with uncommitted changes, a pack no line names, lines that
+already name the version or that disagree on it, and a pack that does not resolve. `install` on an
+old version ends its refusal with the `prd_change.py pack` command to run.
 
 ## Languages
 
@@ -673,13 +727,36 @@ These files live in the git common directory, so every worktree of the repositor
 The skills route each decision through the inbox and fall back to the chat when `serve` cannot start; the
 page is never the only route.
 
+## Known limits (0.8.5)
+
+- A diagram draws as inline SVG where the renderer works, in a plain browser and in an Artifact
+  published as its own page; a diagram with a render error, or an SVG the diagram check refuses, is shown as its source,
+  with the stderr note `prd_publish: diagram at <file>:<line> shown as source: <reason>`. Mermaid's
+  journey diagrams always fall back, since they use `foreignObject`. The `Diagram source` summary is
+  English on every page.
+- `mermaidx` pulls an unpinned `quickjs-ng`, so a render is the same per resolution, not across time.
+- On the `uv run --script` path a renderer that cannot install stops the publish rather than falling
+  back; wheels exist for macOS, manylinux, musllinux, Windows. The pip route needs `mermaidx` too
+  (`pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`).
+- The tester guard applies pytest's option table to every harness. A non-pytest runner's name filter
+  (jest `-t foo`) is read as a bare positional and refused (`prd_tester_guard: <arg> is not under a
+  test root`); an option the table does not know is read as a plain flag, so a value it takes is
+  checked as a positional, which errs toward refusing. `-o addopts`, `--doctest-glob`, `--confcutdir`
+  and the other refused options end with `is refused after a harness command`, and an unquoted glob
+  with `prd_tester_guard: unquoted glob in <arg>`.
+- A SOURCES finding from `prd_build_check.py --sources` does not fail the round the first time: the
+  caller sends the report back to the builder with the finding. A second one on the same round fails
+  it.
+- A pack release needs the plugin's `prd_change.py`, not the vendored copy, which resolves the pack
+  from `.prd-toolkit/packs`, still at the old version.
+
 ## Known limits (0.8.4)
 
 - Two branches that each change a different PRD both rewrite the parent `docs/prd/README.md` table,
   so their merge can conflict there. Rerun `prd_block.py`; never edit the table by hand.
 - The README shows no requirement statuses; `/prd-status` does. Only the PRD folder's root has a
   README: `features/`, `contracts/` and the other folders have none.
-- Since 0.8.4 a mermaid diagram on the published page is the source in a `<pre class="mermaid">` block. No viewer draws it, an Artifact included: every viewer shows the source. The page's labels follow the PRD's language, with English where a language table lacks a key.
+- Since 0.8.4 the page's labels follow the PRD's language, with English where a language table lacks a key. (A mermaid diagram is drawn from 0.8.5: see Known limits (0.8.5).)
 - The description is §2's first paragraph as written. The toolkit never drafts one itself.
 
 ## Known limits (0.8.2)
@@ -759,7 +836,7 @@ page is never the only route.
 - A confirmation is trusted to be the user's, as `prd_deploy.py confirm` is.
 - `recover` never marks a step done.
 - `Evidence:` holding no secret or classified value is held by instruction; nothing scans it.
-- Mermaid diagrams on the published page are shown as source, and the page's own labels are English. (0.8.4 changes the labels: see Known limits (0.8.4).)
+- Mermaid diagrams on the published page are shown as source, and the page's own labels are English. (0.8.4 changes the labels: see Known limits (0.8.4); 0.8.5 draws the diagrams: see Known limits (0.8.5).)
 - The window between reading the runbook steps and hashing them is not covered (see Deploying).
 
 ## Assumption status `awaiting <who>`
@@ -772,6 +849,21 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.5:** The deploy, pack and check fixes from the first private-pack loop, the published page's diagrams, and a stricter tester guard. See the [design spec](../docs/superpowers/specs/2026-11-08-prd-toolkit-0.8.5-design.md).
+  - Item 1: `prd_deploy.py confirm` takes repeated `--step N --reply TEXT` pairs, one record per step, all or nothing; the skill adds a later step only when the owner's reply names it.
+  - Item 2: `prd_error.py new` may record an entry while a run is stopped; it stays uncommitted through `resume` and the close commits it.
+  - Item 3: a `Timeout` column in `testing.md` Levels bounds a `tests` step's level; `--timeout` still wins; a pack level's `timeout` is copied into it.
+  - Item 4: a `Branch` column in `operations.md` Environments; a run's finish and `check` print `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too`.
+  - Item 5: a Check may be ``matches `<pattern>` `` (a full-line Python regular expression).
+  - Item 6: `prd_change.py pack <prd_dir> <name> <X.Y.Z>` moves a pack release without a hand-made patch, then `prd_hooks.py install` and the approval with the dry-run record `no dry run (pack version only)`.
+  - Item 7: `prd_context.py --for implement` judges a `Source:` by the cited line: `MOVED: line <L> is now line <M>` is not stale (the close refreshes the line), `STALE: the cited line's text is gone` or `appears <N> times` is; the exit counts only the blocks asked for, and a block pulled in through `Traces:` prints `(pulled in; not counted)`.
+  - Item 8: `prd_build_check.py --diff <base>..<head> --sources <file>` checks each builder SOURCES line against the round's hunks; the caller sends a finding back to the builder, and the round is not failed for it.
+  - Item 9: the published page draws mermaid as inline SVG from the pinned `mermaidx==0.11.3`, each diagram falling back to its source with `prd_publish: diagram at <file>:<line> shown as source: <reason>`; publish the page as its own Artifact.
+  - Item 10: the tester guard checks every harness argument: a bare positional or path under a test root, `--pyargs`, `--doctest-modules`, `--doctest-glob`, `--rootdir`, `--confcutdir`, `-p <plugin>` and `-o addopts` refused, and an unquoted glob refused.
+  - Item 11: `pytest-xdist` and `-n auto` for the toolkit's own suite.
+  - Item A: a moved `Status:` line is a `patch` bump item that §14's IDs cell names. Item B: a new or removed block's ACs and T-ids are named in §14's IDs cell.
+  - The toolkit's own PRD is at 6.0.0 (approved b99cfac). 5.2.0 (approved f4468b0) added `lint-cli` FR-016 (lint reports a `testing.md` Levels `Timeout` cell that is not a whole number of seconds of at least 1: `runbook-tests`), FR-017 (an `operations.md` Environments `Branch` cell that `git check-ref-format --branch` refuses: `runbook-env`) and FR-018 (a runbook Check whose `matches` pattern does not compile or that holds both `prints` and `matches`: `runbook-steps`); 6.0.0 changes FR-010 (rebuilt and verified): `prd_publish.py`'s missing-package hint now ends `pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`.
+  - Upgrading from 0.8.4: re-run `prd_hooks.py install docs/prd/<slug>` from the plugin, which vendors the new scripts. Every new column and form is optional, so no PRD changes. A pack release now ends with `prd_change.py pack`.
 - **0.8.4:** A README for each PRD folder, an Overview tab on the published page, and ten fixes from the 0.8.3 proof. See the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
   - `docs/prd/<slug>/README.md` and `docs/prd/README.md` are managed blocks between `<!-- prd-toolkit:start -->` and `<!-- prd-toolkit:end -->`, written by `prd_block.py` beside the `CLAUDE.md` block from two templates, from the PRD's own text (see READMEs and the Overview tab). Text outside the markers is yours. The toolkit's own PRD is at 5.1.0 with `lint-cli` FR-015: lint, the change digest, the bump and the tester skip the PRD folder's root `README.md`.
   - `prd.md` §2 gains two optional parts, `Principles:` and `Getting started:`; no section is added and no existing PRD breaks. Authoring and adoption offer to draft them.
@@ -795,7 +887,8 @@ the user cannot state.
     - The owner approved PRD 5.1.0 in the decision inbox's form, then read both READMEs and approved the `es` labels.
     - Fix 6: `prd_build_check.py --diff 081a20c..bead8e1` passed the vendor-refresh round (exit 0).
     - Fix 2: a `prd-tester` suite round ran T-015.1 and T-015.2 under `uv run --directory prd-toolkit`, both passed, and the guard refused no call. That session had no Grep tool and read whole files instead, so fix 3's checked `grep` waits for a live tester after the merge.
-    - `/prd-publish` put PRD 5.1.0 into the design artifact. The Overview tab drew. The mermaid diagram showed as source, because the Artifact viewer runs no mermaid on an HTML page; drawing it is 0.8.5's item 9.
+    - `/prd-publish` put PRD 5.1.0 into the design artifact. The Overview tab drew. The mermaid diagram showed as source, because the Artifact viewer runs no mermaid on an HTML page; the cause was publishing the page as a file inside another Artifact, and 0.8.5 draws the diagram.
+    - Proven live after the merge on 2026-11-08: a real `prd-tester` on the installed 0.8.4 ran `uv run --directory` and five checked greps with no refusal (fixes 2 and 3).
 - **0.8.3:** The fixes from the 0.8.2 proof, and a way for the toolkit's own repository to refresh its vendored copy. See the [design spec](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md).
   - `prd_hooks.py vendor <prd>` writes `.prd-toolkit/` exactly as `install` does and nothing else, prints `vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)`, and refuses from a vendored copy (`prd_hooks: vendor runs from the plugin, not from .prd-toolkit/`, exit 2).
   - `prd_build_check.py --diff` accepts a change under `.prd-toolkit/` when the repository holds exactly one prd-toolkit plugin directory and `.prd-toolkit/` at `<head>` is, byte for byte, what `vendor` writes from that directory at `<head>` (read from `<head>`'s tree, never the working tree), with no path `vendor` would delete. Otherwise each differing path is `<path>: differs from the plugin; refresh it with prd_hooks.py vendor`, exit 1; in any other repository the old refusal stands unchanged.

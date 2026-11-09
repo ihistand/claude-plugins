@@ -508,6 +508,13 @@ refer to (levels, environments, fixtures).
   (`bash tools/gate.sh <level>`) is not one. A build command that excludes the deploy-gate path
   (`--ignore`, `--ignore-glob`, `--deselect`) or selects its tests by an expression (`-m`, `-k`) is
   not reported: `pytest tests --ignore tests/system` and `pytest -m "not system" tests` pass.
+- Levels: an optional `Timeout` column, found by its header name as `Environment` is, gives a level's
+  timeout at `/prd-deploy` in whole seconds, at least 1 (`runbook-tests` reports any other value). A
+  blank cell or no column means the default, 600 s. A `tests` step runs each level with its own
+  Timeout; `Run:`, `Check:` and `Rollback:` commands keep the default; a `--timeout` given to
+  `prd_deploy.py` overrides every one of them, 600 included. The timeout message names the value that
+  applied: `timed out after <N> s (the <level> level's Timeout)`, `(--timeout)` or `(the default)`. A
+  pack level's `timeout:` is copied into this cell.
 - Levels: each `Harness command` is **one simple command** in backticks, such as
   `` `uv run pytest tests` ``; the `prd-tester` guard runs nothing else. It blocks a command whose
   first word is `cd`, `env`, `sh`, `bash`, `zsh`, `eval` or `exec`; one containing `$`, `{` or
@@ -571,13 +578,26 @@ Three tables and a runbook. Other headings (Secrets by name) are free. The `runb
 
 - Environments: `Production` is `yes` or `no`, and at least one row is `yes`. Every environment is
   also a row of `testing.md` Environments (`runbook-env`).
+- Environments: an optional `Branch` column names the branch an environment deploys from, a valid git
+  branch name or blank (`runbook-env`). When a run or a resume ends, done or failed, having reached
+  environments whose Branch is not `git branch --show-current`, `prd_deploy.py` prints on stderr one
+  line per such branch, each once, in the order its environment was reached:
+  `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too`
+  (`a detached HEAD` for `<current>`), and `prd_deploy.py check` prints the same lines. It is a note:
+  the exit code does not change and the run is never refused.
 - A step line is `N. <title> (actor: agent|human) (env: <environment>)`, numbered from 1 without
   gaps. Labelled lines follow, indented, in any order, one per label; lint reports a repeated label (`runbook-steps`), and the first is used. An agent step takes `Run:` (required),
   `Check:` (required unless `Run:` is a `tests` step) and `Rollback:` (optional); a human step
   takes `Do:` and `Check:` (both required, prose) and never `Run:` or `Rollback:`. Other indented
   lines are prose and ignored (`runbook-steps`).
 - An agent `Run:` is one backticked command, or `tests <level>[, <level>]`. An agent `Check:` is
-  one backticked command, optionally followed by `` prints `<text>` ``. `Rollback:` is one
+  one backticked command, optionally followed by `` prints `<text>` `` or `` matches `<pattern>` ``,
+  never both (`runbook-steps`). `prints` passes when the command exits 0 and a stdout line, stripped,
+  equals the text; `matches` when it exits 0 and a stdout line, stripped, satisfies
+  `re.fullmatch(<pattern>, line)` (a Python regular expression that must compile), as in
+  `` Check: `uv run scripts/deploy.py staging --status` matches `deployed [0-9a-f]{7,40}` ``. A mismatch fails the step
+  with `no stdout line equals '<text>'` or `no stdout line matches '<pattern>'` in its log. The text
+  and the pattern sit between backticks, so neither can hold a backtick. `Rollback:` is one
   backticked command. A `tests` step has no `Check:`: the suite is its check. Each level it names
   exists in `testing.md` Levels with Gate `deploy` and a Harness command (`runbook-tests`).
   A value that is still a `[NEEDS CLARIFICATION: …]` marker is left to the markers rule.

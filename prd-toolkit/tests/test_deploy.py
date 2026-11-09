@@ -143,12 +143,12 @@ def test_stdin_closed(repo):
 
 
 def test_timeout(repo):
-    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `sleep 5; mkdir -p .deploy/staging && echo Hi")
+    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `sleep 30; mkdir -p .deploy/staging && echo Hi")
     started = time.monotonic()
     r = deploy_cli(repo, "run", "--timeout", "1")
-    assert r.returncode == 4 and time.monotonic() - started < 4.5
+    assert r.returncode == 4 and time.monotonic() - started < 15  # well under the 30 s sleep: the timeout ended it
     rec = records(repo, r)[-1]
-    assert rec["result"] == "fail" and rec["stderr"].endswith("timed out after 1 s")
+    assert rec["result"] == "fail" and rec["stderr"].endswith("timed out after 1 s (--timeout)")
 
 
 def test_tests_step_env(repo):
@@ -670,12 +670,12 @@ def test_rollback_stdin_is_closed(repo):
 
 
 def test_rollback_times_out(repo):
-    change(repo, OPS, "touch .deploy/staging/rolled-back`", "sleep 5`")
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", "sleep 30`")
     run_id = failed_run(repo)
     started = time.monotonic()
     r = deploy_cli(repo, "rollback", "--run", run_id, "--step", "1", "--timeout", "1")
-    assert r.returncode == 4 and time.monotonic() - started < 4.5
-    assert deploy.read_log(repo, run_id)[-1]["stderr"].endswith("timed out after 1 s")
+    assert r.returncode == 4 and time.monotonic() - started < 15  # well under the 30 s sleep: the timeout ended it
+    assert deploy.read_log(repo, run_id)[-1]["stderr"].endswith("timed out after 1 s (--timeout)")
 
 
 def test_rollback_usage_errors_print_nothing_on_stdout(repo):
@@ -1160,3 +1160,262 @@ def test_plan_steps_until_production_env_unit(repo):
     with pytest.raises(ValueError, match=r"^--until staging would include production step 3$"):
         deploy.plan_steps(prd, "staging")
     assert [s.number for s in deploy.plan_steps(prd, "production")] == [1, 2, 3, 4, 5]
+
+
+# ---- 0.8.5: one confirm covers consecutive human steps ----
+
+def ahead_repo(repo, *run_args):
+    from deploy_fixture import three_human_steps
+    three_human_steps(repo)
+    r = deploy_cli(repo, "run", *run_args)
+    assert r.returncode == 3 and r.stdout.splitlines()[-1].startswith("prd-deploy: human step=2"), r.stdout + r.stderr
+    return run_id_of(r)
+
+
+def confirm_pairs(repo, run_id, *pairs):
+    args = [a for n, text in pairs for a in ("--step", str(n), "--reply", text)]
+    return deploy_cli(repo, "confirm", "--run", run_id, *args)
+
+
+def log_of(repo, run_id):
+    return deploy.read_log(repo, run_id)
+
+
+def test_one_confirm_covers_the_stopped_step_and_the_human_steps_after_it(repo):
+    run_id = ahead_repo(repo)
+    r = confirm_pairs(repo, run_id, (2, "staging ok"), (3, "notes ok"), (4, "deploy production"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    confirms = [x for x in log_of(repo, run_id) if x.get("kind") == "confirm"]
+    assert [(c["step"], c["reply"], c.get("ahead")) for c in confirms] == [(2, "staging ok", None), (3, "notes ok", True), (4, "deploy production", True)]
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stdout.splitlines()[-1] == f"prd-deploy: done step=5 run={run_id}", r.stdout + r.stderr
+    humans = {x["step"]: x for x in log_of(repo, run_id) if x.get("kind") == "step" and x.get("actor") == "human"}
+    assert humans[2].get("confirmed_ahead") is None
+    assert all(humans[n]["result"] == "human" and humans[n]["confirmed_ahead"] is True for n in (3, 4))
+    assert (repo / ".deploy/step5").exists()
+    assert resume(repo, run_id).returncode == 1
+
+
+@pytest.mark.parametrize("pairs", [
+    [(2, "a"), (4, "c")],                  # a gap
+    [(2, "a"), (3, "b"), (5, "e")],        # an agent step
+    [(3, "b")],                            # not the stopped step
+    [(2, "a"), (3, " ")],                  # an empty reply
+    [(2, "a"), (3, "b"), (3, "b")],        # a repeat
+])
+def test_a_bad_pair_refuses_the_whole_confirm(repo, pairs):
+    run_id = ahead_repo(repo)
+    before = log_of(repo, run_id)
+    r = confirm_pairs(repo, run_id, *pairs)
+    assert r.returncode == 2 and r.stdout == "" and r.stderr.strip(), (r.stdout, r.stderr)
+    assert log_of(repo, run_id) == before
+
+
+def test_a_step_past_until_is_refused(repo):
+    run_id = ahead_repo(repo, "--until", "staging")
+    before = log_of(repo, run_id)
+    r = confirm_pairs(repo, run_id, (2, "a"), (3, "b"), (4, "c"))
+    assert r.returncode == 2 and "step 4" in r.stderr
+    assert log_of(repo, run_id) == before
+
+
+def test_unequal_step_and_reply_counts_are_refused(repo):
+    run_id = ahead_repo(repo)
+    before = log_of(repo, run_id)
+    r = deploy_cli(repo, "confirm", "--run", run_id, "--step", "2", "--step", "3", "--reply", "a")
+    assert r.returncode == 2 and r.stdout == ""
+    assert log_of(repo, run_id) == before
+
+
+def test_a_0_8_4_log_reads_as_before(repo):
+    run_id = ahead_repo(repo)
+    assert confirm_pairs(repo, run_id, (2, "staging ok")).returncode == 0
+    assert not any("ahead" in x or "confirmed_ahead" in x for x in log_of(repo, run_id))
+    r = resume(repo, run_id)
+    assert r.returncode == 3 and r.stdout.splitlines()[-1] == f"prd-deploy: human step=3 run={run_id}", r.stdout + r.stderr
+
+
+# ---- 0.8.5: a level's own Timeout, the close-branch note and matches Checks ----
+
+TESTING = "docs/prd/orders/testing.md"
+LEVELS = "| Level | Harness command | Environment | Gate |\n|---|---|---|---|\n"
+
+
+def level_timeouts(repo, **cells) -> None:
+    """Give testing.md's Levels table a Timeout column; `cells` maps a level to its cell, others stay blank."""
+    p = repo / TESTING
+    text = p.read_text(encoding="utf-8")
+    assert text.count(LEVELS) == 1
+    head, rest = text.split(LEVELS)
+    rows, tail = rest.split("\n\n", 1)
+    rows = "\n".join(f"{row} {cells.get(row.split('|')[1].strip(), '')} |" for row in rows.split("\n"))
+    p.write_text(head + "| Level | Harness command | Environment | Gate | Timeout |\n|---|---|---|---|---|\n" + rows + "\n\n" + tail, encoding="utf-8")
+    commit(repo, "Level timeouts", TESTING)
+
+
+def slow_system(repo, seconds: int) -> None:
+    """Step 2 runs `tests e2e, system`; the system level sleeps `seconds` first, e2e passes at once."""
+    change(repo, OPS, "   Run: tests system\n", "   Run: tests e2e, system\n")
+    change(repo, "tools/gate.sh", "exit 0", f'[ "$1" = system ] && sleep {seconds}\nexit 0')
+
+
+def test_a_levels_timeout_applies_to_that_level_only(repo):
+    level_timeouts(repo, system="2")
+    slow_system(repo, 3)
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 4, r.stdout + r.stderr
+    recs = [x for x in records(repo, r) if x["kind"] == "step" and x["step"] == 2]
+    assert [(x["level"], x["result"]) for x in recs] == [("e2e", "pass"), ("system", "fail")]
+    assert recs[1]["stderr"].endswith("timed out after 2 s (the system level's Timeout)"), recs[1]["stderr"]
+    r = deploy_cli(repo, "run", "--until", "staging", "--timeout", "30")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_given_timeout_overrides_every_level_even_at_600(repo, monkeypatch, capsys):
+    """Review Focus 3: --timeout 600 on a level whose Timeout is 1200 runs it with 600, named (--timeout)."""
+    from prd_deploy import main
+    level_timeouts(repo, system="1200")
+    seen = []
+    real = deploy._execute
+
+    def spy(cmd, root, env, timeout, why=None):
+        seen.append((cmd, timeout, why))
+        return real(cmd, root, env, timeout, why)
+
+    monkeypatch.setattr(deploy, "_execute", spy)
+    assert main(["run", prd_dir(repo), "--until", "staging", "--timeout", "600"]) == 0
+    assert ("bash tools/gate.sh system", 600, "--timeout") in seen
+    seen.clear()
+    assert main(["run", prd_dir(repo), "--until", "staging"]) == 0
+    assert ("bash tools/gate.sh system", 1200, "the system level's Timeout") in seen
+    assert all(why == "the default" and t == 600 for c, t, why in seen if c != "bash tools/gate.sh system")
+
+
+def test_level_timeout_unit(repo):
+    from prdlint import model
+    level_timeouts(repo, system="1200")
+    prd = model.load(Path(prd_dir(repo)))
+    assert deploy.level_timeout(prd, "system", None) == (1200, "the system level's Timeout")
+    assert deploy.level_timeout(prd, "system", 600) == (600, "--timeout")
+    assert deploy.level_timeout(prd, "e2e", None) == (600, "the default")
+
+
+def test_timeout_is_not_given_by_default():
+    from prd_deploy import _parser
+    for argv in (["run", "x"], ["resume", "x", "--run", "r"], ["rollback", "x", "--run", "r", "--step", "1"]):
+        assert _parser().parse_args(argv).timeout is None, argv
+
+
+def test_a_run_command_times_out_at_the_default(repo, monkeypatch, capsys):
+    from prd_deploy import main
+    level_timeouts(repo, system="30")
+    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `sleep 3; mkdir -p .deploy/staging && echo Hi")
+    monkeypatch.setattr(deploy, "DEFAULT_TIMEOUT", 1)
+    assert main(["run", prd_dir(repo), "--until", "staging"]) == 4
+    run_id = capsys.readouterr().out.splitlines()[0].removeprefix("run: ")
+    rec = deploy.read_log(repo, run_id)[-1]
+    assert rec["step"] == 1 and rec["stderr"].endswith("timed out after 1 s (the default)"), rec["stderr"]
+
+
+BRANCHES = "| Environment | URL | Production | Branch |\n|---|---|---|---|\n"
+
+
+def env_branches(repo, **branches) -> None:
+    """Give operations.md's Environments table a Branch column."""
+    p = repo / OPS
+    text = p.read_text(encoding="utf-8")
+    old = "| Environment | URL | Production |\n|---|---|---|\n"
+    head, rest = text.split(old)
+    rows, tail = rest.split("\n\n", 1)
+    rows = "\n".join(f"{row} {branches.get(row.split('|')[1].strip(), '')} |" for row in rows.split("\n"))
+    p.write_text(head + BRANCHES + rows + "\n\n" + tail, encoding="utf-8")
+    commit(repo, "Environment branches", OPS)
+
+
+NOTE = "prd_deploy: the close is on {current}, not release; push the close commit to release too"
+
+
+@pytest.mark.parametrize("failing", [False, True])
+def test_a_close_on_another_branch_prints_a_note(repo, failing):
+    env_branches(repo, staging="release")
+    if failing:
+        change(repo, OPS, "prints `Hi`", "prints `Nope`")
+    git(repo, "checkout", "-q", "-b", "work")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == (4 if failing else 0), r.stdout + r.stderr
+    assert r.stderr == NOTE.format(current="work") + "\n", r.stderr
+    assert "prd_deploy:" not in r.stdout
+
+
+def test_no_note_on_the_environments_branch(repo):
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "-b", "release")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0 and r.stderr == "", r.stdout + r.stderr
+
+
+def test_a_detached_head_is_named(repo):
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "--detach")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == 0 and r.stderr == NOTE.format(current="a detached HEAD") + "\n", r.stderr
+
+
+def test_the_note_comes_at_a_resumes_finish(repo):
+    env_branches(repo, production="release")
+    git(repo, "checkout", "-q", "-b", "work")
+    r = deploy_cli(repo, "run")
+    assert r.returncode == 3 and r.stderr == "", r.stderr  # stopped at a human step: not finished
+    run_id = run_id_of(r)
+    assert confirm(repo, run_id).returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stderr == NOTE.format(current="work") + "\n", r.stderr
+
+
+def test_branch_note_unit(repo):
+    from prdlint import model
+    env_branches(repo, staging="release")
+    prd = model.load(Path(prd_dir(repo)))
+    assert deploy.branch_note(prd, repo, ["production"]) == []
+    assert deploy.branch_note(prd, repo, ["staging"]) == [NOTE.format(current="main")]
+
+
+def note_for(current: str, branch: str) -> str:
+    return f"prd_deploy: the close is on {current}, not {branch}; push the close commit to {branch} too"
+
+
+def test_branch_note_names_each_other_branch_once_in_reached_order(repo):
+    from prdlint import model
+    env_branches(repo, staging="release", local="hotfix", production="release")
+    prd = model.load(Path(prd_dir(repo)))
+    git(repo, "checkout", "-q", "-b", "work")
+    assert deploy.branch_note(prd, repo, ["staging", "local", "production"]) == [note_for("work", "release"), note_for("work", "hotfix")]
+
+
+def test_a_run_reaching_two_other_branches_prints_two_lines(repo):
+    env_branches(repo, staging="release", production="main")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stderr == note_for("work", "release") + "\n" + note_for("work", "main") + "\n", r.stderr
+
+
+MATCHES = "Check: `cat .deploy/staging/greeting` prints `Hi`"
+
+
+@pytest.mark.parametrize("printed,ok", [("deployed 3a27030", True), ("  deployed 3a27030  ", True), ("deployed", False), ("deployed 3a27030 now", False)])
+def test_a_matches_check(repo, printed, ok):
+    pattern = "^deployed [0-9a-f]{7,40}$"
+    change(repo, OPS, MATCHES, f"Check: `echo '{printed}'` matches `{pattern}`")
+    r = deploy_cli(repo, "run", "--until", "staging")
+    assert r.returncode == (0 if ok else 4), r.stdout + r.stderr
+    rec = next(x for x in records(repo, r) if x["kind"] == "step" and x["step"] == 1)
+    if not ok:
+        assert rec["check"]["stderr"].endswith(f"no stdout line matches '{pattern}'"), rec["check"]["stderr"]
+
+
+def test_matches_ok_unit():
+    assert deploy._matches_ok(b"x\ndeployed 3a27030\r\n", r"deployed [0-9a-f]{7,40}")
+    assert not deploy._matches_ok(b"deployed 3a27030 now\n", r"deployed [0-9a-f]{7,40}")
+    assert not deploy._matches_ok(b"", r".*")

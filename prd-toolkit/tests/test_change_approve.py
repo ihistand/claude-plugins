@@ -324,3 +324,89 @@ def test_an_ignored_claude_md_is_neither_refused_nor_staged(recorded):
     code, _, err = approve(recorded)
     assert code == 0, err
     assert "CLAUDE.md" not in git(recorded, "show", "--name-only", "--format=", "HEAD").split()
+
+
+# --- 0.8.5 spec 6: the approval of a pack move carries the re-vendored pack ---
+
+PACK_DRY = "no dry run (pack version only)"
+
+
+@pytest.fixture
+def moved(tmp_path, monkeypatch):
+    """The guide PRD moved from notes-pack 0.1.0 to 0.1.1 by `pack`, re-vendored by `install` (which also refreshed
+    CLAUDE.md's block to the new version), and reviewed; nothing committed since the move."""
+    from prdlint import hooks
+    from test_change_record import NOTES_PRD, notes_prd, notes_source
+
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(notes_source(tmp_path)))
+    repo = notes_prd(tmp_path)
+    for k, v in (("user.name", AUTHOR_NAME), ("user.email", AUTHOR_EMAIL), ("commit.gpgsign", "false"), ("core.hooksPath", ".no-hooks")):
+        git(repo, "config", k, v)
+    (repo / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+    git(repo, "add", "CLAUDE.md")
+    git(repo, "commit", "-q", "-m", "docs: notes")
+    code, out, err = call("pack", str(repo / NOTES_PRD), "notes-pack", "0.1.1")
+    assert code == 0 and out.endswith("| pack notes-pack 0.1.0 → 0.1.1; pending | - |\n"), err
+    hooks.install(repo, NOTES_PRD)
+    assert "(version 1.0.1)" in (repo / "CLAUDE.md").read_text(encoding="utf-8")
+    v = {"interface": 1, "kind": "review", "head": "x", "digest": change.digest(repo / NOTES_PRD), "restate": "r", "touches": [],
+         "impact": {"exit": 0, "lines": []}, "bump": {"level": "patch", "decided": []},
+         "dry_run": {"tids": [], "open": 0, "dismissed": 0, "record": PACK_DRY}, "ready": True, "blockers": []}
+    (repo / NOTES_PRD / ".prd-review.json").write_text(json.dumps(v), encoding="utf-8")
+    return repo
+
+
+def approve_move(repo):
+    from test_change_record import NOTES_PRD
+
+    return call("approve", str(repo / NOTES_PRD), "--reply", "approve it", "--dry-run", PACK_DRY)
+
+
+def test_approve_commits_the_revendored_pack_of_a_pack_move(moved):
+    from test_change_record import NOTES_PRD, notes_lint
+
+    code, out, err = approve_move(moved)
+    assert code == 0, err
+    files = git(moved, "show", "--name-only", "--format=", "HEAD").split()
+    assert {f"{NOTES_PRD}/prd.md", f"{NOTES_PRD}/features/install.md", ".prd-toolkit/packs/notes-pack/pack.yaml",
+            ".prd-toolkit/pack-sources.json", "CLAUDE.md"} <= set(files)
+    assert not any(f.startswith(".prd-toolkit/") and not f.startswith((".prd-toolkit/packs/notes-pack/", ".prd-toolkit/pack-sources.json")) for f in files)
+    md = (moved / NOTES_PRD / "prd.md").read_text(encoding="utf-8")
+    today = md.split("\nupdated: ", 1)[1].split("\n", 1)[0]
+    assert md.rstrip().endswith(f"| 1.0.1 | {today} | pack notes-pack 0.1.0 → 0.1.1; no dry run (pack version only) | - |")
+    assert git(moved, "status", "--porcelain", "--", NOTES_PRD, ".prd-toolkit/packs/notes-pack", ".prd-toolkit/pack-sources.json", "CLAUDE.md") == ""
+    assert notes_lint(moved) == 0
+
+
+def claude_refused(repo):
+    before = snapshot(repo)
+    code, _, err = approve_move(repo)
+    assert code == 1 and err == "refused: CLAUDE.md has uncommitted changes; commit or set them aside first\n", (code, err)
+    assert snapshot(repo) == before
+
+
+def test_a_block_refresh_with_another_claude_md_edit_is_refused(moved):
+    claude = moved / "CLAUDE.md"
+    claude.write_text(claude.read_text(encoding="utf-8").replace("# Notes\n", "# Notes\n\nMY UNRELATED NOTE\n"), encoding="utf-8")
+    claude_refused(moved)
+
+
+def test_a_managed_block_prd_block_would_not_render_is_refused(moved):
+    claude = moved / "CLAUDE.md"
+    claude.write_text(claude.read_text(encoding="utf-8").replace("(version 1.0.1)", "(version 9.9.9)"), encoding="utf-8")
+    claude_refused(moved)
+
+
+def test_a_deleted_claude_md_is_refused_as_uncommitted(moved):
+    (moved / "CLAUDE.md").unlink()  # a tracked CLAUDE.md deleted in the working tree is an uncommitted change
+    claude_refused(moved)
+
+
+def test_approve_of_a_change_that_moves_no_pack_stages_no_vendored_copy(recorded):
+    from prdlint import hooks
+
+    git(recorded, "config", "core.hooksPath", ".no-hooks")
+    hooks.vendor(recorded, PRD)
+    code, _, err = approve(recorded)
+    assert code == 0, err
+    assert not [f for f in git(recorded, "show", "--name-only", "--format=", "HEAD").split() if f.startswith(".prd-toolkit/")]

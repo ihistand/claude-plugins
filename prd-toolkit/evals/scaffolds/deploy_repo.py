@@ -2,15 +2,17 @@
 an Approved PRD, a runbook and a deploy script that installs into `.deploy/<env>/`.
 
 Usage (from the eval workspace; never write into the plugin tree):
-    python3 -B <this file> <dst> <ready|staging-done|failing-check|at-gate>
+    python3 -B <this file> <dst> <ready|staging-done|failing-check|at-gate|at-ui-steps>
 
 ready          everything committed, every requirement `verified`, nothing deployed, no deploy log
 staging-done   `ready` plus a finished `prd_deploy.py run --until staging` (real log, `.deploy/staging/`
                installed) and no Deployed row yet
 failing-check  `ready`, but the code prints `Hey` while config.yaml and staging's Check say `Hi`
 at-gate        `ready` plus a real `prd_deploy.py run` stopped at the human step 3 (exit 3)
+at-ui-steps    `ready` with a runbook whose steps 2 to 5 are human steps done in the release UI, plus a real
+               `prd_deploy.py run` stopped at step 2 (exit 3)
 
-The last stdout line is `run=<id>` for `staging-done` and `at-gate`. The tracked tree is clean in
+The last stdout line is `run=<id>` for `staging-done`, `at-gate` and `at-ui-steps`. The tracked tree is clean in
 every state. The vendored `.prd-toolkit/` comes from the plugin tree this file sits in.
 """
 import subprocess
@@ -21,7 +23,7 @@ PLUGIN = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN / "tests"))
 from legacy import commit, git  # noqa: E402
 
-STATES = ("ready", "staging-done", "failing-check", "at-gate")
+STATES = ("ready", "staging-done", "failing-check", "at-gate", "at-ui-steps")
 
 PYPROJECT = """[project]
 name = "greet"
@@ -525,7 +527,40 @@ OPERATIONS = """# Operations
 - None.
 """
 
+# at-ui-steps: four human steps in a row, done in the release UI in one sitting, before the production deploy.
+UI_RUNBOOK = """## Runbook
+
+1. Deploy to staging (actor: agent) (env: staging)
+   Run: `python3 scripts/deploy.py staging`
+   Check: `.deploy/staging/bin/greet World` prints `Hi, World!`
+   Rollback: `python3 scripts/deploy.py staging --previous`
+2. Merge main into release (actor: human) (env: production)
+   Do: merge `main` into `release` on the forge's web page
+   Check: the reply says the step is done
+3. Promote the release build (actor: human) (env: production)
+   Do: press Promote on the release build in the CI page
+   Check: the reply says the step is done
+4. Purge the download cache (actor: human) (env: production)
+   Do: press Purge on the cache page
+   Check: the reply says the step is done
+5. Announce the release (actor: human) (env: production)
+   Do: post the release note in the team channel
+   Check: the reply says the step is done
+6. Deploy to production (actor: agent) (env: production)
+   Run: `python3 scripts/deploy.py production`
+   Check: `.deploy/production/bin/greet World` prints `Hello, World!`
+   Rollback: `python3 scripts/deploy.py production --previous`
+7. Smoke on production (actor: agent) (env: production)
+   Run: tests smoke
+
+## Drift"""
+
 ERRORS = "# Error ledger\n\nNo entries yet. Add `### E-001 <title>` when the first error is diagnosed.\n"
+
+
+def _ui_operations() -> str:
+    head, rest = OPERATIONS.split("## Runbook\n", 1)
+    return head + UI_RUNBOOK + rest.split("## Drift", 1)[1]
 
 
 def _write(repo: Path, files: dict[str, str]) -> None:
@@ -567,7 +602,7 @@ def main(dst: str, state: str) -> None:
         base + "prd.md": PRD,
         base + "nfr.md": NFR,
         base + "testing.md": TESTING,
-        base + "operations.md": OPERATIONS,
+        base + "operations.md": OPERATIONS if state != "at-ui-steps" else _ui_operations(),
         base + "errors.md": ERRORS,
         base + "features/greet.md": FEATURES,
         base + "test-cases/greet.yaml": CASES,
@@ -583,7 +618,7 @@ def main(dst: str, state: str) -> None:
     if state == "failing-check":
         (repo / "src/greet/cli.py").write_text(CLI_HEY, encoding="utf-8")
         commit(repo, "Try a friendlier greeting\n\nRefs: FR-001", "src", date="2026-01-06T12:00:00+0000")
-    if state in ("staging-done", "at-gate"):
+    if state in ("staging-done", "at-gate", "at-ui-steps"):
         args = ("--until", "staging") if state == "staging-done" else ()
         r = _tool(repo, str(repo / ".prd-toolkit/prd_deploy.py"), "run", "docs/prd/greet", *args)
         expected = 0 if state == "staging-done" else 3

@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from string import Template
 
-from . import languages, overview, status, trace
+from . import diagrams, languages, overview, status, trace
 from .context import _section
 from .deps import require
 from .markdown import sections
@@ -21,11 +21,32 @@ NO_COMMIT = "no commit"
 _MD = markdown_it.MarkdownIt("commonmark", {"html": False}).enable("table").disable("image")
 
 
+DIAGRAM_SOURCE = "Diagram source"
+_DIAGRAMS: dict = {"count": 0, "notes": []}  # this page's diagrams so far, and its (file, line, reason) fallbacks
+
+
 def _fence(self, tokens, idx, options, env):
     t = tokens[idx]
     if t.info.strip().split(" ")[0] == "mermaid":
-        return f'<pre class="mermaid">{html.escape(t.content, quote=True)}</pre>\n'
+        return _diagram(t, env)
     return _DEFAULT_FENCE(self, tokens, idx, options, env)
+
+
+def _diagram(t, env) -> str:
+    """A mermaid fence as an inline SVG with its source in a closed <details>, or as today's <pre class="mermaid">
+    when it does not render; each diagram on the page is numbered in order."""
+    _DIAGRAMS["count"] += 1
+    source = html.escape(t.content, quote=True)
+    try:
+        svg = diagrams.render_svg(t.content, _DIAGRAMS["count"])
+    except diagrams.Fallback as e:
+        file, start = env["where"]
+        note = (file, start + t.map[0], e.reason)
+        if note not in _DIAGRAMS["notes"]:  # the Overview and the Technical tab show §4 twice: one note
+            _DIAGRAMS["notes"].append(note)
+        return f'<pre class="mermaid">{source}</pre>\n'
+    return (f'<figure class="diagram">{svg}</figure>\n'
+            f'<details><summary>{DIAGRAM_SOURCE}</summary><pre class="mermaid-source">{source}</pre></details>\n')
 
 
 _DEFAULT_FENCE = markdown_it.renderer.RendererHTML.fence
@@ -63,8 +84,14 @@ def _e(text) -> str:
     return html.escape(str(text), quote=True)
 
 
-def _md(text: str) -> str:
-    return _MD.render(text)
+def _md(text: str, where: tuple[str, int]) -> str:
+    """Markdown as HTML; `where` is the (file, line) the text starts on, for a diagram's note."""
+    return _MD.render(text, {"where": where})
+
+
+def _text_of(body: list[tuple[int, str]]) -> tuple[str, int]:
+    """A body's text, stripped, and the line its first non-blank line sits on."""
+    return "\n".join(t for _, t in body).strip(), next((n for n, t in body if t.strip()), 0)
 
 
 def _inline(text: str) -> str:
@@ -86,8 +113,8 @@ def _table(header: list[str], rows: list[list[str]]) -> str:
 
 def _section_md(prd: Prd, number: int) -> str:
     s = _section(prd, number)
-    text = "\n".join(t for _, t in s.body).strip() if s else ""
-    return _md(text) if text else _none()
+    text, line = _text_of(s.body) if s else ("", 0)
+    return _md(text, ("prd.md", line)) if text else _none()
 
 
 def _doc_section(prd: Prd, doc: str, title: str):
@@ -96,15 +123,15 @@ def _doc_section(prd: Prd, doc: str, title: str):
 
 def _doc_section_md(prd: Prd, doc: str, title: str) -> str:
     s = _doc_section(prd, doc, title)
-    text = "\n".join(t for _, t in s.body).strip() if s else ""
-    return _md(text) if text else _none()
+    text, line = _text_of(s.body) if s else ("", 0)
+    return _md(text, (doc, line)) if text else _none()
 
 
 def _doc_md(prd: Prd, doc: str) -> str:
     """The body of a whole document (its tables), under the page's own heading rather than the document's title."""
-    lines = prd.docs.get(doc, "").split("\n")
-    body = "\n".join(lines[1:] if lines and lines[0].startswith("# ") else lines).strip()
-    return _md(body) if body else _none()
+    lines = list(enumerate(prd.docs.get(doc, "").split("\n"), 1))
+    body, line = _text_of(lines[1:] if lines and lines[0][1].startswith("# ") else lines)
+    return _md(body, (doc, line)) if body else _none()
 
 
 # ---- summaries -------------------------------------------------------------------------------
@@ -377,38 +404,47 @@ def _linked(facts: overview.Facts) -> str:
     return listing(L("upstreams"), facts.upstreams) + listing(L("consumers"), facts.consumers)
 
 
+def _in_s2(prd: Prd, part: str) -> tuple[str, int]:
+    """Where a §2 part starts: the first §2 line that ends with the part's first line (a label may precede it)."""
+    first = part.split("\n", 1)[0].strip()
+    s2 = _section(prd, 2)
+    return "prd.md", next((n for n, t in (s2.body if s2 else []) if t.rstrip().endswith(first)), 0)
+
+
 def overview_panel(prd: Prd, facts: overview.Facts) -> str:
     """The Overview tab: the README's facts in order, each part left out when its source is empty."""
     n = facts.open_errors
     errors = L("overview_errors_none") if n == 0 else L("overview_errors_one") if n == 1 else L("overview_errors_many", n=n)
     s4 = _section(prd, 4)
-    arch = "\n".join(t for _, t in s4.body).strip() if s4 else ""
+    arch, arch_line = _text_of(s4.body) if s4 else ("", 0)
     rows = [[_e(a.name), _e(a.adoption), _e(_counts(a.counts))] for a in facts.areas]
     head = [_e(L("overview_area")), _e(L("overview_adoption")), _e(L("overview_requirements"))]
     line = L("overview_line", version=facts.version, status=facts.status, owner=facts.owner, updated=facts.updated)
     return "".join([
         f'<p class="none">{_e(line)}</p>\n',
-        _part(L("what_it_is"), _md(facts.summary) if facts.summary else ""),
-        _part(L("principles"), _md(facts.principles) if facts.principles else ""),
-        _part(L("architecture"), _md(arch) if arch else ""),
+        _part(L("what_it_is"), _md(facts.summary, _in_s2(prd, facts.summary)) if facts.summary else ""),
+        _part(L("principles"), _md(facts.principles, _in_s2(prd, facts.principles)) if facts.principles else ""),
+        _part(L("architecture"), _md(arch, ("prd.md", arch_line)) if arch else ""),
         _part(L("areas"), _table(head, rows) if rows else ""),
         _part(L("overview_open_errors"), f"<p>{_e(errors)}</p>"),
         _part(L("linked_prds"), _linked(facts)),
-        _part(L("getting_started"), _md(facts.getting_started) if facts.getting_started else ""),
+        _part(L("getting_started"), _md(facts.getting_started, _in_s2(prd, facts.getting_started)) if facts.getting_started else ""),
         f'<p class="none">{_e(L("snapshot_line", version=facts.version))}</p>',
     ])
 
 
 # ---- page ------------------------------------------------------------------------------------
 
-def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date) -> str:
+def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date, notes: list | None = None) -> str:
+    """The page; each diagram shown as source adds one (file, line, reason) to `notes`."""
     if summaries is not None:
         problems = summary_problems(prd, summaries)
         if problems:
             raise Refused(problems)
     _use_language(prd)
+    _DIAGRAMS.update(count=0, notes=[])
     table = languages.for_prd(prd)
-    return Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
+    page = Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
         lang=_e(table.code if table else "en"),
         overview_label=_e(L("overview")), overview=overview_panel(prd, overview.facts(prd)),
         business_label=_e(L("business")), technical_label=_e(L("technical")),
@@ -417,3 +453,6 @@ def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date) 
         business=business(prd, summaries),
         technical=technical(prd, repo_root, summaries),
     )
+    if notes is not None:
+        notes.extend(_DIAGRAMS["notes"])
+    return page

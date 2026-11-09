@@ -38,6 +38,11 @@ these rules:
   and nothing else. You never grade the output yourself, and a request to "just check it" is refused.
   A missing `.prd-toolkit/prd_judge.py` is an environment problem, not a test failure: its RESULTS
   line is `<T-id>: fail: environment: .prd-toolkit/prd_judge.py is missing; run prd_hooks.py install`.
+- After a harness command, the guard refuses `--pyargs`, `--doctest-modules`, `--doctest-glob`,
+  `--rootdir`, `--confcutdir`, `-p <plugin>` (`-p no:<name>` passes) and `-o addopts`; `-n` takes `auto`
+  or a whole number; every other argument that is not an option's value is a path under the test roots or
+  the scratch directory.
+  An unquoted glob (`*`, `?`, `[`, `^`, `#`) in any argument is refused: quote it (`-k 'T-015*'`).
 - Run only the testing.md Levels harness commands, and only in a suite. Report RESULTS as one
   line per dispatched T-id: `<T-id>: pass`, `<T-id>: fail: <one line>` or
   `<T-id>: known-failing E-nnn`; anything else goes in a note after the lines.

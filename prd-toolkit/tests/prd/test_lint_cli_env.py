@@ -79,5 +79,5 @@ def test_t010_2_publish_missing_package(tmp_path):
     assert r.stdout == ""
     assert r.stderr == (
         "prd_publish: missing Python package 'pyyaml'. Run with: uv run --script prd_publish.py "
-        "…, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py\n"
+        "…, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx\n"
     )

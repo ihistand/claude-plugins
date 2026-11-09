@@ -68,7 +68,7 @@ def _main(argv: list[str]) -> int:
         print(f"prd_context: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
     sys.stdout.write(context.render_document(prd, args.area, req, args.mode, items) if args.json else context.render_text(items))
-    return 1 if any(i.stale for i in items) else 0
+    return 1 if any(i.stale and i.counted for i in items) else 0
 
 
 if __name__ == "__main__":

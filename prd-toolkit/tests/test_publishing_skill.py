@@ -460,3 +460,52 @@ def test_three_tabs_overview_first_and_no_summary():
     three = step(3)
     assert "The Overview tab takes no summary" in three
     assert "never an `overview` key" in three
+
+
+# --- 0.8.5, spec 13 (item 9): Task 14's pins ---
+
+def test_085_rule_5_publishes_its_own_artifact():
+    rule = flat(SKILL).split("**The Artifact only when the session has it.**", 1)[1].split(" ## Publishing, step by step", 1)[0]
+    assert "as its own private Artifact" in rule
+    assert "never as a file inside another Artifact" in rule
+    assert "draws `pre.mermaid` diagrams only on its own main page" in rule
+    assert "its own Artifact, never as a file inside" in step(5)
+
+
+def test_085_eval_publish_own_artifact():
+    d = EVALS / "publish-own-artifact"
+    assert {p.stem for p in (d / "graders").glob("*.md")} == {"skill-fired", "page-rendered",
+                                                               "reply-names-its-own-artifact",
+                                                               "reply-never-says-put-it-inside"}
+    assert 'scaffolds/error_repo.py" "$PWD" bug' in (d / "scaffold.sh").read_text(encoding="utf-8")
+    assert "| `publish-own-artifact`" in (EVALS / "BASELINE.md").read_text(encoding="utf-8")
+    pattern = _grader("publish-own-artifact", "reply-names-its-own-artifact")["pattern"]
+    assert re.search(pattern, "I published the page as its own Artifact.")
+    assert not re.search(pattern, "Add prd.html to your design artifact.")
+
+
+def test_085_fix2_the_inside_grader_refuses_an_instruction_to_put_the_page_inside():
+    g = _grader("publish-own-artifact", "reply-never-says-put-it-inside")
+    assert g["match"] == "not_contains" and g["target"] == "last_message"
+    assert g["flags"] == "i" and "(?i)" not in g["pattern"]  # the eval runner's regexes are JavaScript: no inline flags
+    pat = re.compile(g["pattern"], re.I)
+    for red in ("To publish it, upload that file to the artifact as `prd.html`.",  # RED's three replies
+                "Upload the file yourself. Rename it to `prd.html` when you upload it.",
+                "**Next step:** to get it into the artifact as `prd.html`, add that file by hand beside the "
+                "artifact's main page.",
+                "In a session that has the Artifact tool, add this file to that artifact under the name `prd.html`.",
+                "You'll need to upload the file yourself. When you upload it, name it `prd.html`."):
+        assert pat.search(red), red
+    for green in ("Even with the tool, the page would go in as its own private Artifact and not as a file beside "
+                  "the design's main page.",
+                  "I wouldn't add the page to the design artifact as `prd.html` even with the tool.",
+                  "You can also upload it yourself.",
+                  "Upload the file yourself, or run this again in a session that has the Artifact tool."):
+        assert not pat.search(green), green
+    assert "allowed_tools leaves out Artifact by choice" in (EVALS / "BASELINE.md").read_text(encoding="utf-8")
+
+
+def test_085_fix2_the_script_glob_is_one_absolute_pattern():
+    """Fix round 2's GREEN run: a Glob with a `path` argument outside the repository is denied in don't-ask mode."""
+    one = step(1)
+    assert ("Glob `<scripts>/prd_publish.py` with that absolute path as the whole pattern and no `path` argument" in one)

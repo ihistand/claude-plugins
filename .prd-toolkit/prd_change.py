@@ -53,6 +53,11 @@ def _build() -> argparse.ArgumentParser:
     rec.add_argument("--bump", required=True, choices=change.RECORD_LEVELS, help="the version level")
     rec.add_argument("--change", required=True, help="the changelog text")
     _flags(rec, leaf=True)
+    pck = sub.add_parser("pack", help="move every line naming a pack to a new version and record it as a patch")
+    pck.add_argument("prd_dir")
+    pck.add_argument("name", help="the pack's name")
+    pck.add_argument("version", help="the version to move to, X.Y.Z")
+    _flags(pck, leaf=True)
     app = sub.add_parser("approve", help="record the dry run, set the status and commit the approval")
     app.add_argument("prd_dir")
     app.add_argument("--reply", required=True, help="the owner's reply, verbatim")
@@ -84,6 +89,11 @@ def _cmd_record(prd: model.Prd, args) -> tuple[str, dict]:
     return f"{done.version}\n{done.row}\n", dataclasses.asdict(done)
 
 
+def _cmd_pack(prd: model.Prd, args) -> tuple[str, dict]:
+    done = change.pack(change.repo_root(prd.root), prd.root, args.name, args.version, datetime.date.today().isoformat())
+    return f"{done.version}\n{done.row}\n", dataclasses.asdict(done)
+
+
 def _cmd_approve(prd: model.Prd, args) -> tuple[str, dict]:
     if args.refs is not None and ("\n" in args.refs or "\r" in args.refs):
         raise change.UsageError("approve: --refs must be one line")
@@ -99,6 +109,7 @@ COMMANDS = {
     ("digest", None): ("change.digest", _cmd_digest),
     ("bump", None): ("change.bump", _cmd_bump),
     ("record", None): ("change.record", _cmd_record),
+    ("pack", None): ("change.pack", _cmd_pack),
     ("approve", None): ("change.approve", _cmd_approve),
 }
 

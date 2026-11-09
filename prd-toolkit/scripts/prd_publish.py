@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7", "markdown-it-py>=3.0"]
+# dependencies = ["pyyaml>=6.0", "sqlglot>=25", "openapi-spec-validator>=0.7", "markdown-it-py>=3.0", "mermaidx==0.11.3"]
 # ///
 """Render a PRD folder as one self-contained HTML page. Exit 0 written, 1 refused, 2 usage, dependency or internal error."""
 import argparse
@@ -59,13 +59,16 @@ def main(argv: list[str]) -> int:
         except (OSError, ValueError) as e:
             print(f"prd_publish: cannot read {args.summaries}: {e}", file=sys.stderr)
             return 2
+    notes: list[tuple[str, int, str]] = []
     try:
-        page = publish.render_page(prd, model.repo_root(prd.root), summaries, date.today())
+        page = publish.render_page(prd, model.repo_root(prd.root), summaries, date.today(), notes)
     except publish.Refused as e:
         return _refuse(*e.reasons)
     except Exception as e:
         print(f"prd_publish: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
+    for file, line, reason in notes:
+        print(f"prd_publish: diagram at {file}:{line} shown as source: {reason}", file=sys.stderr)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(page, encoding="utf-8")

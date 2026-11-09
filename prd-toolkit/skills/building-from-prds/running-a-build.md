@@ -226,7 +226,7 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    5. Step 4's builder check, on the round branch:
 
       ```bash
-      uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n>; echo "prd-build-check-exit=$?"
+      uv run --script <scripts>/prd_build_check.py docs/prd/<slug> --diff <base>..prd-round/<area>-<n> --sources <SNAP>/sources-<n>.txt; echo "prd-build-check-exit=$?"
       git log --format=%B <base>..prd-round/<area>-<n>
       git status --porcelain --untracked-files=all
       ```
@@ -281,13 +281,35 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      nothing (a file the builder left uncommitted fails the round, and the next round's step 1
      stops the build as a dirty tree).
 
-     `prd-build-check-exit=1` fails the round: each line names a file in the PRD folder or a
-     tester's test the builder touched; record the lines as the round's failure. `2` is a usage
+     Before that check, write the builder's report verbatim, with the Write tool, to
+     `<SNAP>/builder-report-<n>.md`, and its SOURCES field verbatim to `<SNAP>/sources-<n>.txt`
+     (`<SNAP>` is outside the repository, so outside the PRD folder): one `<ID>: <path>:<line>`
+     line per block, never edited or completed by you. A report whose SOURCES is `none` passes no
+     `--sources`. Your gate on SOURCES is `--sources`, never a reading of the code. It holds each
+     line to a file and a hunk the round changed. Its findings: `sources: <ID>: <path> is not
+     changed in <base>..<head>`, `sources: <ID>: <path>:<line> is outside the round's changes
+     (hunks <a>-<b>, …)`, or `sources: line <n> is not '<ID>: <path>:<line>'` (prose after the
+     line number, or no line number).
+
+     When the round's only findings are `sources:` lines, the first time on that round, it is not
+     a failed round: dispatch the builder again with the round's prompt plus a
+     `Restate: <SNAP>/builder-report-<n>.md` line and the `sources:` lines (**Prompts**). The
+     round branch stays, unmerged. The builder writes and commits nothing and replies with the
+     SOURCES field only: write it to `<SNAP>/sources-<n>.txt` again, then run round step 5's
+     check again. That restate is not counted under **Rounds**, and no new round branch is cut.
+     A second `sources:` finding on the same round fails the round, counted under **Rounds**.
+
+     Otherwise `prd-build-check-exit=1` fails the round: each line names a file in the PRD folder
+     or a tester's test the builder touched; record the lines as the round's failure. `2` is a usage
      error: fix the command. Every commit message in the log carries a `Refs:` line naming the
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
-     one SOURCES line per block. A QUESTIONS line that is not a test dispute is a PRD gap and
-     stops the build, as **Stops** says: `built` if a merge happened, otherwise no status. The
+     one SOURCES line per block with no `Source:` yet that the round implemented, at the first
+     line the round added for it, and per block whose implementation start the round added or
+     changed. A
+     QUESTIONS line that is not a test
+     dispute is a PRD gap and stops the build, as **Stops** says: `built` if a merge happened,
+     otherwise no status. The
      one exception: `QUESTIONS: worktree is not on the build branch` is not a PRD gap. The round
      was cut wrong, so it fails the round, and the next round's cut is checked before its dispatch
      (step 3's round step 2). A test
@@ -464,9 +486,15 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    Edit nothing else in the PRD, except the entry a stop records and, on `--fixes`, the removals of
    steps 4 and 5, already committed.
 
-   Run `git rev-parse --short HEAD` as its own call, after the last merge. From each SOURCES line
-   of the builder's latest report for a block, write the block's
-   `Source: <path>:<line> @<short sha>`, replacing any `Source:` line it had.
+   Run `git rev-parse --short HEAD` as its own call, after the last merge: the `<HEAD short sha>`
+   below. From each block's line in the latest round's `<SNAP>/sources-<n>.txt` that names it (the
+   restated file after a restate, never the saved report), write the block's `Source: <path>:<line>
+   @<short sha>`, the short sha of the last commit that round's COMMIT names (`git rev-parse --short
+   <that sha>`, its own call), replacing any `Source:` line it had. A later round that moved the
+   line then shows as MOVED or STALE in the close's pack. A block no SOURCES file names already
+   has a `Source:` (a block with none always gets a SOURCES line): keep that `Source:` as it is.
+   The close's pack judges it: MOVED is rewritten below, and STALE means a wrong line or sha, so
+   fix it.
 
    **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
    them, each in its own commit, before step 7's trace, so the close's trace holds (test
@@ -486,12 +514,13 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    uv run --script <scripts>/prd_trace.py docs/prd/<slug>; echo "prd-trace-exit=$?"
    ```
 
-   `prd-context-exit=` must be `0`: a STALE code item for a block you just wrote means a wrong
-   line or SHA, so fix it. `prd-lint-exit=` must be `0`. `prd-trace-exit=1` after writing
-   `verified` reverts those blocks to `built` and stops the build: rewrite the status words
-   before you commit. `prd-trace-exit=2` stops the build like `1`: the blocks stay `built`. On a
-   stopped build's `built` close, give the trace findings to the user with the stop. Then, each
-   its own call:
+   `prd-context-exit=` must be `0`: a STALE code item for a block you just wrote means a wrong line
+   or SHA, so fix it. A `MOVED: line <L> is now line <M>` item exits `0` too: rewrite that block's
+   `Source:` as `<path>:<M> @<HEAD short sha>`, and run the pack again. `prd-lint-exit=` must be
+   `0`. `prd-trace-exit=1` after writing `verified` reverts those blocks to `built` and stops the
+   build: rewrite the status words before you commit. `prd-trace-exit=2` stops the build like `1`:
+   the blocks stay `built`. On a stopped build's `built` close, give the trace findings to the user
+   with the stop. Then, each its own call:
 
    ```bash
    git add docs/prd/<slug>
@@ -545,9 +574,20 @@ Quote: "<the test case's ac: line>" / "<the expect entry>"
 Failing test: <path>
 ```
 
-It first checks that HEAD holds `Base:` and that the current branch is `Branch:`, then runs
-`prd_context.py … --for implement` itself, writes unit tests first, then the code, runs the
-standards linters and required skills, and commits on the round branch with `Refs: <IDs>`.
+A SOURCES restate (step 4) adds, after every other line of the round's prompt:
+
+```
+Restate: <SNAP>/builder-report-<n>.md
+<each sources: line, verbatim>
+```
+
+It writes nothing, commits nothing and runs no branch check: it reads that report and
+`git diff <Base>..<Branch>` and replies with the SOURCES field only.
+
+Any other builder prompt first checks that HEAD holds `Base:` and that the current branch is
+`Branch:`, then runs `prd_context.py … --for implement` itself, writes unit tests first, then the
+code, runs the standards linters and required skills, and commits on the round branch with `Refs:
+<IDs>`.
 
 The tester prompt, as `dispatching.md` step 3 gives it, with no dry-run directory: `Mode: write` in
 step 3, `Mode: suite` in step 5 and on a test-misread round.

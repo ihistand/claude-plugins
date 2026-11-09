@@ -167,6 +167,56 @@ def diff_findings(prd: Prd, repo_root: Path, rng: str) -> list[str]:
     return findings
 
 
+_SOURCE_LINE = re.compile(r"^\s*(?:SOURCES\b:?\s*)?(?:[-*]\s+)?([A-Za-z][\w]*-\d+(?:\.\d+)?):\s*(.+?):(\d+)\s*$")
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def sources_findings(repo_root: Path, rng: str, text: str) -> list[str]:
+    """Hold a builder's SOURCES lines (<ID>: <path>:<line>) to the files and hunks the round changed."""
+    m = _RANGE.match(rng)
+    if not m or "..." in rng:
+        raise BadRange(f"bad range {rng}: expected <base>..<head>")
+    base, head = _resolve(repo_root, rng, m.group(1)), _resolve(repo_root, rng, m.group(2))
+    proc = _git(repo_root, "diff", "--name-only", "--no-renames", "-z", "--end-of-options", f"{base}..{head}")
+    if proc.returncode != 0:
+        raise BadRange(f"bad range {rng}: {(proc.stderr.strip().splitlines() or ['git diff failed'])[0]}")
+    changed = {p for p in proc.stdout.split("\0") if p}
+    hunks: dict[str, list[tuple[int, int]]] = {}
+
+    def hunks_of(path: str) -> list[tuple[int, int]]:
+        if path not in hunks:
+            d = _git(repo_root, "diff", "-U0", "--no-color", "--no-renames", base, head, "--", path)
+            if d.returncode != 0:
+                raise RuntimeError(f"git diff {path} failed: {(d.stderr.strip().splitlines() or ['?'])[0]}")
+            found = []
+            for line in d.stdout.splitlines():
+                h = _HUNK.match(line)
+                if h:
+                    start, count = int(h.group(1)), int(h.group(2) or 1)
+                    # a hunk that only deletes counts at its deletion point: line start or start + 1
+                    found.append((start, start + count - 1) if count else (start, start + 1))
+            hunks[path] = found
+        return hunks[path]
+
+    findings: list[str] = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        if not raw.strip():
+            continue
+        s = _SOURCE_LINE.match(raw)
+        if not s:
+            findings.append(f"sources: line {n} is not '<ID>: <path>:<line>'")
+            continue
+        sid, path, line = s.group(1), s.group(2), int(s.group(3))
+        if path not in changed:
+            findings.append(f"sources: {sid}: {path} is not changed in {rng}")
+            continue
+        spans = hunks_of(path)
+        if not any(a <= line <= b for a, b in spans):
+            listed = ", ".join(f"{a}-{b}" for a, b in spans)
+            findings.append(f"sources: {sid}: {path}:{line} is outside the round's changes (hunks {listed})")
+    return findings
+
+
 _HEADING = re.compile(r"^#*\s*(?:\d+\.\s*)?(?:\*\*)?RESULTS\b")
 _RESULT_LINE = re.compile(r"^(?:[-*]\s+)?(T-\d{3}\.\d+)\b")
 

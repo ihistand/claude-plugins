@@ -80,6 +80,30 @@ An output-language change, or a pack change on an area with no `built`, `verifie
 (every block `approved` or `as-built`), is a change like any other: the steps below, the version
 by the table, and the area's contracts, Levels, Harness and test cases moved to the new pack.
 
+**A new pack version is a scripted patch.** A pack release that moves only the version on a
+`Pack:` or `Target: pack` line (its name and source unchanged) is not a retarget, and the line is
+never edited by hand. Run each command its own Bash call, from the plugin's scripts
+(`<plugin scripts>`, as above: never the vendored `.prd-toolkit/` copy, whose `packs/` still holds
+the old version). On a refusal, stop and report it.
+
+- First `uv run --script <plugin scripts>/prd_change.py pack docs/prd/<slug> <name> <X.Y.Z>; echo "prd-change-exit=$?"`.
+  It moves every line naming `<name>` and records `pack <name> <old> → <new>; pending` as a
+  patch, leaving the tree uncommitted. A `refused:` line names what to fix:
+  `no Pack: or Target: pack line names <name>`, `every line naming <name> already names <X.Y.Z>`,
+  `the lines naming <name> disagree on its version or source`, the resolver's
+  `pack <name> <X.Y.Z> (<source>) not found; looked in: …`, or uncommitted changes in the PRD
+  folder (commit or set them aside first: it never mixes into another change).
+- Then `uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>; echo "prd-hooks-exit=$?"`,
+  which re-vendors the pack. `.prd-toolkit/` stays uncommitted: `approve` stages the re-vendored
+  pack and `.prd-toolkit/pack-sources.json` in the approval commit.
+- Then the five steps' step 4 (lint and the verdict, with no dry run) and step 5's approval as for
+  any patch, with `--dry-run 'no dry run (pack version only)'`: §14 reads
+  `pack <name> <old> → <new>; no dry run (pack version only)`.
+
+An install refusal ending `; to move the PRD to <name> <have>, run prd_change.py pack <prd> <name> <have>`
+starts this flow. A new version that breaks what the PRD relies on (a contract type, a level, a
+harness slot) fails lint or the next build: that is a real change, through the steps below.
+
 ## Non-negotiable rules
 
 1. **PRD before code.** Do not edit source, tests or migrations until the user has approved the
@@ -129,10 +153,12 @@ script's own (`change.BUMP_RULES`; a test holds the two equal, row for row):
 | a changed test case under a changed AC | major |
 | a new test case under an unchanged AC that cites an open errors.md entry | patch |
 | any other new test case under an unchanged AC | needs judgment |
+| a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged | patch |
+| a moved block `Status:` value | patch |
 | any other changed file in the PRD folder | needs judgment |
 
 It ignores the frontmatter `version:`, `updated:` and `status:` lines, the §11 and §14 tables, block
-`Status:` and `Source:` lines, a `Tests:` line that only follows its added or removed cases, and
+`Source:` lines, a `Tests:` line that only follows its added or removed cases, and
 `.prd-review.json`. The highest level wins, and one `needs judgment` item makes the result
 `needs judgment`. **Only you decide a `needs judgment` item, by the Level table above, with its
 reason:** an AC reworded with its meaning kept is patch, one that gains behaviour and changes
@@ -215,7 +241,10 @@ so you count instead of it.
    `status`), `openapi.yaml` (responses, `x-error-codes`, `x-prd-ids`) and every other contract
    step 1 listed. If a block the change touches has a `Source:` line, run the pack again with
    `--for implement` (its own Bash call, the same gate), re-read each region it marks STALE, and
-   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. A revised block keeps its
+   rewrite that ref as `<path>:<current line> @<HEAD short sha>`. The STALE reasons:
+   `the cited line's text is gone`, `appears <N> times`, `<path> is not in <sha>`. A
+   `MOVED: line <L> is now line <M>` mark is no STALE (the exit stays `0`), but rewrite its
+   `Source:` as `<path>:<M> @<HEAD short sha>` all the same. A revised block keeps its
    `Source:` line: refresh a STALE one to the current line and sha, and never drop it, because the
    next implement pack reads FR code from it. Set the PRD status to `In review`.
    **Linked PRDs.** When `links.md` has Consumers, run, after the edits and as its own call,

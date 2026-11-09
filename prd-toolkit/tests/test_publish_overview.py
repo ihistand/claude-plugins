@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 from conftest import edit
-from prdlint import model, overview, publish
+from prd_publish import main as publish_main
+from prdlint import diagrams, model, overview, publish
+from test_publish import stub_svg
 
 TODAY = date(2026, 11, 1)
 FIX = Path(__file__).parent / "fixtures/publish"
@@ -13,6 +15,14 @@ FIX = Path(__file__).parent / "fixtures/publish"
 
 def page_of(root, summaries=None):
     return publish.render_page(model.load(root), root.parent.parent.parent, summaries, TODAY)
+
+
+@pytest.fixture(autouse=True)
+def as_source(monkeypatch):
+    """The renderer stubbed to fall back, so every page here shows its diagrams as today's source."""
+    def fallback(source, number):
+        raise diagrams.Fallback("x")
+    monkeypatch.setattr(diagrams, "render_svg", fallback)
 
 
 def panel(page, name):
@@ -102,11 +112,47 @@ def test_linked_prds_as_the_readme_shows(orders):
 MERMAID = "```mermaid\ngraph TD\n  A[<b>x</b> & y] --> B\n```"
 
 
-def test_mermaid_fence(prd):
+ESCAPED = "graph TD\n  A[&lt;b&gt;x&lt;/b&gt; &amp; y] --&gt; B\n"
+
+
+def fence_line(prd) -> int:
+    lines = (prd / "prd.md").read_text(encoding="utf-8").split("\n")
+    return next(i for i, ln in enumerate(lines, 1) if ln == "```mermaid" and lines[i] == "graph TD")
+
+
+def publish_cli(prd, tmp_path, capsys):
+    out = tmp_path / "page.html"
+    code = publish_main(["render", str(prd), "--out", str(out)])
+    return code, capsys.readouterr().err, out.read_text(encoding="utf-8")
+
+
+def test_mermaid_fence_drawn(prd, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(diagrams, "render_svg", stub_svg)
     edit(prd, "prd.md", "## 5.", MERMAID + "\n\n## 5.")
-    page = page_of(prd)
-    want = '<pre class="mermaid">graph TD\n  A[&lt;b&gt;x&lt;/b&gt; &amp; y] --&gt; B\n</pre>'
+    code, err, page = publish_cli(prd, tmp_path, capsys)
+    assert code == 0 and "shown as source" not in err
+    source = f'<details><summary>Diagram source</summary><pre class="mermaid-source">{ESCAPED}</pre></details>'
+    for name in ("overview", "technical"):
+        p = panel(page, name)
+        assert p.count('<figure class="diagram"><svg id="diagram-') == 2, name  # the fixture's diagram and this one
+        assert p.count(source) == 1, name
+        assert 'pre class="mermaid"' not in p and "<details open" not in p, name
+    ids = re.findall(r'<svg id="(diagram-\d+)"', page)
+    assert ids == [f"diagram-{n}" for n in range(1, 5)]  # numbered in page order, never repeated
+    for tag in ("<script", "<link", "@import"):
+        assert tag not in page
+    assert "url(" not in page.split("</style>")[0]
+
+
+def test_mermaid_fence_as_source(prd, tmp_path, capsys):
+    edit(prd, "prd.md", "## 5.", MERMAID + "\n\n## 5.")
+    code, err, page = publish_cli(prd, tmp_path, capsys)
+    assert code == 0
+    want = f'<pre class="mermaid">{ESCAPED}</pre>'
     assert panel(page, "overview").count(want) == 1 and panel(page, "technical").count(want) == 1
+    assert "<figure" not in page and "mermaid-source" not in page
+    assert f"prd_publish: diagram at prd.md:{fence_line(prd)} shown as source: x\n" in err
+    assert err.count(f"prd.md:{fence_line(prd)} ") == 1  # one line per diagram, though both tabs show it
     for tag in ("<script", "<link", "@import"):
         assert tag not in page
     assert "url(" not in page.split("</style>")[0]

@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import shutil
+import subprocess
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,10 +161,24 @@ def runbook_steps(prd: Prd) -> Iterator[Finding]:
             continue
         if "Check" not in labels:
             yield out(s.line, f"step {n}: an agent step needs Check:")
+        elif s.prints is not None and s.matches is not None:
+            yield out(labels["Check"][1], f"step {n}: Check: takes prints or matches, not both")
         elif s.check is None and not marked("Check", s):
             yield out(labels["Check"][1], f"step {n}: Check: must be one backticked command, optionally followed by prints `<text>`; got '{labels['Check'][0]}'")
+        if s.matches is not None and s.prints is None:
+            try:
+                re.compile(s.matches)
+            except re.error as e:
+                yield out(labels["Check"][1], f"step {n}: matches pattern '{s.matches}' does not compile: {e}")
         if "Rollback" in labels and s.rollback is None and not marked("Rollback", s):
             yield out(labels["Rollback"][1], f"step {n}: Rollback: must be one backticked command; got '{labels['Rollback'][0]}'")
+
+
+def _git_accepts_branch(name: str) -> bool:
+    try:
+        return subprocess.run(["git", "check-ref-format", "--branch", name], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return True  # no git on the runner: nothing to refuse with
 
 
 @rule("runbook-env")
@@ -194,6 +209,9 @@ def runbook_env(prd: Prd) -> Iterator[Finding]:
             yield Finding("operations.md", first, "runbook-env", "operations.md Environments has no Production column")
         elif not production_envs(prd):
             yield Finding("operations.md", first, "runbook-env", "operations.md Environments: no environment has Production yes")
+    for env, branch in ops.branches.items():
+        if branch and not _git_accepts_branch(branch):
+            yield Finding("operations.md", ops.environments.get(env, 0), "runbook-env", f"environment '{env}': Branch '{branch}' is not a valid branch name")
     for s in ops.steps:
         if s.env is not None:
             yield from check(s.env, s.line, f"step {s.number}: ")
@@ -217,6 +235,10 @@ def production_gate(prd: Prd) -> Iterator[Finding]:
 
 @rule("runbook-tests")
 def runbook_tests(prd: Prd) -> Iterator[Finding]:
+    for level, cell in prd.testing.timeouts.items():
+        if cell and not (re.fullmatch(r"[0-9]+", cell) and int(cell) >= 1):
+            yield Finding("testing.md", prd.testing.levels.get(level, 0), "runbook-tests",
+                          f"level '{level}': Timeout '{cell}' is not a whole number of seconds of at least 1")
     for s in prd.operations.steps:
         for level in s.tests or []:
             line = s.labels["Run"][1]

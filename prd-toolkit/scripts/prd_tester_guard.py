@@ -30,9 +30,9 @@ _BACKTICKED = re.compile(r"`([^`]+)`")
 _ITEM_LIST = re.compile(r"\s*(`[^`]+`(?:\s*,\s*`[^`]+`)*)")
 _OP_CHARS = set("();<>|&")
 _TASK_OUTPUT = re.compile(r"^[A-Za-z0-9_-]+\.output$")
-# A glob character the shell would expand (outside quotes, unescaped) is lexed as its mask, so a check can tell
-# `grep 'T-0*' tests` from `grep s* tests`; every check but grep's reads the token with its glob characters back.
-_GLOB_MASK = {"*": "\x01", "?": "\x02", "[": "\x03"}
+# A glob character the shell would expand (outside quotes, unescaped; `^` and `#` are zsh's) is lexed as its mask, so
+# a check can tell `grep 'T-0*' tests` from `grep s* tests`; the other checks read the token with its glob characters back.
+_GLOB_MASK = {"*": "\x01", "?": "\x02", "[": "\x03", "^": "\x04", "#": "\x05"}
 _UNMASK = str.maketrans({v: k for k, v in _GLOB_MASK.items()})
 # grep (0.8.4): the only options the tester may give it; `-R` and `--dereference-recursive` follow symbolic links.
 GREP_FLAGS = set("rnlLciwxvoqsHhEF")
@@ -249,11 +249,13 @@ class Context:
         """`raw` resolved from `base` (default: cwd) is inside a write root."""
         return self.inside(raw, self.write_roots(), base)
 
-    def deny(self, verb: str) -> Block:
+    def deny(self, verb: str, reason: str | None = None) -> Block:
         roots = self.read_roots() if verb == "read" else self.write_roots()
         msg = f"prd-tester may only {verb} under: {', '.join(str(r) for r in roots) or '(none)'}"
         if self.problems:
             msg += f" (testing.md is missing or has no Test roots: {'; '.join(self.problems)})"
+        if reason:
+            msg += f" (prd_tester_guard: {reason})"
         return Block(" ".join(msg.split("\n")))
 
 
@@ -355,7 +357,9 @@ def _check_segment(ctx: Context, masked: list[str], deny: Block) -> None:
         raise deny
     for h in ctx.harness:
         if args[: len(h)] == h:
-            _check_harness_args(ctx, args[len(h):], _harness_base(ctx, h))
+            denied = _check_harness_args(ctx, margs[len(h):], _harness_base(ctx, h))
+            if denied:
+                raise Block(denied)
             return
     if args[0] == "grep":
         _check_grep(ctx, margs[1:], deny)
@@ -383,17 +387,31 @@ def _non_flags(args: list[str]) -> list[str]:
     return out
 
 
-# Long options whose value is a path.
-PATH_OPTS = {"--junitxml", "--junit-xml", "--basetemp", "--rootdir", "--confcutdir", "--config-file", "-c",
-             "--log-file", "--report-log", "--resultlog", "--cache-dir", "--ignore", "--ignore-glob", "--deselect",
-             "--html", "--cov-report"}
-# Short options that take a value (`c` and `o` are paths/ini overrides; the rest are expressions or names).
-SHORT_VALUE_OPTS = "ockmpnWr"
-
-
-def _looks_like_path(v: str) -> bool:
-    v = v.split("::", 1)[0]
-    return "/" in v or v.endswith(".py")
+# After a harness command (0.8.5): these are refused outright, whatever follows them.
+REFUSED_OPTS = frozenset({"--pyargs", "--doctest-modules", "--doctest-glob", "--rootdir", "--confcutdir"})
+# The options that take a value, so a value is never read as a positional: a "path" goes through the test-root check,
+# a "count" is `auto` or a whole number, and "text" (an expression, a name or a number) passes. An option not here is
+# a plain flag, so a value it takes is checked as a positional. `-p` and `-o` have rules of their own (PLUGIN_OPTS,
+# INI_OPTS).
+VALUE_OPTS: dict[str, str] = {
+    **dict.fromkeys(("-c", "--config-file", "--basetemp", "--junitxml", "--junit-xml", "--log-file", "--ignore",
+                     "--ignore-glob", "--deselect"), "path"),
+    **dict.fromkeys(("-n", "--numprocesses", "--maxprocesses"), "count"),
+    **dict.fromkeys(("-k", "-m", "-r", "--report-chars", "-W", "--pythonwarnings", "--tb", "--maxfail", "--durations",
+                     "--durations-min", "--max-warnings", "--capture", "--show-capture", "--color", "--code-highlight",
+                     "--import-mode", "--verbosity", "--lfnf", "--last-failed-no-failures", "--junit-prefix",
+                     "--junitprefix", "--assert", "--log-level", "--log-format", "--log-date-format",
+                     "--log-cli-level", "--log-cli-format", "--log-cli-date-format", "--log-file-mode",
+                     "--log-file-level", "--log-file-format", "--log-file-date-format", "--log-auto-indent",
+                     "--log-disable", "--dist", "--max-worker-restart"), "text"),
+}
+# `-p <plugin>` loads a plugin and is refused; `-p no:<name>` only turns one off.
+PLUGIN_OPTS = frozenset({"-p"})
+# `-o key=value`: a key holding dir, path, file or cache_dir puts its value through the test-root check; `addopts`
+# would carry any option past these checks, so it is refused.
+INI_OPTS = frozenset({"-o", "--override-ini"})
+INI_PATH_WORDS = ("dir", "path", "file")
+REFUSED_INI = frozenset({"addopts"})
 
 
 def _harness_base(ctx: Context, harness: list[str]) -> Path:
@@ -408,56 +426,87 @@ def _harness_base(ctx: Context, harness: list[str]) -> Path:
     return ctx.cwd
 
 
-def _check_harness_args(ctx: Context, rest: list[str], base: Path) -> None:
-    """Arguments after a harness command may only point at scratch or test roots, each resolved from `base`."""
-    def need(v: str) -> None:
-        v = v.split("::", 1)[0]
-        if has_glob(v) or not ctx.can_write(v, base):
-            raise ctx.deny("write")
+def _check_harness_args(ctx: Context, rest: list[str], base: Path) -> str | None:
+    """The deny message for the first argument after a harness command that is refused, or None when every one passes.
+    `rest` holds the arguments as lexed, an unquoted glob character still masked; a path is resolved from `base` and
+    must lie under a scratch or test root."""
+    def refused(option: str) -> str:
+        return str(ctx.deny("run", f"{option} is refused after a harness command"))
 
-    def check_ini(kv: str) -> None:
-        key, _, val = kv.partition("=")
-        if val and (_looks_like_path(val) or key == "cache_dir" or any(w in key for w in ("dir", "path", "file"))):
-            need(val)
+    def path(v: str) -> str | None:
+        if ctx.can_write(v.split("::", 1)[0], base):
+            return None
+        return str(ctx.deny("write", f"{v} is not under a test root"))
 
-    i = 0
+    def value(opt: str, val: str) -> str | None:
+        if opt in PLUGIN_OPTS:
+            return None if val.startswith("no:") else refused(f"{opt} {val}")
+        if opt in INI_OPTS:
+            key, _, v = val.partition("=")
+            key = key.strip().lower()
+            if key in REFUSED_INI:
+                return refused(f"{opt} {key}")
+            return path(v) if any(w in key for w in INI_PATH_WORDS) else None  # cache_dir included
+        kind = VALUE_OPTS[opt]
+        if kind == "path":
+            return path(val)
+        if kind == "count" and not (val == "auto" or (val.isascii() and val.isdigit())):
+            return refused(f"{opt} {val}")
+        return None
+
+    def takes_value(opt: str) -> bool:
+        return opt in VALUE_OPTS or opt in PLUGIN_OPTS or opt in INI_OPTS
+
+    def positional(a: str) -> bool:
+        """argparse's order: a `-`-led token that holds a space and whose option part (`--x` before any `=`, or a short
+        token's first two characters) names no option these tables know is a positional, which pytest collects."""
+        if not a.startswith("-") or a == "-":
+            return True
+        part = a.partition("=")[0] if a.startswith("--") else a[:2]
+        return " " in a and not (part in REFUSED_OPTS or takes_value(part))
+
+    for m in rest:
+        if m != m.translate(_UNMASK):
+            return str(ctx.deny("run", f"unquoted glob in {m.translate(_UNMASK)}"))
+    rest = [m.translate(_UNMASK) for m in rest]
+    i, ended = 0, False
     while i < len(rest):
         a = rest[i]
         i += 1
-        if a == "--override-ini" or a.startswith("--override-ini="):
-            if a == "--override-ini":
-                if i >= len(rest):
-                    raise ctx.deny("write")
-                check_ini(rest[i])
-                i += 1
+        if ended or positional(a):
+            denied = path(a)
+        elif a == "--":
+            ended, denied = True, None
+        elif a.startswith("--"):
+            opt, eq, val = a.partition("=")
+            if opt in REFUSED_OPTS:
+                return refused(opt)
+            if not takes_value(opt):
+                denied = path(val) if eq else None  # a plain flag: a value given to it is a positional
+            elif eq:
+                denied = value(opt, val)
+            elif i >= len(rest):
+                return refused(opt)
             else:
-                check_ini(a.partition("=")[2])
-        elif a.startswith("--") and "=" in a:
-            opt, _, val = a.partition("=")
-            if opt in PATH_OPTS or _looks_like_path(val):
-                need(val)
-        elif a in PATH_OPTS:
-            if i >= len(rest):
-                raise ctx.deny("write")
-            need(rest[i])
-            i += 1
-        elif a.startswith("-") and not a.startswith("--") and len(a) >= 2:
-            # A cluster of short flags: the first option that takes a value swallows the rest of the token,
-            # or the next token when nothing follows it.
-            j = next((n for n, ch in enumerate(a) if n and ch in SHORT_VALUE_OPTS), 0)
+                denied, i = value(opt, rest[i]), i + 1
+        else:
+            # A cluster of short flags: the first option that takes a value swallows the rest of the token, or the
+            # next token when nothing follows it.
+            j = next((n for n in range(1, len(a)) if takes_value("-" + a[n])), 0)
             if not j:
                 continue
-            val = a[j + 1:]
-            if not val:
-                if i >= len(rest):
-                    raise ctx.deny("write")
-                val, i = rest[i], i + 1
-            if a[j] == "c":
-                need(val)
-            elif a[j] == "o":
-                check_ini(val)
-        elif not a.startswith("-") and _looks_like_path(a):
-            need(a)
+            opt, val = "-" + a[j], a[j + 1:]
+            if val:
+                # argparse may read `-o=addopts=-v` as `-o addopts=-v`: an attached value is checked with and without
+                # its leading `=`
+                denied = value(opt, val) or (value(opt, val[1:]) if val.startswith("=") else None)
+            elif i >= len(rest):
+                return refused(opt)
+            else:
+                denied, i = value(opt, rest[i]), i + 1
+        if denied:
+            return denied
+    return None
 
 
 def _check_grep(ctx: Context, margs: list[str], deny: Block) -> None:
@@ -472,7 +521,7 @@ def _check_grep(ctx: Context, margs: list[str], deny: Block) -> None:
 
     def readable(m: str) -> None:
         p = m.translate(_UNMASK)
-        if not p or has_glob(p) or not ctx.can_read(p):
+        if not p or has_glob(p) or unquoted_glob(m) or not ctx.can_read(p):
             raise ctx.deny("read")
 
     operands: list[str] = []

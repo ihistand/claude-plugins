@@ -122,6 +122,7 @@ class Testing:
     has_gate: bool = False
     levels_line: int = 0
     level_envs: dict[str, str] = field(default_factory=dict)  # level -> Environment cell
+    timeouts: dict[str, str] = field(default_factory=dict)  # level -> raw Timeout cell (whitespace removed); only when the column exists
     environments: dict[str, int] = field(default_factory=dict)
     fixtures: dict[str, int] = field(default_factory=dict)
     signoffs: list[Row] = field(default_factory=list)
@@ -141,6 +142,7 @@ class Step:
     tests: list[str] | None = None  # the levels of a `Run: tests <level>[, <level>]` step
     check: str | None = None
     prints: str | None = None
+    matches: str | None = None  # the pattern of `Check: `cmd` matches `pattern``
     rollback: str | None = None
 
 
@@ -167,6 +169,7 @@ class Operations:
     environments: dict[str, int] = field(default_factory=dict)  # environment -> row line
     production: dict[str, str] = field(default_factory=dict)  # environment -> raw Production cell
     has_production: bool = False  # the Environments table has a Production column
+    branches: dict[str, str] = field(default_factory=dict)  # environment -> Branch cell, whitespace and backticks removed; only when the column exists
     steps: list[Step] = field(default_factory=list)
     runbook_line: int = 0
     deployed: list[DeployedRow] = field(default_factory=list)
@@ -459,7 +462,8 @@ _STEP_LINE = re.compile(r"^(\d+)\.\s+(.*?)\s*\(actor:\s*(agent|human)\)\s*\(env:
 _STEP_ANY = re.compile(r"^(\d+)\.\s+(.*?)\s*$")
 _LABEL = re.compile(r"^\s+(Run|Check|Rollback|Do):\s*(.*?)\s*$")
 _CMD = re.compile(r"^`([^`]+)`$")
-_CHECK = re.compile(r"^`([^`]+)`(?:\s+prints\s+`([^`]*)`)?$")
+_CHECK = re.compile(r"^`([^`]+)`((?:\s+(?:prints|matches)\s+`[^`]*`)*)$")
+_CHECK_TAIL = re.compile(r"\s+(prints|matches)\s+`([^`]*)`")
 _TESTS = re.compile(r"^tests\s+(.+)$")
 _SECRET_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
 
@@ -486,7 +490,12 @@ def _step(m: re.Match, n: int, body: list[tuple[int, str]]) -> Step:
     if "Check" in s.labels:
         km = _CHECK.match(s.labels["Check"][0])
         if km:
-            s.check, s.prints = km.group(1).strip(), km.group(2)
+            tails = _CHECK_TAIL.findall(km.group(2))
+            kinds = [k for k, _ in tails]
+            if len(set(kinds)) == len(kinds):  # each form at most once; a repeat is malformed
+                s.check = km.group(1).strip()
+                for k, v in tails:
+                    setattr(s, k, v)
     if "Rollback" in s.labels:
         cm = _CMD.match(s.labels["Rollback"][0])
         if cm:
@@ -506,6 +515,10 @@ def _operations(text: str) -> Operations:
         if pi >= 0:
             for r in env.rows:
                 ops.production[r.cells[0].strip("`")] = (r.cells[pi] if pi < len(r.cells) else "").strip().strip("`").strip()
+        if "branch" in hdr:
+            bi = hdr.index("branch")
+            for r in env.rows:
+                ops.branches[r.cells[0].strip("`")] = (r.cells[bi] if bi < len(r.cells) else "").strip().replace("`", "").strip()
     for s in secs:
         title = s.title.strip().lower()
         if title == "runbook":
@@ -941,6 +954,10 @@ def load(prd_dir: Path) -> Prd:
             if ei >= 0:
                 for r in lv.rows:
                     testing.level_envs[r.cells[0].strip("`")] = (r.cells[ei] if ei < len(r.cells) else "").strip().strip("`").strip()
+            ti = hdr.index("timeout") if "timeout" in hdr else -1
+            if ti >= 0:
+                for r in lv.rows:
+                    testing.timeouts[r.cells[0].strip("`")] = (r.cells[ti] if ti < len(r.cells) else "").strip()
         testing.environments = _names(_table_under(tsecs, "Environments"))
         testing.fixtures = _names(_table_under(tsecs, "Fixtures"))
         so = _table_under(tsecs, "Sign-offs")
