@@ -42,7 +42,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
-      - run: "uv run --directory prd-toolkit pytest -q tests --ignore tests/prd"
+      - run: "uv run --directory prd-toolkit pytest -q -n auto tests --ignore tests/prd"
 
   test-integration:
     runs-on: ubuntu-latest
@@ -51,4 +51,4 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
-      - run: "uv run --directory prd-toolkit pytest -q tests/prd"
+      - run: "uv run --directory prd-toolkit pytest -q -n auto tests/prd"
