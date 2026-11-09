@@ -293,3 +293,51 @@ Errors: -
 Edge cases: the root README is a guide `prd_block.py` writes from the PRD (prd-toolkit 0.8.4), never a source; a `README.md` in `features/` or `contracts/` is still linted → AC-015.1; only lint is in this area: the change digest, the bump and the tester skip the file by their own rules (unadopted areas)
 Tests: T-015.1 [integration], T-015.2 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prd_block.py` (the README's writer, status area)
+
+### FR-016 Report a Levels Timeout that is not a whole number of seconds
+Status: approved
+Flow: 1. load testing.md → 2. read the Levels table's optional `Timeout` column, found by its header
+      name → 3. report each cell that is neither empty nor a whole number of seconds of at least 1
+Acceptance (EARS):
+- AC-016.1 When testing.md's Levels table has a column headed `Timeout` and a level's cell, its
+  surrounding whitespace removed, is neither empty nor a whole number of at least 1 written in the
+  digits 0 to 9, the lint command shall report `runbook-tests` at that level's row in `testing.md`
+  with `level '<level>': Timeout '<cell>' is not a whole number of seconds of at least 1`; an empty
+  cell, or a Levels table with no `Timeout` column, gives no such finding.
+Errors: -
+Edge cases: `0`, `-5`, `1.5`, `ten` and `10s` are each reported → AC-016.1; a level that no tests step runs still has its cell checked → AC-016.1; what a Timeout does at deploy time belongs to the deploy runner (prd-toolkit 0.8.5, an unadopted area)
+Tests: T-016.1 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; testing.md Levels
+
+### FR-017 Report an Environments Branch that git refuses
+Status: approved
+Flow: 1. load operations.md → 2. read the Environments table's optional `Branch` column, found by its
+      header name → 3. report each cell that is not empty and that git refuses as a branch name
+Acceptance (EARS):
+- AC-017.1 When operations.md's Environments table has a column headed `Branch` and an environment's
+  cell, its surrounding whitespace and backticks removed, is not empty and
+  `git check-ref-format --branch <cell>` exits with a status other than 0, the lint command shall
+  report `runbook-env` at that environment's row in `operations.md` with
+  `environment '<environment>': Branch '<cell>' is not a valid branch name`; an empty cell, or an
+  Environments table with no `Branch` column, gives no such finding.
+Errors: -
+Edge cases: `main..x`, `a b` and a name ending in `.lock` are each refused by git → AC-017.1; `release/staging` is accepted → AC-017.1; lint never checks that the branch exists, only that git accepts the name; the note a deploy prints for a close on another branch belongs to the deploy runner (prd-toolkit 0.8.5, an unadopted area)
+Tests: T-017.1 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; operations.md Environments; git on the runner (testing.md Harness)
+
+### FR-018 Check a runbook Check's matches pattern
+Status: approved
+Flow: 1. load operations.md → 2. read each agent step's `Check:`: one backticked command, then
+      optionally `prints` and one backticked text, or `matches` and one backticked pattern → 3. report
+      a pattern that does not compile, and a Check that holds both forms
+Acceptance (EARS):
+- AC-018.1 When an agent step's `Check:` is one backticked command followed by `matches` and one
+  backticked pattern, the lint command shall accept it as a Check; it shall report `runbook-steps`
+  at the Check line with `step <n>: matches pattern '<pattern>' does not compile: <message>` when the
+  pattern does not compile as a Python regular expression, `<message>` being the text of the error
+  `re.compile` raises, and with `step <n>: Check: takes prints or matches, not both` when the Check
+  holds both `prints` and `matches`, in either order.
+Errors: -
+Edge cases: a pattern cannot hold a backtick, which ends it → AC-018.1; `prints` keeps its exact meaning, a whole stdout line equal to its text; how a deploy matches a pattern at run time belongs to the deploy runner (prd-toolkit 0.8.5, an unadopted area); a Check malformed in any other way keeps the existing `runbook-steps` message
+Tests: T-018.1 [integration], T-018.2 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; operations.md Runbook

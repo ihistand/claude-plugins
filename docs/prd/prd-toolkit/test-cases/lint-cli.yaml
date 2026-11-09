@@ -8,6 +8,19 @@
 #   <tmp>/docs/prd/orders/<key>, and set PRD_PLUGINS_FILE to the absolute path of fixture
 #   lint-cli/plugins_superpowers.json (the registries rule reads it). With S0 alone the folder lints clean (T-001.1).
 #   M1 = append the line `FORBIDDEN: {}` to <tmp>/docs/prd/orders/contracts/errors.yaml (it becomes line 41).
+#   M2 = in <tmp>/docs/prd/orders/testing.md, give the Levels table a last column `Timeout`: line 5 becomes
+#        `| Level | Harness command | Environment | Gate | Timeout |`, line 6 `|---|---|---|---|---|`, and each of
+#        lines 7 to 13 gains one more cell before its line end: ` ten |` on line 10 (level system), ` 1200 |` on
+#        line 11 (e2e), ` 0 |` on line 13 (smoke), and an empty cell ` |` on lines 7, 8, 9 and 12.
+#   M3 = in <tmp>/docs/prd/orders/operations.md, give the Environments table a last column `Branch`: line 5
+#        becomes `| Environment | URL | Production | Branch |`, line 6 `|---|---|---|---|`, and each of lines 7
+#        to 10 gains one more cell: an empty cell ` |` on lines 7 (local) and 8 (ci), ` release/staging |` on
+#        line 9 (staging) and ` main..x |` on line 10 (production).
+#   M4 = in <tmp>/docs/prd/orders/operations.md, line 16 (step 1's Check) becomes the text between the double
+#        quotes: "   Check: `curl -fsS https://orders-staging.example.com/health` matches `^ok$`".
+#   M5 = in <tmp>/docs/prd/orders/operations.md, line 16 (step 1's Check) becomes
+#        "   Check: `curl -fsS https://orders-staging.example.com/health` matches `^ok(`" and line 25 (step 4's
+#        Check) becomes "   Check: `curl -fsS https://orders.example.com/health` prints `ok` matches `^ok$`".
 T-001.1:
   ac: AC-001.1
   level: integration
@@ -1173,6 +1186,91 @@ T-015.2:
     output:
       exit: 1
       stdout_contains: "docs/prd/orders/contracts/dependencies/README.md:1: markers-open: "
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-016.1:
+  ac: AC-016.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M2]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the empty cells and the whole number 1200 give no finding; with S0 alone the folder lints clean (T-001.1)
+  expect:
+    output:
+      exit: 1
+      stdout_exact_lines:
+        - "docs/prd/orders/testing.md:10: runbook-tests: level 'system': Timeout 'ten' is not a whole number of seconds of at least 1"
+        - "docs/prd/orders/testing.md:13: runbook-tests: level 'smoke': Timeout '0' is not a whole number of seconds of at least 1"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-017.1:
+  ac: AC-017.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M3]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: git refuses main..x as a branch name and accepts release/staging; the two empty cells give no finding
+  expect:
+    output:
+      exit: 1
+      stdout_exact_lines:
+        - "docs/prd/orders/operations.md:10: runbook-env: environment 'production': Branch 'main..x' is not a valid branch name"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-018.1:
+  ac: AC-018.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M4]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: a Check with matches and a pattern that compiles is accepted, so the folder lints clean as with S0 alone
+  expect:
+    output:
+      exit: 0
+      stdout_exact: ""
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-018.2:
+  ac: AC-018.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, M5]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the pattern ^ok( does not compile, and Python 3.11 to 3.14 all give re.compile's message as "missing ), unterminated subpattern at position 3"; step 4's Check holds both prints and matches
+  expect:
+    output:
+      exit: 1
+      stdout_exact_lines:
+        - "docs/prd/orders/operations.md:16: runbook-steps: step 1: matches pattern '^ok(' does not compile: missing ), unterminated subpattern at position 3"
+        - "docs/prd/orders/operations.md:25: runbook-steps: step 4: Check: takes prints or matches, not both"
       stderr: ""
     effects: []
     errors: []

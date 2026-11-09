@@ -6,8 +6,8 @@
 
 | Level | Harness command | Environment | Gate |
 |---|---|---|---|
-| unit | `uv run --directory prd-toolkit pytest -q tests --ignore tests/prd` | local | build |
-| integration | `uv run --directory prd-toolkit pytest -q tests/prd` | local | build |
+| unit | `uv run --directory prd-toolkit pytest -q -n auto tests --ignore tests/prd` | local | build |
+| integration | `uv run --directory prd-toolkit pytest -q -n auto tests/prd` | local | build |
 
 ## Harness
 
