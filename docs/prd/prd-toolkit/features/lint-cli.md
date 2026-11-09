@@ -295,7 +295,8 @@ Tests: T-015.1 [integration], T-015.2 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prd_block.py` (the README's writer, status area)
 
 ### FR-016 Report a Levels Timeout that is not a whole number of seconds
-Status: approved
+Status: verified
+Source: prd-toolkit/scripts/prdlint/rules/registries.py:237 @1c773e4
 Flow: 1. load testing.md → 2. read the Levels table's optional `Timeout` column, found by its header
       name → 3. report each cell that is neither empty nor a whole number of seconds of at least 1
 Acceptance (EARS):
@@ -310,7 +311,8 @@ Tests: T-016.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; testing.md Levels
 
 ### FR-017 Report an Environments Branch that git refuses
-Status: approved
+Status: verified
+Source: prd-toolkit/scripts/prdlint/rules/registries.py:177 @1c773e4
 Flow: 1. load operations.md → 2. read the Environments table's optional `Branch` column, found by its
       header name → 3. report each cell that is not empty and that git refuses as a branch name
 Acceptance (EARS):
@@ -326,7 +328,8 @@ Tests: T-017.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; operations.md Environments; git on the runner (testing.md Harness)
 
 ### FR-018 Check a runbook Check's matches pattern
-Status: approved
+Status: verified
+Source: prd-toolkit/scripts/prdlint/rules/registries.py:165 @1c773e4
 Flow: 1. load operations.md → 2. read each agent step's `Check:`: one backticked command, then
       optionally `prints` and one backticked text, or `matches` and one backticked pattern → 3. report
       a pattern that does not compile, and a Check that holds both forms
