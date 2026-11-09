@@ -781,3 +781,19 @@ def test_a_committed_entry_is_refused_at_resume(repo):
     record_entry(repo, f"deploy run {run_id}, step 2")
     commit(repo, "Record the entry", ERRORS)
     refused_with(resume(repo, run_id), "HEAD moved since the run started")
+
+
+def test_deleting_only_the_placeholder_is_refused_at_resume(repo):
+    p = repo / ERRORS
+    p.write_text(f"# Error ledger\n\n{PLACEHOLDER}\n", encoding="utf-8")
+    commit(repo, "Empty ledger", ERRORS)
+    run_id = confirmed_stop(repo)
+    p.write_text("# Error ledger\n\n", encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+def test_trailing_whitespace_alone_is_refused_at_resume(repo):
+    run_id = confirmed_stop(repo)
+    p = repo / ERRORS
+    p.write_text(p.read_text(encoding="utf-8") + "  \n", encoding="utf-8")
+    refused_with(resume(repo, run_id), "the tracked tree has changes")

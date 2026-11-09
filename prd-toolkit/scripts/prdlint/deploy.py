@@ -395,6 +395,8 @@ def run_entries_only(prd: Prd, repo_root: Path, header: dict, run_id: str) -> bo
     base, now = _show(repo_root, str(header.get("head")), rel), path.read_text(encoding="utf-8")
     base_ids, new = set(_errors_ledger(base)), _errors_ledger(now)
     added = [e for i, e in new.items() if i not in base_ids]
+    if not added:
+        return False  # only added entries pass; any other change is refused
     now_lines = now.split("\n")
     for e in added:
         detected = re.search(r"^Detected:.*$", "\n".join(now_lines[e.line - 1:e.end]), re.M)
