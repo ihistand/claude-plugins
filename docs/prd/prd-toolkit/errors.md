@@ -72,7 +72,7 @@ Recurrence of: E-005
 
 ### E-008 Cached uv script environments accumulate without bound in ~/.cache/uv/environments-v2
 Detected: 2026-11-09, user report (GitHub issue #24)
-Classification: unclassified
+Classification: spec gap
 Evidence: Source: GitHub issue ihistand/claude-plugins#24, filed 2026-11-09 from a disk-space review.
   ~/.cache/uv/environments-v2 held 26,888 cached script environments; uv cache size reported 454.4GiB.
   Per script: prd-git-hook 8,632; prd-block 4,485; prd-deploy 3,466; prd-lint 2,535; prd-trace 1,747;
@@ -82,6 +82,6 @@ Evidence: Source: GitHub issue ihistand/claude-plugins#24, filed 2026-11-09 from
   rm -rf of the folder freed about 89 GB of disk and about 27 million files (APFS clones made the listed size overstate it).
   During the rm, two new environments appeared from hook runs in another session:
   prd-git-hook-bda7e90cb225275c and prd-lint-d26ef0960b4cb95e (16:12), so the rm ended with Directory not empty.
-Diagnosis: -
+Diagnosis: Root cause: uv keys a cached script environment on the script's path, not its contents or dependencies. Reproduced 2026-11-09 with uv 0.13.7: running `.prd-toolkit/prd_error.py` twice from one path reused one environment; a copy in a new folder built a second; the same path with the file edited reused it. Every distinct path a prd script runs from therefore leaves one environment in `~/.cache/uv/environments-v2` that nothing removes. Two sources make new paths: (1) the unit suite builds git repositories under pytest `tmp_path`, installs the hooks there and commits, so each shim runs `uv run --script "$prd_top/.prd-toolkit/prd_git_hook.py"` from a new path, and tests run vendored copies of scripts the same way; one run of `tests/test_hooks_install.py` (33 tests) added 4 `prd-git-hook` environments, and the full suite runs on every build, review fix and CI-parity run; (2) in real repositories each clone or worktree has its own `.prd-toolkit/`, so every new worktree adds environments for each script its hooks and skills run. Sections searched and found silent on cached environments, their count or their cleanup: prd.md technical context ("Each CLI script (`prd-toolkit/scripts/prd_*.py`) is a uv script with an inline dependency header, run as `uv run --script <script>`."), testing.md Harness (Lifecycle, Clean state: "Every test starts from its own pytest `tmp_path`"), nfr.md and operations.md; no AC in the lint-cli feature covers the hooks or test setup. No PRD line bounds what a test run or a hook run may leave in the user's uv cache.
 Resolution: -
 Recurrence of: -
