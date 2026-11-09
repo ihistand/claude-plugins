@@ -71,14 +71,20 @@ try:
     out["bad"] = None
 except diagrams.Fallback as e:
     out["bad"] = e.reason
+try:
+    out["seq"], out["seq_reason"] = diagrams.render_svg(sys.argv[2], 4), None
+except diagrams.Fallback as e:
+    out["seq"], out["seq_reason"] = None, e.reason
 print(json.dumps(out))
 """
+
+SEQUENCE = "sequenceDiagram\n  Alice->>Bob: hi\n  Bob-->>Alice: hello back\n"
 
 
 def test_the_toolkit_diagram_renders_for_real(tmp_path):
     """Never skipped: uv installs the pinned renderer in its own environment; the pytest one never holds it."""
     r = subprocess.run(["uv", "run", "--no-project", "--with", f"mermaidx=={pin()}", "python", "-I", "-c", PROBE,
-                        str(ROOT / "scripts")], input=section4(), capture_output=True, text=True, encoding="utf-8",
+                        str(ROOT / "scripts"), SEQUENCE], input=section4(), capture_output=True, text=True, encoding="utf-8",
                        cwd=tmp_path, timeout=600)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
@@ -102,6 +108,14 @@ def test_the_toolkit_diagram_renders_for_real(tmp_path):
         for sel in sels:
             assert re.match(rf"#diagram-{n}(?![\w-])", sel), (n, sel)
     assert out["bad"].startswith("the renderer failed: "), out["bad"]
+    # a sequence diagram draws too; its style points at a filter it never defines, which stays inside diagram-4
+    assert out["seq_reason"] is None, out["seq_reason"]
+    seq = out["seq"]
+    assert seq.startswith('<svg id="diagram-4"') and diagrams.check_svg(seq) is None
+    for label in ("Alice", "Bob", "hi", "hello back"):
+        assert label in text_of(seq), label
+    for svg in (one, two, seq):
+        assert "<!" not in svg and "<?" not in svg
 
 
 def test_the_toolkit_page_draws_its_diagrams_for_real(tmp_path):
@@ -161,6 +175,18 @@ def test_ids_are_numbered_per_diagram(monkeypatch):
                    '<use href="#diagram-2-L_a_0"></use><text>#my-svg and L_a_0</text></svg>')
     assert diagrams.render_svg("graph TD\n  numbered\n", 2) == two  # the same every time
     assert diagrams.render_svg("graph TD\n  numbered\n", 1).startswith('<svg id="diagram-1" aria-labelledby="diagram-1-chart')
+
+
+def test_a_reference_to_no_id_is_kept_inside_the_diagram(monkeypatch):
+    dangling = ('<svg id="my-svg"><style>#my-svg .actor{filter:url(#drop-shadow)}</style><defs><filter id="my-svg-drop-shadow">'
+                '</filter></defs><a xlink:href="#nowhere"><use href="#my-svg-drop-shadow"></use></a>'
+                '<path style="filter: url( \'#gone\' )"></path><text>#drop-shadow stays text</text></svg>')
+    monkeypatch.setattr(diagrams, "_render", lambda source: dangling)
+    assert diagrams.render_svg("sequenceDiagram\n  dangling\n", 3) == (
+        '<svg id="diagram-3"><style>#diagram-3 .actor{filter:url(#diagram-3-drop-shadow)}</style><defs>'
+        '<filter id="diagram-3-my-svg-drop-shadow"></filter></defs><a xlink:href="#diagram-3-nowhere">'
+        '<use href="#diagram-3-my-svg-drop-shadow"></use></a><path style="filter: url( \'#diagram-3-gone\' )"></path>'
+        '<text>#drop-shadow stays text</text></svg>')
 
 
 def test_a_renderer_that_cannot_load_is_a_fallback(monkeypatch):
@@ -227,6 +253,12 @@ def test_a_clean_svg_passes():
     # a reference that leaves the diagram
     '<path marker-end="url(#arrow)">', '<use href="#arrow">', '<use href="#diagram-2-x">', '<path fill="url(#diagram-12-x)">',
     "<style>a{fill:url(#other)}</style>",
+    # a comment, CDATA or processing instruction splits a CSS word past the check
+    "<style>a{fill:u<!---->rl(//evil.example/a)}</style>", '<style>@imp<!---->ort "//evil.example/a.css";</style>',
+    '<style>@im<![CDATA[port "//evil.example/a.css";]]></style>', "<style>a{fill:u<?x?>rl(//evil.example/a)}</style>",
+    "<style>@font<!---->-face{font-family:x}</style>", "<!-- a comment -->", '<?xml version="1.0"?>',
+    # a name that only starts like the diagram's own
+    '<use href="#diagram-1x">', '<path fill="url(#diagram-1x)">', '<use href="#diagram-1_a">',
     # a value a browser reads as a relative URL, though it holds the diagram's own fragment
     '<use href="\'#diagram-1-arrow">', '<use href="&quot;#diagram-1-arrow">', '<use href="\u00a0#diagram-1-arrow">',
     '<path style="fill:url(\u00a0#diagram-1-arrow)">',
@@ -247,7 +279,9 @@ def test_check_svg_names_the_spec_reasons(bad, reason):
 
 
 @pytest.mark.parametrize("text", ["", "hello", "   ", "<g></g>", '<svg id="diagram-1">', '<svg id="diagram-1"></svg><svg>',
-                                  '<p></p><svg id="diagram-1"></svg>', '<svg></svg>', '<svg id="my-svg"></svg>'])
+                                  '<p></p><svg id="diagram-1"></svg>', '<svg></svg>', '<svg id="my-svg"></svg>',
+                                  '<svg id="diagram-1"></svg><svg><text>x</text></svg>', '<svg id="diagram-1"></svg>hello</svg>',
+                                  '<?xml version="1.0"?><?xml version="1.0"?><svg id="diagram-1"></svg>'])
 def test_check_svg_refuses_what_is_not_one_numbered_svg(text):
     assert diagrams.check_svg(text) is not None, text
 

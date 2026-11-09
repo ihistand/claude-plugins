@@ -56,20 +56,28 @@ _ARIA = re.compile(r'(\saria-(?:labelledby|describedby)=")([^"]*)"')
 _MARKUP = re.compile(r"<style\b[^>]*>.*?</style>|<[^>]*>", re.S)
 
 
+_LINK = r"""url\(\s*["']?\s*#|[\s:]href\s*=\s*["']?\s*#"""  # what a `url(` or an href value starts with
+_TARGET = r"""[^\s"')>]+"""
+
+
 def _number(svg: str, number: int) -> str:
     """The root SVG's ID becomes `diagram-<number>` and every other ID `diagram-<number>-<id>`, with each `#id`
-    reference and aria ID list in the markup and the style following; text between tags is left alone."""
+    reference and aria ID list in the markup and the style following; text between tags is left alone. A `url(#…)`
+    or `href="#…"` names the diagram's own namespace even when no element has that ID (mermaid's sequence style
+    points at `#drop-shadow`, which it never defines): a dangling reference stays dangling, inside the diagram."""
     root = re.match(r'\s*<svg\b[^>]*?\sid="([^"]*)"', svg)
     ids = set(_ID.findall(svg))
     new = {i: f"diagram-{number}" if root and i == root.group(1) else f"diagram-{number}-{i}" for i in ids}
-    if not new:
-        return svg
-    ref = re.compile("#(" + "|".join(re.escape(i) for i in sorted(new, key=len, reverse=True)) + r")(?![\w-])")
+    known = "|".join(re.escape(i) for i in sorted(new, key=len, reverse=True))
+    ref = re.compile(rf"(?P<link>(?i:{_LINK}))(?P<target>{_TARGET})" + (rf"|#(?P<id>{known})(?![\w-])" if known else ""))
+
+    def target(name: str) -> str:
+        return new.get(name, f"diagram-{number}-{name}")
 
     def markup(m: re.Match) -> str:
         s = _ID.sub(lambda k: f'id="{new[k.group(1)]}"', m.group(0))
         s = _ARIA.sub(lambda k: k.group(1) + " ".join(new.get(t, t) for t in k.group(2).split()) + '"', s)
-        return ref.sub(lambda k: "#" + new[k.group(1)], s)
+        return ref.sub(lambda k: k.group("link") + target(k.group("target")) if k.group("link") else "#" + new[k.group("id")], s)
 
     return _MARKUP.sub(markup, svg)
 
@@ -86,7 +94,8 @@ _SVG_TAGS = frozenset(t.lower() for t in (
     "stop style svg switch symbol text textPath title tspan use view").split())
 _TAG = re.compile(r"</?([A-Za-z][^\s/>]*)")
 _START = re.compile(r"<[A-Za-z]")
-_SHAPE = re.compile(r"\s*(?:<\?xml[^>]*\?>\s*)?(<svg\b.*</svg>)\s*", re.S | re.I)
+_HEAD = re.compile(r"\s*(?:<\?xml[^<>]*\?>\s*)?(?=<svg[\s/>])", re.I)
+_SVG_TAG = re.compile(r"<(/?)svg(?=[\s/>])", re.I)
 _ON = re.compile(r"(?<![\w-])on\w*\s*=")
 _URL = re.compile(r"url\(")
 _LOADS = ("@import", "@font-face", "image-set(", "image(", "src(", "src=")
@@ -132,21 +141,38 @@ def _tag_at(s: str, i: int) -> list[tuple[str, str]] | None:
         attrs.append((name, html.unescape(value)))
 
 
+def _root(svg: str) -> tuple[int, int] | None:
+    """Where the one root `<svg>` starts and its matching `</svg>` ends, with nothing but space around them; None
+    when the text is anything else."""
+    head = _HEAD.match(svg)
+    if not head:
+        return None
+    depth = 0
+    for m in _SVG_TAG.finditer(svg, head.end()):
+        depth += -1 if m.group(1) else 1
+        if depth == 0:
+            end = svg.find(">", m.end())
+            return (head.end(), end + 1) if end >= 0 and not svg[end + 1 :].strip() else None
+    return None
+
+
 def check_svg(svg: str) -> str | None:
     """Why this SVG may not go on the page, or None. It must be one `<svg>` whose root ID is `diagram-<n>`; each tag's
     attributes are read as a browser reads them, and every href and url( must point into `diagram-<n>`. Tag names are
     read as written; the rest is also read with character references decoded, as a browser reads attribute values and
     SVG style, so `&#x75;rl(` is `url(`."""
-    shape = _SHAPE.fullmatch(svg)
+    shape = _root(svg)
     if not shape:
         return "the SVG is not one <svg> element"
-    root = dict(reversed(_tag_at(svg, shape.start(1)) or []))  # the first of a repeated attribute wins
+    if "<!" in svg or "<?" in svg[shape[0] :]:  # in an SVG <style> they split a CSS word: u<!---->rl(
+        return "the SVG holds a comment, CDATA or processing instruction"
+    root = dict(reversed(_tag_at(svg, shape[0]) or []))  # the first of a repeated attribute wins
     number = re.fullmatch(r"diagram-(\d+)", root.get("id", ""))
     if not number:
         return "the SVG's root has no diagram-<n> ID"
-    own = rf"#diagram-{number.group(1)}(?!\d)"
-    href_ok = re.compile(own)  # a value is a URL: anything before the `#` makes it a relative one
-    url_ok = re.compile(rf"[{_WS}]*[\"']?[{_WS}]*{own}")  # CSS may quote and space the target, with its own whitespace
+    own = rf"#diagram-{number.group(1)}"
+    href_ok = re.compile(rf"{own}(?:-|\Z)")  # a value is a URL: anything before the `#` makes it a relative one
+    url_ok = re.compile(rf"[{_WS}]*[\"']?[{_WS}]*{own}(?=[-)\"'{_WS}])")  # CSS may quote and space the target
     raw = svg.lower()
     text = html.unescape(svg).lower()
     tags = [_tag_at(svg, m.start()) for m in _START.finditer(svg)]  # from every `<`: a decoy cannot hide a tag
