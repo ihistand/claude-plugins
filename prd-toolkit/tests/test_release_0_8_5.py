@@ -58,6 +58,9 @@ def test_changelog_entry():
         "pytest-xdist", "-n auto",                                   # 11
         "Item A", "Item B",
         "6.0.0", "5.2.0", "FR-016", "FR-017", "FR-018", "FR-010",
+        "FR-016 (lint reports a `testing.md` Levels `Timeout` cell that is not a whole number of seconds of at least 1: `runbook-tests`)",
+        "FR-017 (an `operations.md` Environments `Branch` cell that `git check-ref-format --branch` refuses: `runbook-env`)",
+        "FR-018 (a runbook Check whose `matches` pattern does not compile or that holds both `prints` and `matches`: `runbook-steps`)",
         "Upgrading from 0.8.4",
         "re-run `prd_hooks.py install docs/prd/<slug>`", "no PRD changes", "ends with `prd_change.py pack`",
     ):
@@ -79,6 +82,8 @@ def test_readme_says_where_a_diagram_draws():
     assert "inline SVG" in p and "its own Artifact" in p and "never as a file inside another" in p
     k = flat(section(README, "Known limits (0.8.5)"))
     assert README.index("## Known limits (0.8.5)") < README.index("## Known limits (0.8.4)")
+    assert "now needs" not in k and "renders badly" not in k
+    assert "a render error, or an SVG the diagram check refuses" in k
     for needle in ("quickjs-ng", "not across time", "uv run --script", "stops the publish", "macOS, manylinux, musllinux, Windows",
                    "prd_publish: diagram at <file>:<line> shown as source: <reason>", "journey", "foreignObject",
                    "`Diagram source`", "English on every page", "`mermaidx`",

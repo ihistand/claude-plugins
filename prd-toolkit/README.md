@@ -730,13 +730,13 @@ page is never the only route.
 ## Known limits (0.8.5)
 
 - A diagram draws as inline SVG where the renderer works, in a plain browser and in an Artifact
-  published as its own page; a diagram that renders badly or cannot render is shown as its source,
+  published as its own page; a diagram with a render error, or an SVG the diagram check refuses, is shown as its source,
   with the stderr note `prd_publish: diagram at <file>:<line> shown as source: <reason>`. Mermaid's
   journey diagrams always fall back, since they use `foreignObject`. The `Diagram source` summary is
   English on every page.
 - `mermaidx` pulls an unpinned `quickjs-ng`, so a render is the same per resolution, not across time.
 - On the `uv run --script` path a renderer that cannot install stops the publish rather than falling
-  back; wheels exist for macOS, manylinux, musllinux, Windows. The pip route now needs `mermaidx` too
+  back; wheels exist for macOS, manylinux, musllinux, Windows. The pip route needs `mermaidx` too
   (`pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`).
 - The tester guard applies pytest's option table to every harness. A non-pytest runner's name filter
   (jest `-t foo`) is read as a bare positional and refused (`prd_tester_guard: <arg> is not under a
@@ -861,7 +861,7 @@ the user cannot state.
   - Item 10: the tester guard checks every harness argument: a bare positional or path under a test root, `--pyargs`, `--doctest-modules`, `--doctest-glob`, `--rootdir`, `--confcutdir`, `-p <plugin>` and `-o addopts` refused, and an unquoted glob refused.
   - Item 11: `pytest-xdist` and `-n auto` for the toolkit's own suite.
   - Item A: a moved `Status:` line is a `patch` bump item that §14's IDs cell names. Item B: a new or removed block's ACs and T-ids are named in §14's IDs cell.
-  - The toolkit's own PRD is at 6.0.0 (approved b99cfac). 5.2.0 (approved f4468b0) added `lint-cli` FR-016, FR-017 and FR-018; 6.0.0 changes FR-010 (rebuilt and verified): `prd_publish.py`'s missing-package hint now ends `pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`.
+  - The toolkit's own PRD is at 6.0.0 (approved b99cfac). 5.2.0 (approved f4468b0) added `lint-cli` FR-016 (lint reports a `testing.md` Levels `Timeout` cell that is not a whole number of seconds of at least 1: `runbook-tests`), FR-017 (an `operations.md` Environments `Branch` cell that `git check-ref-format --branch` refuses: `runbook-env`) and FR-018 (a runbook Check whose `matches` pattern does not compile or that holds both `prints` and `matches`: `runbook-steps`); 6.0.0 changes FR-010 (rebuilt and verified): `prd_publish.py`'s missing-package hint now ends `pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`.
   - Upgrading from 0.8.4: re-run `prd_hooks.py install docs/prd/<slug>` from the plugin, which vendors the new scripts. Every new column and form is optional, so no PRD changes. A pack release now ends with `prd_change.py pack`.
 - **0.8.4:** A README for each PRD folder, an Overview tab on the published page, and ten fixes from the 0.8.3 proof. See the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
   - `docs/prd/<slug>/README.md` and `docs/prd/README.md` are managed blocks between `<!-- prd-toolkit:start -->` and `<!-- prd-toolkit:end -->`, written by `prd_block.py` beside the `CLAUDE.md` block from two templates, from the PRD's own text (see READMEs and the Overview tab). Text outside the markers is yours. The toolkit's own PRD is at 5.1.0 with `lint-cli` FR-015: lint, the change digest, the bump and the tester skip the PRD folder's root `README.md`.
