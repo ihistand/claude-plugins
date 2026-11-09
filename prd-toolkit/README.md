@@ -856,7 +856,7 @@ the user cannot state.
   - Item 4: a `Branch` column in `operations.md` Environments; a run's finish and `check` print `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too`.
   - Item 5: a Check may be ``matches `<pattern>` `` (a full-line Python regular expression).
   - Item 6: `prd_change.py pack <prd_dir> <name> <X.Y.Z>` moves a pack release without a hand-made patch, then `prd_hooks.py install` and the approval with the dry-run record `no dry run (pack version only)`.
-  - Item 7: `prd_context.py --for implement` judges a `Source:` by the cited line: `MOVED: line <L> is now line <M>` is not stale (the close refreshes the line), `STALE: the cited line's text is gone` or `appears <N> times` is; the exit counts only the blocks asked for, and a block pulled in through `Traces:` prints `(pulled in; not counted)`.
+  - Item 7: `prd_context.py --for implement` judges a `Source:` by the cited line: `MOVED: line <L> is now line <M>` is not stale (the close refreshes the line), `STALE: the cited line's text is gone` or `appears <N> times` is; the exit counts only the blocks asked for, and a block pulled in through `Traces:` prints `(pulled in; not counted)`. `--json` keeps `stale` as every stale block and adds `counted` (the stale blocks the exit counts) and `moved`.
   - Item 8: `prd_build_check.py --diff <base>..<head> --sources <file>` checks each builder SOURCES line against the round's hunks; the caller sends a finding back to the builder, and the round is not failed for it.
   - Item 9: the published page draws mermaid as inline SVG from the pinned `mermaidx==0.11.3`, each diagram falling back to its source with `prd_publish: diagram at <file>:<line> shown as source: <reason>`; publish the page as its own Artifact.
   - Item 10: the tester guard checks every harness argument: a bare positional or path under a test root, `--pyargs`, `--doctest-modules`, `--doctest-glob`, `--rootdir`, `--confcutdir`, `-p <plugin>` and `-o addopts` refused, and an unquoted glob refused.
@@ -864,6 +864,23 @@ the user cannot state.
   - Item A: a moved `Status:` line is a `patch` bump item that §14's IDs cell names. Item B: a new or removed block's ACs and T-ids are named in §14's IDs cell.
   - The toolkit's own PRD is at 6.0.0 (approved b99cfac). 5.2.0 (approved f4468b0) added `lint-cli` FR-016 (lint reports a `testing.md` Levels `Timeout` cell that is not a whole number of seconds of at least 1: `runbook-tests`), FR-017 (an `operations.md` Environments `Branch` cell that `git check-ref-format --branch` refuses: `runbook-env`) and FR-018 (a runbook Check whose `matches` pattern does not compile or that holds both `prints` and `matches`: `runbook-steps`); 6.0.0 changes FR-010 (rebuilt and verified): `prd_publish.py`'s missing-package hint now ends `pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx`.
   - Upgrading from 0.8.4: re-run `prd_hooks.py install docs/prd/<slug>` from the plugin, which vendors the new scripts. Every new column and form is optional, so no PRD changes. A pack release now ends with `prd_change.py pack`.
+  - Proven on 2026-11-09:
+    - CI passed all five jobs on PR #25 at `eed2d3f` (run 42708030265). `test-unit` took 9 min 59 s, against 21 min on PR #22 before item 11. `scripts/ci-local.sh origin/main` with an empty HOME passed all five at the same commit: 3484 unit tests passed, 1 skipped, and 58 integration tests passed. The new Python 3.11 compile check is among them; it caught a 3.11 `SyntaxError` in `deploy.py` before the release.
+    - Items 1–5, in one `/prd-deploy` run of a scratch repository:
+      - one `confirm` answered steps 2, 3 and 4, and the log records 3 and 4 with `"ahead": true`;
+      - an uncommitted mid-run `errors.md` entry passed `resume`, and the close commit carried it;
+      - a `matches` Check passed;
+      - a 2 s level Timeout logged `timed out after 2 s (the smoke level's Timeout)`;
+      - the branch note printed at the finish and from `check`, which exited 0.
+    - Item 6: in a scratch repository with a private pack, `prd_change.py pack` moved it 0.1.0 → 0.1.1, then `install` and the approval ran. The approval commit holds the re-vendored `pack.yaml` and the §14 row `pack notes-pack 0.1.0 → 0.1.1; no dry run (pack version only)`, and lint is clean.
+    - Items 7 and 8 ran in this release's own `/prd-build` rounds: `lint-cli` FR-016..FR-018, and FR-010 for PRD 6.0.0.
+    - Item 9: `/prd-publish` of PRD 6.0.0 drew both diagrams as inline SVG, Overview and Technical, in plain Chrome and in the page's own private Artifact.
+    - Item 10, proven live after the merge: a real `prd-tester` on the installed 0.8.5 ran the integration harness command with spec 11's examples added. The guard refused:
+      - a bare `scripts`, `..` and `-c ../pyproject.toml`, each with `prd_tester_guard: <arg> is not under a test root`;
+      - `--doctest-modules`, `--pyargs prdlint`, `-p pytest_randomly` and `--rootdir=..`, each with `prd_tester_guard: <option> is refused after a harness command`;
+      - an unquoted `-k T-015*`, with `prd_tester_guard: unquoted glob in T-015*`.
+
+      The guard let through a quoted `-k`, `-p no:cacheprovider` and `--tb=short`, and the tester's T-015.1 passed. A bare `scripts` argument ran under the 0.8.4 guard.
 - **0.8.4:** A README for each PRD folder, an Overview tab on the published page, and ten fixes from the 0.8.3 proof. See the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
   - `docs/prd/<slug>/README.md` and `docs/prd/README.md` are managed blocks between `<!-- prd-toolkit:start -->` and `<!-- prd-toolkit:end -->`, written by `prd_block.py` beside the `CLAUDE.md` block from two templates, from the PRD's own text (see READMEs and the Overview tab). Text outside the markers is yours. The toolkit's own PRD is at 5.1.0 with `lint-cli` FR-015: lint, the change digest, the bump and the tester skip the PRD folder's root `README.md`.
   - `prd.md` §2 gains two optional parts, `Principles:` and `Getting started:`; no section is added and no existing PRD breaks. Authoring and adoption offer to draft them.
