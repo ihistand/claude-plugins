@@ -381,7 +381,7 @@ HARNESS_ARG_RULES = (
     "`-p <plugin>` (`-p no:<name>` passes)",
     "`-o addopts`",
     "`-n` takes `auto` or a whole number",
-    "every other argument that is not an option's value is a path under the test roots",
+    "every other argument that is not an option's value is a path under the test roots or the scratch directory",
     "unquoted glob (`*`, `?`, `[`, `^`, `#`) in any argument is refused: quote it (`-k 'T-015*'`)",
 )
 

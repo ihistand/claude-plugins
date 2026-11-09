@@ -457,6 +457,14 @@ def _check_harness_args(ctx: Context, rest: list[str], base: Path) -> str | None
     def takes_value(opt: str) -> bool:
         return opt in VALUE_OPTS or opt in PLUGIN_OPTS or opt in INI_OPTS
 
+    def positional(a: str) -> bool:
+        """argparse's order: a `-`-led token that holds a space and whose option part (`--x` before any `=`, or a short
+        token's first two characters) names no option these tables know is a positional, which pytest collects."""
+        if not a.startswith("-") or a == "-":
+            return True
+        part = a.partition("=")[0] if a.startswith("--") else a[:2]
+        return " " in a and not (part in REFUSED_OPTS or takes_value(part))
+
     for m in rest:
         if m != m.translate(_UNMASK):
             return str(ctx.deny("run", f"unquoted glob in {m.translate(_UNMASK)}"))
@@ -465,7 +473,7 @@ def _check_harness_args(ctx: Context, rest: list[str], base: Path) -> str | None
     while i < len(rest):
         a = rest[i]
         i += 1
-        if ended or not a.startswith("-") or a == "-":
+        if ended or positional(a):
             denied = path(a)
         elif a == "--":
             ended, denied = True, None

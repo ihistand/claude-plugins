@@ -842,3 +842,10 @@ def test_a_quoted_zsh_glob_character_in_grep_passes(tmp_path):
     for cmd in ("grep 'a^b' prd-toolkit/tests/prd", "grep -e 'a#b' prd-toolkit/tests/prd", 'grep "^@prd" prd-toolkit/tests/prd'):
         r = bash(repo, cmd)
         assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("arg, shown", [("'--x /../scripts/prd_lint.py'", "--x /../scripts/prd_lint.py"),
+                                        ("'--x /..'", "--x /.."), ("'- /..'", "- /..")])
+def test_a_dash_led_argument_with_a_space_is_a_positional(tmp_path, arg, shown):
+    # argparse reads a `-`-led token that names no option and holds a space as a positional, and pytest collects it
+    assert_reason(bash(make_toolkit_repo(tmp_path), f"{DIR_HARNESS} {arg}"), "write", NOT_UNDER.format(shown))
