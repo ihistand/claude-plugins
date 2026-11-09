@@ -131,6 +131,10 @@ CASES = {
     9: [(regression_test, {"T-002.3": J}, J, "T-002.3", "added"),
         (lambda p: (no_touch_error(p), commit_now(p), regression_test(p)), {"T-002.3": J}, J, "T-002.3", "added")],
     10: [
+        (lambda p: (name_service_pack(p), commit_now(p), edit(p, "prd.md", "- Pack: service 1.0.0 (prd-toolkit)", "- Pack: service 1.0.1 (prd-toolkit)")),
+         {"service": PAT}, PAT, "service", "changed"),
+    ],
+    11: [
         (lambda p: edit(p, "operations.md", "## Drift", "## Drift\n\nNew words."), {"operations.md": J}, J, "operations.md", "changed"),
         (new_error_code, {"NEW_CODE": J}, J, "NEW_CODE", "added"),
         (drop_case, {"T-002.2": J}, J, "T-002.2", "removed"),
@@ -147,6 +151,10 @@ CASES = {
 PARAMS = [(i, *case) for i, cases in CASES.items() for case in cases]
 
 
+def name_service_pack(prd):
+    edit(prd, "prd.md", "- Not used: message brokers", "- Pack: service 1.0.0 (prd-toolkit)\n- Not used: message brokers")
+
+
 def commit_now(prd):
     """Commit what is on disk so far, so a precondition is part of the base."""
     repo = prd.parents[2]
@@ -155,7 +163,7 @@ def commit_now(prd):
 
 def test_every_rule_has_a_case():
     assert set(CASES) == set(range(len(change.BUMP_RULES)))
-    assert [lvl for _, lvl in change.BUMP_RULES] == ["minor", "minor", "major", "major", "needs judgment", "patch", "needs judgment", "major", "patch", "needs judgment", "needs judgment"]
+    assert [lvl for _, lvl in change.BUMP_RULES] == ["minor", "minor", "major", "major", "needs judgment", "patch", "needs judgment", "major", "patch", "needs judgment", "patch", "needs judgment"]
 
 
 @pytest.mark.parametrize("index,mutate,expected,overall,item_id,kind", PARAMS, ids=[f"rule{p[0]}-{p[4]}" for p in PARAMS])
@@ -166,7 +174,7 @@ def test_each_rule(repo, index, mutate, expected, overall, item_id, kind):
     assert doc["level"] == overall
     item = next(i for i in doc["items"] if i["id"] == item_id)
     assert item["change"] == kind
-    want = f"unclassified change in {item['file']}" if expected[item_id] == J and index == 10 else change.BUMP_RULES[index][0]
+    want = f"unclassified change in {item['file']}" if expected[item_id] == J and index == change._OTHER_FILE else change.BUMP_RULES[index][0]
     assert item["reason"] == want
     for i in doc["items"]:
         assert i["line"] > 0 and i["file"], i

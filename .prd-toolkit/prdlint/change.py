@@ -1,4 +1,5 @@
 """The change bookkeeping behind prd_change.py: next IDs, the PRD digest and the version bump (record and approve join them)."""
+import copy
 import hashlib
 import io
 import json
@@ -132,9 +133,11 @@ BUMP_RULES: tuple[tuple[str, str], ...] = (
     ("a changed test case under a changed AC", "major"),
     ("a new test case under an unchanged AC that cites an open errors.md entry", "patch"),
     ("any other new test case under an unchanged AC", JUDGMENT),
+    ("a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged", "patch"),
     ("any other changed file in the PRD folder", JUDGMENT),
 )
-_NEW, _NEW_TEST, _GONE, _GONE_ITEM, _AC_TEXT, _PROSE, _CHANGED_UNDER_SAME, _CHANGED_UNDER_CHANGED, _REGRESSION, _OTHER_TEST, _OTHER_FILE = range(11)
+(_NEW, _NEW_TEST, _GONE, _GONE_ITEM, _AC_TEXT, _PROSE, _CHANGED_UNDER_SAME, _CHANGED_UNDER_CHANGED, _REGRESSION, _OTHER_TEST, _PACK_VERSION,
+ _OTHER_FILE) = range(12)
 _BASE_FM_DROP = re.compile(r"^(?:version|updated|status):")
 _FIELD = re.compile(r"^([A-Za-z][\w ()/-]*?):")
 _PROSE_FIELDS = ("Flow", "Edge cases")
@@ -296,14 +299,45 @@ def _ac_states(old: model.Prd, new: model.Prd) -> dict[str, str]:
     return out
 
 
+def _pack_lines(prd: model.Prd) -> list[model.PackRef]:
+    """Every `Pack:` and `Target: pack` line of the PRD: section 1's first, then each area's in file order."""
+    return ([prd.pack_ref] if prd.pack_ref else []) + [t.pack for t in sorted(prd.targets.values(), key=lambda t: t.file) if t.pack]
+
+
+def _pack_token(ref: model.PackRef, version: str | None = None) -> str:
+    return f"{ref.name} {version or ref.version} ({ref.source})"
+
+
+def _pack_moves(old: model.Prd, new: model.Prd) -> list[tuple[model.PackRef, model.PackRef]]:
+    """(base ref, working ref) of each line whose pack version moved, its file, name and source unchanged."""
+    was = {r.file: r for r in _pack_lines(old)}
+    return [(was[r.file], r) for r in _pack_lines(new)
+            if r.file in was and (was[r.file].name, was[r.file].source) == (r.name, r.source) and was[r.file].version != r.version]
+
+
+def _without_moves(prd: model.Prd, moves) -> model.Prd:
+    """A copy of `prd` whose moved pack lines carry the base version again, so the other diffs see only the rest."""
+    docs = dict(prd.docs)
+    for was, now in moves:
+        lines = docs[now.file].split("\n")
+        lines[now.line - 1] = lines[now.line - 1].replace(_pack_token(now), _pack_token(was), 1)
+        docs[now.file] = "\n".join(lines)
+    same = copy.copy(prd)
+    same.docs = docs
+    return same
+
+
 @dataclass
 class _Diff:
-    """The two PRDs and the items found so far; the `_diff_*` helpers read it and add to `items`."""
+    """The two PRDs and the items found so far; the `_diff_*` helpers read it and add to `items`. `same` is `new` with
+    each moved pack version put back, for the diffs that compare whole lines."""
     old: model.Prd
     new: model.Prd
     items: list[BumpItem] = field(default_factory=list)
 
     def __post_init__(self):
+        self.moves = _pack_moves(self.old, self.new)
+        self.same = _without_moves(self.new, self.moves)
         self.old_blocks = {b.id: b for b in self.old.blocks}
         self.new_blocks = {b.id: b for b in self.new.blocks}
         self.gone = {i for i, b in self.old_blocks.items() if not _removed(b) and (i not in self.new_blocks or _removed(self.new_blocks[i]))}
@@ -443,7 +477,7 @@ def _preamble(text: str) -> str:
 
 def _diff_prd_md(d: _Diff, old_md: str) -> None:
     """prd.md outside the ignored lines: the glossary is prose; the preamble and any other section are unclassified."""
-    new_md = _normalized_prd_md(d.new, _BASE_FM_DROP)
+    new_md = _normalized_prd_md(d.same, _BASE_FM_DROP)
     if new_md == old_md:
         return
     if _preamble(old_md) != _preamble(new_md):
@@ -465,7 +499,7 @@ def _diff_files(d: _Diff, old_files: dict[str, bytes], new_files: dict[str, byte
     """Every other changed file, and the text a features or nfr file keeps outside its blocks."""
     for rel in sorted(set(old_files) | set(new_files)):
         if re.fullmatch(r"features/[^/]+\.md", rel) or rel == "nfr.md":
-            if _outside_blocks(d.old, rel) != _outside_blocks(d.new, rel):
+            if _outside_blocks(d.old, rel) != _outside_blocks(d.same, rel):
                 d.add(_OTHER_FILE, rel, rel, 1, "changed")
         elif _is_classified(rel):
             continue
@@ -493,6 +527,8 @@ def bump(repo_root: Path, prd_root: Path, base: str) -> Bump:
         old_lines = _contract_lines(old, old_contracts)
         old_md = _normalized_prd_md(old, _BASE_FM_DROP)
     d = _Diff(old, new)
+    for _, now in d.moves:
+        d.add(_PACK_VERSION, now.name, now.file, now.line, "changed")
     _diff_blocks(d)
     _diff_cases(d)
     _diff_contracts(d, old_contracts, old_lines)
@@ -678,6 +714,60 @@ def record(repo_root: Path, prd_root: Path, base: str, level: str, text: str, to
     row = f"| {version} | {today} | {text.strip()}; pending | {ids} |"
     _write_prd_md(prd_root / "prd.md", version, today, row, _index_rows(base_md, now, result.items))
     return Recorded(version, row)
+
+
+# ---------------------------------------------------------------- pack
+
+_SEMVER = re.compile(r"\d+\.\d+\.\d+")
+
+
+def pack_moves(repo_root: Path, prd_root: Path, base: str) -> list[str]:
+    """The names of the packs whose version the working tree moved from `base`, each once."""
+    repo_root, prd_root = Path(repo_root).resolve(), Path(prd_root).resolve()
+    with tempfile.TemporaryDirectory(prefix="prd-pack-") as tmp:
+        old = _load_base(repo_root, prd_root.relative_to(repo_root).as_posix(), base, Path(tmp))
+        moves = _pack_moves(old, model.load(prd_root))
+    return list(dict.fromkeys(now.name for _, now in moves))
+
+
+def pack(repo_root: Path, prd_root: Path, name: str, version: str, today: str) -> Recorded:
+    """Move every `Pack:` and `Target: pack` line naming `name` to `version`, then record it as a patch (`record`'s
+    version, `updated` and §14 row `pack <name> <old> → <new>; pending`, IDs `-`); the tree is left uncommitted."""
+    from . import packs  # local: packs imports hooks, which imports change_approve
+
+    repo_root, prd_root = Path(repo_root).resolve(), Path(prd_root).resolve()
+    if not _SEMVER.fullmatch(version):
+        raise UsageError(f"pack: {version} is not a version X.Y.Z")
+    refs = [r for r in _pack_lines(model.load(prd_root)) if r.name == name]
+    if not refs:
+        raise ChangeError(f"no Pack: or Target: pack line names {name}")
+    if len({(r.version, r.source) for r in refs}) > 1:
+        raise ChangeError(f"the lines naming {name} disagree on its version or source")
+    old = refs[0].version
+    if old == version:
+        raise ChangeError(f"every line naming {name} already names {version}")
+    rel = prd_root.relative_to(repo_root).as_posix()
+    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--", rel], cwd=repo_root, capture_output=True, text=True)
+    if dirty.returncode != 0 or dirty.stdout.strip():
+        raise ChangeError(f"{rel} has uncommitted changes; commit or set them aside first")
+    try:
+        packs.resolve(model.PackRef(name, version, refs[0].source, "", 0), repo_root, vendored=False)
+    except packs._FAILURES as e:
+        raise ChangeError(str(e)) from None
+    was = {f: (prd_root / f).read_bytes() for f in {r.file for r in refs} | {"prd.md"}}
+    try:
+        for r in refs:
+            path = prd_root / r.file
+            raw = path.read_bytes().decode("utf-8")
+            eol = "\r\n" if "\r\n" in raw else "\n"
+            lines = raw.replace("\r\n", "\n").split("\n")
+            lines[r.line - 1] = lines[r.line - 1].replace(_pack_token(r), _pack_token(r, version), 1)
+            path.write_bytes(eol.join(lines).encode("utf-8"))
+        return record(repo_root, prd_root, "HEAD", "patch", f"pack {name} {old} → {version}", today)
+    except BaseException:  # a refused record leaves every file as it was
+        for f, data in was.items():
+            (prd_root / f).write_bytes(data)
+        raise
 
 
 from .change_approve import Approved, approve  # noqa: E402,F401  (the approve step lives in its own module)

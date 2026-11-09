@@ -91,9 +91,33 @@ def _checked(repo_root: Path, prd_root: Path, reply: str, dry_run: str):
         _fail("a first approval is authoring's, not a change's")
     if last is None or len(last.cells) < 3 or not last.cells[2].endswith(PENDING):
         _fail("the last §14 row is not recorded and pending; run record first")
-    if not _ignored(repo_root, "CLAUDE.md") and _git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip():
+    if _claude_dirty(repo_root) and not _only_the_block(repo_root, prd_root):
         _fail("CLAUDE.md has uncommitted changes; commit or set them aside first")
     return last
+
+
+def _claude_dirty(repo_root: Path) -> bool:
+    return not _ignored(repo_root, "CLAUDE.md") and bool(_git(repo_root, "status", "--porcelain", "--", "CLAUDE.md").stdout.strip())
+
+
+def _only_the_block(repo_root: Path, prd_root: Path) -> bool:
+    """Is CLAUDE.md HEAD's CLAUDE.md with the managed block prd_block renders for the working PRD, and nothing else (the
+    refresh `prd_hooks.py install` writes after `prd_change.py pack`, the block this approval would write itself)?"""
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import prd_block
+
+    head = subprocess.run(["git", "show", "HEAD:CLAUDE.md"], cwd=repo_root, capture_output=True)
+    block = prd_block.render_block(model.load(prd_root), prd_root.relative_to(repo_root).as_posix())
+    with tempfile.TemporaryDirectory(prefix="prd-approve-") as tmp:
+        base = Path(tmp) / "CLAUDE.md"
+        if head.returncode == 0:
+            base.write_bytes(head.stdout)
+        try:
+            _, expected = prd_block._merged(base, block, "end")
+        except prd_block.BlockError:
+            return False
+    return (repo_root / "CLAUDE.md").read_bytes() == expected.encode("utf-8")
 
 
 def _approved_text(text: str, last, dry_run: str) -> str:
@@ -132,11 +156,23 @@ def _block(prd_root: Path) -> None:
         _fail(f"prd_block failed: {run.stderr.strip()}")
 
 
+def _vendored_packs(repo_root: Path, prd_root: Path) -> list[str]:
+    """The re-vendored copy of each pack whose version the change moved, and pack-sources.json: the paths `install` wrote."""
+    from . import change
+    from .hooks import PACK_SOURCES, PACKS_DIR, VENDOR_DIR
+
+    out = [f"{VENDOR_DIR}/{PACKS_DIR}/{name}" for name in change.pack_moves(repo_root, prd_root, "HEAD")]
+    if out:
+        out.append(f"{VENDOR_DIR}/{PACK_SOURCES}")
+    return [p for p in out if (repo_root / p).exists() and not _ignored(repo_root, p)]
+
+
 def _commit(repo_root: Path, prd_root: Path, message: str, with_claude: bool) -> str:
-    """Commit the PRD folder (never its verdict), and CLAUDE.md when `with_claude` (prd_block changed its bytes)."""
+    """Commit the PRD folder (never its verdict), CLAUDE.md when `with_claude` (prd_block changed its bytes), and the
+    re-vendored pack of a change that moved a pack version."""
     rel = prd_root.relative_to(repo_root).as_posix()
     review = f"{rel}/{REVIEW_FILE}"
-    paths = [rel, f":(exclude){review}"]
+    paths = [rel, f":(exclude){review}", *_vendored_packs(repo_root, prd_root)]
     if with_claude and not _ignored(repo_root, "CLAUDE.md"):
         paths.append("CLAUDE.md")
     parent = prd_root.parent / "README.md"  # the parent's block, written beside the PRD's own README (which `rel` covers)
@@ -174,7 +210,7 @@ def approve(repo_root: Path, prd_root: Path, reply: str, dry_run: str, refs: str
     try:
         md_path.write_bytes(_approved_text(old_md.decode("utf-8"), last, dry_run).encode("utf-8"))
         _block(prd_root)
-        changed = (claude.read_bytes() if claude.exists() else None) != old_claude
+        changed = (claude.read_bytes() if claude.exists() else None) != old_claude or _claude_dirty(repo_root)
         sha = _commit(repo_root, prd_root, _message(prd_root.name, version, reply, dry_run, refs), changed)
     except BaseException:
         md_path.write_bytes(old_md)

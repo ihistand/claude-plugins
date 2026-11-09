@@ -2,11 +2,14 @@
 import contextlib
 import io
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 from conftest import edit
 from deploy_fixture import deploy_repo
-from legacy import commit
+from doc_fixture import document_prd
+from legacy import commit, git
 from prd_change import main as change_main
 from prd_lint import main as lint_main
 from prdlint import change
@@ -357,3 +360,149 @@ def test_changed_contract_item_keeps_an_id_only_the_base_has(repo):
     edit(prd, "contracts/errors.yaml", "The file is zero bytes or has only a header line.", "The file is zero bytes or has only a header line (FR-003).")
     r = rec(repo, "major")
     assert "FR-003" in ids_cell(r).split(", ")
+
+
+# --- 0.8.5 spec 6: prd_change.py pack moves a PRD to a new pack version ---
+
+NOTES = "notes@market"
+NOTES_PRD = "docs/prd/guide"  # the document PRD of doc_fixture, moved from the built-in document pack to notes-pack
+PACK_AT = "- Pack: notes-pack {v} (notes@market)"
+TARGET_AT = "Target: pack notes-pack {v} (notes@market), output language en"
+PACK_ROW = "| 1.0.1 | 2026-11-04 | pack notes-pack 0.1.0 → 0.1.1; pending | - |"
+PACKS = Path(__file__).parent.parent / "packs"
+PACK_RULE = "a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged"
+
+
+def notes_source(tmp_path, version="0.1.1"):
+    """A plugin `notes@market` whose prd-packs/ holds notes-pack at `version` (the document pack renamed); returns the plugins file."""
+    folder = tmp_path / "notes-plugin/prd-packs/notes-pack"
+    shutil.copytree(PACKS / "document", folder)
+    text = (folder / "pack.yaml").read_text(encoding="utf-8")
+    (folder / "pack.yaml").write_text(text.replace("pack: document", "pack: notes-pack").replace("version: 1.0.0", f"version: {version}"), encoding="utf-8")
+    plugins = {"superpowers@superpowers-marketplace": [{}], NOTES: [{"scope": "user", "installPath": str(tmp_path / "notes-plugin"), "version": "1.0.0"}]}
+    path = tmp_path / "notes-plugins.json"
+    path.write_text(json.dumps({"version": 2, "plugins": plugins}), encoding="utf-8")
+    return path
+
+
+def notes_prd(tmp_path, version="0.1.0", target_version=None):
+    """A git repo at tmp_path/notes holding the document PRD, naming notes-pack in §1 and on the install area's Target: line, committed."""
+    repo = tmp_path / "notes"
+    prd = document_prd(repo)
+    edit(prd, "prd.md", "- Pack: document 1.0.0 (prd-toolkit)", PACK_AT.format(v=version))
+    edit(prd, "features/install.md", "# Install\n", "# Install\n\n" + TARGET_AT.format(v=target_version or version) + "\n")
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, "the guide", "docs")
+    return repo
+
+
+@pytest.fixture
+def notes_repo(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(notes_source(tmp_path)))
+    return notes_prd(tmp_path)
+
+
+def notes_md(repo, rel="prd.md"):
+    return (repo / NOTES_PRD / rel).read_text(encoding="utf-8")
+
+
+def notes_lint(repo):
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        return lint_main([str(repo / NOTES_PRD)])
+
+
+def test_pack_moves_every_line_and_records_a_pending_patch(notes_repo):
+    r = change.pack(notes_repo, notes_repo / NOTES_PRD, "notes-pack", "0.1.1", TODAY)
+    assert r == change.Recorded("1.0.1", PACK_ROW)
+    md = notes_md(notes_repo)
+    assert PACK_AT.format(v="0.1.1") + "\n" in md and PACK_AT.format(v="0.1.0") not in md
+    assert TARGET_AT.format(v="0.1.1") + "\n" in notes_md(notes_repo, "features/install.md")  # the source and the output language are kept
+    assert "\nversion: 1.0.1\n" in md and "\nupdated: 2026-11-04\n" in md and md.rstrip().endswith(PACK_ROW)
+    assert notes_lint(notes_repo) == 0
+
+
+def test_pack_cli_text_and_json(notes_repo):
+    code, out, err = call("pack", str(notes_repo / NOTES_PRD), "notes-pack", "0.1.1")
+    assert code == 0 and err == "" and out.startswith("1.0.1\n| 1.0.1 | ") and out.endswith("| pack notes-pack 0.1.0 → 0.1.1; pending | - |\n")
+    git(notes_repo, "checkout", "-q", "--", "docs")
+    code, out, err = call("pack", str(notes_repo / NOTES_PRD), "notes-pack", "0.1.1", "--json")
+    doc = json.loads(out)
+    assert code == 0 and err == "" and (doc["kind"], doc["version"]) == ("change.pack", "1.0.1")
+    assert doc["row"].endswith("| pack notes-pack 0.1.0 → 0.1.1; pending | - |")
+    code, out, _ = call("pack", str(notes_repo / NOTES_PRD), "notes-pack", "1.2", "--json")
+    assert code == 2 and json.loads(out) == {"interface": 1, "kind": "change.pack", "error": "pack: 1.2 is not a version X.Y.Z"}
+
+
+def test_bump_reads_each_moved_pack_line_as_a_patch(notes_repo):
+    change.pack(notes_repo, notes_repo / NOTES_PRD, "notes-pack", "0.1.1", TODAY)
+    result = change.bump(notes_repo, notes_repo / NOTES_PRD, "HEAD")
+    md_line = notes_md(notes_repo).split("\n").index(PACK_AT.format(v="0.1.1")) + 1
+    api_line = notes_md(notes_repo, "features/install.md").split("\n").index(TARGET_AT.format(v="0.1.1")) + 1
+    assert result.level == "patch"
+    assert [(i.level, i.id, i.file, i.line, i.reason) for i in result.items] == [
+        ("patch", "notes-pack", "prd.md", md_line, PACK_RULE), ("patch", "notes-pack", "features/install.md", api_line, PACK_RULE)]
+    code, out, _ = call("bump", str(notes_repo / NOTES_PRD), "--base", "HEAD")
+    assert code == 0 and out.splitlines()[0] == f"patch notes-pack prd.md:{md_line} {PACK_RULE}" and out.endswith("level patch\n")
+
+
+def test_a_pack_line_with_a_new_source_still_needs_judgment(notes_repo):
+    edit(notes_repo / NOTES_PRD, "prd.md", PACK_AT.format(v="0.1.0"), "- Pack: notes-pack 0.1.1 (notes@elsewhere)")
+    assert change.bump(notes_repo, notes_repo / NOTES_PRD, "HEAD").level == "needs judgment"
+
+
+def test_a_target_line_moving_its_language_too_still_needs_judgment(notes_repo):
+    edit(notes_repo / NOTES_PRD, "features/install.md", TARGET_AT.format(v="0.1.0"), "Target: pack notes-pack 0.1.1 (notes@market), output language es")
+    items = change.bump(notes_repo, notes_repo / NOTES_PRD, "HEAD").items
+    assert [(i.id, i.level) for i in items] == [("notes-pack", "patch"), ("features/install.md", "needs judgment")]
+
+
+def pack_refused(repo, why, name="notes-pack", version="0.1.1", prd=NOTES_PRD):
+    before = {p.relative_to(repo).as_posix(): p.read_bytes() for p in (repo / prd).rglob("*") if p.is_file()}
+    code, out, err = call("pack", str(repo / prd), name, version)
+    assert (code, out) == (1, "") and err == f"refused: {why}\n", (code, err)
+    assert {p.relative_to(repo).as_posix(): p.read_bytes() for p in (repo / prd).rglob("*") if p.is_file()} == before
+
+
+def test_pack_refuses_a_pack_no_line_names(notes_repo):
+    pack_refused(notes_repo, "no Pack: or Target: pack line names other-pack", name="other-pack")
+
+
+def test_pack_refuses_a_prd_on_the_built_in_default(repo):
+    pack_refused(repo, "no Pack: or Target: pack line names service", name="service", version="1.0.1", prd=PRD)
+
+
+def test_pack_refuses_a_version_the_source_does_not_hold(notes_repo, tmp_path):
+    folder = tmp_path / "notes-plugin/prd-packs/notes-pack"
+    pack_refused(notes_repo, f"pack notes-pack 0.1.2 (notes@market) not found; looked in: {folder}/ (holds 0.1.1)", version="0.1.2")
+
+
+def test_pack_refuses_an_uncommitted_prd_folder(notes_repo):
+    edit(notes_repo / NOTES_PRD, "nfr.md", "# Non-functional requirements", "# Non-functional requirements (none)")
+    pack_refused(notes_repo, "docs/prd/guide has uncommitted changes; commit or set them aside first")
+
+
+def test_pack_refuses_an_untracked_file_in_the_prd_folder(notes_repo):
+    (notes_repo / NOTES_PRD / "notes.md").write_text("x\n", encoding="utf-8")
+    pack_refused(notes_repo, "docs/prd/guide has uncommitted changes; commit or set them aside first")
+
+
+def test_pack_refuses_a_move_to_the_version_already_named(notes_repo):
+    pack_refused(notes_repo, "every line naming notes-pack already names 0.1.0", version="0.1.0")
+
+
+def test_pack_refuses_lines_that_disagree(tmp_path, monkeypatch):
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(notes_source(tmp_path)))
+    repo = notes_prd(tmp_path, target_version="0.0.9")
+    pack_refused(repo, "the lines naming notes-pack disagree on its version or source")
+
+
+@pytest.mark.parametrize("version", ["0.1", "v0.1.1", "0.1.1-rc1", ""])
+def test_pack_refuses_a_bad_version_as_usage(notes_repo, version):
+    code, out, err = call("pack", str(notes_repo / NOTES_PRD), "notes-pack", version)
+    assert code == 2 and out == "" and err == f"pack: {version} is not a version X.Y.Z\n"
+
+
+def test_a_pack_record_that_fails_leaves_every_line_as_it_was(notes_repo):
+    edit(notes_repo / NOTES_PRD, "prd.md", "| Version | Date | Change | IDs |\n|---|---|---|---|\n| 1.0.0 | 2026-11-03 | Initial release | FR-001 |\n", "")
+    commit(notes_repo, "no changelog table", "docs")
+    pack_refused(notes_repo, "§14 has no changelog table")

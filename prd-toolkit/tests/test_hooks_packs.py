@@ -260,3 +260,25 @@ def test_vendored_list_with_no_vendored_pack(repo, tmp_path):
     assert r.returncode == 0 and r.stdout == ""
     assert r.stderr == ("prd_lint: listed from the vendored copy: no pack is vendored in .prd-toolkit/packs/; the plugin's own "
                         "scripts/prd_lint.py --list-packs lists every pack on this machine\n")
+
+
+# --- 0.8.5 spec 6: a source holding another version names the command that moves the PRD to it ---
+
+def test_install_refusal_names_prd_change_pack(tmp_path, monkeypatch):
+    from test_change_record import notes_prd, notes_source
+
+    monkeypatch.setenv("PRD_PLUGINS_FILE", str(notes_source(tmp_path)))
+    repo = notes_prd(tmp_path)
+    with pytest.raises(hooks.InstallRefused) as e:
+        hooks.install(repo, PRD)
+    folder = tmp_path / "notes-plugin/prd-packs/notes-pack"
+    assert str(e.value) == (f"pack notes-pack 0.1.0 (notes@market) not found; looked in: {folder}/ (holds 0.1.1); "
+                            "to move the PRD to notes-pack 0.1.1, run prd_change.py pack docs/prd/guide notes-pack 0.1.1")
+    assert not (repo / ".prd-toolkit").exists()
+
+
+def test_a_source_without_the_pack_gives_no_pack_hint(repo):
+    edit(repo / PRD, "prd.md", NAMED, DEMO)
+    with pytest.raises(hooks.InstallRefused) as e:
+        hooks.install(repo, PRD)
+    assert "prd_change.py pack" not in str(e.value)

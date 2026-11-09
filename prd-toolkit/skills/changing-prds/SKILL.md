@@ -129,6 +129,7 @@ script's own (`change.BUMP_RULES`; a test holds the two equal, row for row):
 | a changed test case under a changed AC | major |
 | a new test case under an unchanged AC that cites an open errors.md entry | patch |
 | any other new test case under an unchanged AC | needs judgment |
+| a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged | patch |
 | any other changed file in the PRD folder | needs judgment |
 
 It ignores the frontmatter `version:`, `updated:` and `status:` lines, the §11 and §14 tables, block
