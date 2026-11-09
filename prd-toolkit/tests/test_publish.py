@@ -6,11 +6,23 @@ from pathlib import Path
 
 import pytest
 from conftest import edit
-from prdlint import model, publish
+from prdlint import diagrams, model, publish
 
 TODAY = date(2026, 11, 1)
 GOLDEN = Path(__file__).parent / "fixtures/publish/orders.html"
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts/prd_publish.py"
+
+
+def stub_svg(source: str, number: int) -> str:
+    """A fixed stand-in for the renderer's SVG, so the page stays deterministic; it uses what a real one uses."""
+    return (f'<svg id="diagram-{number}" viewBox="0 0 10 10"><style>#diagram-{number} path{{filter:url(#diagram-{number}-s)}}</style>'
+            f'<defs><filter id="diagram-{number}-s"></filter></defs><path d="M0 0L9 9" marker-end="url(#diagram-{number}-s)"></path>'
+            f'<use href="#diagram-{number}-s"></use><text x="1" y="5">{len(source.splitlines())} lines</text></svg>')
+
+
+@pytest.fixture(autouse=True)
+def drawn(monkeypatch):
+    monkeypatch.setattr(diagrams, "render_svg", stub_svg)
 
 
 def render(prd, summaries=None):
@@ -37,6 +49,7 @@ def assert_loads_nothing(page):
 
 def test_loads_nothing(prd):
     page = render(prd, {"version": "1.0.0", "areas": {"import": {"text": "Files come in.", "ids": ["FR-001"]}}})
+    assert '<figure class="diagram"><svg id="diagram-1"' in page  # the rendered-SVG case
     assert_loads_nothing(page)
 
 
