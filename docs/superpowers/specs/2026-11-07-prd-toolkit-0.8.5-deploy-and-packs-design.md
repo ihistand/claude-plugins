@@ -14,6 +14,8 @@
 >   later-release candidates from the same loop.
 > - Items 9 and 10 (owner, 2026-11-08): drawing the mermaid diagram, from the 0.8.4 proof, and the
 >   tester guard's bare arguments, from the 0.8.4 final review.
+> - Item 9's third way (owner, 2026-11-08): an Artifact's main page draws mermaid itself; a file
+>   published beside it does not.
 
 ## 1. Backlog
 
@@ -53,7 +55,14 @@ pack's first releases.
    the Artifact viewer to draw it; the 0.8.4 proof (2026-11-08) found it shows the source, as a
    plain browser does. The owner put this here on 2026-11-08. Ways to weigh: render the diagram to
    inline SVG at publish time (a renderer dependency), or let the page load mermaid (it then loads
-   something, which the page's "loads nothing" rule and its test refuse).
+   something, which the page's "loads nothing" rule and its test refuse). A third way, found after
+   the 0.8.4 merge: the Artifact service draws `<pre class="mermaid">` blocks on an Artifact's main
+   page with a mermaid runtime it adds itself, and adds none to an HTML file published beside it.
+   The 0.8.4 proof published the PRD page as such a file in the design Artifact, which is why it
+   showed the source. Published as its own Artifact's main page, the page may draw the diagram with
+   no change to the page, though it would still show the source anywhere else. Untested. If it holds,
+   the README's 0.8.4 line "No viewer draws it, an Artifact included" is too broad and needs
+   correcting.
 10. **The tester guard's bare arguments.** `prd_tester_guard.py` checks the paths a harness command
     names, but a bare argument can still reach the code: `--doctest-modules scripts`, a `..` path,
     `--pyargs`, or a `-k` pattern such as `-k s*`. The 0.8.4 final review recommends this as 0.8.5's
