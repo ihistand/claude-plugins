@@ -744,8 +744,9 @@ page is never the only route.
   checked as a positional, which errs toward refusing. `-o addopts`, `--doctest-glob`, `--confcutdir`
   and the other refused options end with `is refused after a harness command`, and an unquoted glob
   with `prd_tester_guard: unquoted glob in <arg>`.
-- A SOURCES finding from `prd_build_check.py --sources` does not fail the round: the caller sends the
-  report back to the builder with the finding.
+- A SOURCES finding from `prd_build_check.py --sources` does not fail the round the first time: the
+  caller sends the report back to the builder with the finding. A second one on the same round fails
+  it.
 - A pack release needs the plugin's `prd_change.py`, not the vendored copy, which resolves the pack
   from `.prd-toolkit/packs`, still at the old version.
 

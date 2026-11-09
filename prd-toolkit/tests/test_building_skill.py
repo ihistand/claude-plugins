@@ -796,10 +796,25 @@ RESTATE_RULE = ("A `Restate:` prompt runs no branch check: it writes nothing and
                 "names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field only.")
 
 
-# Ruling 39: SOURCES names a block only when the round added or changed where its implementation starts.
-SOURCES_FIELD = ("one line per block whose implementation start this round added or changed: where its implementation "
-                 "starts, never another changed line picked to pass the check. A block whose start the round did not "
-                 "touch is left out, and SOURCES is `none` when no block's start was touched")
+# Ruling 39, as the final review amends it: a block with no `Source:` yet always gets a SOURCES line, at the first
+# line the round added for it; a block that has one is named only when the round touched its start, else it keeps it.
+SOURCES_FIELD = ("one line per block whose implementation start this round added or changed, and always one for a "
+                 "block with no `Source:` yet, in the round that writes its implementation: where its implementation "
+                 "starts, never another changed line picked to pass the check. For a block with no `Source:` yet that "
+                 "is the first line the round added for it: a requirement added inside an existing function starts at "
+                 "its first added line, not the function's `def`. A block that already has a `Source:` and whose start "
+                 "the round did not touch is left out and keeps its `Source:`, and SOURCES is `none` when no block "
+                 "qualifies")
+SOURCES_JUDGE = ("one SOURCES line per block with no `Source:` yet that the round implemented, at the first line the "
+                 "round added for it, and per block whose implementation start the round added or changed")
+SOURCES_AGENT = ("- SOURCES: a block with no `Source:` yet always gets a line in the round that writes its "
+                 "implementation, at the first line the round added for it (inside an existing function, its first "
+                 "added line, not the function's `def`). A block that already has a `Source:` gets a line only when "
+                 "the round added or changed where its implementation starts; otherwise it is left out and keeps its "
+                 "`Source:`.")
+SOURCES_KEPT = ("A block no SOURCES file names already has a `Source:` (a block with none always gets a SOURCES line): "
+                "keep that `Source:` as it is. The close's pack judges it: MOVED is rewritten below, and STALE means a "
+                "wrong line or sha, so fix it.")
 
 
 def test_085_fix1_a_sources_finding_goes_back_to_the_builder():
@@ -819,7 +834,7 @@ def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
     assert "a line this round added or changed" not in flat(SKILL)
     four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
     assert "A report whose SOURCES is `none` passes no `--sources`." in four
-    assert "one SOURCES line per block whose implementation start the round added or changed" in four
+    assert SOURCES_JUDGE in four
     assert ("From each block's line in the latest round's `<SNAP>/sources-<n>.txt` that names it (the restated "
             "file after a restate, never the saved report)") in flat(RUN)
 
@@ -849,3 +864,11 @@ def test_085_fix3_the_restate_exception_opens_the_branch_check():
     assert RESTATE_FIRST_AGENT in flat(AGENT)
     assert "The caller's `--sources` rejected the lines the prompt quotes" in flat(SKILL)
     assert "found the lines the prompt quotes outside the round's changes" not in flat(SKILL)
+
+
+# Final review, item 3: a new block always gets a SOURCES line; an untouched old one keeps its `Source:`.
+def test_085_final_a_new_block_always_gets_a_sources_line():
+    assert "a block with no `Source:` yet" in flat(SKILL).split("SOURCES <ID>: <path>:<line>", 1)[1].split("QUESTIONS", 1)[0]
+    assert SOURCES_AGENT in flat(AGENT)
+    close = flat(RUN).split("From each block's line in the latest round's", 1)[1].split("**`--fixes E-nnn` only:**", 1)[0]
+    assert SOURCES_KEPT in close

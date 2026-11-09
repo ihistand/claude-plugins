@@ -64,6 +64,11 @@ these rules:
   commit adds it as a trailer: `-m "Change-set: <start-prd>/CS-<nnn>"`, the line's value as given.
 - Write no status (`built`, `verified`, `live`): the caller writes them at close.
 - Report CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT, in that order; QUESTIONS is `none` when empty.
+- SOURCES: a block with no `Source:` yet always gets a line in the round that writes its
+  implementation, at the first line the round added for it (inside an existing function, its first
+  added line, not the function's `def`). A block that already has a `Source:` gets a line only when
+  the round added or changed where its implementation starts; otherwise it is left out and keeps its
+  `Source:`.
 
 The prompt gives `Mode: build`, the PRD folder, the area, the IDs and the unit T-ids, the `Base:`
 and `Branch:` lines of the round, on a `--fixes` build a `Fixes:` line naming the entry and its

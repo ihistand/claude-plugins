@@ -92,6 +92,13 @@ def test_readme_says_where_a_diagram_draws():
         assert needle in k, needle
 
 
+def test_known_limits_say_a_second_sources_finding_fails_the_round():
+    k = flat(section(README, "Known limits (0.8.5)"))
+    assert ("A SOURCES finding from `prd_build_check.py --sources` does not fail the round the first time: the caller "
+            "sends the report back to the builder with the finding. A second one on the same round fails it.") in k
+    assert "does not fail the round: the caller" not in k
+
+
 def test_parts_for_each_item():
     d = flat(section(README, "Deploying"))
     for needle in ("--step N --reply TEXT", "`Timeout` column", "`Branch` column", "matches `<pattern>`",

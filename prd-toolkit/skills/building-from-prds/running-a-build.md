@@ -304,7 +304,9 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
      error: fix the command. Every commit message in the log carries a `Refs:` line naming the
      build's IDs; one without it fails the round. Then judge the report: its five fields in order
      (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT), one UNIT line per unit T-id, each `pass`, and
-     one SOURCES line per block whose implementation start the round added or changed. A
+     one SOURCES line per block with no `Source:` yet that the round implemented, at the first
+     line the round added for it, and per block whose implementation start the round added or
+     changed. A
      QUESTIONS line that is not a test
      dispute is a PRD gap and stops the build, as **Stops** says: `built` if a merge happened,
      otherwise no status. The
@@ -489,7 +491,10 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    restated file after a restate, never the saved report), write the block's `Source: <path>:<line>
    @<short sha>`, the short sha of the last commit that round's COMMIT names (`git rev-parse --short
    <that sha>`, its own call), replacing any `Source:` line it had. A later round that moved the
-   line then shows as MOVED or STALE in the close's pack.
+   line then shows as MOVED or STALE in the close's pack. A block no SOURCES file names already
+   has a `Source:` (a block with none always gets a SOURCES line): keep that `Source:` as it is.
+   The close's pack judges it: MOVED is rewritten below, and STALE means a wrong line or sha, so
+   fix it.
 
    **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
    them, each in its own commit, before step 7's trace, so the close's trace holds (test

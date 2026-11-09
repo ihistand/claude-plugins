@@ -212,9 +212,14 @@ In this order, each field on its own line:
 CHANGES     one line per file changed: <path>: <what changed>
 UNIT        <T-id>: pass | fail: <one line>, one line per unit T-id (none when you have none)
 SOURCES     <ID>: <path>:<line>, one line per block whose implementation start this round added
-            or changed: where its implementation starts, never another changed line picked to
-            pass the check. A block whose start the round did not touch is left out, and SOURCES
-            is `none` when no block's start was touched. Nothing after the line number
+            or changed, and always one for a block with no `Source:` yet, in the round that
+            writes its implementation: where its implementation starts, never another changed
+            line picked to pass the check. For a block with no `Source:` yet that is the first
+            line the round added for it: a requirement added inside an existing function starts
+            at its first added line, not the function's `def`. A block that already has a
+            `Source:` and whose start the round did not touch is left out and keeps its
+            `Source:`, and SOURCES is `none` when no block qualifies. Nothing after the line
+            number
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the round branch and its commit SHAs
 ```
