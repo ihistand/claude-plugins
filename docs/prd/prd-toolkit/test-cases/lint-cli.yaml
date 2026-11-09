@@ -664,12 +664,12 @@ T-010.2:
     cwd: <tmp>
     env: {LC_ALL: C.UTF-8}
     command: <tmp>/venv/bin/python <repo>/prd-toolkit/scripts/prd_publish.py --help
-    note: prd_publish.py's dependency header lists pyyaml, sqlglot, openapi-spec-validator and markdown-it-py
+    note: prd_publish.py's dependency header lists pyyaml, sqlglot, openapi-spec-validator, markdown-it-py and mermaidx
   expect:
     output:
       exit: 2
       stdout: ""
-      stderr: "prd_publish: missing Python package 'pyyaml'. Run with: uv run --script prd_publish.py …, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py\n"
+      stderr: "prd_publish: missing Python package 'pyyaml'. Run with: uv run --script prd_publish.py …, or: pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx\n"
     effects: []
     errors: []
     leaks: none

@@ -161,7 +161,7 @@ Tests: T-009.1 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint
 
 ### FR-010 Name a missing dependency
-Status: verified
+Status: approved
 Source: prd-toolkit/scripts/prdlint/deps.py:12 @97c04e1
 Acceptance (EARS):
 - AC-010.1 If `pyyaml`, `sqlglot` or `openapi-spec-validator` cannot be imported, the lint command
@@ -174,7 +174,7 @@ Acceptance (EARS):
   to stderr, where `<script>` is its own name without `.py` and `<packages>` lists only the packages
   of its own dependency header, and exit 2.
 Errors: -
-Edge cases: prd_publish.py is the one script whose header adds a package (`markdown-it-py`) → AC-010.2 (E-002, fixed in 0.7.3)
+Edge cases: prd_publish.py is the one script whose header adds packages (`markdown-it-py`, and from prd-toolkit 0.8.5 the diagram renderer `mermaidx`) → AC-010.2 (E-002, fixed in 0.7.3)
 Tests: T-010.1 [integration], T-010.2 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; cli:prd_publish; `prdlint/deps.py` require
 

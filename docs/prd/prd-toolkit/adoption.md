@@ -14,7 +14,7 @@
 | build-check | not started | `prd-toolkit/scripts/prd_build_check.py`, `prd-toolkit/scripts/prdlint/buildcheck.py` |
 | deploy | not started | `prd-toolkit/scripts/prd_deploy.py`, `prd-toolkit/scripts/prdlint/deploy.py`, `prd-toolkit/scripts/prd_drift.py`, `prd-toolkit/scripts/prdlint/drift.py` |
 | errors | not started | `prd-toolkit/scripts/prd_error.py`, `prd-toolkit/scripts/prdlint/errors.py` |
-| publish | not started | `prd-toolkit/scripts/prd_publish.py`, `prd-toolkit/scripts/prdlint/publish.py`, `prd-toolkit/templates/publish/**` |
+| publish | not started | `prd-toolkit/scripts/prd_publish.py`, `prd-toolkit/scripts/prdlint/publish.py`, `prd-toolkit/scripts/prdlint/diagrams.py`, `prd-toolkit/templates/publish/**` |
 | links | not started | `prd-toolkit/scripts/prd_links.py`, `prd-toolkit/scripts/prdlint/links.py`, `prd-toolkit/scripts/prdlint/changeset.py`, `prd-toolkit/scripts/prdlint/snapshot.py`, `prd-toolkit/scripts/prdlint/citations.py`, `prd-toolkit/scripts/prdlint/rules/links.py` |
 | tester-guard | not started | `prd-toolkit/scripts/prd_tester_guard.py`, `prd-toolkit/hooks/**` |
 | gates | not started | `prd-toolkit/scripts/prd_gates.py`, `prd-toolkit/scripts/prdlint/gates.py`, `prd-toolkit/scripts/prdlint/formserver.py`, `prd-toolkit/scripts/prd_confirm.py`, `prd-toolkit/scripts/prdlint/confirm.py` |
