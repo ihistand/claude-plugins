@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import edit
 from prdlint import diagrams
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +25,31 @@ def section4() -> str:
     m = re.search(r"^## 4\..*?^```mermaid\n(.*?)^```$", text, re.S | re.M)
     assert m, "the toolkit's §4 holds a mermaid diagram"
     return m.group(1)
+
+
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """A stubbed `_render` never meets an earlier test's cached SVG."""
+    diagrams._raw.cache_clear()
+    yield
+    diagrams._raw.cache_clear()
+
+
+def selectors(css: str) -> list[str]:
+    """The top-level rule selectors of a style sheet; an at-rule's block (a @keyframes) is skipped whole."""
+    out, depth, start = [], 0, 0
+    for i, ch in enumerate(css):
+        if ch == "{":
+            if depth == 0:
+                prelude = css[start:i].strip()
+                if not prelude.startswith("@"):
+                    out += [sel.strip() for sel in prelude.split(",")]
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                start = i + 1
+    return out
 
 
 def labels(source: str) -> list[str]:
@@ -69,6 +95,12 @@ def test_the_toolkit_diagram_renders_for_real(tmp_path):
     for ref in re.findall(r"url\(#([^)]+)\)", one):  # every url(#…) points inside its own diagram
         assert ref in ids1, ref
     assert "#my-svg" not in one  # the style is scoped to the diagram's own ID
+    for n, svg in ((1, one), (2, two)):
+        sheets = re.findall(r"<style>(.*?)</style>", svg, re.S)
+        sels = [sel for css in sheets for sel in selectors(css)]
+        assert sheets and len(sels) > 10, n
+        for sel in sels:
+            assert re.match(rf"#diagram-{n}(?![\w-])", sel), (n, sel)
     assert out["bad"].startswith("the renderer failed: "), out["bad"]
 
 
@@ -84,6 +116,29 @@ def test_the_toolkit_page_draws_its_diagrams_for_real(tmp_path):
     assert '<figure class="diagram"><svg id="diagram-1"' in page and '<figure class="diagram"><svg id="diagram-2"' in page
     assert 'pre class="mermaid"' not in page
     assert_loads_nothing(page)
+
+
+DECOY = """flowchart TB
+  X["href='#"] --> A
+  A --> B["it's"]
+  click A "https://evil.example/"
+"""
+
+
+def test_a_decoy_label_cannot_hide_a_link_for_real(prd, tmp_path):
+    """A label that opens a quote must not hide the link mermaid draws for `click`: the diagram falls back."""
+    edit(prd, "prd.md", "## 5.", "```mermaid\n" + DECOY + "```\n\n## 5.")
+    lines = (prd / "prd.md").read_text(encoding="utf-8").split("\n")
+    line = next(i for i, ln in enumerate(lines, 1) if ln == "```mermaid" and lines[i] == "flowchart TB")
+    out = tmp_path / "page.html"
+    r = subprocess.run(["uv", "run", "--script", str(SCRIPT), "render", str(prd), "--out", str(out)],
+                       capture_output=True, text=True, encoding="utf-8", timeout=600)
+    assert r.returncode == 0, r.stderr
+    assert r.stderr == f"prd_publish: diagram at prd.md:{line} shown as source: the SVG holds an href that is not #…\n"
+    page = out.read_text(encoding="utf-8")
+    assert page.count('<figure class="diagram">') == 2  # the fixture's own diagram still draws, on both tabs
+    outside = re.sub(r'<pre class="mermaid">.*?</pre>', "", page, flags=re.S)
+    assert "evil.example" not in outside  # only the PRD's own source, shown as text, names it
 
 
 # ---- numbering, with the renderer's output stood in ----------------------------------------------
@@ -142,9 +197,9 @@ def test_the_vendorable_module_needs_no_renderer():
 
 SAFE = ('<svg id="diagram-1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
         '<style>#diagram-1 .edge{stroke:#333;filter:url(#diagram-1-shadow)}@keyframes dash{to{stroke-dashoffset:0}}</style>'
-        '<defs><marker id="arrow"></marker><filter id="diagram-1-shadow"><feDropShadow dx="1"></feDropShadow></filter></defs>'
-        '<path marker-end="url(#arrow)" style="filter: url( \'#arrow\' )"></path><use href="#arrow"></use>'
-        '<a xlink:href="#arrow"><text data-id="x">turn it on, A &amp; B &lt;b&gt;</text></a>%s</svg>')
+        '<defs><marker id="diagram-1-arrow"></marker><filter id="diagram-1-shadow"><feDropShadow dx="1"></feDropShadow></filter></defs>'
+        '<path marker-end="url(#diagram-1-arrow)" style="filter: url( \'#diagram-1-arrow\' )"></path><use href="#diagram-1-arrow"></use>'
+        '<a xlink:href="#diagram-1"><text data-id="x">turn it on, A &amp; B &lt;b&gt; title="href=\'#"</text></a>%s</svg>')
 
 
 def test_a_clean_svg_passes():
@@ -165,6 +220,16 @@ def test_a_clean_svg_passes():
     '<img src="https://x">', '<g src="x">', "<iframe>", "<embed>", "<object>", "<link>", "<meta>", "<base>",
     "<b>x</b>", "<div>x</div>", '<table background="https://x">',
     '<set attributeName="href" to="https://x"></set>', '<animate attributeName="href"></animate>', "<feImage></feImage>",
+    # a decoy attribute value that opens a quote, so a scan of the whole text skips the real href
+    '<a title="href=\'#" href="javascript:alert(1)" z="\'">', '<a title="href=\'#" xlink:href="javascript:alert(1)" z="\'">',
+    '<use title="href=\'#" href="https://evil.example/a.svg#a" z="\'">', '<a title=\'href="#\' href="javascript:alert(1)" z=\'"\'>',
+    '<a title="href=&#39;#" href="javascript:alert(1)" z="&#39;">', '<a title=">" href="javascript:alert(1)">',
+    # a reference that leaves the diagram
+    '<path marker-end="url(#arrow)">', '<use href="#arrow">', '<use href="#diagram-2-x">', '<path fill="url(#diagram-12-x)">',
+    "<style>a{fill:url(#other)}</style>",
+    # a value a browser reads as a relative URL, though it holds the diagram's own fragment
+    '<use href="\'#diagram-1-arrow">', '<use href="&quot;#diagram-1-arrow">', '<use href="\u00a0#diagram-1-arrow">',
+    '<path style="fill:url(\u00a0#diagram-1-arrow)">',
 ])
 def test_check_svg_refuses(bad):
     assert diagrams.check_svg(SAFE % bad) is not None, bad
@@ -179,3 +244,13 @@ def test_check_svg_refuses(bad):
 ])
 def test_check_svg_names_the_spec_reasons(bad, reason):
     assert diagrams.check_svg(SAFE % bad) == reason
+
+
+@pytest.mark.parametrize("text", ["", "hello", "   ", "<g></g>", '<svg id="diagram-1">', '<svg id="diagram-1"></svg><svg>',
+                                  '<p></p><svg id="diagram-1"></svg>', '<svg></svg>', '<svg id="my-svg"></svg>'])
+def test_check_svg_refuses_what_is_not_one_numbered_svg(text):
+    assert diagrams.check_svg(text) is not None, text
+
+
+def test_check_svg_allows_leading_space_and_an_xml_declaration():
+    assert diagrams.check_svg('\n  <?xml version="1.0" encoding="UTF-8"?>\n' + SAFE % "" + "\n") is None

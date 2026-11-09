@@ -85,30 +85,87 @@ _SVG_TAGS = frozenset(t.lower() for t in (
     "feTurbulence filter g line linearGradient marker mask metadata path pattern polygon polyline radialGradient rect "
     "stop style svg switch symbol text textPath title tspan use view").split())
 _TAG = re.compile(r"</?([A-Za-z][^\s/>]*)")
+_START = re.compile(r"<[A-Za-z]")
+_SHAPE = re.compile(r"\s*(?:<\?xml[^>]*\?>\s*)?(<svg\b.*</svg>)\s*", re.S | re.I)
 _ON = re.compile(r"(?<![\w-])on\w*\s*=")
-_HREF = re.compile(r"""href\s*=\s*(?:"\s*([^"]*)"|'\s*([^']*)'|([^\s>]*))""")
-_URL = re.compile(r"""url\((?!\s*["']?\s*#)""")
+_URL = re.compile(r"url\(")
 _LOADS = ("@import", "@font-face", "image-set(", "image(", "src(", "src=")
+_WS = "\t\n\f\r "  # the HTML tokenizer's whitespace
+
+
+def _tag_at(s: str, i: int) -> list[tuple[str, str]] | None:
+    """The attributes of the start tag at `s[i]` (a `<` and a letter), read as the HTML tokenizer reads them: names
+    lowercased, values with character references decoded. None when the text ends inside the tag."""
+    n, j = len(s), i + 1
+    while j < n and s[j] not in _WS + "/>":
+        j += 1
+    attrs: list[tuple[str, str]] = []
+    while True:
+        while j < n and (s[j] in _WS or s[j] == "/"):  # before an attribute name; a `/` not before `>` is skipped
+            j += 1
+        if j >= n:
+            return None
+        if s[j] == ">":
+            return attrs
+        k = j + 1  # a name may start with `=`, and holds quotes and `<` as written
+        while k < n and s[k] not in _WS + "/>=":
+            k += 1
+        name, j, value = s[j:k].lower(), k, ""
+        while j < n and s[j] in _WS:
+            j += 1
+        if j < n and s[j] == "=":
+            j += 1
+            while j < n and s[j] in _WS:
+                j += 1
+            if j >= n:
+                return None
+            if s[j] in "\"'":
+                end = s.find(s[j], j + 1)
+                if end < 0:
+                    return None
+                value, j = s[j + 1 : end], end + 1
+            elif s[j] != ">":
+                k = j
+                while k < n and s[k] not in _WS + ">":
+                    k += 1
+                value, j = s[j:k], k
+        attrs.append((name, html.unescape(value)))
 
 
 def check_svg(svg: str) -> str | None:
-    """Why this SVG may not go on the page, or None. Tags are read as written; everything else is read with
-    character references decoded, as a browser reads attribute values and SVG style, so `&#x75;rl(` is `url(`."""
+    """Why this SVG may not go on the page, or None. It must be one `<svg>` whose root ID is `diagram-<n>`; each tag's
+    attributes are read as a browser reads them, and every href and url( must point into `diagram-<n>`. Tag names are
+    read as written; the rest is also read with character references decoded, as a browser reads attribute values and
+    SVG style, so `&#x75;rl(` is `url(`."""
+    shape = _SHAPE.fullmatch(svg)
+    if not shape:
+        return "the SVG is not one <svg> element"
+    root = dict(reversed(_tag_at(svg, shape.start(1)) or []))  # the first of a repeated attribute wins
+    number = re.fullmatch(r"diagram-(\d+)", root.get("id", ""))
+    if not number:
+        return "the SVG's root has no diagram-<n> ID"
+    own = rf"#diagram-{number.group(1)}(?!\d)"
+    href_ok = re.compile(own)  # a value is a URL: anything before the `#` makes it a relative one
+    url_ok = re.compile(rf"[{_WS}]*[\"']?[{_WS}]*{own}")  # CSS may quote and space the target, with its own whitespace
     raw = svg.lower()
     text = html.unescape(svg).lower()
+    tags = [_tag_at(svg, m.start()) for m in _START.finditer(svg)]  # from every `<`: a decoy cannot hide a tag
+    attrs = [a for t in tags if t is not None for a in t]
     if "<script" in raw or ":script" in raw:
         return "the SVG holds <script"
     if "<foreignobject" in raw:
         return "the SVG holds <foreignObject"
-    if _ON.search(text):
+    if _ON.search(text) or any(name.startswith("on") for name, _ in attrs):
         return "the SVG holds an on…= attribute"
-    if any(not next(v for v in m.groups() if v is not None).startswith("#") for m in _HREF.finditer(text)):
+    if any((name == "href" or name.endswith(":href")) and not href_ok.match(value.strip(_WS)) for name, value in attrs):
         return "the SVG holds an href that is not #…"
-    if _URL.search(text):
+    if any(not url_ok.match(text, m.end()) for m in _URL.finditer(text)):
         return "the SVG holds a url( that is not url(#…)"
     tag = next((t for t in _TAG.findall(raw) if t not in _SVG_TAGS), None)
     if tag:
         return f"the SVG holds <{tag}>, which is not a drawing element"
+    if None in tags:
+        return "the SVG holds a tag that does not close"
     if "\\" in text:
         return "the SVG holds a backslash, which CSS can use to hide url( or @import"
     load = next((w for w in _LOADS if w in text), None)
