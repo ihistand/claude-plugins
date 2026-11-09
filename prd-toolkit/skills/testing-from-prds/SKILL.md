@@ -197,6 +197,12 @@ You may add arguments only after the whole command, with every path inside the t
 `uv run pytest tests/test_notes.py` is a different command and is blocked. If a row cannot run
 in that shape, that is a QUESTION for testing.md, not a reason to rewrite the command.
 
+The guard checks every argument you add. It refuses `--pyargs`, `--doctest-modules`, `--doctest-glob`,
+`--rootdir`, `--confcutdir`, `-p <plugin>` (`-p no:<name>` passes) and `-o addopts`; `-n` takes `auto`
+or a whole number; every other argument that is not an option's value is a path under the test roots,
+resolved from the harness's `--directory`. An unquoted glob (`*`, `?`, `[`, `^`, `#`) in any argument is
+refused: quote it (`-k 'T-015*'`). Rule 5 says what to do with a refusal.
+
 ## Report
 
 In this order:

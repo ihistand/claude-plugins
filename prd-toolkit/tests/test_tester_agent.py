@@ -372,3 +372,30 @@ def test_r28_write_tids_include_deploy_gate_and_never_run():
             "changed ones, or a `verified` block's deploy-gate T-ids that no test cites), each with its "
             "test-case file; a write runs none of them.") in text
     assert "A write's T-ids are the new or changed non-unit T-ids the caller names" not in text
+
+
+# --- 0.8.5 (spec 11): the guard checks every argument after a harness command ---
+
+HARNESS_ARG_RULES = (
+    "`--pyargs`, `--doctest-modules`, `--doctest-glob`, `--rootdir`, `--confcutdir`",
+    "`-p <plugin>` (`-p no:<name>` passes)",
+    "`-o addopts`",
+    "`-n` takes `auto` or a whole number",
+    "every other argument that is not an option's value is a path under the test roots",
+    "unquoted glob (`*`, `?`, `[`, `^`, `#`) in any argument is refused: quote it (`-k 'T-015*'`)",
+)
+
+
+def test_skill_and_agent_list_what_the_guard_refuses_after_a_harness_command():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("guard_opts", GUARD)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    assert set(guard.REFUSED_OPTS) == {o.strip("`") for o in HARNESS_ARG_RULES[0].split(", ")}
+    assert guard.REFUSED_INI == {"addopts"}
+    skill = _flat(SKILL).split("## Harness commands the guard accepts", 1)[1].split("## Report", 1)[0]
+    agent = _flat(AGENT)
+    for s in HARNESS_ARG_RULES:
+        assert s in skill, s
+        assert s in agent, s
