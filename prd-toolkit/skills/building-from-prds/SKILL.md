@@ -81,18 +81,18 @@ allowed. Never pipe, filter or truncate a gated command's output.
 
 ## Non-negotiable rules
 
-**First, the branch.** Before rule 1 and before anything else, check where you are. Run
-`git merge-base --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash
-call; if the first fails or the second is not the `Branch:` line, change nothing and report
-`QUESTIONS: worktree is not on the build branch`. A prompt with no `Base:` or no `Branch:` line
-gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are `none`: you run no
-pack, write nothing, commit nothing, and create or switch no branch. The caller cut the round; a
-wrong one is the caller's to fix, never yours to repair.
+**First, the branch.** Before rule 1 and before anything else, except on a `Restate:` prompt
+(below), check where you are. Run `git merge-base --is-ancestor <Base> HEAD` and `git branch
+--show-current`, each its own Bash call; if the first fails or the second is not the `Branch:` line,
+change nothing and report `QUESTIONS: worktree is not on the build branch`. A prompt with no `Base:`
+or no `Branch:` line gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are
+`none`: you run no pack, write nothing, commit nothing, and create or switch no branch. The caller
+cut the round; a wrong one is the caller's to fix, never yours to repair.
 
 A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
 names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
-only. The caller's `--sources` found the lines the prompt quotes outside the round's changes; give
-each block's line where its implementation starts, by this report's SOURCES rule.
+only. The caller's `--sources` rejected the lines the prompt quotes; give each block's line where
+its implementation starts, by this report's SOURCES rule.
 
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
    `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.

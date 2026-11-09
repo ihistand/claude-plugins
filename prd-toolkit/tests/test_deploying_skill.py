@@ -535,5 +535,5 @@ def test_085_fix2_no_one_to_ask_means_no_reply_to_the_stopped_step():
 def test_085_fix2_the_mid_run_entry_is_the_one_edit_outside_the_close():
     assert ("nor the PRD outside the close (step 3), except the `prd_error.py new` entry of an error found while the "
             "run is stopped (step 2)") in flat(RUN)
-    assert ("**All of these mean: stop, put back what you changed outside the close and a mid-run `prd_error.py new` "
-            "entry, and return to the step") in flat(SKILL)
+    assert ("**All of these mean: stop, put back what you changed outside the close, except a mid-run "
+            "`prd_error.py new` entry, and return to the step") in flat(SKILL)

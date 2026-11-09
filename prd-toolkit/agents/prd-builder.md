@@ -16,10 +16,11 @@ report format (CHANGES, UNIT, SOURCES, QUESTIONS, COMMIT).
 
 If the skill's text is not in your context, say so as the first line under QUESTIONS, and keep to
 these rules:
-- First, before anything else: Run `git merge-base --is-ancestor <Base> HEAD` and
-  `git branch --show-current`, each its own Bash call; if the first fails or the second is not the
-  `Branch:` line, change nothing and report `QUESTIONS: worktree is not on the build branch`. A
-  prompt with no `Base:` or `Branch:` line gets the same report, every other field `none`.
+- First, before anything else, except on a `Restate:` prompt (the next bullet): Run `git merge-base
+  --is-ancestor <Base> HEAD` and `git branch --show-current`, each its own Bash call; if the first
+  fails or the second is not the `Branch:` line, change nothing and report `QUESTIONS: worktree is
+  not on the build branch`. A prompt with no `Base:` or `Branch:` line gets the same report, every
+  other field `none`.
 - A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
   names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
   only.

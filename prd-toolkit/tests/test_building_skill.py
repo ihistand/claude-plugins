@@ -820,11 +820,12 @@ def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
     four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
     assert "A report whose SOURCES is `none` passes no `--sources`." in four
     assert "one SOURCES line per block whose implementation start the round added or changed" in four
-    assert "From each block's SOURCES line in the latest builder report that names it" in flat(RUN)
+    assert ("From each block's line in the latest round's `<SNAP>/sources-<n>.txt` that names it (the restated "
+            "file after a restate, never the saved report)") in flat(RUN)
 
 
 # Fix round 2, item 1: the close writes an earlier round's line at that round's commit, so MOVED can fire.
-CLOSE_SHA = "`Source: <path>:<line> @<short sha>`, the short sha of the last commit that report's COMMIT names"
+CLOSE_SHA = "`Source: <path>:<line> @<short sha>`, the short sha of the last commit that round's COMMIT names"
 MOVED_REWRITE = "rewrite that block's `Source:` as `<path>:<M> @<HEAD short sha>`"
 
 
@@ -833,3 +834,18 @@ def test_085_fix2_the_close_writes_each_source_at_its_rounds_commit():
     assert CLOSE_SHA in t
     assert MOVED_REWRITE in t
     assert "rewrite that block's `Source:` to line `<M>`, and run" not in t
+
+
+
+# Fix round 3: a Restate prompt is excepted in the branch check's own first sentence; a finding "rejected" the lines.
+RESTATE_FIRST_SKILL = ("**First, the branch.** Before rule 1 and before anything else, except on a `Restate:` prompt (below), "
+                       "check where you are.")
+RESTATE_FIRST_AGENT = ("- First, before anything else, except on a `Restate:` prompt (the next bullet): Run "
+                       "`git merge-base --is-ancestor <Base> HEAD`")
+
+
+def test_085_fix3_the_restate_exception_opens_the_branch_check():
+    assert RESTATE_FIRST_SKILL in flat(SKILL)
+    assert RESTATE_FIRST_AGENT in flat(AGENT)
+    assert "The caller's `--sources` rejected the lines the prompt quotes" in flat(SKILL)
+    assert "found the lines the prompt quotes outside the round's changes" not in flat(SKILL)

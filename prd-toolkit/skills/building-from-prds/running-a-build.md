@@ -485,11 +485,11 @@ tree, or a branch off the default branch, in step 1) and resumes the build at st
    steps 4 and 5, already committed.
 
    Run `git rev-parse --short HEAD` as its own call, after the last merge: the `<HEAD short sha>`
-   below. From each block's SOURCES line in the latest builder report that names it, write the
-   block's `Source: <path>:<line> @<short sha>`, the short sha of the last commit that report's
-   COMMIT names (`git rev-parse --short <that sha>`, its own call), replacing any `Source:` line
-   it had. A
-   later round that moved the line then shows as MOVED or STALE in the close's pack.
+   below. From each block's line in the latest round's `<SNAP>/sources-<n>.txt` that names it (the
+   restated file after a restate, never the saved report), write the block's `Source: <path>:<line>
+   @<short sha>`, the short sha of the last commit that round's COMMIT names (`git rev-parse --short
+   <that sha>`, its own call), replacing any `Source:` line it had. A later round that moved the
+   line then shows as MOVED or STALE in the close's pack.
 
    **`--fixes E-nnn` only:** the close removes no `known-failing:` line: steps 4 and 5 removed
    them, each in its own commit, before step 7's trace, so the close's trace holds (test

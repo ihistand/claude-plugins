@@ -187,7 +187,7 @@ Quoted from runs without this skill (evals/baselines/deploying-from-prds.md), ex
 - `git push` of the close commit, to the branch a `prd_deploy: the close is on …` note names or
   any other. The push is the owner's. (Spec 0.8.5 §5.4.)
 
-**All of these mean: stop, put back what you changed outside the close and a mid-run
+**All of these mean: stop, put back what you changed outside the close, except a mid-run
 `prd_error.py new` entry, and return to the step of `running-a-deploy.md` whose gate is open.**
 
 ## Common Rationalizations
