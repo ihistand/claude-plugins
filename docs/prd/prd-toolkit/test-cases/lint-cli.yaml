@@ -1137,3 +1137,43 @@ T-014.8:
     effects: []
     errors: []
     leaks: none
+T-015.1:
+  ac: AC-015.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-cli/readme_markers]
+  input:
+    setup: [S0, copy fixture lint-cli/readme_markers to <tmp>/docs/prd/orders/README.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: each of the fixture's three lines is a finding in any other Markdown file of an Approved PRD (testing.md Fixtures); with S0 alone the folder lints clean (T-001.1)
+  expect:
+    output:
+      exit: 0
+      stdout_exact: ""
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-015.2:
+  ac: AC-015.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-cli/readme_markers]
+  input:
+    setup: [S0, copy fixture lint-cli/readme_markers to <tmp>/docs/prd/orders/README.md, copy fixture lint-cli/readme_markers to <tmp>/docs/prd/orders/contracts/dependencies/README.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the same three lines in both files; the copy in contracts/dependencies/ is read as any other Markdown file, its line 1 reported as markers-open; that the root copy gives no finding is T-015.1's to show
+  expect:
+    output:
+      exit: 1
+      stdout_contains: "docs/prd/orders/contracts/dependencies/README.md:1: markers-open: "
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none

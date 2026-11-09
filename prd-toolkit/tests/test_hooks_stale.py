@@ -19,6 +19,7 @@ SKILL = PLUGIN_ROOT / "skills/changing-prds/SKILL.md"
 def repo(prd):
     root = prd.parent.parent.parent
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run([sys.executable, str(PLUGIN_ROOT / "scripts/prd_block.py"), PRD], cwd=root, check=True)  # these tests are about the CI files; the blocks start current
     return root
 
 
@@ -27,7 +28,7 @@ def run(repo, *args, script="scripts/prd_hooks.py"):
 
 
 def stale(repo):
-    return hooks.stale_ci(repo, model.load(repo / PRD), PRD)
+    return [x for x in hooks.stale_ci(repo, model.load(repo / PRD), PRD) if "; run prd_block.py" not in x]
 
 
 def vendored(repo, *args):

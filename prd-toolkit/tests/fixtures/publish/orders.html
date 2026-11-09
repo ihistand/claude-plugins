@@ -19,6 +19,7 @@ code, pre { font: .9em ui-monospace, monospace; background: var(--soft); border-
 code { padding: .1em .3em; }
 pre { padding: .75rem; overflow-x: auto; }
 pre code { padding: 0; }
+pre.mermaid { white-space: pre; }
 table { border-collapse: collapse; margin: .5rem 0; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--line); padding: .3rem .6rem; text-align: left; vertical-align: top; }
 th { background: var(--soft); }
@@ -39,9 +40,9 @@ dl.facts dd { margin: 0; }
 .tabs { display: flex; gap: .25rem; margin: 1rem 0 0; border-bottom: 1px solid var(--line); }
 .tabs label { padding: .4rem 1rem; cursor: pointer; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; color: var(--muted); }
 .panel { display: none; }
-#tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
-#tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
-#tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
+#tab-overview:checked ~ .tabs label[for="tab-overview"], #tab-business:checked ~ .tabs label[for="tab-business"], #tab-technical:checked ~ .tabs label[for="tab-technical"] { border-color: var(--line); background: var(--bg); color: var(--fg); font-weight: 700; margin-bottom: -1px; }
+#tab-overview:checked ~ main #overview, #tab-business:checked ~ main #business, #tab-technical:checked ~ main #technical { display: block; }
+#tab-overview:focus-visible ~ .tabs label[for="tab-overview"], #tab-business:focus-visible ~ .tabs label[for="tab-business"], #tab-technical:focus-visible ~ .tabs label[for="tab-technical"] { outline: 2px solid var(--accent); }
 @media print { .panel { display: block; } .tabs { display: none; } }
 </style>
 </head>
@@ -50,13 +51,32 @@ dl.facts dd { margin: 0; }
 <h1>Orders service</h1>
 <dl class="facts"><dt>Project</dt><dd>orders</dd><dt>PRD version</dt><dd>1.0.0</dd><dt>Status</dt><dd>Approved</dd><dt>Commit</dt><dd>no commit</dd><dt>Generated</dt><dd>2026-11-01</dd></dl>
 </header>
-<input class="tab-input" type="radio" name="tab" id="tab-business" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-overview" checked>
+<input class="tab-input" type="radio" name="tab" id="tab-business">
 <input class="tab-input" type="radio" name="tab" id="tab-technical">
 <nav class="tabs" style="max-width: 60rem; margin-left: auto; margin-right: auto; padding: 0 1rem;">
+<label for="tab-overview">Overview</label>
 <label for="tab-business">Business</label>
 <label for="tab-technical">Technical</label>
 </nav>
 <main>
+<section class="panel" id="overview">
+<p class="none">1.0.0 · Approved · Owner: Sample Owner · Updated 2026-10-29</p>
+<h2>What it is</h2><p>The orders service imports order files from the warehouse and lets sales reps look up
+and admins delete orders through an HTTP API.</p>
+
+<h2>Architecture</h2><pre class="mermaid">flowchart LR
+  Importer --&gt; DB[(PostgreSQL)]
+  Importer --&gt; Geocoder
+  API --&gt; DB
+</pre>
+<p>The importer reads a file, validates postal codes with the geocoder, and writes to the
+database. The API reads and deletes orders. The geocoder is the only external service.</p>
+
+<h2>Areas</h2><table><thead><tr><th>Area</th><th>Adoption</th><th>Requirements</th></tr></thead><tbody><tr><td>api</td><td>-</td><td>2 live</td></tr><tr><td>import</td><td>-</td><td>1 live</td></tr></tbody></table>
+<h2>Open errors</h2><p>No open errors.</p>
+<p class="none">A snapshot of the PRD at version 1.0.0. The PRD in the repository is the authority.</p>
+</section>
 <section class="panel" id="business">
 <h2>Summary and goals</h2>
 <p>The orders service imports order files from the warehouse and lets sales reps look up
@@ -119,11 +139,11 @@ and admins delete orders through an HTTP API.</p>
 </ul>
 
 <h2>Architecture</h2>
-<pre><code class="language-mermaid">flowchart LR
+<pre class="mermaid">flowchart LR
   Importer --&gt; DB[(PostgreSQL)]
   Importer --&gt; Geocoder
   API --&gt; DB
-</code></pre>
+</pre>
 <p>The importer reads a file, validates postal codes with the geocoder, and writes to the
 database. The API reads and deletes orders. The geocoder is the only external service.</p>
 

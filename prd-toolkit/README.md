@@ -6,7 +6,7 @@ that cannot read your code, skills to author, adopt and change it, and a builder
 approved change to verified code, a deploy script that takes verified code to a running
 environment, an error ledger that carries every failure from record to a checked fix, and a
 publisher that renders the PRD as one page to share, and change sets that link PRDs across
-repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Version 0.8.3.
+repositories. Packs, languages and judged test cases extend it to documents and to PRDs written in other languages, and a machine interface (JSON output, the change bookkeeping as scripts, one list of pending decisions) lets clients other than Claude Code drive it, and a local decision inbox puts every pending decision in one browser page. Each PRD folder has a README that says what it is, and the published page opens on an Overview. Version 0.8.4.
 
 Design: [docs/superpowers/specs/2026-10-29-prd-toolkit-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-design.md),
 for 0.2 [docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md](../docs/superpowers/specs/2026-10-29-prd-toolkit-0.2-design.md),
@@ -19,7 +19,8 @@ for 0.7.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.7.1-confirm-form-desi
 for 0.8.0 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.0-design.md),
 for 0.8.1 [docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md](../docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md),
 for 0.8.2 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md),
-and for 0.8.3 [docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md).
+for 0.8.3 [docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md),
+and for 0.8.4 [docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
 
 ## Install
 
@@ -45,7 +46,7 @@ install hint and exits 2.
 | `/prd-status` | `prd_status.py` | Show where each requirement stands, and the version each environment runs |
 | `/prd-deploy [--until <env>] [<run id>]` | `prd-toolkit:deploying-from-prds` | Deploy a verified PRD through its runbook with `prd_deploy.py`, stopping at every human step and failure, then record the run (see Deploying) |
 | `/prd-error [<E-nnn> \| <run id> \| <text>]` | `prd-toolkit:handling-errors` | Record an error in `errors.md` with `prd_error.py`, diagnose it, propose its class and wait for the user's confirmation; the fix starts from a failing test and goes through `/prd-change` and `/prd-build --fixes E-nnn`, and the close is checked with `prd_error.py check` |
-| `/prd-publish [<out file>] [<request>]` | `prd-toolkit:publishing-prds` | Render the PRD with `prd_publish.py` as one self-contained HTML page (a Business and a Technical tab), with per-area summaries by Claude that cite their IDs; the page goes outside the PRD folder, is never committed, and is offered as a private Artifact when the session has the Artifact tool |
+| `/prd-publish [<out file>] [<request>]` | `prd-toolkit:publishing-prds` | Render the PRD with `prd_publish.py` as one self-contained HTML page (an Overview, a Business and a Technical tab), with per-area summaries by Claude that cite their IDs; the page goes outside the PRD folder, is never committed, and is offered as a private Artifact when the session has the Artifact tool |
 | `/prd-change-set [<CS-nnn> \| <text>]` | `prd-toolkit:coordinating-prds` | Coordinate one change across linked PRDs in several repositories: one record, one approval for every member's PRD diff, then a build (and where a link needs it, a deploy) per repository in dependency order (see Change sets) |
 
 ## Lint CLI
@@ -133,7 +134,7 @@ on Read, Glob, Grep, Write, Edit, NotebookEdit and Bash. It acts only when the h
 `agent_type` is `prd-tester` (or ends with `:prd-tester`); every other session passes through.
 For the tester it allows reads only of the PRD folder, the scratchpad and the test roots, writes
 only to the scratchpad and the test roots (the PRD is read-only), and Bash only for the
-`testing.md` harness commands (one simple command each) plus `ls`, `mkdir` and `uv run python -m py_compile`. It never fails open: with `testing.md`
+`testing.md` harness commands (one simple command each) plus `ls`, `mkdir`, `uv run python -m py_compile` and, since 0.8.4, a checked `grep` (readable paths named one by one, a fixed list of options, the options before the pattern), for a session whose Claude Code build has no Grep tool. It never fails open: with `testing.md`
 missing or unparsable, only Read, Glob and Grep under the PRD folder are allowed.
 
 **Limit.** The guard confines the tester's tool calls, not the processes the harness runs. A
@@ -412,7 +413,7 @@ another resolution; an unreadable range or PRD folder.
 ## Publishing
 
 `/prd-publish [<out file>] [<request>]` (skill `prd-toolkit:publishing-prds`) renders the PRD with
-`prd_publish.py` as one self-contained HTML page with a Business tab and a Technical tab. The page
+`prd_publish.py` as one self-contained HTML page with an Overview tab (opened by default), a Business tab and a Technical tab; the Overview is described under READMEs and the Overview tab. The page
 loads nothing (no script, stylesheet, font or image from any URL), so it opens offline, by email or
 on an intranet; PRD text is rendered from markdown with raw HTML escaped, and the error ledger
 appears without its `Evidence:` lines.
@@ -672,6 +673,15 @@ These files live in the git common directory, so every worktree of the repositor
 The skills route each decision through the inbox and fall back to the chat when `serve` cannot start; the
 page is never the only route.
 
+## Known limits (0.8.4)
+
+- Two branches that each change a different PRD both rewrite the parent `docs/prd/README.md` table,
+  so their merge can conflict there. Rerun `prd_block.py`; never edit the table by hand.
+- The README shows no requirement statuses; `/prd-status` does. Only the PRD folder's root has a
+  README: `features/`, `contracts/` and the other folders have none.
+- Since 0.8.4 a mermaid diagram on the published page is the source in a `<pre class="mermaid">` block. No viewer draws it, an Artifact included: every viewer shows the source. The page's labels follow the PRD's language, with English where a language table lacks a key.
+- The description is §2's first paragraph as written. The toolkit never drafts one itself.
+
 ## Known limits (0.8.2)
 
 - The form cannot prove a person clicked, as in 0.7.1. The page needs the token, which only the session that
@@ -749,7 +759,7 @@ page is never the only route.
 - A confirmation is trusted to be the user's, as `prd_deploy.py confirm` is.
 - `recover` never marks a step done.
 - `Evidence:` holding no secret or classified value is held by instruction; nothing scans it.
-- Mermaid diagrams on the published page are shown as source, and the page's own labels are English.
+- Mermaid diagrams on the published page are shown as source, and the page's own labels are English. (0.8.4 changes the labels: see Known limits (0.8.4).)
 - The window between reading the runbook steps and hashing them is not covered (see Deploying).
 
 ## Assumption status `awaiting <who>`
@@ -762,6 +772,30 @@ the user cannot state.
 
 ## Changelog
 
+- **0.8.4:** A README for each PRD folder, an Overview tab on the published page, and ten fixes from the 0.8.3 proof. See the [design spec](../docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md).
+  - `docs/prd/<slug>/README.md` and `docs/prd/README.md` are managed blocks between `<!-- prd-toolkit:start -->` and `<!-- prd-toolkit:end -->`, written by `prd_block.py` beside the `CLAUDE.md` block from two templates, from the PRD's own text (see READMEs and the Overview tab). Text outside the markers is yours. The toolkit's own PRD is at 5.1.0 with `lint-cli` FR-015: lint, the change digest, the bump and the tester skip the PRD folder's root `README.md`.
+  - `prd.md` §2 gains two optional parts, `Principles:` and `Getting started:`; no section is added and no existing PRD breaks. Authoring and adoption offer to draft them.
+  - `/prd-publish` renders an Overview tab, first and opened by default, from §2, §4, the areas, the open errors and the linked PRDs; a mermaid fence renders as `<pre class="mermaid">`. One module, `prdlint/overview.py`, holds the facts the README and the tab share.
+  - `prd_block.py --check` and `prd_hooks.py check --ci` report a stale block (including `CLAUDE.md`, which nothing checked before) as `stale: <file>; run prd_block.py docs/prd/<slug>` and fail; `prd_hooks.py install` refreshes the three blocks. Watch item: a hand-edited `CLAUDE.md` block fails `check --ci` until `prd_block.py` reruns.
+  - Known limit: two branches that each change a different PRD can conflict in the parent README's table; rerun `prd_block.py`.
+  - Fix 1: a regression case's `known-failing: E-nnn` line comes off together with its `symptom:` line when it has one, at the deploy gate and at the build gate, and no other test-case line goes.
+  - Fix 2: the tester's guard resolves a path argument after a harness command that holds uv's `--directory <d>` (or `--directory=<d>`) from `<d>`, so `uv run --directory prd-toolkit pytest -q tests/prd/test_x.py` is allowed; a glob and a path outside the test roots are still refused.
+  - Fix 3: the guard allows a checked `grep` (readable paths named one by one, a fixed list of options, no `-R`) for a session with no Grep tool; the tester quotes `--include` and `--exclude` globs and puts every option before the pattern. `cat`, `head`, `sed` and `find` stay barred.
+  - Fix 4: `prd_build_check.py --stale` reads a test's path literally (`git --literal-pathspecs log`), so a name with `[`, `*` or `?` is judged by its own last commit.
+  - Fix 5: `prd_change.py record` lists a cited ID in the §14 IDs cell when it is a block in the base or the working tree, so an FR the same change removes is listed.
+  - Fix 6: `prd_build_check.py --diff` rebuilds the expected `.prd-toolkit/` from a checkout of `<head>` through a temporary index, so `export-ignore` and `export-subst` no longer change it and nothing is held whole in memory; it compares the executable bit as well as the bytes; a subprocess that times out is the tool error `<command> timed out after <n> s`; a failing vendor reads `vendor at <sha>: <its first line>`.
+  - Fix 7: a deploy run log that cannot be read is the gate `deploy-step:<run id>:unreadable`, titled `run log <run id> could not be read`, instead of vanishing from the list; answering it is refused with the reason, and the inbox shows the reason with no answer controls.
+  - Fix 8: thirteen scripts that no area owned are mapped in four `not started` rows of the toolkit's `adoption.md`: `gates`, `change`, `judge` and `packs`; the new `overview.py` and the two README templates join the `status` row. A `not started` row changes no behaviour.
+  - Fix 9: a pack validator that fails reads `validator failed: <first non-blank stderr line>`, else the first non-blank stdout line, else `exit <n>`.
+  - Fix 10: the E-007 fix of the 0.8.3 entry (PR #18, `lint-cli` FR-006, PRD 5.0.0) changed lint after 0.8.3 shipped, with no version bump; it first ships to installs in 0.8.4.
+  - Upgrading from 0.8.3: re-run `prd_hooks.py install docs/prd/<slug>` (the repository that holds the plugin runs `prd_hooks.py vendor` and then `prd_block.py`), which vendors the new scripts and writes both READMEs and a current `CLAUDE.md` block; commit them with `.prd-toolkit/`. No PRD needs an edit. Watch for a hand-edited `CLAUDE.md` block, which fails `check --ci` until `prd_block.py` reruns.
+  - Proven on 2026-11-08, on the toolkit's own PRD:
+    - CI passed all five jobs on PR #21 at `041675e` (run 42521656890), and `scripts/ci-local.sh origin/main` with an empty HOME passed all five at `a427384`.
+    - A README edited inside its block failed the `prd-lint` job with `stale: docs/prd/prd-toolkit/README.md; run prd_block.py docs/prd/prd-toolkit`, and passed again after `prd_block.py`.
+    - The owner approved PRD 5.1.0 in the decision inbox's form, then read both READMEs and approved the `es` labels.
+    - Fix 6: `prd_build_check.py --diff 081a20c..bead8e1` passed the vendor-refresh round (exit 0).
+    - Fix 2: a `prd-tester` suite round ran T-015.1 and T-015.2 under `uv run --directory prd-toolkit`, both passed, and the guard refused no call. That session had no Grep tool and read whole files instead, so fix 3's checked `grep` waits for a live tester after the merge.
+    - `/prd-publish` put PRD 5.1.0 into the design artifact. The Overview tab drew. The mermaid diagram showed as source, because the Artifact viewer runs no mermaid on an HTML page; drawing it is 0.8.5's item 9.
 - **0.8.3:** The fixes from the 0.8.2 proof, and a way for the toolkit's own repository to refresh its vendored copy. See the [design spec](../docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md).
   - `prd_hooks.py vendor <prd>` writes `.prd-toolkit/` exactly as `install` does and nothing else, prints `vendored the toolkit into .prd-toolkit/ (version <X.Y.Z>)`, and refuses from a vendored copy (`prd_hooks: vendor runs from the plugin, not from .prd-toolkit/`, exit 2).
   - `prd_build_check.py --diff` accepts a change under `.prd-toolkit/` when the repository holds exactly one prd-toolkit plugin directory and `.prd-toolkit/` at `<head>` is, byte for byte, what `vendor` writes from that directory at `<head>` (read from `<head>`'s tree, never the working tree), with no path `vendor` would delete. Otherwise each differing path is `<path>: differs from the plugin; refresh it with prd_hooks.py vendor`, exit 1; in any other repository the old refusal stands unchanged.
@@ -881,6 +915,54 @@ uv run --script prd-toolkit/scripts/prd_block.py docs/prd/<slug> [--claude-md PA
 ```
 
 `--check` reports whether the block is current without writing.
+
+## READMEs and the Overview tab
+
+Since 0.8.4 a person who opens `docs/prd/` or `docs/prd/<slug>/` on a forge finds a README that says
+what the folder is, whether to edit it and how, and a person who opens a published page finds an
+Overview tab. Both are assembled from the PRD's own text, never from anything outside the PRD folder.
+
+**The two READMEs.** `prd_block.py docs/prd/<slug>` writes three managed blocks: the `CLAUDE.md`
+block as before, `docs/prd/<slug>/README.md` (what the PRD covers, its areas, what is in the folder
+and how to read and change it) and `docs/prd/README.md` (a table of every PRD under `docs/prd/`, how
+the toolkit works and how to get started). Each block sits between `<!-- prd-toolkit:start -->` and
+`<!-- prd-toolkit:end -->`; text outside the markers belongs to you and is never touched. A block is
+never edited by hand: it is rewritten from the PRD, and a better description is a better PRD §2,
+changed through `/prd-change`. The description is §2's first paragraph (its first sentence in the
+parent's table). Two start markers, or unbalanced markers, make `prd_block.py` exit 2; a marker
+inside a closed code fence is not a marker. The skills stage both READMEs with `CLAUDE.md` wherever
+they run `prd_block.py`, and lint, the change digest, the version bump and the tester all skip the
+PRD folder's root `README.md` (the toolkit's own PRD, `lint-cli` FR-015, PRD 5.1.0).
+
+**Checking.** `prd_block.py --check` prints `stale: <file>` for each block that differs from what it
+would write now and exits 1, else 0. `prd_hooks.py check --ci`, which the generated CI job already
+runs, prints `stale: <file>; run prd_block.py docs/prd/<slug>` and exits 1 for the same condition,
+and now covers `CLAUDE.md` too. There is no pre-commit check: in the middle of a change the version
+moves before the blocks are refreshed.
+
+**Upgrading.** `prd_hooks.py install` refreshes the three blocks after it vendors the copy, so an
+upgrade writes both READMEs in the same commit as `.prd-toolkit/` and the next PR does not fail the
+new check. The one thing to watch: a repository that hand-edited the text between the markers of its
+`CLAUDE.md` block fails `check --ci` until `prd_block.py docs/prd/<slug>` runs again (the check
+message names the command). Never merge a README conflict by hand; rerun `prd_block.py`.
+
+**§2's two optional parts.** `prd.md` §2 may hold two more labelled parts beside `Goals:`,
+`Personas:` and `Out of scope:`: `Principles:` (bold-named bullets, each one or two sentences) and
+`Getting started:` (numbered steps a new user takes). A part runs from its label to the next
+labelled line of §2 or its end; a PRD in another language uses its language table's labels
+(`Principios:` and `Primeros pasos:` in Spanish). Both are optional and free Markdown, lint checks
+nothing new, and no existing PRD breaks. Authoring phase 2 and the adoption bootstrap offer to draft
+them from what you say; neither requires them.
+
+**The Overview tab.** `prd_publish.py render` writes three tabs, the Overview first and checked by
+default, then Business and Technical unchanged. The Overview holds, each part left out when its
+source is empty: the version, status, owner and date line; what it is (§2's first paragraph); the
+principles; the architecture (§4); a table of areas with adoption status and requirement counts
+by status; the count of open errors; the linked PRDs; and the getting-started steps. It needs no
+summary and gets none, and it loads nothing, like the rest of the page. The README and the tab take
+their facts from one module, `prdlint/overview.py`, so they never disagree. A published page gains
+its tab on the next `/prd-publish`; a PRD without `Principles:` or `Getting started:` gets the tab
+without those two parts.
 
 ## Folder layout
 

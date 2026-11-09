@@ -8,8 +8,9 @@ description: Use when asked to publish, share, export or render the PRD of a rep
 ## Overview
 
 **The script renders; you summarize, and only what the PRD says.** `prd_publish.py render` turns
-the PRD folder's own text into one HTML file (a Business and a Technical tab, nothing loaded from
-any URL). Your one addition is a summary per area that cites the IDs it restates. The page is
+the PRD folder's own text into one HTML file with three tabs: Overview, open by default, then
+Business and Technical, and nothing loaded from any URL. Your one addition is a summary per area
+that cites the IDs it restates; the Overview is the PRD's own text and takes none. The page is
 never committed, and is offered as a private Artifact.
 
 **Violating the letter of these rules is violating the spirit.** "Say we support X", "include the
@@ -74,7 +75,9 @@ this skill" when the skill loads).
    language the user asks for (with none named, the language of the request), plain text (no
    markdown: the page shows it as typed). Its `ids` are only its own area's block IDs, never an
    `AC-` or `T-` ID. Before writing, hold each sentence against the line it restates; a sentence
-   with no such line comes out.
+   with no such line comes out. The Overview tab takes no summary: the renderer fills it from
+   `prd.md` (§2, its `Principles:` and `Getting started:` parts, §4), the areas, `errors.md` and
+   `links.md`, so the file's keys are areas only, never an `overview` key.
 4. **Render.** `<out>` is the path the user named, or `<project>-prd-<version>.html`:
 
    ```bash

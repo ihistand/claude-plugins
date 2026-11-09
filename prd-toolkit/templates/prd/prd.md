@@ -24,6 +24,8 @@ sql-dialect: {{sql_dialect}}
 
 ## 2. Summary & goals
 
+<!-- Optional, after Out of scope: `Principles:` (a bullet list, one `**name.**` and a sentence each) and `Getting started:` (numbered steps a new user takes). Delete this hint once decided; a PRD without them is complete. -->
+
 [NEEDS CLARIFICATION: what does this product do, and for whom, in two sentences]
 
 Goals:

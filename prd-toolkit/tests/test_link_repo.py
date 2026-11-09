@@ -191,7 +191,7 @@ def test_cs_running_record_and_branches(states, tmp_path):
     client_feats = (client / CLIENT_PRD / "features/welcome.md").read_text(encoding="utf-8")
     assert "Status: approved (since 1.1.0)" in client_feats and "greet --json" in client_feats
     changed = git(client, "diff", "--name-only", "main..HEAD").split()
-    assert changed and all(x.startswith(CLIENT_PRD + "/") or x == "CLAUDE.md" for x in changed), changed  # nothing built
+    assert changed and all(x.startswith(CLIENT_PRD + "/") or x in ("CLAUDE.md", "docs/prd/README.md") for x in changed), changed  # nothing built
     # check: the client reads greet at main (unchanged); greet's working tree changed cli:greet, which the client cites
     r = check(client, CLIENT_PRD)
     assert r.returncode == 0, r.stdout + r.stderr

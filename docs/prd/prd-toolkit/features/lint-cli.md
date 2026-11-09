@@ -279,3 +279,17 @@ Errors: -
 Edge cases: `--json` may come before or after the folder argument → AC-014.1; a separate token after `--json` is never read as the interface number, only `--json=<N>` names one → AC-014.3, AC-014.4; `--interface` with an unsupported `--json=<N>`, in either order, prints `1` and exits 0 → AC-014.5; a missing Python package exits 2 before the command line is read, so it prints FR-010's stderr text only; the interface number rises only when a field is removed, renamed or retyped (spec 0.8.1 §3)
 Tests: T-014.1 [integration], T-014.2 [integration], T-014.3 [integration], T-014.4 [integration], T-014.5 [integration], T-014.6 [integration], T-014.7 [integration], T-014.8 [integration]  (test-cases/lint-cli.yaml)
 Traces: cli:prd_lint; `prdlint/interface.py`
+
+### FR-015 Leave the PRD folder's root README out of the lint
+Status: verified
+Source: prd-toolkit/scripts/prdlint/model.py:832 @22fa357
+Flow: 1. load the folder → 2. leave out the file `README.md` directly in the folder, which `prd_block.py`
+      generates from the PRD → 3. run the rules on everything else, other `README.md` files included
+Acceptance (EARS):
+- AC-015.1 The lint command shall report no finding for the file named `README.md` directly in the
+  PRD folder, whatever it holds, and shall read every other `README.md` in the folder, such as
+  `contracts/dependencies/README.md`, as it reads any other Markdown file there.
+Errors: -
+Edge cases: the root README is a guide `prd_block.py` writes from the PRD (prd-toolkit 0.8.4), never a source; a `README.md` in `features/` or `contracts/` is still linted → AC-015.1; only lint is in this area: the change digest, the bump and the tester skip the file by their own rules (unadopted areas)
+Tests: T-015.1 [integration], T-015.2 [integration]  (test-cases/lint-cli.yaml)
+Traces: cli:prd_lint; `prd_block.py` (the README's writer, status area)

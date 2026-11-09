@@ -30,6 +30,14 @@ _BACKTICKED = re.compile(r"`([^`]+)`")
 _ITEM_LIST = re.compile(r"\s*(`[^`]+`(?:\s*,\s*`[^`]+`)*)")
 _OP_CHARS = set("();<>|&")
 _TASK_OUTPUT = re.compile(r"^[A-Za-z0-9_-]+\.output$")
+# A glob character the shell would expand (outside quotes, unescaped) is lexed as its mask, so a check can tell
+# `grep 'T-0*' tests` from `grep s* tests`; every check but grep's reads the token with its glob characters back.
+_GLOB_MASK = {"*": "\x01", "?": "\x02", "[": "\x03"}
+_UNMASK = str.maketrans({v: k for k, v in _GLOB_MASK.items()})
+# grep (0.8.4): the only options the tester may give it; `-R` and `--dereference-recursive` follow symbolic links.
+GREP_FLAGS = set("rnlLciwxvoqsHhEF")
+GREP_VALUE_FLAGS = set("efmABC")
+GREP_GLOB_OPTS = ("--include=", "--exclude=")
 
 
 class Block(Exception):
@@ -222,8 +230,8 @@ class Context:
             return []
         return ([self.scratch] if self.scratch else []) + self.test_roots
 
-    def inside(self, raw: str, roots: list[Path]) -> bool:
-        p = (self.cwd / raw).resolve()
+    def inside(self, raw: str, roots: list[Path], base: Path | None = None) -> bool:
+        p = ((base or self.cwd) / raw).resolve()
         return any(p.is_relative_to(r) for r in roots)
 
     def can_read(self, raw: str) -> bool:
@@ -237,8 +245,9 @@ class Context:
         p = (self.cwd / raw).resolve()
         return p.parent == self.tasks_dir and bool(_TASK_OUTPUT.match(p.name))
 
-    def can_write(self, raw: str) -> bool:
-        return self.inside(raw, self.write_roots())
+    def can_write(self, raw: str, base: Path | None = None) -> bool:
+        """`raw` resolved from `base` (default: cwd) is inside a write root."""
+        return self.inside(raw, self.write_roots(), base)
 
     def deny(self, verb: str) -> Block:
         roots = self.read_roots() if verb == "read" else self.write_roots()
@@ -271,7 +280,34 @@ def check_bash(ctx: Context, cmd: object) -> None:
             _check_segment(ctx, seg, deny)
 
 
+def _mask_globs(line: str, deny: Block) -> str:
+    """`line` with each glob character the shell would expand replaced by its mask; quotes and escapes are kept as
+    they are, so the lexer splits the masked line exactly as the original one."""
+    if any(m in line for m in _GLOB_MASK.values()):
+        raise deny
+    out, quote, i = [], None, 0
+    while i < len(line):
+        c = line[i]
+        if quote == "'":
+            quote = None if c == "'" else quote
+        elif c == "\\" and i + 1 < len(line):
+            out.append(line[i:i + 2])
+            i += 2
+            continue
+        elif quote == '"':
+            quote = None if c == '"' else quote
+        elif c in "'\"":
+            quote = c
+        elif c in _GLOB_MASK:
+            c = _GLOB_MASK[c]
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def _segments(line: str, deny: Block) -> list[list[str]]:
+    """The line's command segments, each a token list in which an unquoted glob character is still masked."""
+    line = _mask_globs(line, deny)
     try:
         lex = shlex.shlex(line, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
@@ -288,8 +324,10 @@ def _segments(line: str, deny: Block) -> list[list[str]]:
     return [s for s in segs if s]
 
 
-def _check_segment(ctx: Context, toks: list[str], deny: Block) -> None:
+def _check_segment(ctx: Context, masked: list[str], deny: Block) -> None:
+    toks = [t.translate(_UNMASK) for t in masked]
     args: list[str] = []
+    margs: list[str] = []  # args as lexed, an unquoted glob character still masked
     i = 0
     while i < len(toks):
         t = toks[i]
@@ -299,6 +337,7 @@ def _check_segment(ctx: Context, toks: list[str], deny: Block) -> None:
             target = toks[i + 1]
             if args and args[-1].isdigit():
                 args.pop()  # a file descriptor, as in 2>&1
+                margs.pop()
             if not (t == ">&" and (target.isdigit() or target == "-")) and target != "/dev/null":
                 if t == "<":
                     if has_glob(target) or not ctx.can_read(target):
@@ -310,13 +349,17 @@ def _check_segment(ctx: Context, toks: list[str], deny: Block) -> None:
         if "$" in t or "{" in t or t.startswith("~"):
             raise deny
         args.append(t)
+        margs.append(masked[i])
         i += 1
     if not args or args[0] in SHELLS:
         raise deny
     for h in ctx.harness:
         if args[: len(h)] == h:
-            _check_harness_args(ctx, args[len(h):])
+            _check_harness_args(ctx, args[len(h):], _harness_base(ctx, h))
             return
+    if args[0] == "grep":
+        _check_grep(ctx, margs[1:], deny)
+        return
     if args[: len(PY_COMPILE)] == PY_COMPILE:
         paths, verb = _non_flags(args[len(PY_COMPILE):]), "write"
     elif args[0] == "mkdir":
@@ -353,11 +396,23 @@ def _looks_like_path(v: str) -> bool:
     return "/" in v or v.endswith(".py")
 
 
-def _check_harness_args(ctx: Context, rest: list[str]) -> None:
-    """Arguments after a harness command may only point at scratch or test roots."""
+def _harness_base(ctx: Context, harness: list[str]) -> Path:
+    """Where the harness reads its path arguments from: uv's `--directory <d>` (or `--directory=<d>`), resolved from
+    cwd, when the harness is a uv command that holds one; else cwd."""
+    if harness and harness[0] == "uv":
+        for n, t in enumerate(harness):
+            if t == "--directory" and n + 1 < len(harness):
+                return (ctx.cwd / harness[n + 1]).resolve()
+            if t.startswith("--directory="):
+                return (ctx.cwd / t.partition("=")[2]).resolve()
+    return ctx.cwd
+
+
+def _check_harness_args(ctx: Context, rest: list[str], base: Path) -> None:
+    """Arguments after a harness command may only point at scratch or test roots, each resolved from `base`."""
     def need(v: str) -> None:
         v = v.split("::", 1)[0]
-        if has_glob(v) or not ctx.can_write(v):
+        if has_glob(v) or not ctx.can_write(v, base):
             raise ctx.deny("write")
 
     def check_ini(kv: str) -> None:
@@ -403,6 +458,67 @@ def _check_harness_args(ctx: Context, rest: list[str]) -> None:
                 check_ini(val)
         elif not a.startswith("-") and _looks_like_path(a):
             need(a)
+
+
+def _check_grep(ctx: Context, margs: list[str], deny: Block) -> None:
+    """`grep` with options from GREP_FLAGS, GREP_VALUE_FLAGS and GREP_GLOB_OPTS only (short flags may cluster, a value
+    is the rest of its token or the next token), the pattern the first operand unless `-e` or `-f` gives it, `-f`'s
+    file readable, and at least one file operand, none with a glob character, each readable. `margs` still holds each
+    unquoted glob character masked: one in the pattern or an option value would be expanded by the shell into more
+    operands, so it is refused; only an `--include=` or `--exclude=` value may hold one. Every option comes before the
+    first operand, so GNU and BSD grep read the same tokens as operands."""
+    def unquoted_glob(t: str) -> bool:
+        return t != t.translate(_UNMASK)
+
+    def readable(m: str) -> None:
+        p = m.translate(_UNMASK)
+        if not p or has_glob(p) or not ctx.can_read(p):
+            raise ctx.deny("read")
+
+    operands: list[str] = []
+    pattern_given, ended, i = False, False, 0
+    while i < len(margs):
+        a = margs[i]
+        i += 1
+        if ended or not a.startswith("-") or a == "-":
+            operands.append(a)
+        elif operands:
+            # GNU grep reads an option after an operand as an option, BSD grep as a file (`--` too): neither is checked
+            raise deny
+        elif a == "--":
+            ended = True
+        elif a.startswith(GREP_GLOB_OPTS):
+            continue
+        elif a.startswith("--"):
+            raise deny
+        else:
+            for j, ch in enumerate(a[1:], 1):
+                if ch in GREP_FLAGS:
+                    continue
+                if ch not in GREP_VALUE_FLAGS:
+                    raise deny
+                value = a[j + 1:]
+                if not value:
+                    if i >= len(margs):
+                        raise deny
+                    value, i = margs[i], i + 1
+                if unquoted_glob(value):
+                    raise deny
+                if ch in "ef":
+                    pattern_given = True
+                if ch == "f":
+                    readable(value)
+                break
+    if not pattern_given:
+        if not operands:
+            raise deny
+        pattern, operands = operands[0], operands[1:]
+        if unquoted_glob(pattern):
+            raise deny
+    if not operands:
+        raise ctx.deny("read")
+    for m in operands:
+        readable(m)
 
 
 def check(data: dict) -> None:

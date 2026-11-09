@@ -96,6 +96,16 @@ Level-2 headings, exactly these, in this order:
 A section whose subject does not apply has the body `Not applicable: <reason>`. Section 13 is
 the single line `None.` when empty; open questions are bullet lines and block approval.
 
+Section 2 may hold two optional labelled parts beside `Goals:`, `Personas:` and `Out of scope:`:
+`Principles:` (bullets, each `- **<name>.** <one or two sentences>`) and `Getting started:` (numbered
+steps a new user takes). A part starts at a line that begins with its label, or with the PRD
+language's label from `references/languages/<code>.yaml` (`es`: `Principios:` and `Primeros pasos:`),
+and runs to the next labelled line of §2 or the end of §2; text after the label on its own line
+belongs to the part. Both are free Markdown, neither is required, and lint checks nothing new. The
+PRD's README and the published Overview tab show them (`prdlint/overview.py` reads them, and §2's
+first paragraph, the summary: its first run of non-blank lines once HTML comments are removed, never
+a paragraph that starts with a label).
+
 Tables (the header row is parsed; column names and order are fixed):
 
 | Section | Header |

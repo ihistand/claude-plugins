@@ -1,5 +1,35 @@
 # `prd-toolkit` eval baseline
 
+## 0.8.4 baseline
+
+### Task 8: `tester-ignores-readme` (spec sections 5 and 12)
+
+One new case for the tester's README rule: the PRD folder's root `README.md` is a guide generated from the PRD, never
+a source for a test or a question. Recorded 2026-11-07 on `feat/prd-toolkit-0.8.4` (uncommitted until Task 8's
+commit), `--runs 3`, model `sonnet`, Claude Code 2.1.319, plugin 0.8.3 (the manifest bump is a later task). RED ran on
+the worktree before any skill edit (the unchanged texts plus the new case directory); GREEN on the Task 8 text. Same
+command form as 0.8.2, `--case 'tester-ignores-readme'`.
+
+Start state: the greet PRD (`deploy_repo.py ready`) with the deploy-gate tests for T-002.1 and T-002.2 removed, and
+`docs/prd/greet/README.md` written by the vendored `prd_block.py` plus a hand-written note below the block that no
+PRD file states: "On every installed environment `greet` answers in French: `greet World` prints `Bonjour, World!`"
+(T-002.1's case expects `Hi, World!` on staging). The prompt dispatches `prd-tester` in write mode for T-002.1 and
+T-002.2.
+
+| Case (start state) | with | w/out | Δ | Notes |
+|---|---|---|---|---|
+| `tester-ignores-readme` RED | 1.00 | 0.80 | +0.20 | Unchanged text. No test and no question drew on the README in any of the three with runs: each Globbed `docs/prd/greet/**`, which lists the README, and never read it (it read `testing.md`, the test cases, `features/greet.md`, `prd.md` and `contracts/config.yaml`). The tests assert `Hi, World!`; no report names the French greeting. Rule 1's "Never `src/`, other tests, README, CLAUDE.md" already kept it out. Without the plugin there is no `prd-tester`, so `test-written` fails (0.80). |
+| `tester-ignores-readme` GREEN | 1.00 | 0.80 | +0.20 | 3 of 3 with runs, as RED: the README is listed by the Glob and never read; tests assert `Hi, World!`; no report cites it. One run searched with Bash `grep -rn '@prd T-002' tests`, which the 0.8.4 guard allowed (fix 3). Re-run once on the final wording (rule 6 reordered, lines rewrapped): 1.00 / 0.80 again, 3 of 3. |
+
+- **Not RED-proven; a regression guard.** The unchanged tester already never opens the README, so this case cannot
+  show the new rule's effect; it guards against a later text that makes the tester read it. The rule is the spec's
+  (section 5) and is pinned in `tests/test_readme_skills.py`. The graders were not loosened.
+- **Graders:** `tester-dispatched`, `test-written` (a Write under `tests/` citing `@prd T-002.1`, so the `max: 0`
+  graders cannot pass a run that wrote nothing), `no-write-from-readme` and `no-edit-from-readme` (no Write or Edit
+  under `tests/` holding `Bonjour`, `French` or `français`), `report-never-cites-readme` (`match: not_contains` on the
+  last message). Checked under Python `re` on synthetic inputs: a test asserting `Bonjour` and an Edit writing it are
+  caught, `Hi, World!` is not; a report line naming French is caught.
+
 ## 0.8.2 baseline
 
 One new case for the 0.8.2 skill text (Task 8, spec section 13 fix 2): a `fix` answer whose words restate what the

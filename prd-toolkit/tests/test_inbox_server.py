@@ -139,6 +139,22 @@ def test_the_cards_of_the_other_kinds_carry_the_fields_the_page_renders(inbox):
     assert inbox.gate(f"adoption:{AREA}")["area"] == AREA
 
 
+def test_an_unreadable_run_log_is_a_card_with_its_reason_that_is_refused(inbox):
+    from prdlint import deploy
+
+    with (deploy.log_dir(inbox.repo) / f"{inbox.run_id}.jsonl").open("a", encoding="utf-8") as f:
+        f.write('{"kind": "confirm"\n')
+    gate_id = f"deploy-step:{inbox.run_id}:unreadable"
+    d = inbox.gate(gate_id)
+    assert d["title"] == f"run log {inbox.run_id} could not be read" and d["question"]
+    assert d["run"] == inbox.run_id and d["unreadable"] is True and d["choices"] == []
+    assert f"deploy-step:{inbox.run_id}:3" not in {g["id"] for g in inbox.group(inbox.repo)["gates"]}
+    before = snapshot(inbox.repo)
+    status, out = inbox.post(gate_id, "send", "deploy production")
+    assert status == 400 and out["error"] == f"refused: run log {inbox.run_id} could not be read: {d['question']}", out
+    assert snapshot(inbox.repo) == before and inbox.log() == []
+
+
 def test_a_deploy_step_gate_shows_once_in_the_first_group(inbox):
     gate_id = f"deploy-step:{inbox.run_id}:3"
     first, second = ({g["id"] for g in grp["gates"]} for grp in inbox.gates()["worktrees"])

@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from string import Template
 
-from . import languages, status, trace
+from . import languages, overview, status, trace
 from .context import _section
 from .deps import require
 from .markdown import sections
@@ -19,6 +19,17 @@ TEMPLATE = Path(__file__).resolve().parent.parent.parent / "templates/publish/pa
 MAX_SUMMARY = 600
 NO_COMMIT = "no commit"
 _MD = markdown_it.MarkdownIt("commonmark", {"html": False}).enable("table").disable("image")
+
+
+def _fence(self, tokens, idx, options, env):
+    t = tokens[idx]
+    if t.info.strip().split(" ")[0] == "mermaid":
+        return f'<pre class="mermaid">{html.escape(t.content, quote=True)}</pre>\n'
+    return _DEFAULT_FENCE(self, tokens, idx, options, env)
+
+
+_DEFAULT_FENCE = markdown_it.renderer.RendererHTML.fence
+_MD.add_render_rule("fence", _fence)
 _MD.validateLink = lambda url: url.strip().lower().startswith(("#", "http://", "https://", "mailto:"))  # no data: or relative targets
 _ID = re.compile(r"^([A-Z]+)-(\d+)$")
 
@@ -347,6 +358,47 @@ def technical(prd: Prd, repo_root: Path, summaries: dict | None) -> str:
     ])
 
 
+# ---- overview --------------------------------------------------------------------------------
+
+def _part(heading: str, body: str) -> str:
+    return f"<h2>{_e(heading)}</h2>{body}\n" if body else ""
+
+
+def _counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{n} {k}" for k, n in counts.items()) or "-"
+
+
+def _linked(facts: overview.Facts) -> str:
+    def listing(label: str, locs: list[str]) -> str:
+        items = "".join(f"<li><code>{_e(x.strip().strip('`').strip())}</code></li>" for x in locs)
+        return f"<h3>{_e(label)}</h3>" + (f"<ul>{items}</ul>" if items else _none())
+    if not (facts.upstreams or facts.consumers):
+        return ""
+    return listing(L("upstreams"), facts.upstreams) + listing(L("consumers"), facts.consumers)
+
+
+def overview_panel(prd: Prd, facts: overview.Facts) -> str:
+    """The Overview tab: the README's facts in order, each part left out when its source is empty."""
+    n = facts.open_errors
+    errors = L("overview_errors_none") if n == 0 else L("overview_errors_one") if n == 1 else L("overview_errors_many", n=n)
+    s4 = _section(prd, 4)
+    arch = "\n".join(t for _, t in s4.body).strip() if s4 else ""
+    rows = [[_e(a.name), _e(a.adoption), _e(_counts(a.counts))] for a in facts.areas]
+    head = [_e(L("overview_area")), _e(L("overview_adoption")), _e(L("overview_requirements"))]
+    line = L("overview_line", version=facts.version, status=facts.status, owner=facts.owner, updated=facts.updated)
+    return "".join([
+        f'<p class="none">{_e(line)}</p>\n',
+        _part(L("what_it_is"), _md(facts.summary) if facts.summary else ""),
+        _part(L("principles"), _md(facts.principles) if facts.principles else ""),
+        _part(L("architecture"), _md(arch) if arch else ""),
+        _part(L("areas"), _table(head, rows) if rows else ""),
+        _part(L("overview_open_errors"), f"<p>{_e(errors)}</p>"),
+        _part(L("linked_prds"), _linked(facts)),
+        _part(L("getting_started"), _md(facts.getting_started) if facts.getting_started else ""),
+        f'<p class="none">{_e(L("snapshot_line", version=facts.version))}</p>',
+    ])
+
+
 # ---- page ------------------------------------------------------------------------------------
 
 def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date) -> str:
@@ -358,6 +410,7 @@ def render_page(prd: Prd, repo_root: Path, summaries: dict | None, today: date) 
     table = languages.for_prd(prd)
     return Template(TEMPLATE.read_text(encoding="utf-8")).substitute(
         lang=_e(table.code if table else "en"),
+        overview_label=_e(L("overview")), overview=overview_panel(prd, overview.facts(prd)),
         business_label=_e(L("business")), technical_label=_e(L("technical")),
         title=_e(f"{prd.frontmatter.get('prd', 'PRD')} {L('prd')} {prd.frontmatter.get('version', '')}"),
         header=_header(prd, repo_root, today),

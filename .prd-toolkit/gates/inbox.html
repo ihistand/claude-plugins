@@ -284,7 +284,7 @@ function gateCard(entry, slots) {
       h('button', { type: 'button', class: 'link', text: 'Dismiss', events: { click: () => { I.flags.delete(entry.key); draw(); } } })));
   }
   card.append(h('p', { class: 'gq', text: g.question }));
-  if (!entry.gone && g.waiting === false) card.append(h('p', { class: 'muted gnowait', text: 'No session is waiting on this gate. Answering it still records the answer.' }));
+  if (!entry.gone && g.waiting === false && !g.unreadable) card.append(h('p', { class: 'muted gnowait', text: 'No session is waiting on this gate. Answering it still records the answer.' }));
   const evidence = g.evidence || [];
   if (evidence.length) {
     card.append(h('ul', { class: 'gev' }, evidence.slice(0, FOLD).map((line) => h('li', { text: line }))));
@@ -367,6 +367,13 @@ function renderErrorClass(entry) {
 
 function renderDeployStep(entry) {
   const g = entry.g;
+  if (g.unreadable) {
+    // the run's log cannot be read, so the step it stopped at is unknown: the reason, and nothing to answer
+    return [
+      h('div', { class: 'gfacts' }, [fact('Run', g.run || ''), fact('Reason', g.question || '')].flat()),
+      h('p', { class: 'muted', text: 'This run log could not be read, so this card takes no reply. It leaves the inbox once the log reads again.' }),
+    ];
+  }
   return [
     h('div', { class: 'gfacts' }, [fact('Run', g.run || ''), fact('Environment', g.env || ''), fact('Actor', g.actor || ''),
       fact('Do', g.do || ''), fact('Check', g.check || '')].flat()),

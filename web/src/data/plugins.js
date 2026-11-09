@@ -41,7 +41,7 @@ export const plugins = [
   {
     id: 'prd-toolkit',
     name: 'prd-toolkit',
-    version: '0.8.3',
+    version: '0.8.4',
     description: 'A living PRD as the single authority agents build, test and deploy from: a PRD folder with contracts and black-box test cases, a 40-rule linter and trace checks, a test agent that cannot read your code, skills to author, adopt and change it, a builder that takes an approved change to verified code, a deploy script that takes it live, an error ledger from record to checked fix, a publisher that renders the PRD as one page, packs, languages and judged test cases that extend it to documents in other languages, a change-set coordinator that links PRDs across repositories, and a machine interface (JSON scripts for changes and gates). Includes /prd-new, /prd-adopt, /prd-change, /prd-context, /prd-build, /prd-status, /prd-deploy, /prd-error, /prd-publish and /prd-change-set.',
     install: '/plugin install prd-toolkit@ihistand',
     commands: [
@@ -53,7 +53,7 @@ export const plugins = [
       { name: '/prd-status', description: 'Show where each requirement stands', workflow: 'prd_status.py reads the PRD and the build state → prints each requirement as approved, built or verified' },
       { name: '/prd-deploy', description: 'Deploy a verified PRD through its runbook', workflow: 'prd_deploy.py plan → run the runbook step by step, stopping at every human step and failure → you relay each reply verbatim → Deployed rows and verified → live' },
       { name: '/prd-error', description: 'Record, diagnose and fix an error through the PRD', workflow: 'prd_error.py new → reproduce with a failing test → propose a class → your confirmation → /prd-change and /prd-build --fixes → resolve → prd_error.py check' },
-      { name: '/prd-publish', description: 'Render the PRD as one self-contained page to share', workflow: 'prd_publish.py → Business and Technical tabs with per-area summaries that cite their IDs → a private Artifact or the file' },
+      { name: '/prd-publish', description: 'Render the PRD as one self-contained page to share', workflow: 'prd_publish.py → Overview, Business and Technical tabs with per-area summaries that cite their IDs → a private Artifact or the file' },
       { name: '/prd-change-set', description: 'Coordinate one change across linked PRDs in several repositories', workflow: 'prd_links.py impact → changes/CS-nnn.md → every member\'s PRD edited → one approval → build and deploy each repository in dependency order → Merge order' },
     ],
     skills: [
@@ -79,6 +79,7 @@ export const plugins = [
       { label: 'Design spec (0.8.1)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-03-prd-toolkit-0.8.1-design.md' },
       { label: 'Design spec (0.8.2)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md' },
       { label: 'Design spec (0.8.3)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-06-prd-toolkit-0.8.3-backlog-design.md' },
+      { label: 'Design spec (0.8.4)', url: 'https://github.com/ihistand/claude-plugins/blob/main/docs/superpowers/specs/2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md' },
     ],
   },
 ]

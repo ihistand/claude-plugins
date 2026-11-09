@@ -121,6 +121,9 @@ a row `adopted` whose adoption has no §14 row is step 5 interrupted: resume at 
   collects `tests/system`): give each level its own path. Lint reports an overlap (`test-level`).
   Anything only the user knows (the owner, intent, environments, secrets) stays a
   `[NEEDS CLARIFICATION: …]` marker.
+- **§2's two optional parts:** offer to draft `Principles:` and `Getting started:` from what the
+  user has said, as authoring phase 2 says; the user's words decide them. Neither is required: a
+  §2 without them is complete, and neither takes a marker.
 - **Operations** (`operations.md` is project-wide, so this is read from the repo, not from the
   extractor's report): the adopter writes the runbook as-built, from the repo's deploy scripts, CI
   files and docs, in the grammar of `${CLAUDE_PLUGIN_ROOT}/references/prd-format.md` (Environments
@@ -416,7 +419,8 @@ files; if a test case changed since, run step 4 again.
      5's actions are status `Approved`, the `prd-lint-exit=` value is `0`, `prd_block.py` and the
      `docs/superpowers/plans/` grep.
 
-   Then commit the PRD folder, the suite's tests and CLAUDE.md together.
+   Then commit the PRD folder (its `README.md` included), `docs/prd/README.md` when it exists, the
+   suite's tests and CLAUDE.md together.
 5. **Hooks and CI.** When the repository has no `.prd-toolkit/` yet, offer to install the hooks
    and generate CI, and run them only on the user's explicit yes, each its own call (`--gitlab`
    in place of `--github` for a GitLab project):

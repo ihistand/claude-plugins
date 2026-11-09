@@ -10,6 +10,9 @@
 > **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.3 merged.
 >
 > **Revisions.**
+> - Section 8's mermaid line (owner, 2026-11-08): the proof found that the Artifact viewer draws no
+>   mermaid diagram on an HTML page, so the page shows the source everywhere. 0.8.4 ships as built,
+>   with the text corrected; drawing the diagram moves to 0.8.5.
 > - Section 16 and the scope (owner, 2026-11-07): the fixes from the 0.8.3 proof and its residuals
 >   join 0.8.4 as section 16. The six deploy and pack items that section 16 held move to 0.8.5
 >   (`2026-11-07-prd-toolkit-0.8.5-deploy-and-packs-design.md`), best practices to 0.8.6 and
@@ -285,8 +288,9 @@ each from the PRD and each left out when its source is empty:
 | The line `A snapshot of the PRD at version <version>. The PRD in the repository is the authority.` | fixed, in the PRD's language |
 
 - **Mermaid.** A ```` ```mermaid ```` fence anywhere on the page, the Technical tab's §4 included,
-  renders as `<pre class="mermaid">` holding the escaped source. The page still loads nothing; an
-  Artifact viewer draws the diagram, and a plain browser shows the source as before.
+  renders as `<pre class="mermaid">` holding the escaped source. The page still loads nothing, and
+  every viewer shows the source: the Artifact viewer runs no mermaid on an HTML page (the 0.8.4
+  proof, 2026-11-08). Drawing the diagram is 0.8.5's item 9.
 - The Overview takes no summary: `--summaries` keys are areas, and the tab restates nothing.
 - Every label is a language-table key (`overview`, `what_it_is`, `principles`, `areas`,
   `open_errors`, `linked_prds`, `getting_started`, `snapshot_line`), with `en` and `es` values; a key

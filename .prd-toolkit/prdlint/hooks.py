@@ -9,6 +9,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import change_approve
+
 VENDOR_DIR = ".prd-toolkit"
 VENDORED = ("prd_lint.py", "prd_trace.py", "prd_status.py", "prd_context.py", "prd_build_check.py", "prd_hooks.py", "prd_git_hook.py", "prd_deploy.py", "prd_drift.py", "prd_block.py", "prd_error.py", "prd_links.py", "prd_confirm.py", "prd_judge.py", "prd_change.py", "prd_gates.py")
 MARKER = "# prd-toolkit hook"
@@ -24,6 +26,7 @@ PACK_SOURCES = "pack-sources.json"  # .prd-toolkit/pack-sources.json: {"<pack na
 RECORD_DIR = ".prd-judge/"
 REVIEW_FILE = ".prd-review.json"  # the review verdict review mode or the changing-prds skill writes; never committed
 BLOCK_TEMPLATE_DIR = "templates"  # .prd-toolkit/templates/claude-block.md
+HOMEPAGE_FILE = "HOMEPAGE"  # .prd-toolkit/HOMEPAGE: the plugin's `homepage`, one line, read by a vendored prd_block.py
 VENDORED_TEMPLATES = "hooks"  # the shim templates, vendored as .prd-toolkit/hooks/
 
 SCRIPTS = Path(__file__).resolve().parent.parent
@@ -73,6 +76,8 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
     for hook in HOOKS:
         files[f"{VENDORED_TEMPLATES}/{hook}"] = templates / hook
     files[f"{BLOCK_TEMPLATE_DIR}/{BLOCK_TEMPLATE}"] = templates.parent / BLOCK_TEMPLATE  # prd_block.py reads it from the copy
+    for readme in ("readme-prd.md", "readme-prds.md"):  # the README blocks' templates, read the same way
+        files[f"{BLOCK_TEMPLATE_DIR}/{readme}"] = templates.parent / readme
     files[CONFIRM_PAGE] = templates.parent / CONFIRM_PAGE
     files[CONFIRM_PANEL] = templates.parent / CONFIRM_PANEL  # form.html includes it
     files[INBOX_PAGE] = templates.parent / INBOX_PAGE  # and so does the inbox page
@@ -86,6 +91,10 @@ def _source_files(scripts: Path, templates: Path) -> dict[str, Path]:
 
 class InstallRefused(Exception):
     """An install that vendors nothing: a named pack cannot be resolved from its source."""
+
+
+class BlocksRefused(InstallRefused):
+    """An install that writes nothing: a managed block cannot be merged (a broken marker); exit 1, not an internal error."""
 
 
 def _pack_refs(prd) -> list:
@@ -144,6 +153,49 @@ def _hooks_dir(repo_root: Path) -> tuple[Path, str]:
     return (p if p.is_absolute() else repo_root / p), raw
 
 
+def _plugin_homepage() -> str | None:
+    try:
+        value = json.loads((PLUGIN_ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8")).get("homepage")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _write_homepage(dest: Path) -> None:
+    """Write .prd-toolkit/HOMEPAGE (via a temp file) when the plugin has a homepage; remove a stale one otherwise."""
+    home, target = _plugin_homepage(), dest / HOMEPAGE_FILE
+    if home is None:
+        target.unlink(missing_ok=True)
+        return
+    tmp = dest / f".{HOMEPAGE_FILE}.tmp"
+    tmp.write_text(home + "\n", encoding="utf-8")
+    os.replace(tmp, target)
+
+
+def _blocks(repo_root: Path, prd_rel: str):
+    """prd_block's targets for the PRD; its module comes from this copy's scripts folder (the vendored one when vendored)."""
+    import sys
+
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import prd_block
+    from .model import load
+
+    prd = load(Path(repo_root) / prd_rel)
+    return prd_block, prd_block.targets(prd, Path(repo_root).resolve(), Path(repo_root) / "CLAUDE.md")
+
+
+def _relative_message(repo_root: Path, text: str) -> str:
+    return text.replace(str(Path(repo_root).resolve()) + os.sep, "").replace(str(Path(repo_root)) + os.sep, "")
+
+
+def _shown(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _vendor(repo_root: Path, sources_packs=()) -> None:
     dest = repo_root / VENDOR_DIR
     sources = _source_files(SCRIPTS, PLUGIN_ROOT / "templates/hooks")
@@ -174,6 +226,7 @@ def _vendor(repo_root: Path, sources_packs=()) -> None:
     record = {p.name: p.source for p in sorted(sources_packs, key=lambda p: p.name)}
     (dest / PACK_SOURCES).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     (dest / "VERSION").write_text(plugin_version(PLUGIN_ROOT) + "\n", encoding="utf-8")
+    _write_homepage(dest)
     (dest / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
 
 
@@ -212,7 +265,13 @@ def vendor(repo_root: Path, prd_rel: str) -> list[str]:
 def install(repo_root: Path, prd_rel: str) -> list[str]:
     repo_root = Path(repo_root)
     lines: list[str] = []
+    module = tgts = None
     if is_plugin():
+        module, tgts = _blocks(repo_root, prd_rel)
+        try:
+            module.stale(tgts)  # merges every block in memory: a broken marker refuses here, before anything is written
+        except module.BlockError as e:
+            raise BlocksRefused(f"{_relative_message(repo_root, str(e))}; fix the marker, then run prd_block.py {prd_rel}") from None
         lines.append(_vendor_from_plugin(repo_root, prd_rel))
         _ignore_record(repo_root)
     configured = _hooks_path_config(repo_root)
@@ -220,7 +279,7 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
     if configured:
         for hook in HOOKS:
             lines.append(_append_message(hook, prd_rel, shown, f"core.hooksPath is set to {configured}; no shim written"))
-        return lines
+        return lines + _refresh(repo_root, module, tgts)
     hooks_dir.mkdir(parents=True, exist_ok=True)
     for hook in HOOKS:
         path = hooks_dir / hook
@@ -232,7 +291,12 @@ def install(repo_root: Path, prd_rel: str) -> list[str]:
             f.write(text)
         path.chmod(0o755)
         lines.append(f"installed {shown}/{hook}")
-    return lines
+    return lines + _refresh(repo_root, module, tgts)
+
+
+def _refresh(repo_root: Path, module, tgts) -> list[str]:
+    """Write the managed blocks (the plugin's prd_block, so a refresh and CI's check agree); the last install step."""
+    return [f"refreshed {_shown(repo_root, p)}" for p in module.write(tgts)] if module is not None else []
 
 
 def not_a_checkout(prd) -> str:
@@ -241,9 +305,20 @@ def not_a_checkout(prd) -> str:
 
 
 def stale_ci(repo_root: Path, prd, prd_rel: str) -> list[str]:
-    """One line per CI include present whose text differs from what `prd_hooks.py ci` would write now."""
+    """One line per stale managed block (CLAUDE.md, the PRD's README, the parent README) and per CI include present whose
+    text differs from what `prd_hooks.py ci` would write now. A block with a broken marker is one stale line naming the
+    file and the problem, so the check exits 1, not 2."""
     jobs = ci_jobs(prd, prd_rel) + deploy_jobs(prd, prd_rel)
     out = []
+    module, tgts = _blocks(repo_root, prd_rel)
+    if change_approve._ignored(Path(repo_root), "CLAUDE.md"):
+        # a git-ignored CLAUDE.md is absent from a CI checkout, and nothing committed holds its block
+        tgts = [t for t in tgts if Path(t[0]).name != "CLAUDE.md" or Path(t[0]).parent != Path(repo_root)]
+    try:
+        for path in module.stale(tgts):
+            out.append(f"stale: {_shown(repo_root, path)}; run prd_block.py {prd_rel}")
+    except module.BlockError as e:
+        out.append(f"stale: {_relative_message(repo_root, str(e))}; run prd_block.py {prd_rel}")
     for kind, rel in CI_FILES.items():
         path = Path(repo_root) / rel
         if path.is_file() and path.read_text(encoding="utf-8") != (render_gitlab if kind == "gitlab" else render_github)(jobs, prd.operations.secrets):

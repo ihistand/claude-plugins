@@ -38,7 +38,7 @@ def test_f2_build_ids_are_joined_with_commas_for_req():
 def test_f3_approval_commit_carries_refs_none():
     phase7 = [l for l in AUTHORING.read_text(encoding="utf-8").splitlines() if l.startswith("| 7 |")][0]
     phase7 = " ".join(phase7.split())
-    assert "commit the folder and CLAUDE.md with " + NO_REFS in phase7
+    assert "commit the folder, `docs/prd/README.md` when it exists, and CLAUDE.md with " + NO_REFS in phase7
 
 
 def test_f3_changing_commit_of_prd_and_claude_md_carries_refs_none():
