@@ -2,8 +2,8 @@
 
 > **Date:** 2026-11-08
 > **Author:** Ivan Histand & Claude Code
-> **Status:** Draft, every section approved by the owner in the brainstorm of 2026-11-08; the
-> written text awaiting review
+> **Status:** Approved by the owner 2026-11-08 (every section in the brainstorm, then the written
+> text). Plan: `docs/superpowers/plans/2026-11-08-prd-toolkit-0.8.5.md`.
 > **Extends:** `2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md` and the specs it extends, under
 > `2026-11-03-prd-toolkit-0.8-umbrella.md`. Where this addendum and any of them disagree, this
 > addendum wins for 0.8.5.
