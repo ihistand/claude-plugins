@@ -33,6 +33,19 @@ def _value_error(e: ValueError) -> int:
     return _fail(str(e))
 
 
+TIMEOUT_HELP = "per command, overriding every level's Timeout (default: a tests level's Timeout, else 600)"
+
+
+def _note_branch(prd: model.Prd, repo_root, run_id: str) -> None:
+    """At a run's finish, the note for a close on another branch than one its environments deploy from (stderr only)."""
+    try:
+        note = deploy.branch_note(prd, repo_root, deploy.reached_envs(deploy.read_log(repo_root, run_id)))
+    except Exception:  # a note never changes the outcome
+        return
+    if note:
+        print(note, file=sys.stderr, flush=True)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="prd_deploy.py", description="Plan and run a PRD's deploy runbook.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -41,7 +54,7 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("prd_dir")
         p.add_argument("--until", metavar="ENV", help="stop after the last step on this environment")
         if name == "run":
-            p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
+            p.add_argument("--timeout", type=int, default=None, metavar="SECONDS", help=TIMEOUT_HELP)
     for name, text in (("resume", "continue a run after its confirmed human step"), ("confirm", "record the reply to the human step a run stopped at"),
                        ("rollback", "run a failed step's Rollback"),
                        ("recover", "turn a step killed before its result into a failed step")):
@@ -54,7 +67,8 @@ def _parser() -> argparse.ArgumentParser:
         if name in ("confirm", "recover"):
             p.add_argument("--reply", required=True, metavar="TEXT", action=many, help="the user's words" if name == "recover" else None)
         else:
-            p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
+            p.add_argument("--timeout", type=int, default=None, metavar="SECONDS",
+                           help=TIMEOUT_HELP if name == "resume" else "per command (default 600)")
     p = sub.add_parser("record", help="record a deploy the owner did by hand: a run log and the environment's Deployed row; runs nothing")
     p.add_argument("prd_dir")
     p.add_argument("--env", required=True, metavar="ENV")
@@ -81,13 +95,15 @@ def _steps_or_message(prd: model.Prd, until: str | None):
     return steps, None
 
 
-def _run_and_report(prd: model.Prd, repo_root, run_id: str, steps, start: int, timeout: int) -> int:
+def _run_and_report(prd: model.Prd, repo_root, run_id: str, steps, start: int, timeout: int | None) -> int:
     try:
         state, number = deploy.run_steps(prd, repo_root, run_id, steps, start, timeout)
     except Exception as e:  # the run has started: say so and fail it
         print(f"prd_deploy: internal error: {type(e).__name__}: {e}", file=sys.stderr)
         state, number = "failed", 0
     print(f"prd-deploy: {state} step={number} run={run_id}")
+    if state in ("done", "failed"):  # a run stopped at a human step has not finished
+        _note_branch(prd, repo_root, run_id)
     return deploy.EXIT[state]
 
 
@@ -162,6 +178,7 @@ def _resume(args, prd: model.Prd, repo_root) -> int:
     print(f"resume: {args.run}", flush=True)
     if confirmed == steps[-1].number:
         print(f"prd-deploy: done step={confirmed} run={args.run}")
+        _note_branch(prd, repo_root, args.run)
         return deploy.EXIT["done"]
     return _run_and_report(prd, repo_root, args.run, steps, confirmed + 1, args.timeout)
 
@@ -188,7 +205,7 @@ def main(argv: list[str]) -> int:
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return 0 if e.code in (0, None) else deploy.EXIT["usage"]
-    if args.command in ("run", "resume", "rollback") and args.timeout < 1:
+    if args.command in ("run", "resume", "rollback") and args.timeout is not None and args.timeout < 1:
         return _fail("--timeout must be at least 1")
     try:
         prd = model.load(Path(args.prd_dir))
@@ -221,6 +238,7 @@ def main(argv: list[str]) -> int:
             return _fail(f"internal error: {type(e).__name__}: {e}")
         for f in found:
             print(f)
+        _note_branch(prd, model.repo_root(prd.root), args.run)
         return 1 if found else 0
     steps, problem = _steps_or_message(prd, args.until)
     if problem:

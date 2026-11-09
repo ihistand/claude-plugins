@@ -797,3 +797,26 @@ def test_trailing_whitespace_alone_is_refused_at_resume(repo):
     p = repo / ERRORS
     p.write_text(p.read_text(encoding="utf-8") + "  \n", encoding="utf-8")
     refused_with(resume(repo, run_id), "the tracked tree has changes")
+
+
+# ---- 0.8.5: the close-branch note ----
+
+def test_check_prints_the_branch_note_and_still_passes(repo):
+    from test_deploy import NOTE, env_branches
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = staging_run(repo)
+    add_deployed(repo, run_id, "staging")
+    close(repo, run_id)
+    r = check(repo, run_id)
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == NOTE.format(current="work") + "\n", (r.returncode, r.stdout, r.stderr)
+
+
+def test_check_prints_the_note_beside_its_findings(repo):
+    from test_deploy import NOTE, env_branches
+    env_branches(repo, staging="release")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = staging_run(repo)
+    # no close commit and no Deployed row: a finding
+    r = check(repo, run_id)
+    assert r.returncode == 1 and r.stdout.strip() and r.stderr == NOTE.format(current="work") + "\n", (r.returncode, r.stdout, r.stderr)

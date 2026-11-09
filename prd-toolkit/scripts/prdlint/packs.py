@@ -214,6 +214,9 @@ def load_manifest(folder: Path, source: str) -> Pack:
         for i, item in enumerate(data.get(key) or []):
             if not (isinstance(item, dict) and all(isinstance(item.get(k), str) for k in need)):
                 bad(key, f"{key}[{i}] must be a mapping with {' and '.join(need)}")
+    for i, item in enumerate(data.get("levels") or []):
+        if "timeout" in item and not (type(item["timeout"]) is int and item["timeout"] >= 1):  # bool is not a timeout
+            bad("levels", f"levels[{i}]: timeout must be a whole number of seconds of at least 1")
     if not all(isinstance(w, str) and w.strip() for w in data.get("vocabulary") or []):
         bad("vocabulary", "vocabulary must be a list of words")
     for kind, ctype in (data.get("target-kinds") or {}).items():

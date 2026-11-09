@@ -178,8 +178,22 @@ def _tail(data: bytes) -> str:
     return data[-TAIL:].decode("utf-8", errors="replace")
 
 
-def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int) -> dict:
-    """Run `cmd`; returns exit, full stdout bytes, stderr tail text and whether it timed out."""
+def command_timeout(given: int | None) -> tuple[int, str]:
+    """A `Run:`, `Check:` or `Rollback:` command's seconds and the timeout message's parenthesis."""
+    return (given, "--timeout") if given is not None else (DEFAULT_TIMEOUT, "the default")
+
+
+def level_timeout(prd: Prd, level: str, given: int | None) -> tuple[int, str]:
+    """A tests level's seconds and the message's parenthesis: a given --timeout, else the level's Timeout, else the default."""
+    cell = prd.testing.timeouts.get(level, "")
+    if given is None and cell:
+        return int(cell), f"the {level} level's Timeout"
+    return command_timeout(given)
+
+
+def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int, why: str | None = None) -> dict:
+    """Run `cmd`; returns exit, full stdout bytes, stderr tail text and whether it timed out. `why`, when given, names
+    where the timeout came from in the timeout message."""
     proc = subprocess.Popen(
         ["bash", "-c", cmd], cwd=repo_root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env={**{k: v for k, v in os.environ.items() if k != "TEST_ENV"}, **extra_env}, start_new_session=True,
@@ -199,7 +213,7 @@ def _execute(cmd: str, repo_root: Path, extra_env: dict[str, str], timeout: int)
             out, err = b"", b""
     stderr = _tail(err)
     if timed_out:
-        stderr += ("" if not stderr or stderr.endswith("\n") else "\n") + f"timed out after {timeout} s"
+        stderr += ("" if not stderr or stderr.endswith("\n") else "\n") + f"timed out after {timeout} s" + (f" ({why})" if why else "")
     return {"exit": proc.returncode, "out": out, "stdout": _tail(out), "stderr": stderr, "timed_out": timed_out}
 
 
@@ -208,27 +222,38 @@ def _prints_ok(out: bytes, text: str) -> bool:
     return any(line.strip() == want for line in out.decode("utf-8", errors="replace").splitlines())
 
 
-def _agent_record(step: Step, repo_root: Path, timeout: int, mark) -> dict:
+def _matches_ok(out: bytes, pattern: str) -> bool:
+    """At least one stdout line, stripped, satisfies re.fullmatch(pattern, line)."""
+    return any(re.fullmatch(pattern, line.strip()) for line in out.decode("utf-8", errors="replace").splitlines())
+
+
+def _agent_record(step: Step, repo_root: Path, timeout: int | None, mark) -> dict:
     env = {"PRD_ENV": step.env or ""}
     rec = {"command": step.run, "started": _iso()}
     mark(command=step.run)  # written before the command starts; if it fails the command does not run
-    first = _execute(step.run, repo_root, env, timeout)
+    first = _execute(step.run, repo_root, env, *command_timeout(timeout))
     rec.update(exit=first["exit"], stdout=first["stdout"], stderr=first["stderr"])
     ok = first["exit"] == 0 and not first["timed_out"]
     if ok and step.check is not None:
         mark(command=step.check, check=True)
-        c = _execute(step.check, repo_root, env, timeout)
+        c = _execute(step.check, repo_root, env, *command_timeout(timeout))
         rec["check"] = {"command": step.check, "exit": c["exit"], "stdout": c["stdout"], "stderr": c["stderr"]}
-        ok = c["exit"] == 0 and not c["timed_out"] and (step.prints is None or _prints_ok(c["out"], step.prints))
-        if c["exit"] == 0 and not c["timed_out"] and not ok:
-            rec["check"]["stderr"] = (c["stderr"] + f"\nno stdout line equals {step.prints!r}").lstrip("\n")
+        ran = c["exit"] == 0 and not c["timed_out"]
+        if ran and step.prints is not None and not _prints_ok(c["out"], step.prints):
+            ok, why = False, f"no stdout line equals {step.prints!r}"
+        elif ran and step.matches is not None and not _matches_ok(c["out"], step.matches):
+            ok, why = False, f"no stdout line matches '{step.matches}'"
+        else:
+            ok, why = ran, None
+        if why:
+            rec["check"]["stderr"] = (c["stderr"] + "\n" + why).lstrip("\n")
     rec["result"] = "pass" if ok else "fail"
     rec["ended"] = _iso()
     return rec
 
 
-def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) -> list[dict]:
-    """One record per level, stopping at the first failure."""
+def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int | None, mark) -> list[dict]:
+    """One record per level, each with its own timeout (level_timeout), stopping at the first failure."""
     recs = []
     if not step.tests:
         now = _iso()
@@ -240,7 +265,7 @@ def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) ->
             rec.update(exit=None, stdout="", stderr=f"no Harness command for level {level}", result="fail")
         else:
             mark(level=level, command=command)
-            r = _execute(command, repo_root, {"PRD_ENV": step.env or "", "TEST_ENV": step.env or ""}, timeout)
+            r = _execute(command, repo_root, {"PRD_ENV": step.env or "", "TEST_ENV": step.env or ""}, *level_timeout(prd, level, timeout))
             rec.update(exit=r["exit"], stdout=r["stdout"], stderr=r["stderr"], result="pass" if r["exit"] == 0 and not r["timed_out"] else "fail")
         rec["ended"] = _iso()
         recs.append(rec)
@@ -249,8 +274,10 @@ def _tests_records(prd: Prd, step: Step, repo_root: Path, timeout: int, mark) ->
     return recs
 
 
-def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: int, timeout: int) -> tuple[str, int]:
-    """Run `steps` numbered `start` onward, logging and printing each. Returns (state, step number reached)."""
+def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: int, timeout: int | None) -> tuple[str, int]:
+    """Run `steps` numbered `start` onward, logging and printing each. Returns (state, step number reached).
+
+    `timeout` is the --timeout given, or None: then each tests level takes its Timeout and every command the default."""
     reached = start
     for step in steps:
         if step.number < start:
@@ -578,7 +605,7 @@ def resume_point(repo_root: Path, run_id: str) -> tuple[int, str | None]:
     return (last["step"] if last else 0), header.get("until")
 
 
-def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) -> int:
+def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int | None) -> int:
     """Run failed step `step`'s Rollback once and log it; returns the command's exit code (-1 when it never ran to an exit).
 
     ValueError for a usage problem, Refused when the run is another PRD's, or HEAD, the PRD version, the tree or the runbook moved.
@@ -607,7 +634,7 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
         except Exception as e:
             raise ValueError(f"could not record the rollback start, so it was not run: {e}") from None
     try:
-        r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, timeout)
+        r = _execute(target.rollback, repo_root, {"PRD_ENV": target.env or ""}, *command_timeout(timeout))
         rec = {"exit": r["exit"], "stdout": r["stdout"], "stderr": r["stderr"], "ok": r["exit"] == 0 and not r["timed_out"]}
     except Exception as e:  # the command could not even start
         rec = {"exit": None, "stdout": "", "stderr": f"{type(e).__name__}: {e}", "ok": False}
@@ -615,6 +642,24 @@ def rollback(prd: Prd, repo_root: Path, run_id: str, step: int, timeout: int) ->
     append(repo_root, run_id, {"kind": "rollback", "step": step, "command": target.rollback, **rec, "started": started, "ended": _iso()})
     print(f"rollback step {step} {target.env}: {'pass' if ok else 'fail'}", flush=True)
     return 0 if ok else (rec["exit"] if rec["exit"] not in (None, 0) else -1)
+
+
+# ---- the close on another branch (0.8.5 spec 5.4) ----
+
+def reached_envs(log: list[dict]) -> list[str]:
+    """The environments a run's log has step (or by-hand) records for, in order, each once."""
+    return list(dict.fromkeys(r["env"] for r in log if r.get("kind") in ("step", "hand") and r.get("env")))
+
+
+def branch_note(prd: Prd, repo_root: Path, envs: list[str]) -> str | None:
+    """The note for a close made on another branch than one of `envs` deploys from (its Branch cell), or None.
+
+    With several such branches, the last environment's is named. A note, never a refusal or a finding."""
+    current = _git(repo_root, "branch", "--show-current").strip()
+    other = [b for b in (prd.operations.branches.get(e, "") for e in envs) if b and b != current]
+    if not other:
+        return None
+    return f"prd_deploy: the close is on {current or 'a detached HEAD'}, not {other[-1]}; push the close commit to {other[-1]} too"
 
 
 # ---- a deploy done by hand (spec section 17, fix 5) ----

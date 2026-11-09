@@ -329,7 +329,9 @@ the `service` pack may use `validator: built-in`. A `pack` row whose type no res
 
 Required, not machine-checked: a validator that fails on a real defect (prove it can fail).
 `levels`, `harness`, `standards` and `skills` are defaults the authoring skill copies into `testing.md`
-and §5/§6 as `proposed` rows; lint never reads them from the manifest. A helper a pack ships is stated in the pack's `harness` (the Assertions or Fixtures slot) with its parameters, their types and the shape of its result. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE.
+and §5/§6 as `proposed` rows; lint never reads them from the manifest. A `levels` item is `{level, command}` with the
+optional `environment`, `gate` and `timeout`; `timeout` is a whole number of seconds, at least 1, copied
+into the level's `Timeout` cell in `testing.md` Levels. A helper a pack ships is stated in the pack's `harness` (the Assertions or Fixtures slot) with its parameters, their types and the shape of its result. A shipped helper whose shapes are not stated is a dry-run question, not a HARNESS CHOICE.
 
 ## outline
 
