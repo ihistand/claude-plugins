@@ -255,9 +255,15 @@ def test_a_failed_run_needs_an_entry_naming_its_failed_step(repo):
     assert findings(check(repo, run_id)) == [f"errors.md: the run failed at step 1 but no open unclassified entry names run {run_id} and that step in Detected:"]
 
 
+def test_a_failed_runs_lone_mid_run_entry_asks_for_the_failed_steps_entry(repo):
+    run_id = failed_run(repo)
+    add_entry(repo, run_id, step=3)  # an entry of this run naming another step: the failed step's entry is missing
+    close(repo, run_id, "Record a mid-run entry", ERRORS)
+    assert findings(check(repo, run_id)) == [f"errors.md: the run failed at step 1 but no open unclassified entry names run {run_id} and that step in Detected:"]
+
+
 @pytest.mark.parametrize("old,new", [
     ("Classification: unclassified", "Classification: code bug"),
-    ("step 1", "step 2"),
     ("deploy {run}", "deploy other"),
 ])
 def test_failure_entry_wrong(repo, old, new):

@@ -1,4 +1,5 @@
 """prd_context.py --for implement: code excerpts around cited Source lines, staleness, Levels."""
+import json
 import subprocess
 from pathlib import Path
 
@@ -184,6 +185,31 @@ def test_pulled_in_stale_block_is_not_counted(repo):
     assert "STALE: the cited line's text is gone (pulled in; not counted)" in out
     # asked for directly, the same block counts
     assert pack(prd, "--area", "api", "--for", "implement", "--req", "UJ-01")[0] == 1
+
+
+def test_an_asked_block_citing_a_pulled_in_blocks_ref_counts(repo):
+    root, prd, sha = repo
+    _api_sources(prd, sha, sha)  # UJ-01 (first in file order) cites src/importer.py:31; FR-002 cites :30
+    edit(prd, "features/api.md", f"Source: src/importer.py:30 @{sha}", f"Source: src/importer.py:31 @{sha}")
+    (root / "src/importer.py").write_text((root / "src/importer.py").read_text().replace("line 31\n", "gone\n"))
+    code, out, _ = pack(prd, "--area", "api", "--for", "implement", "--req", "FR-002")
+    assert code == 1, out
+    assert "STALE: the cited line's text is gone" in out and "not counted" not in out
+    code, js, _ = pack(prd, "--area", "api", "--for", "implement", "--req", "FR-002", "--json")
+    code_parts = [p for p in json.loads(js)["parts"] if p["title"] == "Code"]
+    assert code == 1 and [(p["id"], p["stale"], p["counted"]) for p in code_parts] == [("FR-002", True, True)]
+
+
+def test_json_keeps_stale_raw_and_adds_counted_and_moved(repo):
+    root, prd, sha = repo
+    _api_sources(prd, sha, sha)  # FR-002 cites :30, UJ-01 (pulled in) cites :31
+    text = (root / "src/importer.py").read_text().replace("line 31\n", "gone\n")
+    (root / "src/importer.py").write_text("new\n" + text)  # line 30 moves to 31; line 31's text is gone
+    code, js, _ = pack(prd, "--area", "api", "--for", "implement", "--req", "FR-002", "--json")
+    by_id = {p["id"]: p for p in json.loads(js)["parts"] if p["title"] == "Code"}
+    assert code == 0
+    assert {k: by_id["UJ-01"][k] for k in ("stale", "counted", "moved")} == {"stale": True, "counted": False, "moved": None}
+    assert {k: by_id["FR-002"][k] for k in ("stale", "counted", "moved")} == {"stale": False, "counted": True, "moved": 31}
 
 
 def test_no_req_counts_every_block_of_the_area(repo):

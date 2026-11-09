@@ -35,8 +35,9 @@ class Item:
     file: str  # PRD-relative; repo-relative for Code items
     line: int | None
     text: str
-    stale: bool = False
+    stale: bool = False  # the item is STALE, counted or not
     counted: bool = True  # false for a block pulled in through another block's Traces:
+    moved: int | None = None  # a MOVED cited line's line number now
 
 
 class ContextError(Exception):
@@ -405,23 +406,33 @@ def _excerpt(root: Path, block: ReqBlock, path: str, line: int, sha: str, contex
     elif reason:
         whole_file = reason.startswith(("changed since", "uncommitted changes", "cannot compare"))
         head.append(f"STALE: {reason}" + ("; the cited line may have moved" if whole_file else "") + ("" if counted else _PULLED))
-    return Item("Code", block.id, path, line, "\n".join(head + shown), stale=bool(reason) and counted, counted=counted)
+    return Item("Code", block.id, path, line, "\n".join(head + shown), stale=bool(reason), counted=counted,
+                moved=moved if state == "moved" else None)
+
+
+def _refs(b: ReqBlock) -> list[tuple[str, int, str]]:
+    return [(m["path"], int(m["line"]), m["sha"]) for m in _SOURCE_REF.finditer(b.source or "")]
 
 
 def _code(blocks: list[ReqBlock], area: str, root: Path, context: int, counted: set[str] | None = None) -> list[Item]:
-    items, seen = [], set()
+    def mine(b: ReqBlock) -> bool:
+        return counted is None or b.id in counted
+
+    owner: dict[tuple[str, int, str], str] = {}  # one excerpt per ref, owned by its first asked block, else its first block
+    for b in sorted(blocks, key=lambda b: not mine(b)):  # stable: file order within asked, then pulled in
+        for ref in _refs(b):
+            owner.setdefault(ref, b.id)
+    items = []
     for b in blocks:
-        mine = counted is None or b.id in counted
         if b.source and not _SOURCE_REF.search(b.source):
             line = _field_lines(b.lines, "Source")[0][0]
             items.append(Item("Code", b.id, b.file, line,
-                              f"### {b.id} Source: {b.source}\nSTALE: Source not in <path>:<line> @<sha> form" + ("" if mine else _PULLED),
-                              stale=mine, counted=mine))
-        for m in _SOURCE_REF.finditer(b.source or ""):
-            ref = (m["path"], int(m["line"]), m["sha"])
-            if ref not in seen:
-                seen.add(ref)
-                items.append(_excerpt(root, b, *ref[:2], ref[2], context, mine))
+                              f"### {b.id} Source: {b.source}\nSTALE: Source not in <path>:<line> @<sha> form" + ("" if mine(b) else _PULLED),
+                              stale=True, counted=mine(b)))
+        for ref in _refs(b):
+            if owner.get(ref) == b.id:
+                del owner[ref]  # a block citing the same ref twice gets one excerpt
+                items.append(_excerpt(root, b, *ref[:2], ref[2], context, mine(b)))
     return items or [_none("Code", f"features/{area}.md")]
 
 
@@ -490,5 +501,6 @@ def render_json(items: list[Item]) -> str:
 def render_document(prd: Prd, area: str | None, req: list[str] | None, mode: str, items: list[Item]) -> str:
     from . import interface
     fm = prd.frontmatter
-    parts = [{"title": i.part, "id": i.id, "file": i.file, "line": i.line, "text": i.text, "stale": i.stale} for i in items]
+    parts = [{"title": i.part, "id": i.id, "file": i.file, "line": i.line, "text": i.text, "stale": i.stale,
+              "counted": i.counted, "moved": i.moved} for i in items]
     return interface.dump("context", {"prd": fm.get("prd"), "mode": mode, "area": area, "ids": list(req or []), "parts": parts})

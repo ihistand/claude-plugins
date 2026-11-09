@@ -143,10 +143,10 @@ def test_stdin_closed(repo):
 
 
 def test_timeout(repo):
-    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `sleep 5; mkdir -p .deploy/staging && echo Hi")
+    change(repo, OPS, "Run: `mkdir -p .deploy/staging && echo Hi", "Run: `sleep 30; mkdir -p .deploy/staging && echo Hi")
     started = time.monotonic()
     r = deploy_cli(repo, "run", "--timeout", "1")
-    assert r.returncode == 4 and time.monotonic() - started < 4.5
+    assert r.returncode == 4 and time.monotonic() - started < 15  # well under the 30 s sleep: the timeout ended it
     rec = records(repo, r)[-1]
     assert rec["result"] == "fail" and rec["stderr"].endswith("timed out after 1 s (--timeout)")
 
@@ -670,11 +670,11 @@ def test_rollback_stdin_is_closed(repo):
 
 
 def test_rollback_times_out(repo):
-    change(repo, OPS, "touch .deploy/staging/rolled-back`", "sleep 5`")
+    change(repo, OPS, "touch .deploy/staging/rolled-back`", "sleep 30`")
     run_id = failed_run(repo)
     started = time.monotonic()
     r = deploy_cli(repo, "rollback", "--run", run_id, "--step", "1", "--timeout", "1")
-    assert r.returncode == 4 and time.monotonic() - started < 4.5
+    assert r.returncode == 4 and time.monotonic() - started < 15  # well under the 30 s sleep: the timeout ended it
     assert deploy.read_log(repo, run_id)[-1]["stderr"].endswith("timed out after 1 s (--timeout)")
 
 

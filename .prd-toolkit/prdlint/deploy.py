@@ -836,7 +836,8 @@ def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> lis
 
 def detected_names_failure(detected: str | None, run_id: str, step) -> bool:
     """A run entry's `Detected:` line names the run id and `step N`; `step` None accepts any step."""
-    return bool(detected and re.search(rf"\bstep\s+{r'\d+' if step is None else step}\b", detected) and run_id in detected)
+    pat = r"\d+" if step is None else str(step)  # outside the f-string: a backslash in its expression is a SyntaxError before 3.12
+    return bool(detected and re.search(rf"\bstep\s+{pat}\b", detected) and run_id in detected)
 
 
 def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
@@ -940,8 +941,12 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         e = new[0]
         etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
         detected = re.search(r"^Detected:.*$", etext, re.M)
-        step_ok = detected_names_failure(detected.group(0) if detected else None, run_id, failed.get("step"))
-        if not (e.open and e.classification == "unclassified" and step_ok):
+        line = detected.group(0) if detected else None
+        step_ok = detected_names_failure(line, run_id, failed.get("step"))
+        run_entry = e.open and e.classification == "unclassified" and detected_names_failure(line, run_id, None)
+        if run_entry and not step_ok:  # a mid-run entry, kept as it is: the failed step's own entry is the one missing
+            out.append(f"errors.md: the run failed at step {failed.get('step')} but no open unclassified entry names run {run_id} and that step in Detected:")
+        elif not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))
     names_failure = False

@@ -397,6 +397,11 @@ def test_a_managed_block_prd_block_would_not_render_is_refused(moved):
     claude_refused(moved)
 
 
+def test_a_deleted_claude_md_is_refused_as_uncommitted(moved):
+    (moved / "CLAUDE.md").unlink()  # a tracked CLAUDE.md deleted in the working tree is an uncommitted change
+    claude_refused(moved)
+
+
 def test_approve_of_a_change_that_moves_no_pack_stages_no_vendored_copy(recorded):
     from prdlint import hooks
 

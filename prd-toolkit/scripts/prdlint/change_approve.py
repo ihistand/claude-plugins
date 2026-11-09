@@ -117,7 +117,8 @@ def _only_the_block(repo_root: Path, prd_root: Path) -> bool:
             _, expected = prd_block._merged(base, block, "end")
         except prd_block.BlockError:
             return False
-    return (repo_root / "CLAUDE.md").read_bytes() == expected.encode("utf-8")
+    claude = repo_root / "CLAUDE.md"
+    return claude.is_file() and claude.read_bytes() == expected.encode("utf-8")  # a deleted CLAUDE.md is an uncommitted change
 
 
 def _approved_text(text: str, last, dry_run: str) -> str:

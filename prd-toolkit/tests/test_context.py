@@ -79,7 +79,7 @@ def test_json_matches_text_and_runs_are_identical(ctx):
     doc = json.loads(js)
     assert list(doc)[:2] == ["interface", "kind"] and doc["kind"] == "context"
     items = [{"part" if k == "title" else k: v for k, v in p.items()} for p in doc["parts"]]
-    assert all(set(i) == {"part", "id", "file", "line", "text", "stale"} for i in items)
+    assert all(set(i) == {"part", "id", "file", "line", "text", "stale", "counted", "moved"} for i in items)
     # the same items in the same order: the JSON re-renders to the text pack byte for byte
     assert render_text([Item(**i) for i in items]) == text
     pairs = [(i["part"], i["id"]) for i in items]
