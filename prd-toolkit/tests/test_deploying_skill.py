@@ -413,7 +413,7 @@ def test_by_hand_record_during_a_stopped_run():
 # --- 0.8.5, spec 13 (items 1 to 5): Task 14's pins ---
 
 LATER_STEP = "a later `--step` only for a step the owner's reply names"
-NEVER_ASK = "Never ask whether later steps are done."
+NEVER_ASK = "Never ask in the chat whether later steps are done."
 MULTI_CONFIRM = ("uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply "
                  "to step N>' --step <M> --reply '<the reply to step M>'; echo \"prd-deploy-exit=$?\"")
 MID_RUN_ENTRY = ('uv run --script <scripts>/prd_error.py new docs/prd/<slug> --title "<the error in one line>" --source '
@@ -511,3 +511,29 @@ def test_085_fix1_inbox_steps_stay_the_owners():
     assert INBOX_GATE in two
     assert "when its reply names later steps, confirm each with that reply" not in two
     assert "(the chat route; through the inbox each step is its own gate)" in flat(SKILL)
+
+
+# Fix round 2, items 3 and minors: rule 4's exception wherever a rule forbids it; the mid-run entry exception.
+RULE4_EXCEPTION = "A later step that the owner's reply to the stopped step names takes that reply (rule 4)."
+
+
+def test_085_fix2_rule_4_exception_in_the_red_flag_and_the_procedure():
+    rf = red_flags()
+    flag = rf.split("A `confirm` whose reply you wrote", 1)[1].split(" - ", 1)[0]
+    assert RULE4_EXCEPTION in flag
+    two = step(2)
+    never = "Never call `prd_deploy.py confirm` with a reply the user did not give to that step."
+    assert never + " " + RULE4_EXCEPTION.replace("(rule 4)", "(rule 4 of `deploying-from-prds`)") in two
+
+
+def test_085_fix2_no_one_to_ask_means_no_reply_to_the_stopped_step():
+    two = step(2)
+    assert ("With no one to ask, the run stays stopped: when the session holds no reply to the stopped step, a "
+            "headless session") in two
+
+
+def test_085_fix2_the_mid_run_entry_is_the_one_edit_outside_the_close():
+    assert ("nor the PRD outside the close (step 3), except the `prd_error.py new` entry of an error found while the "
+            "run is stopped (step 2)") in flat(RUN)
+    assert ("**All of these mean: stop, put back what you changed outside the close and a mid-run `prd_error.py new` "
+            "entry, and return to the step") in flat(SKILL)

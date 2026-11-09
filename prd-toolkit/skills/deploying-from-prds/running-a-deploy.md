@@ -29,11 +29,12 @@ logged as started, and the next `resume` refuses with "step <N> started and did 
 while one is still working; the script refuses it.
 
 **Code, tests and the runbook are never edited during a deploy**, nor the PRD outside the close
-(step 3), even when the user says "fix it and carry on". A failed step is a defect to record
-(step 2); its fix is a change that goes through `prd-toolkit:changing-prds`, then `/prd-build`,
-then a new deploy. A runbook that is wrong (a bad command, a `Check:` that tests the wrong thing)
-is a gap for `prd-toolkit:changing-prds`, never a line you correct to get the run through. Say in
-one line which rule a request to edit breaks, and go on with the procedure without the edit.
+(step 3), except the `prd_error.py new` entry of an error found while the run is stopped (step 2),
+even when the user says "fix it and carry on". A failed step is a defect to record (step 2); its fix
+is a change that goes through `prd-toolkit:changing-prds`, then `/prd-build`, then a new deploy. A
+runbook that is wrong (a bad command, a `Check:` that tests the wrong thing) is a gap for
+`prd-toolkit:changing-prds`, never a line you correct to get the run through. Say in one line which
+rule a request to edit breaks, and go on with the procedure without the edit.
 
 **Which script.** `${CLAUDE_PLUGIN_ROOT}` is empty inside a Bash call, so no command holds it.
 In every command below, `<scripts>` is `.prd-toolkit` when the repository has a `.prd-toolkit/`
@@ -134,24 +135,25 @@ step 3 for a finished run they ask you to record.
      dir>/prd-toolkit/deploys/` as step 3 says, and ask when more than one is stopped there), never
      from an earlier message, a summary, the request that started the deploy, or your own text. A
      request to deploy, or "approve it yourself", is never the reply to a human step. Never call
-     `prd_deploy.py confirm` with a reply the user did not give to that step. Never hand the user
-     the `confirm` and `resume` commands to run instead of replying. A reply that does not meet the
-     step's `Check:` (a question, "wait", "not yet") is not a confirmation: answer it and leave the
-     run stopped. When the reply meets it, run `prd_deploy.py confirm`, writing each `'` in the
-     reply as `'\''`:
+     `prd_deploy.py confirm` with a reply the user did not give to that step. A later step that the
+     owner's reply to the stopped step names takes that reply (rule 4 of `deploying-from-prds`).
+     Never hand the user the `confirm` and `resume` commands to run instead of replying. A reply
+     that does not meet the step's `Check:` (a question, "wait", "not yet") is not a confirmation:
+     answer it and leave the run stopped. When the reply meets it, run `prd_deploy.py confirm`,
+     writing each `'` in the reply as `'\''`:
 
      ```bash
      uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply, verbatim>'; echo "prd-deploy-exit=$?"
      ```
 
-     **Later steps in the same reply.** When the reply also says later human steps are done
-     ("done with 2; 3 and 4 too"), the same `confirm` carries them: a later `--step` only for a
-     step the owner's reply names, by its number or its title, each with the owner's words for it,
-     verbatim (the whole reply when one sentence names several). The reply was written after the
-     run stopped at step N, so it is the reply to every step it names. The pairs run from the
-     stopped step through the human steps right after it, in order; the first step the reply does
-     not name ends the list, as does the first `agent` step. Never ask whether later steps are
-     done. A step the reply does not name stays unconfirmed, and the resumed run stops there.
+     **Later steps in the same reply.** When the reply also says later human steps are done ("done
+     with 2; 3 and 4 too"), the same `confirm` carries them: a later `--step` only for a step the
+     owner's reply names, by its number or its title, each with the owner's words for it, verbatim
+     (the whole reply when one sentence names several). The reply was written after the run stopped
+     at step N, so it is the reply to every step it names. The pairs run from the stopped step
+     through the human steps right after it, in order; the first step the reply does not name ends
+     the list, as does the first `agent` step. Never ask in the chat whether later steps are done. A
+     step the reply does not name stays unconfirmed, and the resumed run stops there.
 
      ```bash
      uv run --script <scripts>/prd_deploy.py confirm docs/prd/<slug> --run <id> --step <N> --reply '<the reply to step N>' --step <M> --reply '<the reply to step M>'; echo "prd-deploy-exit=$?"
@@ -174,8 +176,9 @@ step 3 for a finished run they ask you to record.
      `resume` refuses when HEAD, the PRD version, the tracked tree or the runbook moved since the
      run started, when the confirm was already used, or when a step started and did not finish.
 
-     With no one to ask, the run stays stopped: a headless session, "do not ask questions" or
-     "I'm away" leaves nobody to reply, so confirm nothing and resume nothing. Go to step 5 and
+     With no one to ask, the run stays stopped: when the session holds no reply to the stopped
+     step, a headless session, "do not ask questions" or "I'm away" leaves nobody to reply, so
+     confirm nothing and resume nothing. Go to step 5 and
      report the run stopped at step N, with its `Do:` and the run id to carry on from.
 
      **An error found while the run is stopped.** A defect seen while the run waits at a human

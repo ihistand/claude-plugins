@@ -82,19 +82,23 @@ by the table, and the area's contracts, Levels, Harness and test cases moved to 
 
 **A new pack version is a scripted patch.** A pack release that moves only the version on a
 `Pack:` or `Target: pack` line (its name and source unchanged) is not a retarget, and the line is
-never edited by hand. Run, each its own Bash call, from the plugin's scripts (`<plugin scripts>`,
-as above: never the vendored `.prd-toolkit/` copy, whose `packs/` still holds the old version):
+never edited by hand. Run each command its own Bash call, from the plugin's scripts
+(`<plugin scripts>`, as above: never the vendored `.prd-toolkit/` copy, whose `packs/` still holds
+the old version). On a refusal, stop and report it.
 
-1. `uv run --script <plugin scripts>/prd_change.py pack docs/prd/<slug> <name> <X.Y.Z>; echo "prd-change-exit=$?"`
-   moves every line naming `<name>` and records `pack <name> <old> → <new>; pending` as a patch,
-   leaving the tree uncommitted. A `refused:` line names what to fix:
-   `no Pack: or Target: pack line names <name>`, `every line naming <name> already names <X.Y.Z>`,
-   or uncommitted changes in the PRD folder (commit or set them aside first: it never mixes into
-   another change).
-2. `uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>` re-vendors the pack.
-3. Step 4's lint and verdict, with no dry run, then step 5's approval as for any patch, with
-   `--dry-run 'no dry run (pack version only)'`: §14 reads
-   `pack <name> <old> → <new>; no dry run (pack version only)`.
+- First `uv run --script <plugin scripts>/prd_change.py pack docs/prd/<slug> <name> <X.Y.Z>; echo "prd-change-exit=$?"`.
+  It moves every line naming `<name>` and records `pack <name> <old> → <new>; pending` as a
+  patch, leaving the tree uncommitted. A `refused:` line names what to fix:
+  `no Pack: or Target: pack line names <name>`, `every line naming <name> already names <X.Y.Z>`,
+  `the lines naming <name> disagree on its version or source`, the resolver's
+  `pack <name> <X.Y.Z> (<source>) not found; looked in: …`, or uncommitted changes in the PRD
+  folder (commit or set them aside first: it never mixes into another change).
+- Then `uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>; echo "prd-hooks-exit=$?"`,
+  which re-vendors the pack. `.prd-toolkit/` stays uncommitted: `approve` stages the re-vendored
+  pack and `.prd-toolkit/pack-sources.json` in the approval commit.
+- Then the five steps' step 4 (lint and the verdict, with no dry run) and step 5's approval as for
+  any patch, with `--dry-run 'no dry run (pack version only)'`: §14 reads
+  `pack <name> <old> → <new>; no dry run (pack version only)`.
 
 An install refusal ending `; to move the PRD to <name> <have>, run prd_change.py pack <prd> <name> <have>`
 starts this flow. A new version that breaks what the PRD relies on (a contract type, a level, a

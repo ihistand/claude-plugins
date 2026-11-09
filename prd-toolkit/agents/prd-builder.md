@@ -20,6 +20,9 @@ these rules:
   `git branch --show-current`, each its own Bash call; if the first fails or the second is not the
   `Branch:` line, change nothing and report `QUESTIONS: worktree is not on the build branch`. A
   prompt with no `Base:` or `Branch:` line gets the same report, every other field `none`.
+- A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
+  names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
+  only.
 - `<scripts>` in the command below is the `Scripts:` line when your prompt has one; otherwise the
   Which-script rule of the `building-from-prds` skill decides it. Run the implement pack first,
   as its own Bash call, before you open any PRD file:

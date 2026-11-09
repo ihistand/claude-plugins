@@ -89,6 +89,11 @@ gets the same report. In that report CHANGES, UNIT, SOURCES and COMMIT are `none
 pack, write nothing, commit nothing, and create or switch no branch. The caller cut the round; a
 wrong one is the caller's to fix, never yours to repair.
 
+A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it
+names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field
+only. The caller's `--sources` found the lines the prompt quotes outside the round's changes; give
+each block's line where its implementation starts, by this report's SOURCES rule.
+
 1. **The pack first.** Before you open any PRD file or write anything, run, as its own Bash call:
    `uv run --script <scripts>/prd_context.py docs/prd/<slug> --area <area> --req <IDs> --for implement; echo "prd-context-exit=$?"`.
    `prd-context-exit=0` is current; `1` means a STALE source: re-read each code region the pack
@@ -213,9 +218,6 @@ SOURCES     <ID>: <path>:<line>, one line per block whose implementation start t
 QUESTIONS   each PRD gap and each test dispute (below); an empty list is written as `none`
 COMMIT      the round branch and its commit SHAs
 ```
-
-When the caller sends your report back with a `sources:` finding, restate SOURCES only: change
-no file and make no commit.
 
 QUESTIONS holds two kinds of line, and nothing else:
 

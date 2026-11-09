@@ -61,9 +61,10 @@ directory as a literal absolute path (in double quotes if it holds a space): the
 two directories above the skill's base directory (Claude Code shows it as "Base directory for
 this skill" when the skill loads).
 
-1. **Find the PRD and the script.** Glob `docs/prd/*/prd.md`; with more than one, ask which.
-   Read its frontmatter for `prd:` (the project) and `version:`. Glob `<scripts>/prd_publish.py`;
-   not found is a tool error (rule 1).
+1. **Find the PRD and the script.** Glob `docs/prd/*/prd.md`; with more than one, ask which. Read
+   its frontmatter for `prd:` (the project) and `version:`. Glob `<scripts>/prd_publish.py` with
+   that absolute path as the whole pattern and no `path` argument (a `path` outside the repository
+   is denied); not found is a tool error (rule 1).
 2. **Read each area.** Read `features/<area>.md` for each area, and `nfr.md` (`nfr.md`'s area key
    is `nfr`), in the PRD folder, whole: they are the summaries' only source. An area with no FR or
    NFR block gets no summary.

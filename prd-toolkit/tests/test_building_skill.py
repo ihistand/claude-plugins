@@ -771,22 +771,31 @@ def test_085_both_build_texts_name_moved():
                    "`STALE: <path> is not in <sha>`", MOVED):
         assert reason in rule1, reason
     close = flat(RUN).split("`prd-context-exit=` must be `0`: a STALE code item", 1)[1].split("git add docs/prd/<slug>", 1)[0]
-    assert MOVED in close and "rewrite that block's `Source:` to line `<M>`" in close
+    assert MOVED in close and "rewrite that block's `Source:` as `<path>:<M> @<HEAD short sha>`" in close
 
 
 def test_085_step_4_writes_sources_outside_the_prd_folder_and_passes_it():
     t = flat(RUN)
     four = t.split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
-    assert f"with the Write tool, to `{SOURCES_FILE}`" in four
+    assert f"with the Write tool, to `<SNAP>/builder-report-<n>.md`, and its SOURCES field verbatim to `{SOURCES_FILE}`" in four
     assert "outside the PRD folder" in four
     assert "`sources:`" in four
     assert SOURCES_CALL in RUN.read_text(encoding="utf-8")
 
 
-# Fix round 1, Ruling 38: a `sources:` finding sends the report back; it never fails the round (spec 9).
-SOURCES_BACK = ("A `sources:` line is not a failed round: send the builder its report back with the finding, to "
-                "restate its SOURCES. It is not counted under **Rounds**, and no new round branch is cut.")
-OTHER_FINDINGS = "Every other `--diff` line fails the round as above."
+# Fix round 1, Ruling 38, and fix round 2: a first `sources:` finding sends the report back through a Restate
+# dispatch; a second one on the same round fails it (spec 9).
+SOURCES_BACK = ("When the round's only findings are `sources:` lines, the first time on that round, it is not a failed "
+                "round: dispatch the builder again with the round's prompt plus a `Restate: <SNAP>/builder-report-<n>.md` "
+                "line and the `sources:` lines (**Prompts**).")
+SOURCES_SECOND = "A second `sources:` finding on the same round fails the round, counted under **Rounds**."
+OTHER_FINDINGS = "Otherwise `prd-build-check-exit=1` fails the round"
+GATE_IS_SOURCES = "Your gate on SOURCES is `--sources`, never a reading of the code."
+RESTATE_PROMPT = "Restate: <SNAP>/builder-report-<n>.md\n<each sources: line, verbatim>\n"
+RESTATE_RULE = ("A `Restate:` prompt runs no branch check: it writes nothing and commits nothing. Read the report it "
+                "names and `git diff <Base>..<Branch>`, each its own Bash call, and reply with the SOURCES field only.")
+
+
 # Ruling 39: SOURCES names a block only when the round added or changed where its implementation starts.
 SOURCES_FIELD = ("one line per block whose implementation start this round added or changed: where its implementation "
                  "starts, never another changed line picked to pass the check. A block whose start the round did not "
@@ -795,10 +804,14 @@ SOURCES_FIELD = ("one line per block whose implementation start this round added
 
 def test_085_fix1_a_sources_finding_goes_back_to_the_builder():
     four = flat(RUN).split(" 4. **Check the state.**", 1)[1].split(" 5. **", 1)[0]
-    assert SOURCES_BACK in four and OTHER_FINDINGS in four
-    assert four.index(SOURCES_BACK) < four.index(OTHER_FINDINGS)
+    at = [four.find(s) for s in ("`<SNAP>/builder-report-<n>.md`", GATE_IS_SOURCES, SOURCES_BACK, SOURCES_SECOND,
+                                 OTHER_FINDINGS)]
+    assert -1 not in at and at == sorted(at), at
+    assert "is not counted under **Rounds**, and no new round branch is cut" in four
     assert "is a finding like any other `--diff` line and fails the round" not in four
-    assert "restate SOURCES only: change no file and make no commit" in flat(SKILL)
+    assert RESTATE_PROMPT in RUN.read_text(encoding="utf-8")
+    assert RESTATE_RULE in flat(SKILL)
+    assert RESTATE_RULE in flat(AGENT)
 
 
 def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
@@ -808,3 +821,15 @@ def test_085_fix1_sources_names_only_blocks_whose_start_the_round_touched():
     assert "A report whose SOURCES is `none` passes no `--sources`." in four
     assert "one SOURCES line per block whose implementation start the round added or changed" in four
     assert "From each block's SOURCES line in the latest builder report that names it" in flat(RUN)
+
+
+# Fix round 2, item 1: the close writes an earlier round's line at that round's commit, so MOVED can fire.
+CLOSE_SHA = "`Source: <path>:<line> @<short sha>`, the short sha of the last commit that report's COMMIT names"
+MOVED_REWRITE = "rewrite that block's `Source:` as `<path>:<M> @<HEAD short sha>`"
+
+
+def test_085_fix2_the_close_writes_each_source_at_its_rounds_commit():
+    t = flat(RUN)
+    assert CLOSE_SHA in t
+    assert MOVED_REWRITE in t
+    assert "rewrite that block's `Source:` to line `<M>`, and run" not in t

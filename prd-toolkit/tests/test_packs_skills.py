@@ -340,3 +340,20 @@ def test_085_changing_step_2_rewrites_a_moved_source():
 def test_085_authoring_and_adoption_copy_a_levels_timeout():
     assert TIMEOUT_COPY in section(AUTHORING, "### Applying the pack")
     assert TIMEOUT_COPY in flat(ADOPTING)
+
+
+
+# Fix round 2 (minors): the pack flow's install gate, the uncommitted .prd-toolkit/, its refusals, no numbering.
+PACK_INSTALL_GATE = 'uv run --script <plugin scripts>/prd_hooks.py install docs/prd/<slug>; echo "prd-hooks-exit=$?"'
+
+
+def test_085_fix2_pack_flow_install_gate_refusals_and_no_numbers():
+    s = section(CHANGING, "## Packs and retargeting")
+    flow = s.split("**A new pack version is a scripted patch.**", 1)[1]
+    assert f"`{PACK_INSTALL_GATE}`" in flow
+    assert "On a refusal, stop" in flow
+    assert "`.prd-toolkit/` stays uncommitted" in flow and "`approve` stages" in flow
+    for refusal in ("`the lines naming <name> disagree on its version or source`",
+                    "`pack <name> <X.Y.Z> (<source>) not found; looked in: …`"):
+        assert refusal in flow, refusal
+    assert not re.search(r" [123]\. `uv run", flow)
