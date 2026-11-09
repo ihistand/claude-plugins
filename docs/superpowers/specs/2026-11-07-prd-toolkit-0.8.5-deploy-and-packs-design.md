@@ -16,6 +16,7 @@
 >   tester guard's bare arguments, from the 0.8.4 final review.
 > - Item 9's third way (owner, 2026-11-08): an Artifact's main page draws mermaid itself; a file
 >   published beside it does not.
+> - Item 11 (owner, 2026-11-08): the test jobs on a text-only pull request, from PR #22's CI run.
 
 ## 1. Backlog
 
@@ -67,3 +68,14 @@ pack's first releases.
     names, but a bare argument can still reach the code: `--doctest-modules scripts`, a `..` path,
     `--pyargs`, or a `-k` pattern such as `-k s*`. The 0.8.4 final review recommends this as 0.8.5's
     first item; the owner put it here on 2026-11-08.
+11. **The test jobs on a text-only pull request.** The workflow `prd_hooks.py ci` generates runs
+    every job on every pull request, with no path filter, so a PR that changes only a spec still
+    waits about 20 minutes for the toolkit's own `test-unit` job (about 3,145 tests, run one at a
+    time; most start a script as a subprocess, often in a fresh git repository). PR #22, one backlog
+    line, waited the full run. Two ways to weigh, and they combine: a path filter on the generated
+    test jobs, so they skip a PR that touches no file a build-gate level tests (a toolkit change in
+    `prdlint/hooks.py`, for every adopting repository; lint and trace still run on every PR, and a
+    filter that skips a needed run lets a broken build merge); or parallel tests for the toolkit's own
+    suite with `pytest-xdist` (`-n auto`), a change to the toolkit PRD's `testing.md` Levels command
+    and `pyproject.toml`, which the Harness's "nothing is shared between tests" rule should allow. The
+    owner put this here on 2026-11-08.
