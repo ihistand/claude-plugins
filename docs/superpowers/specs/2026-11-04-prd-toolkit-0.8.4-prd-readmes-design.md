@@ -10,6 +10,9 @@
 > **Needs:** 0.8.1's `prdlint/change.py` (the digest and the bump) on `main`, and 0.8.3 merged.
 >
 > **Revisions.**
+> - Section 8's mermaid line, again (2026-11-08, 0.8.5): the Artifact viewer draws a `pre.mermaid` block
+>   on an Artifact's own main page, and the proof had published inside another Artifact; 0.8.5 item 9
+>   draws the diagram as inline SVG.
 > - Section 8's mermaid line (owner, 2026-11-08): the proof found that the Artifact viewer draws no
 >   mermaid diagram on an HTML page, so the page shows the source everywhere. 0.8.4 ships as built,
 >   with the text corrected; drawing the diagram moves to 0.8.5.
@@ -290,7 +293,8 @@ each from the PRD and each left out when its source is empty:
 - **Mermaid.** A ```` ```mermaid ```` fence anywhere on the page, the Technical tab's §4 included,
   renders as `<pre class="mermaid">` holding the escaped source. The page still loads nothing, and
   every viewer shows the source: the Artifact viewer runs no mermaid on an HTML page (the 0.8.4
-  proof, 2026-11-08). Drawing the diagram is 0.8.5's item 9.
+  proof, 2026-11-08): it draws a `pre.mermaid` block only on its own main page. 0.8.5's item 9 draws
+  the diagram as inline SVG, and the page is published as its own Artifact.
 - The Overview takes no summary: `--summaries` keys are areas, and the tab restates nothing.
 - Every label is a language-table key (`overview`, `what_it_is`, `principles`, `areas`,
   `open_errors`, `linked_prds`, `getting_started`, `snapshot_line`), with `en` and `es` values; a key

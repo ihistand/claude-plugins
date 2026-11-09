@@ -71,7 +71,7 @@ def test_known_limits_of_spec_15():
     s = flat(README)
     for needle in ("held by instruction; the trace reads the tag, not each runner's syntax",
                    "`recover` never marks a step done", "holding no secret or classified value",
-                   "Mermaid diagrams on the published page are shown as source",
+                   "Mermaid diagrams on the published page are shown as source, and the page's own labels are English",
                    "between reading the runbook steps and hashing them"):
         assert needle in s, needle
 
