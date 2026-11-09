@@ -318,6 +318,8 @@ def test_toolkit_range_excludes_this_toolkit(prd, tmp_path, monkeypatch):
      "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
     ({"levels": [{"level": "checks", "command": "x", "timeout": "x"}]}, "levels",
      "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
+    ({"levels": [{"level": "checks", "command": "x", "timeout": True}]}, "levels",
+     "pack demo: pack.yaml: levels[0]: timeout must be a whole number of seconds of at least 1"),
     ({"contract_types": [{"type": "outline"}]}, "contract-types", "pack demo: pack.yaml: contract-types[0] must be a mapping with type, files and validator"),
     ({"target_kinds": {"doc": "outline"}}, "target-kinds", "pack demo: pack.yaml: target-kinds: doc maps to outline, not a contract type of this pack"),
     ({"rubrics": "rubrics.md"}, "rubrics", "pack demo: pack.yaml: rubrics: rubrics.md is not a file in the pack"),

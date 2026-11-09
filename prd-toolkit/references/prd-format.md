@@ -580,9 +580,10 @@ Three tables and a runbook. Other headings (Secrets by name) are free. The `runb
   also a row of `testing.md` Environments (`runbook-env`).
 - Environments: an optional `Branch` column names the branch an environment deploys from, a valid git
   branch name or blank (`runbook-env`). When a run or a resume ends, done or failed, having reached
-  an environment whose Branch is not `git branch --show-current`, `prd_deploy.py` prints on stderr
+  environments whose Branch is not `git branch --show-current`, `prd_deploy.py` prints on stderr one
+  line per such branch, each once, in the order its environment was reached:
   `prd_deploy: the close is on <current>, not <branch>; push the close commit to <branch> too`
-  (`a detached HEAD` for `<current>`), and `prd_deploy.py check` prints the same line. It is a note:
+  (`a detached HEAD` for `<current>`), and `prd_deploy.py check` prints the same lines. It is a note:
   the exit code does not change and the run is never refused.
 - A step line is `N. <title> (actor: agent|human) (env: <environment>)`, numbered from 1 without
   gaps. Labelled lines follow, indented, in any order, one per label; lint reports a repeated label (`runbook-steps`), and the first is used. An agent step takes `Run:` (required),

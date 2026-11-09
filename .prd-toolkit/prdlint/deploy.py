@@ -651,15 +651,13 @@ def reached_envs(log: list[dict]) -> list[str]:
     return list(dict.fromkeys(r["env"] for r in log if r.get("kind") in ("step", "hand") and r.get("env")))
 
 
-def branch_note(prd: Prd, repo_root: Path, envs: list[str]) -> str | None:
-    """The note for a close made on another branch than one of `envs` deploys from (its Branch cell), or None.
-
-    With several such branches, the last environment's is named. A note, never a refusal or a finding."""
+def branch_note(prd: Prd, repo_root: Path, envs: list[str]) -> list[str]:
+    """One note line per branch, other than the current one, that one of `envs` deploys from (its Branch cell), each
+    once, in the order the environments were reached; empty when there is none. A note, never a refusal or a finding."""
     current = _git(repo_root, "branch", "--show-current").strip()
-    other = [b for b in (prd.operations.branches.get(e, "") for e in envs) if b and b != current]
-    if not other:
-        return None
-    return f"prd_deploy: the close is on {current or 'a detached HEAD'}, not {other[-1]}; push the close commit to {other[-1]} too"
+    other = dict.fromkeys(b for b in (prd.operations.branches.get(e, "") for e in envs) if b and b != current)
+    here = current or "a detached HEAD"
+    return [f"prd_deploy: the close is on {here}, not {b}; push the close commit to {b} too" for b in other]
 
 
 # ---- a deploy done by hand (spec section 17, fix 5) ----

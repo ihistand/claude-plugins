@@ -37,12 +37,12 @@ TIMEOUT_HELP = "per command, overriding every level's Timeout (default: a tests 
 
 
 def _note_branch(prd: model.Prd, repo_root, run_id: str) -> None:
-    """At a run's finish, the note for a close on another branch than one its environments deploy from (stderr only)."""
+    """At a run's finish, one note line per other branch its environments deploy from (stderr only)."""
     try:
-        note = deploy.branch_note(prd, repo_root, deploy.reached_envs(deploy.read_log(repo_root, run_id)))
+        notes = deploy.branch_note(prd, repo_root, deploy.reached_envs(deploy.read_log(repo_root, run_id)))
     except Exception:  # a note never changes the outcome
         return
-    if note:
+    for note in notes:
         print(note, file=sys.stderr, flush=True)
 
 

@@ -1376,8 +1376,29 @@ def test_branch_note_unit(repo):
     from prdlint import model
     env_branches(repo, staging="release")
     prd = model.load(Path(prd_dir(repo)))
-    assert deploy.branch_note(prd, repo, ["production"]) is None
-    assert deploy.branch_note(prd, repo, ["staging"]) == NOTE.format(current="main")
+    assert deploy.branch_note(prd, repo, ["production"]) == []
+    assert deploy.branch_note(prd, repo, ["staging"]) == [NOTE.format(current="main")]
+
+
+def note_for(current: str, branch: str) -> str:
+    return f"prd_deploy: the close is on {current}, not {branch}; push the close commit to {branch} too"
+
+
+def test_branch_note_names_each_other_branch_once_in_reached_order(repo):
+    from prdlint import model
+    env_branches(repo, staging="release", local="hotfix", production="release")
+    prd = model.load(Path(prd_dir(repo)))
+    git(repo, "checkout", "-q", "-b", "work")
+    assert deploy.branch_note(prd, repo, ["staging", "local", "production"]) == [note_for("work", "release"), note_for("work", "hotfix")]
+
+
+def test_a_run_reaching_two_other_branches_prints_two_lines(repo):
+    env_branches(repo, staging="release", production="main")
+    git(repo, "checkout", "-q", "-b", "work")
+    run_id = stopped_run(repo)
+    assert confirm(repo, run_id).returncode == 0
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stderr == note_for("work", "release") + "\n" + note_for("work", "main") + "\n", r.stderr
 
 
 MATCHES = "Check: `cat .deploy/staging/greeting` prints `Hi`"
