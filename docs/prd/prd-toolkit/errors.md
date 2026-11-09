@@ -73,6 +73,7 @@ Recurrence of: E-005
 ### E-008 Cached uv script environments accumulate without bound in ~/.cache/uv/environments-v2
 Detected: 2026-11-09, user report (GitHub issue #24)
 Classification: spec gap
+Confirmed: 2026-11-09, "Confirm the class (form)"
 Evidence: Source: GitHub issue ihistand/claude-plugins#24, filed 2026-11-09 from a disk-space review.
   ~/.cache/uv/environments-v2 held 26,888 cached script environments; uv cache size reported 454.4GiB.
   Per script: prd-git-hook 8,632; prd-block 4,485; prd-deploy 3,466; prd-lint 2,535; prd-trace 1,747;
