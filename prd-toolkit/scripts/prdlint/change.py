@@ -134,10 +134,11 @@ BUMP_RULES: tuple[tuple[str, str], ...] = (
     ("a new test case under an unchanged AC that cites an open errors.md entry", "patch"),
     ("any other new test case under an unchanged AC", JUDGMENT),
     ("a changed version on a `Pack:` or `Target: pack` line, the pack's name and source unchanged", "patch"),
+    ("a moved block `Status:` value", "patch"),
     ("any other changed file in the PRD folder", JUDGMENT),
 )
 (_NEW, _NEW_TEST, _GONE, _GONE_ITEM, _AC_TEXT, _PROSE, _CHANGED_UNDER_SAME, _CHANGED_UNDER_CHANGED, _REGRESSION, _OTHER_TEST, _PACK_VERSION,
- _OTHER_FILE) = range(12)
+ _STATUS, _OTHER_FILE) = range(13)
 _BASE_FM_DROP = re.compile(r"^(?:version|updated|status):")
 _FIELD = re.compile(r"^([A-Za-z][\w ()/-]*?):")
 _PROSE_FIELDS = ("Flow", "Edge cases")
@@ -163,6 +164,8 @@ class Bump:
 def _rule(index: int, detail: str = "") -> tuple[str, str]:
     """(reason, level) of BUMP_RULES row `index`; the unclassified row names its file."""
     text, level = BUMP_RULES[index]
+    if index == _STATUS:
+        return f"status {detail}", level
     return (f"unclassified change in {detail}" if index == _OTHER_FILE else text), level
 
 
@@ -345,8 +348,8 @@ class _Diff:
         self.ac_state = _ac_states(self.old, self.new)
         self.block_of_ac = {_block_id_of_ac(a.id): b.id for b in [*self.old.blocks, *self.new.blocks] for a in b.acs}
 
-    def add(self, index: int, id_: str, file: str, line: int, change: str) -> None:
-        reason, level = _rule(index, file)
+    def add(self, index: int, id_: str, file: str, line: int, change: str, detail: str | None = None) -> None:
+        reason, level = _rule(index, file if detail is None else detail)
         self.items.append(BumpItem(id_, file, line or 1, change, level, reason))
 
     def covered(self, ac_id: str) -> bool:
@@ -385,13 +388,22 @@ def _tests_line_follows_cases(d: _Diff, before: model.ReqBlock, now: model.ReqBl
     return _tests_rest(before) == _tests_rest(now)
 
 
+def _status_text(fields: dict[str, str]) -> str:
+    return fields.get("Status", "Status:").removeprefix("Status:").strip() or "-"
+
+
 def _diff_blocks(d: _Diff) -> None:
     """New and removed blocks; for the rest, title, prose and other fields, and each AC."""
     for i, b in d.new_blocks.items():
         if i in d.fresh:
             d.add(_NEW, i, b.file, b.line, "added")
+            for a in b.acs:
+                d.add(_NEW, a.id, b.file, a.line, "added")
     for i in sorted(d.gone):
         d.add(_GONE, i, d.old_blocks[i].file, d.old_blocks[i].line, "removed")
+        for a in d.old_blocks[i].acs:
+            if not a.removed:
+                d.add(_GONE, a.id, d.old_blocks[i].file, a.line, "removed")
     old_acs = {a.id: a for b in d.old.blocks for a in b.acs}
     for b in d.new.blocks:
         before = d.old_blocks.get(b.id)
@@ -400,6 +412,9 @@ def _diff_blocks(d: _Diff) -> None:
         if b.title != before.title:
             d.add(_PROSE, b.id, b.file, b.line, "changed")
         was, now = _fields(before), _fields(b)
+        if was.get("Status") != now.get("Status"):
+            at = next((n for n, t in b.lines if t.startswith("Status:")), b.line)
+            d.add(_STATUS, b.id, b.file, at, "changed", f"{_status_text(was)} → {_status_text(now)}")
         for name in sorted(set(was) | set(now)):
             if name in _IGNORED_FIELDS or was.get(name) == now.get(name):
                 continue
@@ -439,6 +454,11 @@ def _diff_cases(d: _Diff) -> None:
     for tc in d.new.test_cases:
         ac = _owner_ac(tc)
         if d.covered(ac):
+            block = d.block_of_ac.get(_block_id_of_ac(ac))
+            if block in d.fresh and tc.id not in old_cases:
+                d.add(_NEW_TEST, tc.id, tc.file, tc.line, "added")
+            elif block in d.gone:
+                d.add(_GONE, tc.id, tc.file, tc.line, "removed")
             continue
         st = d.ac_state.get(ac, "unchanged")
         before = old_cases.get(tc.id)
@@ -452,8 +472,12 @@ def _diff_cases(d: _Diff) -> None:
         elif _case_json(tc) != _case_json(before):
             d.add(_CHANGED_UNDER_CHANGED if st in ("changed", "removed") else _CHANGED_UNDER_SAME, tc.id, tc.file, tc.line, "changed")
     for tid, tc in old_cases.items():
-        if tid not in new_ids and not d.covered(_owner_ac(tc)):
+        if tid in new_ids:
+            continue
+        if not d.covered(_owner_ac(tc)):
             d.add(_OTHER_FILE, tid, tc.file, tc.line, "removed")
+        elif d.block_of_ac.get(_block_id_of_ac(_owner_ac(tc))) in d.gone:
+            d.add(_GONE, tid, tc.file, tc.line, "removed")
 
 
 def _diff_contracts(d: _Diff, was: dict[str, dict[str, str]], was_lines: dict[str, dict[str, int]]) -> None:

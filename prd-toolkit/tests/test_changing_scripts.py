@@ -123,6 +123,12 @@ def test_version_rule_table_equals_bump_rules():
     assert cells == [(item, level) for item, level in change.BUMP_RULES]
 
 
+def test_skill_no_longer_says_bump_ignores_block_status():
+    text = flat(SKILL.read_text(encoding="utf-8"))
+    sentence = text.split("It ignores", 1)[1].split(". The highest level wins", 1)[0]
+    assert "block `Status:`" not in sentence and "`Source:` lines" in sentence
+
+
 def test_skill_points_at_review_mode():
     t = flat(SKILL.read_text(encoding="utf-8"))
     assert "/prd-change --review <dir>" in t and "reviewing-a-change.md" in t

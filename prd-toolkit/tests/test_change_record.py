@@ -118,7 +118,7 @@ def test_ids_are_deduplicated_and_in_natural_order(repo):
     edit(prd, "features/api.md", "### FR-002 Get an order", "### FR-002 Get one order")
     r = rec(repo, "major")
     ids = r.row.split("|")[4].strip()
-    assert ids == "FR-002, FR-009, AC-002.3, T-002.1, T-002.3"
+    assert ids == "FR-002, FR-009, AC-002.3, AC-009.1, T-002.1, T-002.3"
 
 
 def test_section_11_rows_added_changed_removed(repo):
@@ -506,3 +506,31 @@ def test_a_pack_record_that_fails_leaves_every_line_as_it_was(notes_repo):
     edit(notes_repo / NOTES_PRD, "prd.md", "| Version | Date | Change | IDs |\n|---|---|---|---|\n| 1.0.0 | 2026-11-03 | Initial release | FR-001 |\n", "")
     commit(notes_repo, "no changelog table", "docs")
     pack_refused(notes_repo, "§14 has no changelog table")
+
+
+def test_a_status_only_change_records_the_block(repo):
+    prd = repo / PRD
+    edit(prd, "features/api.md", "### FR-003 Delete an order\nStatus: verified (since 1.0.0)", "### FR-003 Delete an order\nStatus: approved")
+    r = rec(repo, "patch")
+    assert r.version == "1.0.1" and r.row.endswith("| FR-003 |")
+
+
+def test_a_new_block_records_its_acs_and_test_cases(repo):
+    prd = repo / PRD
+    append(prd / "features/api.md", "\n### FR-012 Count orders\nStatus: proposed\nAcceptance (EARS):\n- AC-012.1 When asked, the API shall count orders.\nTests: T-012.1 [integration]\n")
+    append(prd / "test-cases/api.yaml", CASE.replace("T-002.3", "T-012.1").replace("AC-002.3", "AC-012.1"))
+    r = rec(repo, "minor")
+    assert r.version == "1.1.0" and r.row.endswith("| FR-012, AC-012.1, T-012.1 |")
+
+
+def test_a_removed_block_keeps_its_deleted_test_id(repo):
+    import re
+    from prdlint import model
+
+    prd = repo / PRD
+    edit(prd, "nfr.md", "### NFR-004 Order lookup latency\nStatus: verified (since 1.0.0)", "### NFR-004 Order lookup latency\nStatus: removed")
+    p = prd / "test-cases/nfr.yaml"
+    p.write_text(re.sub(r"^T-004\.2:\n(?:[ \t]+.*\n|\n)*", "", p.read_text(), flags=re.M), encoding="utf-8")
+    r = rec(repo, "major")
+    assert r.version == "2.0.0" and r.row.endswith("| NFR-004, AC-004.1, T-004.1, T-004.2 |")
+    assert change.next_id(model.load(prd), "T-004") == "T-004.3"
