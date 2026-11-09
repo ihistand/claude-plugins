@@ -27,6 +27,9 @@
 >   section 16). The deploy and pack items from the first private-pack loop are inserted as 0.8.5
 >   (`2026-11-07-prd-toolkit-0.8.5-deploy-and-packs-design.md`); best practices move to 0.8.6 and
 >   conversion to 0.8.7; their content is unchanged.
+> - §4 (owner, 2026-11-08): the 0.8.5 backlog becomes its spec, renamed
+>   `2026-11-08-prd-toolkit-0.8.5-design.md`, with the check, publishing, guard and CI items that
+>   joined it.
 
 ## 1. Why
 
@@ -92,7 +95,7 @@ Every sub-release keeps these:
 | **0.8.2** | The decision inbox: `prd_gates.py serve` and `wait`, one local page that lists every pending gate of a PRD across its worktrees and answers each through `answer_gate()`, with the 0.7.1 adoption panel as one of its cards | 0.8.1 |
 | **0.8.3** | Fixes from the 0.8.2 proof, no feature: `prd_hooks.py vendor` and an exact refresh of `.prd-toolkit/` that `prd_build_check.py --diff` accepts in the toolkit's own repository; the standby promise checked against the vendored version; `prd_change.py record` writing a live block's Since and a contract item's IDs; seven `prd_build_check.py` fixes; eight inbox and gate fixes | 0.8.2 |
 | **0.8.4** | README files for the PRD folders (a managed block in `docs/prd/README.md` and `docs/prd/<slug>/README.md`, written by `prd_block.py`, skipped by lint, the digest and the tester, and checked by `prd_hooks.py check --ci`) and an Overview tab on the published page, both from one set of facts, with §2's optional `Principles:` and `Getting started:` parts; ten small fixes from the 0.8.3 proof and its residuals | 0.8.1, 0.8.3 |
-| **0.8.5** | Deploy and pack fixes from the first private-pack loop: one reply for consecutive human steps, an error entry recorded during a run, a `tests` step's own timeout, a close on another branch than the environment's, a `prints` match for changing output, and the PRD patch a pack release forces | 0.8.4 |
+| **0.8.5** | Deploy and pack fixes from the first private-pack loop: one reply for consecutive human steps, an error entry recorded during a run, a `tests` step's own timeout, a close on another branch than the environment's, a `matches` Check for changing output, and `prd_change.py pack` for the PRD patch a pack release forces; STALE judged by the cited line; SOURCES lines checked against the round's hunks; the published page's diagrams as inline SVG; the tester guard checking every harness argument; parallel tests for the toolkit's own suite; complete §14 IDs cells | 0.8.4 |
 | **0.8.6** | Best-practice sources: found by Claude and approved by the user, or added by the user; recorded per pack or per PRD; turned into §5 rows or checklist items. Finding, installing or writing a skill or a pack when a PRD needs one, recorded in §6 | 0.8.0 |
 | **0.8.7** | Conversion: retarget an area or a whole PRD to another pack, with the `platform-word` findings as the worklist, contracts and Harness rebuilt, T-ids kept, and the old platform running until the new one is `verified` | 0.8.0, 0.8.6 |
 
@@ -100,9 +103,9 @@ Spec for 0.8.0: `2026-11-03-prd-toolkit-0.8.0-design.md`. Spec for 0.8.1:
 `2026-11-03-prd-toolkit-0.8.1-design.md`. Spec for 0.8.2:
 `2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md`. Spec for 0.8.3:
 `2026-11-06-prd-toolkit-0.8.3-backlog-design.md`. Spec for 0.8.4:
-`2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md`. Backlog for 0.8.5:
-`2026-11-07-prd-toolkit-0.8.5-deploy-and-packs-design.md`. The 0.8.5, 0.8.6 and 0.8.7 specs are
-written when their turn comes, each through its own brainstorm.
+`2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md`. Spec for 0.8.5:
+`2026-11-08-prd-toolkit-0.8.5-design.md`. The 0.8.6 and 0.8.7 specs are written when their turn
+comes, each through its own brainstorm.
 
 ## 5. Related work
 
