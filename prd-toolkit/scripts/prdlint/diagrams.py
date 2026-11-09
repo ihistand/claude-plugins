@@ -42,8 +42,11 @@ def render_svg(source: str, number: int) -> str:
     svg, reason = _raw(source)
     if reason:
         raise Fallback(reason)
-    svg = _number(svg, number)
-    refused = check_svg(svg)
+    try:
+        svg = _number(svg, number)
+        refused = check_svg(svg)
+    except Exception as e:  # noqa: BLE001 - a diagram never stops the publish; it shows its source
+        raise Fallback(f"the SVG could not be read: {type(e).__name__}: {_first_line(e)}") from None
     if refused:
         raise Fallback(refused)
     return svg
@@ -56,6 +59,11 @@ _ARIA = re.compile(r'(\saria-(?:labelledby|describedby)=")([^"]*)"')
 _MARKUP = re.compile(r"<style\b[^>]*>.*?</style>|<[^>]*>", re.S)
 
 
+def _opening(segment: str) -> str:
+    """A markup segment's own tag: a `<style>` segment's opening tag, without the sheet it holds."""
+    return segment[: segment.index(">") + 1]
+
+
 _LINK = r"""url\(\s*["']?\s*#|[\s:]href\s*=\s*["']?\s*#"""  # what a `url(` or an href value starts with
 _TARGET = r"""[^\s"')>]+"""
 
@@ -66,7 +74,8 @@ def _number(svg: str, number: int) -> str:
     or `href="#…"` names the diagram's own namespace even when no element has that ID (mermaid's sequence style
     points at `#drop-shadow`, which it never defines): a dangling reference stays dangling, inside the diagram."""
     root = re.match(r'\s*<svg\b[^>]*?\sid="([^"]*)"', svg)
-    ids = set(_ID.findall(svg))
+    # from the tags only: mermaid leaves a raw `"` in label text, where `z id="q` would read as an ID
+    ids = {i for m in _MARKUP.finditer(svg) for i in _ID.findall(_opening(m.group(0)))}
     new = {i: f"diagram-{number}" if root and i == root.group(1) else f"diagram-{number}-{i}" for i in ids}
     known = "|".join(re.escape(i) for i in sorted(new, key=len, reverse=True))
     ref = re.compile(rf"(?P<link>(?i:{_LINK}))(?P<target>{_TARGET})" + (rf"|#(?P<id>{known})(?![\w-])" if known else ""))
@@ -75,9 +84,11 @@ def _number(svg: str, number: int) -> str:
         return new.get(name, f"diagram-{number}-{name}")
 
     def markup(m: re.Match) -> str:
-        s = _ID.sub(lambda k: f'id="{new[k.group(1)]}"', m.group(0))
+        s = m.group(0)
+        tag = _opening(s)
+        s = _ID.sub(lambda k: f'id="{new.get(k.group(1), k.group(1))}"', tag) + s[len(tag) :]
         s = _ARIA.sub(lambda k: k.group(1) + " ".join(new.get(t, t) for t in k.group(2).split()) + '"', s)
-        return ref.sub(lambda k: k.group("link") + target(k.group("target")) if k.group("link") else "#" + new[k.group("id")], s)
+        return ref.sub(lambda k: k.group("link") + target(k.group("target")) if k.group("link") else "#" + new.get(k.group("id"), k.group("id")), s)
 
     return _MARKUP.sub(markup, svg)
 
@@ -92,10 +103,11 @@ _SVG_TAGS = frozenset(t.lower() for t in (
     "feGaussianBlur feMerge feMergeNode feMorphology feOffset fePointLight feSpecularLighting feSpotLight feTile "
     "feTurbulence filter g line linearGradient marker mask metadata path pattern polygon polyline radialGradient rect "
     "stop style svg switch symbol text textPath title tspan use view").split())
-_TAG = re.compile(r"</?([A-Za-z][^\s/>]*)")
+_TAG = re.compile(r"</?([A-Za-z][^\t\n\f\r />]*)")
 _START = re.compile(r"<[A-Za-z]")
-_HEAD = re.compile(r"\s*(?:<\?xml[^<>]*\?>\s*)?(?=<svg[\s/>])", re.I)
-_SVG_TAG = re.compile(r"<(/?)svg(?=[\s/>])", re.I)
+_HEAD = re.compile(r"[\t\n\f\r ]*(?:<\?xml[^<>]*\?>[\t\n\f\r ]*)?(?=<svg[\t\n\f\r />])", re.I)
+_SVG_TAG = re.compile(r"<(/?)svg(?=[\t\n\f\r />])", re.I)
+_TEXT_ONLY = re.compile(r"<(title|desc)(?=[\t\n\f\r />])", re.I)  # HTML integration points: a tag inside is HTML
 _ON = re.compile(r"(?<![\w-])on\w*\s*=")
 _URL = re.compile(r"url\(")
 _LOADS = ("@import", "@font-face", "image-set(", "image(", "src(", "src=")
@@ -104,7 +116,7 @@ _WS = "\t\n\f\r "  # the HTML tokenizer's whitespace
 
 def _tag_at(s: str, i: int) -> list[tuple[str, str]] | None:
     """The attributes of the start tag at `s[i]` (a `<` and a letter), read as the HTML tokenizer reads them: names
-    lowercased, values with character references decoded. None when the text ends inside the tag."""
+    lowercased, values as written. None when the text ends inside the tag."""
     n, j = len(s), i + 1
     while j < n and s[j] not in _WS + "/>":
         j += 1
@@ -138,7 +150,7 @@ def _tag_at(s: str, i: int) -> list[tuple[str, str]] | None:
                 while k < n and s[k] not in _WS + ">":
                     k += 1
                 value, j = s[j:k], k
-        attrs.append((name, html.unescape(value)))
+        attrs.append((name, value))
 
 
 def _root(svg: str) -> tuple[int, int] | None:
@@ -152,7 +164,7 @@ def _root(svg: str) -> tuple[int, int] | None:
         depth += -1 if m.group(1) else 1
         if depth == 0:
             end = svg.find(">", m.end())
-            return (head.end(), end + 1) if end >= 0 and not svg[end + 1 :].strip() else None
+            return (head.end(), end + 1) if end >= 0 and not svg[end + 1 :].strip(_WS) else None
     return None
 
 
@@ -167,7 +179,7 @@ def check_svg(svg: str) -> str | None:
     if "<!" in svg or "<?" in svg[shape[0] :]:  # in an SVG <style> they split a CSS word: u<!---->rl(
         return "the SVG holds a comment, CDATA or processing instruction"
     root = dict(reversed(_tag_at(svg, shape[0]) or []))  # the first of a repeated attribute wins
-    number = re.fullmatch(r"diagram-(\d+)", root.get("id", ""))
+    number = re.fullmatch(r"diagram-(\d+)", html.unescape(root.get("id", "")))
     if not number:
         return "the SVG's root has no diagram-<n> ID"
     own = rf"#diagram-{number.group(1)}"
@@ -183,15 +195,21 @@ def check_svg(svg: str) -> str | None:
         return "the SVG holds <foreignObject"
     if _ON.search(text) or any(name.startswith("on") for name, _ in attrs):
         return "the SVG holds an on…= attribute"
-    if any((name == "href" or name.endswith(":href")) and not href_ok.match(value.strip(_WS)) for name, value in attrs):
+    # a link must point into the diagram both as written and decoded: an HTML parser reads a style raw, an SVG one decoded
+    if any((name == "href" or name.endswith(":href")) and not all(href_ok.match(v.strip(_WS)) for v in (value, html.unescape(value)))
+           for name, value in attrs):
         return "the SVG holds an href that is not #…"
-    if any(not url_ok.match(text, m.end()) for m in _URL.finditer(text)):
+    if any(not url_ok.match(t, m.end()) for t in (raw, text) for m in _URL.finditer(t)):
         return "the SVG holds a url( that is not url(#…)"
     tag = next((t for t in _TAG.findall(raw) if t not in _SVG_TAGS), None)
     if tag:
         return f"the SVG holds <{tag}>, which is not a drawing element"
     if None in tags:
         return "the SVG holds a tag that does not close"
+    for m in _TEXT_ONLY.finditer(svg):
+        start, close = svg.find(">", m.end()), re.compile(rf"</{m.group(1)}[\t\n\f\r />]", re.I).search(svg, m.end())
+        if start < 0 or not close or _START.search(svg, start, close.start()):
+            return f"the SVG holds a tag inside <{m.group(1).lower()}>, where HTML reads it"
     if "\\" in text:
         return "the SVG holds a backslash, which CSS can use to hide url( or @import"
     load = next((w for w in _LOADS if w in text), None)

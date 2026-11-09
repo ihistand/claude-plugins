@@ -75,8 +75,20 @@ try:
     out["seq"], out["seq_reason"] = diagrams.render_svg(sys.argv[2], 4), None
 except diagrams.Fallback as e:
     out["seq"], out["seq_reason"] = None, e.reason
+out["quoted"] = []
+for n, src in enumerate(json.loads(sys.argv[3]), 5):  # anything but a Fallback crashes the probe
+    try:
+        out["quoted"].append(["drawn", diagrams.render_svg(src, n)])
+    except diagrams.Fallback as e:
+        out["quoted"].append(["source", e.reason])
 print(json.dumps(out))
 """
+
+# mermaid leaves a raw `"` in these labels' text, which once made a bogus ID swallow the next tag's real one
+QUOTED = ['sequenceDiagram\n  participant A as z id="q\n  A->>B: hi\n',
+          'sequenceDiagram\n  A->>B: hi\n  create participant C as z id="q\n  A->>C: yo\n',
+          'mindmap\n  root\n    z id="q\n',
+          'stateDiagram-v2\n  [*] --> S\n  note right of S : z id="q\n']
 
 SEQUENCE = "sequenceDiagram\n  Alice->>Bob: hi\n  Bob-->>Alice: hello back\n"
 
@@ -84,7 +96,7 @@ SEQUENCE = "sequenceDiagram\n  Alice->>Bob: hi\n  Bob-->>Alice: hello back\n"
 def test_the_toolkit_diagram_renders_for_real(tmp_path):
     """Never skipped: uv installs the pinned renderer in its own environment; the pytest one never holds it."""
     r = subprocess.run(["uv", "run", "--no-project", "--with", f"mermaidx=={pin()}", "python", "-I", "-c", PROBE,
-                        str(ROOT / "scripts"), SEQUENCE], input=section4(), capture_output=True, text=True, encoding="utf-8",
+                        str(ROOT / "scripts"), SEQUENCE, json.dumps(QUOTED)], input=section4(), capture_output=True, text=True, encoding="utf-8",
                        cwd=tmp_path, timeout=600)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
@@ -116,6 +128,28 @@ def test_the_toolkit_diagram_renders_for_real(tmp_path):
         assert label in text_of(seq), label
     for svg in (one, two, seq):
         assert "<!" not in svg and "<?" not in svg
+    # a raw quote in a label never crashes the render: each draws, or falls back with a reason
+    assert len(out["quoted"]) == len(QUOTED)
+    for n, (kind, value) in enumerate(out["quoted"], 5):
+        if kind == "drawn":
+            assert value.startswith(f'<svg id="diagram-{n}"') and diagrams.check_svg(value) is None, n
+        else:
+            assert kind == "source" and value, n
+
+
+def test_a_raw_quote_in_a_label_never_stops_the_publish_for_real(prd, tmp_path):
+    for src in QUOTED[0], QUOTED[2]:
+        edit(prd, "prd.md", "## 5.", "```mermaid\n" + src + "```\n\n## 5.")
+    lines = (prd / "prd.md").read_text(encoding="utf-8").split("\n")
+    starts = [i for i, ln in enumerate(lines, 1) if ln == "```mermaid" and lines[i] in ("sequenceDiagram", "mindmap")]
+    out = tmp_path / "page.html"
+    r = subprocess.run(["uv", "run", "--script", str(SCRIPT), "render", str(prd), "--out", str(out)],
+                       capture_output=True, text=True, encoding="utf-8", timeout=600)
+    assert r.returncode == 0 and "internal error" not in r.stderr, r.stderr
+    page = out.read_text(encoding="utf-8")
+    drawn = page.count('<figure class="diagram">')
+    noted = [n for n in starts if f"prd_publish: diagram at prd.md:{n} shown as source: " in r.stderr]
+    assert drawn == 2 * (1 + len(starts) - len(noted)), (drawn, noted, r.stderr)  # each tab draws what renders
 
 
 def test_the_toolkit_page_draws_its_diagrams_for_real(tmp_path):
@@ -187,6 +221,26 @@ def test_a_reference_to_no_id_is_kept_inside_the_diagram(monkeypatch):
         '<filter id="diagram-3-my-svg-drop-shadow"></filter></defs><a xlink:href="#diagram-3-nowhere">'
         '<use href="#diagram-3-my-svg-drop-shadow"></use></a><path style="filter: url( \'#diagram-3-gone\' )"></path>'
         '<text>#drop-shadow stays text</text></svg>')
+
+
+def test_ids_are_read_from_tags_not_from_label_text(monkeypatch):
+    quoted = ('<svg id="my-svg"><g id="actor0"><text>z id="q</text></g><g id="actor1"><use href="#actor1"></use></g>'
+              '<text>"</text><path id="my-svg-drop-shadow"></path></svg>')
+    monkeypatch.setattr(diagrams, "_render", lambda source: quoted)
+    assert diagrams.render_svg("sequenceDiagram\n  quoted\n", 2) == (
+        '<svg id="diagram-2"><g id="diagram-2-actor0"><text>z id="q</text></g><g id="diagram-2-actor1">'
+        '<use href="#diagram-2-actor1"></use></g><text>"</text><path id="diagram-2-my-svg-drop-shadow"></path></svg>')
+
+
+@pytest.mark.parametrize("step", ["_number", "check_svg"])
+def test_an_unexpected_error_in_the_numbering_or_the_check_is_a_fallback(monkeypatch, step):
+    monkeypatch.setattr(diagrams, "_render", lambda source: '<svg id="my-svg"></svg>')
+    def boom(*args):
+        raise KeyError("actor1")
+    monkeypatch.setattr(diagrams, step, boom)
+    with pytest.raises(diagrams.Fallback) as e:
+        diagrams.render_svg(f"graph TD\n  {step}\n", 1)
+    assert e.value.reason == "the SVG could not be read: KeyError: 'actor1'"
 
 
 def test_a_renderer_that_cannot_load_is_a_fallback(monkeypatch):
@@ -281,7 +335,14 @@ def test_check_svg_names_the_spec_reasons(bad, reason):
 @pytest.mark.parametrize("text", ["", "hello", "   ", "<g></g>", '<svg id="diagram-1">', '<svg id="diagram-1"></svg><svg>',
                                   '<p></p><svg id="diagram-1"></svg>', '<svg></svg>', '<svg id="my-svg"></svg>',
                                   '<svg id="diagram-1"></svg><svg><text>x</text></svg>', '<svg id="diagram-1"></svg>hello</svg>',
-                                  '<?xml version="1.0"?><?xml version="1.0"?><svg id="diagram-1"></svg>'])
+                                  '<?xml version="1.0"?><?xml version="1.0"?><svg id="diagram-1"></svg>',
+                                  # a root miscounted, or a style an HTML parser reads raw, where &#35; is not `#`
+                                  '<svg id="diagram-1"><g title="<svg "></g></svg><style>body{background:url(&#35;diagram-1-x)}</style></svg>',
+                                  '<svg id="diagram-1"><svg\x0b></svg><style>body{background:url(&#35;diagram-1-x)}</style></svg>',
+                                  '<svg id="diagram-1"><title><style>body{background:url(&#35;diagram-1-x)}</style></title></svg>',
+                                  '<svg id="diagram-1"><desc><b>x</b></desc></svg>', '<svg id="diagram-1"><title>x</svg>',
+                                  '<svg id="diagram-1"><use href="&#35;diagram-1-x"></use></svg>',
+                                  '<svg id="diagram-1"><path style="fill:url(&#35;diagram-1-x)"></path></svg>'])
 def test_check_svg_refuses_what_is_not_one_numbered_svg(text):
     assert diagrams.check_svg(text) is not None, text
 
