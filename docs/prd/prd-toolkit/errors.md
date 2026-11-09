@@ -69,3 +69,19 @@ Evidence: User report (/prd-error), verbatim:
 Diagnosis: Reproduced once: `prd_lint.py <repro>/ydir`, where test-cases/sub.yaml is an empty directory, printed `prd_lint: internal error: IsADirectoryError: [Errno 21] Is a directory: .../test-cases/sub.yaml` and exited 2. Root cause: prdlint/model.py guards `.md` entries with `is_file()` (line 854, the E-005 fix), but the test-cases glob (line 887) and the contracts rglob (line 899) pass every `*.yaml` match, a directory or a broken symlink included, to load_yaml, whose open raises. The broken-symlink half is read from the code, not run: glob yields a dangling link and open raises FileNotFoundError. The code does what an AC says: AC-006.1 `If loading the folder raises an error other than a missing prd.md, the lint command shall print prd_lint: internal error: <exception type>: <message> to stderr ... and exit 2.` AC-006.3 gives the sufficiency finding only to `an entry of the folder whose name ends in .md`. The AC is wrong in scope: a non-file `.yaml` entry in test-cases/ or contracts/ is the same malformed-folder case E-005 fixed for `.md`, and should be a sufficiency finding at line 0, not an internal error.
 Resolution: T-006.4 [integration], PRD 5.0.0, fixed in 52b85d8
 Recurrence of: E-005
+
+### E-008 Cached uv script environments accumulate without bound in ~/.cache/uv/environments-v2
+Detected: 2026-11-09, user report (GitHub issue #24)
+Classification: unclassified
+Evidence: Source: GitHub issue ihistand/claude-plugins#24, filed 2026-11-09 from a disk-space review.
+  ~/.cache/uv/environments-v2 held 26,888 cached script environments; uv cache size reported 454.4GiB.
+  Per script: prd-git-hook 8,632; prd-block 4,485; prd-deploy 3,466; prd-lint 2,535; prd-trace 1,747;
+  prd-status 1,479; prd-links 1,336; prd-change 1,221; validate-outline 692; prd-gates 602; prd-error 470; prd-hooks 54.
+  Each environment about 20 MB as listed (CPython 3.13, uv 0.13.7; pyyaml, jsonschema, openapi-spec-validator).
+  New prd-git-hook environments per day: Nov 1 1,271; Nov 2 1,281; Nov 3 2,645; Nov 4 764; Nov 9 1,365.
+  rm -rf of the folder freed about 89 GB of disk and about 27 million files (APFS clones made the listed size overstate it).
+  During the rm, two new environments appeared from hook runs in another session:
+  prd-git-hook-bda7e90cb225275c and prd-lint-d26ef0960b4cb95e (16:12), so the rm ended with Directory not empty.
+Diagnosis: -
+Resolution: -
+Recurrence of: -
