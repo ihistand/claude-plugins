@@ -657,3 +657,15 @@ def test_by_hand_close_wrong_commit(repo):
     p.write_text(p.read_text(encoding="utf-8").replace(f"| {old[:7]} |", f"| {new} |"), encoding="utf-8")
     close(repo, run_id, "Record the deploy done by hand")
     assert findings(check(repo, run_id)) == [f"Deployed production: commit {new} is not the recorded commit {old[:7]}"]
+
+
+def test_close_after_an_ahead_confirm(repo):
+    from test_deploy import ahead_repo, confirm_pairs
+    run_id = ahead_repo(repo)
+    assert confirm_pairs(repo, run_id, (2, "a"), (3, "b"), (4, "c")).returncode == 0
+    assert resume(repo, run_id).returncode == 0
+    add_deployed(repo, run_id, "staging", "production")
+    go_live(repo)
+    close(repo, run_id)
+    r = check(repo, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr

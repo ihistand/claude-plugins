@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -388,3 +389,18 @@ def test_multiline_refs_is_no_gate(recorded):
     assert listed(recorded / PRD) == []
     _write_verdict(recorded, {"base": "0" * 40})
     assert len(listed(recorded / PRD)) == 1
+
+
+def test_steps_confirmed_ahead_are_no_gate(tmp_path):
+    from deploy_fixture import deploy_repo, three_human_steps
+    repo = deploy_repo(tmp_path)
+    three_human_steps(repo)
+    env = {**os.environ, "PRD_PLUGINS_FILE": str(Path(__file__).parent / "fixtures/installed_plugins.json")}
+    run = subprocess.run([sys.executable, str(SCRIPTS / "prd_deploy.py"), "run", str(repo / PRD)], capture_output=True, text=True, encoding="utf-8", env=env, cwd=repo)
+    assert run.returncode == 3, run.stdout + run.stderr
+    run_id = run.stdout.splitlines()[0].removeprefix("run: ")
+    assert set(by_id(listed(repo / PRD))) == {f"deploy-step:{run_id}:2"}
+    args = ["--step", "2", "--reply", "a", "--step", "3", "--reply", "b", "--step", "4", "--reply", "c"]
+    r = subprocess.run([sys.executable, str(SCRIPTS / "prd_deploy.py"), "confirm", str(repo / PRD), "--run", run_id, *args], capture_output=True, text=True, encoding="utf-8", env=env)
+    assert r.returncode == 0, r.stderr
+    assert listed(repo / PRD) == []

@@ -1160,3 +1160,76 @@ def test_plan_steps_until_production_env_unit(repo):
     with pytest.raises(ValueError, match=r"^--until staging would include production step 3$"):
         deploy.plan_steps(prd, "staging")
     assert [s.number for s in deploy.plan_steps(prd, "production")] == [1, 2, 3, 4, 5]
+
+
+# ---- 0.8.5: one confirm covers consecutive human steps ----
+
+def ahead_repo(repo, *run_args):
+    from deploy_fixture import three_human_steps
+    three_human_steps(repo)
+    r = deploy_cli(repo, "run", *run_args)
+    assert r.returncode == 3 and r.stdout.splitlines()[-1].startswith("prd-deploy: human step=2"), r.stdout + r.stderr
+    return run_id_of(r)
+
+
+def confirm_pairs(repo, run_id, *pairs):
+    args = [a for n, text in pairs for a in ("--step", str(n), "--reply", text)]
+    return deploy_cli(repo, "confirm", "--run", run_id, *args)
+
+
+def log_of(repo, run_id):
+    return deploy.read_log(repo, run_id)
+
+
+def test_one_confirm_covers_the_stopped_step_and_the_human_steps_after_it(repo):
+    run_id = ahead_repo(repo)
+    r = confirm_pairs(repo, run_id, (2, "staging ok"), (3, "notes ok"), (4, "deploy production"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    confirms = [x for x in log_of(repo, run_id) if x.get("kind") == "confirm"]
+    assert [(c["step"], c["reply"], c.get("ahead")) for c in confirms] == [(2, "staging ok", None), (3, "notes ok", True), (4, "deploy production", True)]
+    r = resume(repo, run_id)
+    assert r.returncode == 0 and r.stdout.splitlines()[-1] == f"prd-deploy: done step=5 run={run_id}", r.stdout + r.stderr
+    humans = {x["step"]: x for x in log_of(repo, run_id) if x.get("kind") == "step" and x.get("actor") == "human"}
+    assert humans[2].get("confirmed_ahead") is None
+    assert all(humans[n]["result"] == "human" and humans[n]["confirmed_ahead"] is True for n in (3, 4))
+    assert (repo / ".deploy/step5").exists()
+    assert resume(repo, run_id).returncode == 1
+
+
+@pytest.mark.parametrize("pairs", [
+    [(2, "a"), (4, "c")],                  # a gap
+    [(2, "a"), (3, "b"), (5, "e")],        # an agent step
+    [(3, "b")],                            # not the stopped step
+    [(2, "a"), (3, " ")],                  # an empty reply
+    [(2, "a"), (3, "b"), (3, "b")],        # a repeat
+])
+def test_a_bad_pair_refuses_the_whole_confirm(repo, pairs):
+    run_id = ahead_repo(repo)
+    before = log_of(repo, run_id)
+    r = confirm_pairs(repo, run_id, *pairs)
+    assert r.returncode == 2 and r.stdout == "" and r.stderr.strip(), (r.stdout, r.stderr)
+    assert log_of(repo, run_id) == before
+
+
+def test_a_step_past_until_is_refused(repo):
+    run_id = ahead_repo(repo, "--until", "staging")
+    before = log_of(repo, run_id)
+    r = confirm_pairs(repo, run_id, (2, "a"), (3, "b"), (4, "c"))
+    assert r.returncode == 2 and "step 4" in r.stderr
+    assert log_of(repo, run_id) == before
+
+
+def test_unequal_step_and_reply_counts_are_refused(repo):
+    run_id = ahead_repo(repo)
+    before = log_of(repo, run_id)
+    r = deploy_cli(repo, "confirm", "--run", run_id, "--step", "2", "--step", "3", "--reply", "a")
+    assert r.returncode == 2 and r.stdout == ""
+    assert log_of(repo, run_id) == before
+
+
+def test_a_0_8_4_log_reads_as_before(repo):
+    run_id = ahead_repo(repo)
+    assert confirm_pairs(repo, run_id, (2, "staging ok")).returncode == 0
+    assert not any("ahead" in x or "confirmed_ahead" in x for x in log_of(repo, run_id))
+    r = resume(repo, run_id)
+    assert r.returncode == 3 and r.stdout.splitlines()[-1] == f"prd-deploy: human step=3 run={run_id}", r.stdout + r.stderr

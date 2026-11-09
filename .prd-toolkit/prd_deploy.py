@@ -48,10 +48,11 @@ def _parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=text)
         p.add_argument("prd_dir")
         p.add_argument("--run", required=True, metavar="ID")
+        many = "append" if name == "confirm" else "store"  # confirm takes the pair again for each consecutive human step
         if name != "resume":
-            p.add_argument("--step", required=True, type=int, metavar="N")
+            p.add_argument("--step", required=True, type=int, metavar="N", action=many)
         if name in ("confirm", "recover"):
-            p.add_argument("--reply", required=True, metavar="TEXT", help="the user's words" if name == "recover" else None)
+            p.add_argument("--reply", required=True, metavar="TEXT", action=many, help="the user's words" if name == "recover" else None)
         else:
             p.add_argument("--timeout", type=int, default=deploy.DEFAULT_TIMEOUT, metavar="SECONDS", help="per command (default 600)")
     p = sub.add_parser("record", help="record a deploy the owner did by hand: a run log and the environment's Deployed row; runs nothing")
@@ -102,8 +103,10 @@ def _existing_run(args, prd: model.Prd) -> int:
     try:
         repo_root = model.repo_root(prd.root)
         if args.command == "confirm":
-            deploy.confirm(prd, repo_root, args.run, args.step, args.reply)
-            print(f"confirmed: step {args.step} run={args.run}")
+            if len(args.step) != len(args.reply):
+                raise ValueError(f"{len(args.step)} --step but {len(args.reply)} --reply; give each step its own reply")
+            deploy.confirm(prd, repo_root, args.run, list(zip(args.step, args.reply)))
+            print(f"confirmed: step {', '.join(map(str, args.step))} run={args.run}")
             return 0
         deploy.check_run_id(args.run)
         if args.command == "recover":

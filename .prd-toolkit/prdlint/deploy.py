@@ -259,6 +259,11 @@ def run_steps(prd: Prd, repo_root: Path, run_id: str, steps: list[Step], start: 
         base = {"kind": "step", "step": step.number, "env": step.env, "actor": step.actor}
         if step.actor == "human":
             now = _iso()
+            if any(r.get("kind") == "confirm" and r.get("step") == step.number and r.get("ahead") for r in read_log(repo_root, run_id)):
+                append(repo_root, run_id, {**base, "command": None, "exit": None, "stdout": "", "stderr": "", "started": now, "ended": now,
+                                           "result": "human", "confirmed_ahead": True})  # the owner answered this step in the stopped step's confirm
+                print(f"step {step.number} human {step.env}: confirmed ahead", flush=True)
+                continue
             append(repo_root, run_id, {**base, "command": None, "exit": None, "stdout": "", "stderr": "", "started": now, "ended": now, "result": "human"})
             print(f"step {step.number} human {step.env}: human", flush=True)
             return "human", step.number
@@ -339,8 +344,13 @@ def other_prd(prd: Prd, repo_root: Path, run_id: str, header: dict) -> str | Non
     return None if recorded == here else f"run {run_id} is for {recorded}, not {here}"
 
 
-def confirm(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> None:
-    """Record the reply to the human step the run stopped at. ValueError (a usage error) when it cannot."""
+def confirm(prd: Prd, repo_root: Path, run_id: str, pairs: list[tuple[int, str]]) -> None:
+    """Record the replies to the human step the run stopped at (the first pair) and to the human steps right after it.
+
+    All pairs are checked before any is written, under the run lock. ValueError (a usage error) when one cannot be."""
+    if not pairs:
+        raise ValueError("no step and reply given")
+    step, reply = pairs[0]
     try:
         with run_lock(repo_root, run_id):
             header, recs = _load_log(repo_root, run_id)
@@ -354,7 +364,20 @@ def confirm(prd: Prd, repo_root: Path, run_id: str, step: int, reply: str) -> No
                 raise ValueError("the reply is empty")
             if _confirmed(recs, step):
                 raise ValueError(f"step {step} already has a confirm record")
-            append(repo_root, run_id, {"kind": "confirm", "step": step, "reply": reply, "at": _iso()})
+            if len(pairs) > 1:
+                planned = {s.number: s for s in plan_steps(prd, header.get("until"))}
+                for (before, _), (n, text) in zip(pairs, pairs[1:]):
+                    if n != before + 1:
+                        raise ValueError(f"step {n} does not follow step {before}; a confirm covers consecutive steps")
+                    if n not in planned:
+                        raise ValueError(f"step {n} is not a step of this run (past --until or the runbook's end)")
+                    if planned[n].actor != "human":
+                        raise ValueError(f"step {n} is not a human step")
+                    if not text.strip():
+                        raise ValueError(f"the reply for step {n} is empty")
+            for n, text in pairs:
+                rec = {"kind": "confirm", "step": n, "reply": text, "at": _iso()}
+                append(repo_root, run_id, rec if n == step else {**rec, "ahead": True})
     except Refused as e:
         raise ValueError(e.reasons[0]) from None
 
@@ -508,7 +531,7 @@ def resume_problems(prd: Prd, repo_root: Path, run_id: str) -> list[str]:
         reasons.append(f"step {failed['step']} failed; a failed run ends (start a new run)")
     elif last is None:
         reasons.append("the run has no step records")
-    elif last.get("result") == "human":
+    elif last.get("result") == "human" and not last.get("confirmed_ahead"):  # an ahead-confirmed step is answered, not a stop
         if not _confirmed(recs, last["step"]):
             reasons.append(f"step {last['step']} has no confirm record")
     else:
@@ -661,7 +684,7 @@ def finished_envs(log: list[dict], prd: Prd) -> list[str]:
         recs = [r for r in steps if r.get("step") == number]
         if recs and recs[-1].get("result") == "human":  # a human step passes once confirmed and resumed, with nothing failing after it
             idx = [i for i, r in enumerate(log) if r.get("kind") == "confirm" and r.get("step") == number]
-            ok = bool(idx) and any(r.get("kind") == "resume" and r.get("step") == number for r in log[idx[-1] + 1:])
+            ok = bool(idx) and (bool(recs[-1].get("confirmed_ahead")) or any(r.get("kind") == "resume" and r.get("step") == number for r in log[idx[-1] + 1:]))
             later_fail = any(r.get("kind") == "step" and r.get("result") == "fail" and (r.get("step") or 0) > number for r in log)
             if ok and not later_fail:
                 out.append(env)
