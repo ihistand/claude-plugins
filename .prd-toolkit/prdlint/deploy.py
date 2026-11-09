@@ -25,7 +25,7 @@ except ImportError:  # Windows
 from . import registry, trace
 from .buildcheck import _resolve, _show
 from .markdown import frontmatter, sections
-from .model import Prd, Step, gate_of, load, production_envs
+from .model import Prd, Step, _errors_ledger, gate_of, load, production_envs
 from .trace import BadRange
 
 EXIT = {"done": 0, "refused": 1, "usage": 2, "human": 3, "failed": 4}
@@ -382,6 +382,32 @@ def confirm(prd: Prd, repo_root: Path, run_id: str, pairs: list[tuple[int, str]]
         raise ValueError(e.reasons[0]) from None
 
 
+def run_entries_only(prd: Prd, repo_root: Path, header: dict, run_id: str) -> bool:
+    """True when the tracked tree's only change is errors.md gaining entries, each open, unclassified and with a
+    `Detected:` line naming this run and a step; the old text must be exactly as it was at the run's head."""
+    lines = _git(repo_root, "status", "--porcelain", "--untracked-files=no").splitlines()
+    rel = f"{prd_rel(prd, repo_root)}/errors.md".removeprefix("./")
+    if [ln[3:] for ln in lines] != [rel] or not all(ln[:2].strip() == "M" for ln in lines):
+        return False
+    path = repo_root / rel
+    if not path.is_file():
+        return False
+    base, now = _show(repo_root, str(header.get("head")), rel), path.read_text(encoding="utf-8")
+    base_ids, new = set(_errors_ledger(base)), _errors_ledger(now)
+    added = [e for i, e in new.items() if i not in base_ids]
+    now_lines = now.split("\n")
+    for e in added:
+        detected = re.search(r"^Detected:.*$", "\n".join(now_lines[e.line - 1:e.end]), re.M)
+        if not (e.open and e.classification == "unclassified" and detected_names_failure(detected.group(0) if detected else None, run_id, None)):
+            return False
+    gone = {n for e in added for n in range(e.line, e.end + 1)}
+    kept = [t for n, t in enumerate(now_lines, 1) if n not in gone]
+    old = base.split("\n")
+    if not base_ids:
+        old = [t for t in old if t.strip() != LEDGER_PLACEHOLDER]
+    return "\n".join(kept).rstrip() == "\n".join(old).rstrip()
+
+
 def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
     """Why the run no longer matches the repo; empty when it still does. Check this before reading the runbook."""
     reasons = []
@@ -389,7 +415,7 @@ def _moved(prd: Prd, repo_root: Path, header: dict) -> list[str]:
         reasons.append("HEAD moved since the run started")
     if prd.frontmatter.get("version") != header.get("version"):
         reasons.append("the PRD version changed since the run started")
-    if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip():
+    if _git(repo_root, "status", "--porcelain", "--untracked-files=no").strip() and not run_entries_only(prd, repo_root, header, str(header.get("run"))):
         reasons.append("the tracked tree has changes")  # the runbook is read from the working tree
     if runbook_hash(prd.root) != header.get("runbook"):
         reasons.append("the runbook changed since the run started")  # an untracked or assume-unchanged PRD moves no HEAD
@@ -764,8 +790,8 @@ def _diff_lines(base: list[tuple[int, str]], head: list[tuple[int, str]]) -> lis
 
 
 def detected_names_failure(detected: str | None, run_id: str, step) -> bool:
-    """A failure entry's `Detected:` line names the run id and `step N`."""
-    return bool(detected and re.search(rf"\bstep\s+{step}\b", detected) and run_id in detected)
+    """A run entry's `Detected:` line names the run id and `step N`; `step` None accepts any step."""
+    return bool(detected and re.search(rf"\bstep\s+{r'\d+' if step is None else step}\b", detected) and run_id in detected)
 
 
 def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str]:
@@ -873,7 +899,18 @@ def close_findings(prd: Prd, repo_root: Path, run_id: str, rng: str) -> list[str
         if not (e.open and e.classification == "unclassified" and step_ok):
             out.append(f"{prefix + '/' if prefix != '.' else ''}errors.md:{e.line}: the entry must be open, unclassified, and name run {run_id} and failed step {failed.get('step')} in Detected:")
         drop_errors = set(range(e.line, e.end + 1))
-    first_entry = failed is not None and len(new) == 1 and not b_prd.errors_ledger
+    names_failure = False
+    if failed is None or len(new) != 1:  # a run's entries, recorded while it was stopped or after it failed, ride the close
+        for e in new:
+            etext = "\n".join(h_prd.docs["errors.md"].split("\n")[e.line - 1:e.end])
+            detected = re.search(r"^Detected:.*$", etext, re.M)
+            line = detected.group(0) if detected else None
+            if e.open and e.classification == "unclassified" and detected_names_failure(line, run_id, None):
+                drop_errors |= set(range(e.line, e.end + 1))
+                names_failure = names_failure or (failed is not None and detected_names_failure(line, run_id, failed.get("step")))
+        if failed is not None and new and not names_failure:
+            out.append(f"errors.md: the run failed at step {failed.get('step')} but no open unclassified entry names run {run_id} and that step in Detected:")
+    first_entry = bool(drop_errors) and not b_prd.errors_ledger
 
     # every other change
     diff = _git(repo_root, "diff", "--no-renames", "--name-only", "-z", base, head).split("\0")
