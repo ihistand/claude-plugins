@@ -588,7 +588,7 @@ def test_a_background_output_stays_closed_when_degraded(tmp_path):
 # --- 0.8.4 fix 2: a harness under `uv run --directory <d>` reads its path arguments from <d> ---
 
 TOOLKIT_TESTING = (ROOT.parent / "docs/prd/prd-toolkit/testing.md").read_text(encoding="utf-8")
-DIR_HARNESS = "uv run --directory prd-toolkit pytest -q tests/prd"
+DIR_HARNESS = "uv run --directory prd-toolkit pytest -q -n auto tests/prd"
 
 
 def make_toolkit_repo(tmp_path: Path) -> Path:
@@ -618,7 +618,7 @@ def test_a_directory_harness_allows_a_test_file_named_from_its_directory(tmp_pat
     repo = make_toolkit_repo(tmp_path)
     for cmd in (f"{DIR_HARNESS} tests/prd/test_x.py", f"{DIR_HARNESS} tests/prd/test_x.py::test_a -x",
                 f"{DIR_HARNESS} --junitxml=tests/prd/out.xml",
-                "uv run --directory prd-toolkit pytest -q tests --ignore tests/prd tests/test_x.py"):
+                "uv run --directory prd-toolkit pytest -q -n auto tests --ignore tests/prd tests/test_x.py"):
         r = bash(repo, cmd)
         assert r.returncode == 0, (cmd, r.stderr)
 
@@ -632,11 +632,11 @@ def test_a_directory_harness_refuses_a_path_outside_the_test_roots_from_its_dire
 
 def test_a_directory_harness_with_an_equals_sign_reads_from_its_directory(tmp_path):
     repo = make_toolkit_repo(tmp_path)
-    text = TOOLKIT_TESTING.replace("`uv run --directory prd-toolkit pytest -q tests/prd`", "`uv run --directory=prd-toolkit pytest -q tests/prd`")
+    text = TOOLKIT_TESTING.replace("`uv run --directory prd-toolkit pytest -q -n auto tests/prd`", "`uv run --directory=prd-toolkit pytest -q -n auto tests/prd`")
     assert text != TOOLKIT_TESTING
     (repo / "docs/prd/greet/testing.md").write_text(text, encoding="utf-8")
-    assert bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd tests/prd/test_x.py").returncode == 0
-    assert_blocked(bash(repo, "uv run --directory=prd-toolkit pytest -q tests/prd prd-toolkit/tests/prd/test_x.py"))
+    assert bash(repo, "uv run --directory=prd-toolkit pytest -q -n auto tests/prd tests/prd/test_x.py").returncode == 0
+    assert_blocked(bash(repo, "uv run --directory=prd-toolkit pytest -q -n auto tests/prd prd-toolkit/tests/prd/test_x.py"))
 
 
 def test_a_harness_without_a_directory_still_reads_from_cwd(tmp_path):
