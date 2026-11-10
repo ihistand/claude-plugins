@@ -35,6 +35,19 @@ prd_lint:
     0: "clean lint or only warnings, --list-rules, --list-packs, --interface, --help, or a sample printed"
     1: "one or more error findings, or --sample-tids with no non-unit test case"
     2: "usage error, an unsupported --json=N without --interface, folder without prd.md, missing dependency, or internal error (load or rule)"
+  structure_findings:
+    frontmatter: "prd.md: missing key '<key>' | '<key>: <value>' <reason> | missing key 'sql-dialect' (required because contracts/schema.sql exists) | 'sql-dialect: <value>' is not a sqlglot dialect (<sqlglot error>) (FR-020)"
+    language-table: "prd.md: language '<code>' has no table, or the language loader's reason (FR-021)"
+    sections_headings: "prd.md: missing section '## <n>. <title>' | sections are out of order | unexpected section '## <n>. <title>' (FR-022)"
+    sections_files: "<entry>:0 mandatory '<entry>' is missing | mandatory '<entry>' cannot be marked not applicable | '<slot>' is absent and section 1 has no 'Not applicable: `<slot>` — reason' line (FR-023)"
+    sections_adoption: "section 8: the adoption map moved to adoption.md in prd-toolkit 0.3; ... | section 8 points at adoption.md but adoption.md does not exist | section 8 says \"Not applicable: new project\" but adoption.md exists | section 8 body must be \"See adoption.md.\" or \"Not applicable: new project.\" | adoption.md holds no '| Area | State | Boundary |' table | adoption.md table header must be '| Area | State | Boundary |', not '| <cells> |' | adoption state '<state>' for <area> must be one of not started, extracted, confirmed, adopted (FR-024)"
+    sections_harness: "testing.md has no '## Harness' section with its slots | Harness slot '<slot>' is missing | Harness slots are out of order; the order is <the fifteen slots> | the Harness Layout slot has no 'Test roots:' text | Test roots: lists no backticked directory (FR-025)"
+    placeholder: "placeholder '<text>' in prose; if this is literal text, put it in backticks | placeholder '<text>' in a YAML value (FR-027)"
+    vague-word: "'<word>' with no measurable number on the line (FR-028)"
+    markers-open: "the clarification marker's name in square brackets, then: left open while status is <status> (markers count in every text file, comments included; delete a template hint once its slot is answered) (FR-029)"
+    assumption-indexed: "the word ASSUMPTION in square brackets, then: marker has no A-nn id | <A-id> has no row in section 12 | <A-id>: status '<status>' must be open, confirmed, corrected or awaiting <who> | <A-id> is open while the PRD is Approved (FR-030)"
+    open-questions-empty: "section 13 must be 'None.' when the PRD is Approved (FR-031)"
+    glossary-synonym: "'<text>' is a banned synonym; use '<term>' (FR-032)"
 prd_publish:
   # Only what lint-cli's FR-010 needs so far; the publish area adds the rest when it is adopted.
   invocation: "uv run --script prd-toolkit/scripts/prd_publish.py <arguments>"

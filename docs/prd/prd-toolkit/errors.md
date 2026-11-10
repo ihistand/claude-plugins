@@ -86,3 +86,72 @@ Evidence: Source: GitHub issue ihistand/claude-plugins#24, filed 2026-11-09 from
 Diagnosis: Root cause: uv keys a cached script environment on the script's path, not its contents or dependencies. Reproduced 2026-11-09 with uv 0.13.7: running `.prd-toolkit/prd_error.py` twice from one path reused one environment; a copy in a new folder built a second; the same path with the file edited reused it. Every distinct path a prd script runs from therefore leaves one environment in `~/.cache/uv/environments-v2` that nothing removes. Two sources make new paths: (1) the unit suite builds git repositories under pytest `tmp_path`, installs the hooks there and commits, so each shim runs `uv run --script "$prd_top/.prd-toolkit/prd_git_hook.py"` from a new path, and tests run vendored copies of scripts the same way; one run of `tests/test_hooks_install.py` (33 tests) added 4 `prd-git-hook` environments, and the full suite runs on every build, review fix and CI-parity run; (2) in real repositories each clone or worktree has its own `.prd-toolkit/`, so every new worktree adds environments for each script its hooks and skills run. Sections searched and found silent on cached environments, their count or their cleanup: prd.md technical context ("Each CLI script (`prd-toolkit/scripts/prd_*.py`) is a uv script with an inline dependency header, run as `uv run --script <script>`."), testing.md Harness (Lifecycle, Clean state: "Every test starts from its own pytest `tmp_path`"), nfr.md and operations.md; no AC in the lint-cli feature covers the hooks or test setup. No PRD line bounds what a test run or a hook run may leave in the user's uv cache.
 Resolution: T-019.2 [integration], PRD 6.1.0, fixed in b1e24cc057b31f2f3d599a4a2fb522f08836988a
 Recurrence of: -
+
+### E-009 sections misquotes an unnumbered level-2 heading as `## None. <title>`
+Detected: 2026-11-10, adoption extract of lint-structure (prd-toolkit/scripts/prdlint/rules/structure.py:150 @5824ed1)
+Classification: code bug
+Confirmed: 2026-11-10, "Real bug (form) — it should: When prd.md has a level-2 heading that is not one of the fourteen sections, numbered or not, lint reports sections at its line with unexpected section '<the heading as written>', e.g. unexpected section '## Notes'; it never prints None."
+Touches: FR-022
+Diagnosis: The section parser gives an unnumbered level-2 heading of prd.md (`## Notes`) the number None, and the finding is built as `unexpected section '## {a[0]}. {a[1]}'`, so it prints `unexpected section '## None. Notes'`, quoting a heading that is in no file. The sibling message on line 144 (`missing section '## <n>. <title>'`) and prd-format.md ("prd.md sections": level-2 headings, exactly these) quote a heading as it is written. The Python `None` reaching the message contradicts them.
+Resolution: open
+Recurrence of: -
+
+### E-010 vague-word reads code spans in an FR block's acceptance criteria
+Detected: 2026-11-10, adoption extract of lint-structure (prd-toolkit/scripts/prdlint/rules/structure.py:290 @5824ed1)
+Classification: code bug
+Confirmed: 2026-11-10, "Real bug (form) — it should: In an FR block's ACs, vague-word ignores code spans the way it does for NFR lines: a listed word inside a code span is not reported, and a digit inside a code span does not count as a measurable number."
+Touches: FR-028
+Diagnosis: For an NFR block the rule blanks fenced code and inline code spans before matching (line 286). Commit 76cfa46 ("vague-word ignores code in NFR blocks") added this, and test_vague_word_ignores_inline_code_and_fences tests it. For an FR block it matches the raw AC text (`a.text`, line 290). An FR AC that names a flag such as `--secure` in a code span is therefore reported as `'secure' with no measurable number on the line`, and a digit inside a code span exempts a listed word outside it. prd-format.md ("lint ignores code spans", Requirement blocks) and the sibling NFR branch treat code as not prose.
+Resolution: open
+Recurrence of: -
+
+### E-011 Markers in hidden Markdown files are scanned
+Detected: 2026-11-10, adoption extract of lint-structure (prd-toolkit/scripts/prdlint/rules/structure.py:58 @5824ed1)
+Classification: code bug
+Confirmed: 2026-11-10, "Real bug (form) — it should: A file or folder under the PRD folder whose name starts with . is not part of the PRD: lint loads no Markdown from it, so no rule (markers, assumptions, placeholders, glossary, requirement blocks) reads it."
+Touches: FR-027, FR-029, FR-030, FR-032
+Diagnosis: `all_lines` yields every line of `prose(prd)`, which holds every Markdown file the loader read. The loader collects them with `rglob("*.md")` (model.py:869), which also matches hidden names such as `.notes.md` or `features/.draft.md`. markers-open and assumption-indexed therefore report markers in hidden Markdown files. The function's own docstring (structure.py:57: hidden or editor-backup files are skipped) and prd-format.md (Requirement blocks: hidden or editor-backup files are not scanned) say otherwise, and the raw-file branch (line 64) does skip any path part that starts with `.`.
+Resolution: open
+Recurrence of: -
+
+### E-012 A key missing from the frontmatter is reported at a body line of prd.md
+Detected: 2026-11-10, adoption extract of lint-structure (prd-toolkit/scripts/prdlint/rules/structure.py:83 @5824ed1)
+Classification: code bug
+Confirmed: 2026-11-10, "Real bug (form) — it should: lint looks up a frontmatter key's line only inside the frontmatter block: a present key is reported at its own line, and a missing key always at prd.md:1, whatever lines below the frontmatter start with <key>:. The language-table and sql-dialect findings use the same lookup."
+Touches: FR-020, FR-021
+Diagnosis: `_fm_line` scans every line of prd.md for one that starts with `<key>:`, not only the frontmatter block, and falls back to the frontmatter's line only when none does. Suppose a key is absent from the frontmatter and a later line of prd.md starts with it, for example a configuration example in a fenced block of section 4 with a `language: python` or `owner: ops` line at column 0. Then the `missing key` finding, and a language-table finding for a PRD with no `language:` key, point at that body line. The helper's name (`_fm_line`) and its fallback to `prd.frontmatter_line` say the line is the frontmatter's.
+Resolution: open
+Recurrence of: -
+
+### E-013 An empty Test roots list goes unreported when a marker sits elsewhere on the Layout line
+Detected: 2026-11-10, adoption extract of lint-structure (prd-toolkit/scripts/prdlint/rules/structure.py:217 @5824ed1)
+Classification: code bug
+Confirmed: 2026-11-10, "Real bug (form) — it should: lint reports Test roots: lists no backticked directory whenever the list after Test roots: names no backticked directory and that list itself holds no [NEEDS CLARIFICATION marker; a marker elsewhere on the Layout line does not excuse it."
+Touches: FR-025
+Diagnosis: When `Test roots:` lists no backticked directory, the rule skips its finding if `[NEEDS CLARIFICATION` appears anywhere on the Layout bullet's line, including the convention text before `Test roots:`. Consider the template's Layout line with its first marker kept and its roots filled in without backticks (`Test roots: tests/`). It gives no `sections` finding, and in a Draft PRD no finding at all, although the guard will then block every write. prd-format.md (testing.md, Harness) reports a `Test roots:` that lists no backticked directory and holds no marker. The comment on line 217 names the case it skips as an unfilled marker, which markers-open reports. The loader already removes markers from the Test roots text alone (model.py:575).
+Resolution: open
+Recurrence of: -
+
+### E-014 A repeated prd.md section or Harness slot is reported as out of order, not as a duplicate
+Detected: 2026-11-10, confirmation of Q-01 (FR-022, FR-025)
+Classification: code bug
+Touches: FR-022, FR-025
+Diagnosis: The order checks compare the present sections, and the present Harness slots, with the expected list (structure.py:146 and :210), so a section or slot that appears twice makes the lists differ and is reported as out of order. No finding names the duplicate, which sends the author looking for a misplaced section instead of the repeated one, often left by a merge.
+Resolution: open, intended: a level-2 section of prd.md that appears twice is reported at the second one's line as `duplicate section '## <n>. <title>'`, and a Harness slot that appears twice as `Harness slot '<slot>' appears twice`; out of order is reported only when the sections, or the slots, are out of order once duplicates are set aside (the owner, 2026-11-10)
+Recurrence of: -
+
+### E-015 An empty section 13 passes open-questions-empty while the PRD is Approved
+Detected: 2026-11-10, confirmation of Q-02 (FR-031)
+Classification: code bug
+Touches: FR-031
+Diagnosis: open-questions-empty reports only the first body line of section 13 that is neither empty nor `None.` (structure.py:333), so a section 13 with no text at all gives no finding. prd-format.md says section 13 is the single line `None.` when there are no open questions, so an Approved PRD with an empty section 13 passes a rule meant to require that line.
+Resolution: open, intended: while the PRD is Approved, a section 13 with no text is reported at its heading line with `section 13 must be 'None.' when the PRD is Approved` (the owner, 2026-11-10)
+Recurrence of: -
+
+### E-016 The adoption.md header finding is reported at line 1, not at the header's line
+Detected: 2026-11-10, confirmation of Q-03 (FR-024)
+Classification: code bug
+Touches: FR-024
+Diagnosis: The header-mismatch finding is built with line 1 (structure.py:193) although the table's own line is known (the parsed table's line). Every other adoption.md finding points at the line to fix, a row at its own line, so this one sends the author to the file's heading instead of the header row.
+Resolution: open, intended: the adoption.md header finding is reported at the table's header line (the owner, 2026-11-10)
+Recurrence of: -

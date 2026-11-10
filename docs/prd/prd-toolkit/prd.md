@@ -1,9 +1,9 @@
 ---
 prd: prd-toolkit
-version: 6.1.0
+version: 6.2.0
 status: Approved
 owner: Ivan Histand
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 <!-- Format: references/prd-format.md, "prd.md sections". -->
@@ -159,6 +159,19 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-017 | Report an Environments Branch that git refuses | verified | features/lint-cli.md |  |
 | FR-018 | Check a runbook Check's matches pattern | verified | features/lint-cli.md |  |
 | NFR-019 | A test run leaves no cached uv environments behind | verified | nfr.md |  |
+| FR-020 | Check the prd.md frontmatter | approved | features/lint-structure.md |  |
+| FR-021 | Report a PRD language with no table | approved | features/lint-structure.md |  |
+| FR-022 | Require prd.md's fourteen sections in order | approved | features/lint-structure.md |  |
+| FR-023 | Require the mandatory files and account for the optional ones | live | features/lint-structure.md | 6.2.0 |
+| FR-024 | Check section 8 and adoption.md | approved | features/lint-structure.md |  |
+| FR-025 | Check testing.md's Harness slots | approved | features/lint-structure.md |  |
+| FR-026 | Read prose without code and errors.md quotations | live | features/lint-structure.md | 6.2.0 |
+| FR-027 | Report an unfilled placeholder | approved | features/lint-structure.md |  |
+| FR-028 | Report a vague word without a number | approved | features/lint-structure.md |  |
+| FR-029 | Report clarification markers left open once the PRD is in review | approved | features/lint-structure.md |  |
+| FR-030 | Index every assumption marker | approved | features/lint-structure.md |  |
+| FR-031 | Require no open question once the PRD is Approved | approved | features/lint-structure.md |  |
+| FR-032 | Report a banned glossary synonym | approved | features/lint-structure.md |  |
 
 ## 12. Assumptions index
 
@@ -185,3 +198,4 @@ None.
 | 5.2.0 | 2026-11-08 | lint-cli FR-016, FR-017, FR-018 for prd-toolkit 0.8.5: lint reports a testing.md Levels Timeout cell that is not a whole number of seconds of at least 1 (runbook-tests), an operations.md Environments Branch cell that git check-ref-format --branch refuses (runbook-env), and a runbook Check whose matches pattern does not compile or that holds both prints and matches (runbook-steps), with T-016.1, T-017.1, T-018.1 and T-018.2 on the fixture changes M2 to M5; testing.md runs the unit and integration levels with -n auto (pytest-xdist), a patch item; dry run T-016.1, T-017.1, T-018.1, T-018.2, 0 open questions, 0 dismissed by quote | FR-016, FR-017, FR-018 |
 | 6.0.0 | 2026-11-09 | lint-cli FR-010 for prd-toolkit 0.8.5: prd_publish.py's dependency header gains the pinned diagram renderer mermaidx==0.11.3, so by the unchanged AC-010.2 its missing-package hint ends pip install pyyaml sqlglot openapi-spec-validator markdown-it-py mermaidx; T-010.2's expected stderr and note gain mermaidx (a changed expect, so major) and FR-010's Edge cases line names both added packages; adoption.md's publish row maps the new prdlint/diagrams.py, a patch item; dry run T-010.2, 0 open questions, 3 dismissed by quote | FR-010, T-010.2 |
 | 6.1.0 | 2026-11-09 | NFR-019: a test run leaves no cached uv environments behind (test cache per worktree, E-008); dry run T-019.1, T-019.2, 0 open questions, 0 dismissed by quote | NFR-019, AC-019.1, AC-019.2, T-019.1, T-019.2 |
+| 6.2.0 | 2026-11-10 | lint-structure area adopted (prdlint/rules/structure.py); suite 85 pass, T-020.14 known-failing E-012, T-022.4 known-failing E-009, T-022.5 known-failing E-014, T-024.7 known-failing E-016, T-025.9 known-failing E-013, T-025.10 known-failing E-014, T-027.9 known-failing E-011, T-028.7 known-failing E-010, T-028.8 known-failing E-010, T-029.11 known-failing E-011, T-030.10 known-failing E-011, T-031.3 known-failing E-015, T-032.5 known-failing E-011; testing.md gains the lint-structure/texts fixture and the stdout_not_contains and stdout_count_of_line keys; contracts/cli.yaml gains prd_lint.structure_findings; E-009 to E-016 recorded open; dry run T-020.14, T-022.4, T-022.5, T-024.7, T-025.9, T-025.10, T-027.9, T-028.7, T-028.8, T-029.11, T-030.10, T-031.3, T-032.5, 0 open questions, 0 dismissed by quote | FR-001, FR-002, FR-003, FR-004, FR-007, FR-008, FR-009, FR-013, FR-014, FR-020, FR-021, FR-022, FR-023, FR-024, FR-025, FR-026, FR-027, FR-028, FR-029, FR-030, FR-031, FR-032, AC-020.1, AC-020.2, AC-020.3, AC-020.4, AC-020.5, AC-020.6, AC-021.1, AC-021.2, AC-022.1, AC-022.2, AC-022.3, AC-022.4, AC-023.1, AC-023.2, AC-023.3, AC-023.4, AC-024.1, AC-024.2, AC-024.3, AC-024.4, AC-024.5, AC-024.6, AC-024.7, AC-024.8, AC-024.9, AC-025.1, AC-025.2, AC-025.3, AC-025.4, AC-025.5, AC-025.6, AC-025.7, AC-025.8, AC-025.9, AC-026.1, AC-026.2, AC-026.3, AC-027.1, AC-027.2, AC-027.3, AC-027.4, AC-027.5, AC-028.1, AC-028.2, AC-028.3, AC-028.4, AC-029.1, AC-029.2, AC-029.3, AC-029.4, AC-029.5, AC-030.1, AC-030.2, AC-030.3, AC-030.4, AC-030.5, AC-031.1, AC-031.2, AC-031.3, AC-032.1, AC-032.2, AC-032.3, AC-032.4, T-020.1, T-020.2, T-020.3, T-020.4, T-020.5, T-020.6, T-020.7, T-020.8, T-020.9, T-020.10, T-020.11, T-020.12, T-020.13, T-020.14, T-021.1, T-021.2, T-022.1, T-022.2, T-022.3, T-022.4, T-022.5, T-023.1, T-023.2, T-023.3, T-023.4, T-023.5, T-023.6, T-023.7, T-023.8, T-024.1, T-024.2, T-024.3, T-024.4, T-024.5, T-024.6, T-024.7, T-024.8, T-024.9, T-025.1, T-025.2, T-025.3, T-025.4, T-025.5, T-025.6, T-025.7, T-025.8, T-025.9, T-025.10, T-026.1, T-026.2, T-026.3, T-026.4, T-027.1, T-027.2, T-027.3, T-027.4, T-027.5, T-027.6, T-027.7, T-027.8, T-027.9, T-028.1, T-028.2, T-028.3, T-028.4, T-028.5, T-028.6, T-028.7, T-028.8, T-029.1, T-029.2, T-029.3, T-029.4, T-029.5, T-029.6, T-029.7, T-029.8, T-029.9, T-029.10, T-029.11, T-030.1, T-030.2, T-030.3, T-030.4, T-030.5, T-030.6, T-030.7, T-030.8, T-030.9, T-030.10, T-031.1, T-031.2, T-031.3, T-032.1, T-032.2, T-032.3, T-032.4, T-032.5 |

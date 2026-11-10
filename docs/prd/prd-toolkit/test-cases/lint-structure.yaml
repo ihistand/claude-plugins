@@ -1,0 +1,1712 @@
+# Format: references/prd-format.md, "Test cases". One entry per T-id.
+# Conventions for every case below (they extend those of lint-cli.yaml):
+#   <repo> is the repository root; <tmp> is the test's own tmp_path; <P> is <tmp>/docs/prd/orders.
+#   S0 = write each entry of fixture lint-cli/orders (contracts/fixtures/lint-cli/orders.yaml) to <P>/<key>, creating
+#   parent folders, and set PRD_PLUGINS_FILE to the absolute path of fixture lint-cli/plugins_superpowers.json.
+#   With S0 alone the folder lints clean (T-001.1).
+#   A file named in a setup step is relative to <P>. "line N of F" is line N of F as S0 wrote it, before any other
+#   step of the case; "replace line N of F with X" keeps every other line; "insert X before line N of F" makes X line N;
+#   "append X to F" adds X and a newline after F's final newline, so X becomes the line number the step names.
+#   "texts.<key>" (a whole value, or an item of a list) stands for the string, or the list of strings, under <key> in
+#   fixture lint-structure/texts (contracts/fixtures/lint-structure/texts.yaml, read with yaml.safe_load). Texts that a
+#   lint of this PRD folder would itself report live there, because lint never reads fixture data.
+#   A1 = write <P>/adoption.md as the lines "# Adoption map", "", "| Area | State | Boundary |", "|---|---|---|",
+#        "| import | adopted | `features/import.md` |", each ending in a newline (the row is line 5).
+#   stdout_not_contains: a string, or each string of a list, that stdout does not hold anywhere (the stdout twin of
+#   stderr_not_contains). stdout_count_of_line: {line, count}: the number of stdout lines equal to line.
+T-020.1:
+  ac: AC-020.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "delete line 5 of prd.md (owner: Sample Owner)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: frontmatter: missing key 'owner'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.2:
+  ac: AC-020.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete lines 1 to 8 of prd.md (the whole frontmatter block)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: no other line of the fixture's prd.md starts with prd, version, status, owner or updated and a colon
+  expect:
+    output:
+      exit: 1
+      stdout_lines_in_this_relative_order:
+        - "docs/prd/orders/prd.md:1: frontmatter: missing key 'prd'"
+        - "docs/prd/orders/prd.md:1: frontmatter: missing key 'version'"
+        - "docs/prd/orders/prd.md:1: frontmatter: missing key 'status'"
+        - "docs/prd/orders/prd.md:1: frontmatter: missing key 'owner'"
+        - "docs/prd/orders/prd.md:1: frontmatter: missing key 'updated'"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-020.3:
+  ac: AC-020.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 2 of prd.md with `prd: Orders`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:2: frontmatter: 'prd: Orders' must be a lowercase slug equal to the folder name 'orders'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.4:
+  ac: AC-020.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 2 of prd.md with `prd: sales`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:2: frontmatter: 'prd: sales' must be a lowercase slug equal to the folder name 'orders'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.5:
+  ac: AC-020.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 3 of prd.md with `version: 1.0`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:3: frontmatter: 'version: 1.0' must be X.Y.Z, digits only", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.6:
+  ac: AC-020.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: Done`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:4: frontmatter: 'status: Done' must be Draft, In review or Approved", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.7:
+  ac: AC-020.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 5 of prd.md with `owner:` (nothing after the colon)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:5: frontmatter: 'owner: ' must not be empty", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.8:
+  ac: AC-020.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 6 of prd.md with `updated: 2026/10/29`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:6: frontmatter: 'updated: 2026/10/29' must be YYYY-MM-DD", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.9:
+  ac: AC-020.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "insert `language: EN` before line 8 of prd.md (it becomes line 8)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/prd.md:8: frontmatter: 'language: EN' must match ^[a-z]{2,3}$"
+      stdout_not_contains: language-table
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-020.10:
+  ac: AC-020.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "delete line 7 of prd.md (sql-dialect: postgres); contracts/schema.sql stays"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: frontmatter: missing key 'sql-dialect' (required because contracts/schema.sql exists)", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.11:
+  ac: AC-020.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 7 of prd.md with `sql-dialect: nosuch`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the text in the parentheses is sqlglot's own error message, so only the line's start is asserted
+  expect:
+    output: {exit: 1, stdout_contains: "docs/prd/orders/prd.md:7: frontmatter: 'sql-dialect: nosuch' is not a sqlglot dialect (", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.12:
+  ac: AC-020.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 7 of prd.md with `sql-dialect:` (nothing after the colon)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:7: frontmatter: missing key 'sql-dialect' (required because contracts/schema.sql exists)", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.13:
+  ac: AC-020.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete contracts/schema.sql, "delete line 7 of prd.md (sql-dialect: postgres)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_not_contains: sql-dialect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-020.14:
+  ac: AC-020.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-012
+  symptom: "the missing key is reported at the body line that starts with the key, not at prd.md:1"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "delete line 5 of prd.md (owner: Sample Owner)", "replace line 53 of prd.md (the second line of section 4's prose) with `owner: ops`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: frontmatter: missing key 'owner'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-021.1:
+  ac: AC-021.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "insert `language: fr` before line 8 of prd.md (it becomes line 8)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: the toolkit has tables for en and es only, and the fixture names no pack
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:8: language-table: language 'fr' has no table", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-021.2:
+  ac: AC-021.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "insert `language: es` before line 8 of prd.md"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: language-table, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-022.1:
+  ac: AC-022.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 86 of prd.md (## 9. Versioning) with `## 9. Version`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: sections: missing section '## 9. Versioning'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-022.2:
+  ac: AC-022.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "swap lines 86 (## 9. Versioning) and 94 (## 10. Design & UI) of prd.md"
+      - "swap lines 98 (## 11. Requirement index) and 108 (## 12. Assumptions index) of prd.md"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_count_of_line: {line: "docs/prd/orders/prd.md:1: sections: sections are out of order", count: 1}
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-022.3:
+  ac: AC-022.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `## 15. Appendix` to prd.md (line 123)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:123: sections: unexpected section '## 15. Appendix'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-022.4:
+  ac: AC-022.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-009
+  symptom: "the heading is quoted as `## None. Notes`, not as written"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `## Notes` to prd.md (line 123)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:123: sections: unexpected section '## Notes'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-022.5:
+  ac: AC-022.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-014
+  symptom: "the repeated section is reported as `sections are out of order`, with no duplicate finding"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `## 9. Versioning` to prd.md (line 123), a second section 9 after section 14"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/prd.md:123: sections: duplicate section '## 9. Versioning'"
+      stdout_not_contains: "sections are out of order"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-023.1:
+  ac: AC-023.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete errors.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/errors.md:0: sections: mandatory 'errors.md' is missing", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.2:
+  ac: AC-023.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - delete test-cases/api.yaml, test-cases/import.yaml and test-cases/nfr.yaml
+      - write test-cases/notes.txt holding the line `notes`
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/test-cases:0: sections: mandatory 'test-cases/' is missing", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.3:
+  ac: AC-023.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - delete errors.md
+      - "insert `- Not applicable: `errors.md` — no errors yet` (an em dash) before line 19 of prd.md (it becomes line 19)"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/prd.md:19: sections: mandatory 'errors.md' cannot be marked not applicable"
+      stdout_not_contains: "mandatory 'errors.md' is missing"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-023.4:
+  ac: AC-023.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete contracts/config.yaml]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: sections: 'contracts/config.yaml' is absent and section 1 has no 'Not applicable: `contracts/config.yaml` — reason' line", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.5:
+  ac: AC-023.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete contracts/dependencies/geocoder.yaml and keep the empty contracts/dependencies/ folder]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:1: sections: 'contracts/dependencies/' is absent and section 1 has no 'Not applicable: `contracts/dependencies/` — reason' line", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.6:
+  ac: AC-023.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - delete contracts/config.yaml
+      - "insert `- Not applicable: `contracts/config.yaml` — no settings` before line 19 of prd.md"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: "'contracts/config.yaml' is absent", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.7:
+  ac: AC-023.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - delete contracts/events.md
+      - "insert `- Not applicable: `contracts/asyncapi.yaml` — no message queues` before line 19 of prd.md"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: "'contracts/events.md' is absent", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-023.8:
+  ac: AC-023.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - delete contracts/dependencies/geocoder.yaml and keep the empty folder
+      - "insert `- Not applicable: `contracts/dependencies` — no external services` (no trailing slash) before line 19 of prd.md"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: "'contracts/dependencies/' is absent", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.1:
+  ac: AC-024.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 84 of prd.md (section 8's body) with the three lines `| Area | State | Boundary |`, `|---|---|---|` and `| import | adopted | `features/import.md` |`"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:82: sections: section 8: the adoption map moved to adoption.md in prd-toolkit 0.3; move the table there and leave \"See adoption.md.\"", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.2:
+  ac: AC-024.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 84 of prd.md with `See adoption.md.`; write no adoption.md"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:82: sections: section 8 points at adoption.md but adoption.md does not exist", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.3:
+  ac: AC-024.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, A1, "line 84 of prd.md stays `Not applicable: new project.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:82: sections: section 8 says \"Not applicable: new project\" but adoption.md exists", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.4:
+  ac: AC-024.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 84 of prd.md with `Adopted.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:82: sections: section 8 body must be \"See adoption.md.\" or \"Not applicable: new project.\"", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.5:
+  ac: AC-024.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, replace line 84 of prd.md with texts.m_s8_line]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_s8_expect, stdout_not_contains: "sections: section 8", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.6:
+  ac: AC-024.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 84 of prd.md with `See adoption.md.`"
+      - "write adoption.md as the lines `# Adoption map`, `` and `No areas yet.`, each ending in a newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/adoption.md:1: sections: adoption.md holds no '| Area | State | Boundary |' table", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.7:
+  ac: AC-024.7
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-016
+  symptom: "the header finding is reported at adoption.md:1, not at the header's line"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 84 of prd.md with `See adoption.md.`"
+      - "write adoption.md as the lines `# Adoption map`, ``, `| Area | State |`, `|---|---|` and `| import | adopted |`, each ending in a newline"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/adoption.md:3: sections: adoption.md table header must be '| Area | State | Boundary |', not '| Area | State |'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.8:
+  ac: AC-024.8
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 84 of prd.md with `See adoption.md.`"
+      - "A1, then replace line 5 of adoption.md with `| import | done | `features/import.md` |`"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/adoption.md:5: sections: adoption state 'done' for import must be one of not started, extracted, confirmed, adopted", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-024.9:
+  ac: AC-024.9
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 84 of prd.md with `See adoption.md` (no final period)"
+      - "A1, then append `| legacy | not started | |` to adoption.md (line 6)"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: "sections:", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.1:
+  ac: AC-025.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 15 of testing.md (## Harness) with `## Conventions`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:1: sections: testing.md has no '## Harness' section with its slots", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.2:
+  ac: AC-025.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "delete line 28 of testing.md (the Waits slot); the first slot, Lifecycle, stays on line 17"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:17: sections: Harness slot 'Waits' is missing", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.3:
+  ac: AC-025.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "swap lines 17 (Lifecycle) and 23 (Layout) of testing.md"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:17: sections: Harness slots are out of order; the order is Lifecycle, Environment switch, Database access, Tools on the runner, Clean state, Persistent environments, Layout, HTTP requests, Fixtures, Browser identity, Assertions, Waits, Effects, Leaks, Acceptance", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.4:
+  ac: AC-025.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "insert `- **Subprocess environment.** A script runs with the runner's environment.` before line 22 of testing.md"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: ["Harness slot", "Harness slots are out of order"], stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.5:
+  ac: AC-025.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "on line 23 of testing.md (the Layout slot), delete the text ` Test roots: `tests/`.` at its end"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:23: sections: the Harness Layout slot has no 'Test roots:' text", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.6:
+  ac: AC-025.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "on line 23 of testing.md, replace `Test roots: `tests/`.` with `Test roots: tests/.` (no backticks)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:23: sections: Test roots: lists no backticked directory", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.7:
+  ac: AC-025.7
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "on line 23 of testing.md, replace `Test roots: `tests/`.` with texts.m_roots_tail"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: texts.m_roots_expect
+      stdout_not_contains: ["lists no backticked directory", "has no 'Test roots:' text"]
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-025.8:
+  ac: AC-025.8
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, delete testing.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/testing.md:0: sections: mandatory 'testing.md' is missing"
+      stdout_not_contains: ["has no '## Harness' section", "Harness slot", "Harness Layout slot"]
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-025.9:
+  ac: AC-025.6
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-013
+  symptom: "no `Test roots: lists no backticked directory` finding while a marker sits elsewhere on the Layout line"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "on line 23 of testing.md, replace `Test roots: `tests/`.` with texts.r_marker_elsewhere"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/testing.md:23: sections: Test roots: lists no backticked directory", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-025.10:
+  ac: AC-025.9
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-014
+  symptom: "the repeated slot is reported as `Harness slots are out of order`, with no duplicate finding"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "insert `- **Waits.** An expectation waits up to 5 s.` before line 29 of testing.md (the Effects slot), a second Waits slot right after the first"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/testing.md:29: sections: Harness slot 'Waits' appears twice"
+      stdout_not_contains: "Harness slots are out of order"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-026.1:
+  ac: AC-026.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append the three lines of texts.q_fence_lines to operations.md (lines 48 to 50)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: [placeholder, glossary-synonym], stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-026.2:
+  ac: AC-026.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "append the ten lines of texts.e_quoted_lines to errors.md (lines 9 to 18: line 13 is the Confirmed line, 14 the Evidence line, 15 its continuation)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      stdout_not_contains:
+        - "docs/prd/orders/errors.md:13: glossary-synonym"
+        - "docs/prd/orders/errors.md:14: placeholder"
+        - "docs/prd/orders/errors.md:15: placeholder"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-026.3:
+  ac: AC-026.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "append to errors.md the eight lines ``, `### E-002 quoted`, `Detected: 2026-11-03, user report`, `Classification: code bug`, `Evidence: e`, `Diagnosis: usage: greet <name>`, `Resolution: -` and `Recurrence of: -` (lines 9 to 16; the Diagnosis is line 14)"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/errors.md:14: placeholder: placeholder '<name>' in prose; if this is literal text, put it in backticks", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-026.4:
+  ac: AC-026.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.q_evidence_line to operations.md (line 48)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_tbd_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.1:
+  ac: AC-027.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.p_tbd_line to operations.md (line 48)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_tbd_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.2:
+  ac: AC-027.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `Pick the <the data_state> now.` to operations.md (line 48)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/operations.md:48: placeholder: placeholder '<the data_state>' in prose; if this is literal text, put it in backticks", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.3:
+  ac: AC-027.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 10 of prd.md (# Orders service) with texts.p_slot_heading"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_slot_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.4:
+  ac: AC-027.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.p_qqq_line to operations.md (line 48)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_qqq_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.5:
+  ac: AC-027.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.p_clean_line to operations.md (line 48)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: placeholder, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.6:
+  ac: AC-027.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 6 of contracts/config.yaml with four spaces, `owner: ` and texts.p_yaml_value"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_yaml_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.7:
+  ac: AC-027.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 15 of test-cases/import.yaml (an item of the effects list whose key is on line 14) with six spaces, `- \"`, texts.p_case_item and `\"`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.p_case_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.8:
+  ac: AC-027.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup:
+      - S0
+      - "replace line 6 of contracts/config.yaml with four spaces and `owner: <Sample Owner>`"
+      - append texts.p_yaml_comment to contracts/config.yaml (line 7)
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: placeholder, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-027.9:
+  ac: AC-027.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-011
+  symptom: "placeholder reports a line of the hidden file .notes.md"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "write <P>/.notes.md as texts.p_tbd_line and a newline"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_not_contains: placeholder, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.1:
+  ac: AC-028.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 11 of features/import.md (AC-001.2's continuation) with two spaces and `and log `IMPORT_DUPLICATE` once for it and shall be fast.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/features/import.md:10: vague-word: 'fast' with no measurable number on the line", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.2:
+  ac: AC-028.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 11 of features/import.md with two spaces and `and log `IMPORT_DUPLICATE` once for it, as Fast as AC-001.1 asks.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/features/import.md:10: vague-word: 'Fast' with no measurable number on the line", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.3:
+  ac: AC-028.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 11 of features/import.md with two spaces and `and log `IMPORT_DUPLICATE` once for it, fast for up to 10 rows.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_exact: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.4:
+  ac: AC-028.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 9 of nfr.md (NFR-004's Traces) with `Traces: UJ-01; FR-002; robust`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/nfr.md:9: vague-word: 'robust' with no measurable number on the line", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.5:
+  ac: AC-028.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 9 of nfr.md with `Traces: UJ-01; FR-002; `robust``"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: vague-word, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.6:
+  ac: AC-028.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 12 of features/import.md with `- AC-001.3 (removed in 1.1.0) If the import file is empty, the importer shall be fast and finish with status `empty`,`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: vague-word, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.7:
+  ac: AC-028.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-010
+  symptom: "vague-word reports 'secure' from inside a code span of the AC"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 11 of features/import.md with two spaces and `and log `IMPORT_DUPLICATE` once for it, with the flag `--secure`.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_not_contains: vague-word, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-028.8:
+  ac: AC-028.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-010
+  symptom: "no vague-word finding, the digit inside the code span counted as a number"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 11 of features/import.md with two spaces and `and log `IMPORT_DUPLICATE` once for it and be fast with `--limit 50`.`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/features/import.md:10: vague-word: 'fast' with no measurable number on the line"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-029.1:
+  ac: AC-029.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.m_line to nfr.md (line 23); the status stays Approved]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_expect_approved, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.2:
+  ac: AC-029.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: In review`", append texts.m_line to nfr.md (line 23)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_expect_review, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.3:
+  ac: AC-029.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, replace line 6 of contracts/config.yaml with texts.m_yaml_value_line]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_yaml_value_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.4:
+  ac: AC-029.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.m_yaml_comment to contracts/config.yaml (line 7)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_yaml_comment_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.5:
+  ac: AC-029.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.m_sql_comment to contracts/schema.sql (line 25)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_sql_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.6:
+  ac: AC-029.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.m_code_span_line to nfr.md (line 23)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: markers-open, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.7:
+  ac: AC-029.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup:
+      - S0
+      - write contracts/fixtures/notes.json holding texts.m_line and a newline
+      - write .notes.yaml (in the PRD folder's root) holding texts.m_line and a newline
+      - write prd.md~ holding texts.m_line and a newline
+      - write contracts/custom/notes.lkml holding texts.m_line and a newline
+      - write contracts/blob.json as the byte 0x00 followed by texts.m_line in UTF-8
+      - write contracts/latin.json as the byte 0xff followed by texts.m_line in UTF-8
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: markers-open, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.8:
+  ac: AC-029.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup:
+      - S0
+      - "write links.md as the lines `# Links`, ``, `## Upstreams`, ``, `| Upstream | Location | Version | Commit | Needs |`, `|---|---|---|---|---|` and `| greet | `../greet` | | | verified |`, each ending in a newline"
+      - write contracts/upstream/greet/notes.yaml holding texts.m_upstream_file
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: markers-open, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.9:
+  ac: AC-029.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, write contracts/upstream/greet/notes.yaml holding texts.m_upstream_file and no links.md]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.m_upstream_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.10:
+  ac: AC-029.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: Draft`", append texts.m_line to nfr.md (line 23)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: markers-open, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-029.11:
+  ac: AC-029.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-011
+  symptom: "markers-open reports a line of the hidden file .notes.md"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "write <P>/.notes.md as texts.m_line and a newline; the status stays Approved"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_not_contains: markers-open, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.1:
+  ac: AC-030.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.a_noid_line to nfr.md (line 23)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: texts.a_noid_expect, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.2:
+  ac: AC-030.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.a_a09_line to nfr.md (line 23)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/nfr.md:23: assumption-indexed: A-09 has no row in section 12", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.3:
+  ac: AC-030.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: Draft`", append texts.a_a09_yaml to contracts/config.yaml (line 7)]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/contracts/config.yaml:7: assumption-indexed: A-09 has no row in section 12", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.4:
+  ac: AC-030.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, append texts.a_a01_yaml to contracts/config.yaml (line 7); section 12 has the row A-01]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: assumption-indexed, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.5:
+  ac: AC-030.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 112 of prd.md with `| A-01 | Reps see only their own orders | maybe |`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:112: assumption-indexed: A-01: status 'maybe' must be open, confirmed, corrected or awaiting <who>", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.6:
+  ac: AC-030.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 112 of prd.md with `| A-01 | Reps see only their own orders | awaiting |`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:112: assumption-indexed: A-01: status 'awaiting' must be open, confirmed, corrected or awaiting <who>", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.7:
+  ac: AC-030.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 112 of prd.md with `| A-01 | Reps see only their own orders | open |`; the status stays Approved"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:112: assumption-indexed: A-01 is open while the PRD is Approved", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.8:
+  ac: AC-030.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 112 of prd.md with `| A-01 | Reps see only their own orders | awaiting Sam Rivera |`; the status stays Approved"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: assumption-indexed, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.9:
+  ac: AC-030.5
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: In review`", "replace line 112 of prd.md with `| A-01 | Reps see only their own orders | open |`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: assumption-indexed, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-030.10:
+  ac: AC-030.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-011
+  symptom: "assumption-indexed reports a line of the hidden file .notes.md"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers, lint-structure/texts]
+  input:
+    setup: [S0, "write <P>/.notes.md as texts.a_a09_line and a newline"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_not_contains: assumption-indexed, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-031.1:
+  ac: AC-031.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 116 of prd.md (None.) with the two lines `- Q-01 Who owns refunds?` and `- Q-02 Who approves deletes?` (lines 116 and 117)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output:
+      exit: 1
+      stdout_contains_line: "docs/prd/orders/prd.md:116: open-questions-empty: section 13 must be 'None.' when the PRD is Approved"
+      stdout_not_contains: "docs/prd/orders/prd.md:117: open-questions-empty"
+      stderr: ""
+    effects: []
+    errors: []
+    leaks: none
+T-031.2:
+  ac: AC-031.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 4 of prd.md with `status: In review`", "replace line 116 of prd.md with `- Q-01 Who owns refunds?`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: open-questions-empty, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-031.3:
+  ac: AC-031.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-015
+  symptom: "no open-questions-empty finding for a section 13 with no text"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "delete line 116 of prd.md (None.), leaving section 13 with no text"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/prd.md:114: open-questions-empty: section 13 must be 'None.' when the PRD is Approved", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-032.1:
+  ac: AC-032.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "replace line 5 of features/import.md with `Flow: 0. a purchase arrives → 1. Importer reads a file → 2. validates each row's postal code with the geocoder`"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/features/import.md:5: glossary-synonym: 'purchase' is a banned synonym; use 'order'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-032.2:
+  ac: AC-032.1
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `Clients call the API.` to operations.md (line 48)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 1, stdout_contains_line: "docs/prd/orders/operations.md:48: glossary-synonym: 'Clients' is a banned synonym; use 'customer'", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-032.3:
+  ac: AC-032.2
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "append `Each `purchase` is an order.` to operations.md (line 48)"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+    note: prd.md line 40, in section 3, holds purchase as the banned synonym of order
+  expect:
+    output: {exit: 0, stdout_exact: "", stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-032.4:
+  ac: AC-032.3
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup:
+      - S0
+      - "replace line 40 of prd.md with `| order | A customer's request for goods, stored once per order_key | — |` (an em dash)"
+      - "replace line 41 of prd.md with `| customer | The person or company an order belongs to | none |`"
+      - "append `A purchase by a client: none lost.` to operations.md (line 48)"
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {stdout_not_contains: glossary-synonym, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none
+T-032.5:
+  ac: AC-032.4
+  level: integration
+  target: cli:prd_lint
+  environment: local
+  identity: none
+  known-failing: E-011
+  symptom: "glossary-synonym reports a line of the hidden file .notes.md"
+  preconditions: [lint-cli/orders, lint-cli/plugins_superpowers]
+  input:
+    setup: [S0, "write <P>/.notes.md as the line `a purchase arrives` and a newline"]
+    cwd: <tmp>
+    command: python <repo>/prd-toolkit/scripts/prd_lint.py docs/prd/orders
+  expect:
+    output: {exit: 0, stdout_not_contains: glossary-synonym, stderr: ""}
+    effects: []
+    errors: []
+    leaks: none

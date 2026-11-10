@@ -3,7 +3,7 @@
 | Area | State | Boundary |
 |---|---|---|
 | lint-cli | adopted | `prd-toolkit/scripts/prd_lint.py`, `prd-toolkit/scripts/prdlint/__init__.py`, `prd-toolkit/scripts/prdlint/model.py`, `prd-toolkit/scripts/prdlint/markdown.py`, `prd-toolkit/scripts/prdlint/yamlload.py`, `prd-toolkit/scripts/prdlint/findings.py`, `prd-toolkit/scripts/prdlint/registry.py`, `prd-toolkit/scripts/prdlint/deps.py`, `prd-toolkit/scripts/prdlint/rules/__init__.py`, `prd-toolkit/scripts/prdlint/interface.py` |
-| lint-structure | not started | `prd-toolkit/scripts/prdlint/rules/structure.py`, `prd-toolkit/references/prd-format.md`, `prd-toolkit/templates/prd/**` |
+| lint-structure | adopted | `prd-toolkit/scripts/prdlint/rules/structure.py` |
 | lint-ids | not started | `prd-toolkit/scripts/prdlint/rules/ids.py` |
 | lint-testcases | not started | `prd-toolkit/scripts/prdlint/rules/testcases.py` |
 | lint-contracts | not started | `prd-toolkit/scripts/prdlint/rules/contracts.py` |
@@ -21,5 +21,5 @@
 | change | not started | `prd-toolkit/scripts/prd_change.py`, `prd-toolkit/scripts/prdlint/change.py`, `prd-toolkit/scripts/prdlint/change_approve.py` |
 | judge | not started | `prd-toolkit/scripts/prd_judge.py`, `prd-toolkit/scripts/prdlint/judge.py` |
 | packs | not started | `prd-toolkit/scripts/prdlint/packs.py`, `prd-toolkit/scripts/prdlint/languages.py`, `prd-toolkit/scripts/prdlint/rules/packs.py` |
-| skills | not started | `prd-toolkit/skills/**`, `prd-toolkit/agents/**`, `prd-toolkit/commands/**`, `prd-toolkit/references/clarify-categories.md`, `prd-toolkit/references/contract-types.md`, `prd-toolkit/references/ears.md`, `prd-toolkit/references/quality-checklist.md`, `prd-toolkit/references/test-levels.md` |
+| skills | not started | `prd-toolkit/skills/**`, `prd-toolkit/agents/**`, `prd-toolkit/commands/**`, `prd-toolkit/references/clarify-categories.md`, `prd-toolkit/references/contract-types.md`, `prd-toolkit/references/ears.md`, `prd-toolkit/references/quality-checklist.md`, `prd-toolkit/references/test-levels.md`, `prd-toolkit/references/prd-format.md`, `prd-toolkit/templates/prd/**` |
 | release | not started | `prd-toolkit/.claude-plugin/**`, `prd-toolkit/README.md`, `prd-toolkit/NOTICE`, `prd-toolkit/pyproject.toml`, `prd-toolkit/uv.lock` |
