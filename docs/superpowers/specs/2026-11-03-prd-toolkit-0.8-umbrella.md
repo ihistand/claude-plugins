@@ -104,7 +104,8 @@ Spec for 0.8.0: `2026-11-03-prd-toolkit-0.8.0-design.md`. Spec for 0.8.1:
 `2026-11-04-prd-toolkit-0.8.2-decision-inbox-design.md`. Spec for 0.8.3:
 `2026-11-06-prd-toolkit-0.8.3-backlog-design.md`. Spec for 0.8.4:
 `2026-11-04-prd-toolkit-0.8.4-prd-readmes-design.md`. Spec for 0.8.5:
-`2026-11-08-prd-toolkit-0.8.5-design.md`. The 0.8.6 and 0.8.7 specs are written when their turn
+`2026-11-08-prd-toolkit-0.8.5-design.md`. Backlog for 0.8.6, which also adopts the toolkit PRD's
+`lint-structure` area: `2026-11-08-prd-toolkit-0.8.6-backlog.md`. The 0.8.6 and 0.8.7 specs are written when their turn
 comes, each through its own brainstorm.
 
 ## 5. Related work
