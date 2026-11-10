@@ -158,7 +158,7 @@ Not applicable: command-line scripts and Claude Code skills; the published PRD p
 | FR-016 | Report a Levels Timeout that is not a whole number of seconds | verified | features/lint-cli.md |  |
 | FR-017 | Report an Environments Branch that git refuses | verified | features/lint-cli.md |  |
 | FR-018 | Check a runbook Check's matches pattern | verified | features/lint-cli.md |  |
-| NFR-019 | A test run leaves no cached uv environments behind | approved | nfr.md |  |
+| NFR-019 | A test run leaves no cached uv environments behind | verified | nfr.md |  |
 
 ## 12. Assumptions index
 
