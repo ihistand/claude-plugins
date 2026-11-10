@@ -5,6 +5,7 @@ __pycache__/
 
 # Python tooling
 .venv/
+prd-toolkit/.uv-test-cache/
 prd-toolkit/evals/results/
 .prd-judge/
 .prd-review.json
