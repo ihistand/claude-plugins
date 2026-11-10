@@ -207,7 +207,7 @@ Following Strunk & White principles (elements-of-style skill):
 <!-- prd-toolkit:start -->
 ## Product requirements (by prd_block.py; do not edit)
 
-The PRD at `docs/prd/prd-toolkit` (version 6.1.0) is the authority.
+The PRD at `docs/prd/prd-toolkit` (version 6.2.0) is the authority.
 
 - To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
   files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code
@@ -231,5 +231,5 @@ Required skills:
 - `superpowers:verification-before-completion` for a claim that work is done
 - `superpowers:writing-plans` for planning a change
 
-Adopted areas: lint-cli
+Adopted areas: lint-cli, lint-structure
 <!-- prd-toolkit:end -->
