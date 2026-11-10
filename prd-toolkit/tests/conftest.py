@@ -1,4 +1,5 @@
-"""Shared pytest helpers: a copy of the valid fixture PRD and a one-edit mutator."""
+"""Shared pytest helpers: a copy of the valid fixture PRD and a one-edit mutator, and the session's uv test cache."""
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,6 +9,45 @@ import pytest
 
 FIXTURE = Path(__file__).parent / "fixtures/valid/orders"
 PLUGINS_FILE = Path(__file__).parent / "fixtures/installed_plugins.json"
+
+# -- the session's uv test cache: every uv command a test starts uses it, and its environments go at the end --
+
+DEFAULT_UV_TEST_CACHE = Path(__file__).resolve().parent.parent / ".uv-test-cache"
+_UV_TEST_CACHE = pytest.StashKey[Path]()
+_WORKER_KEY = "prd_test_uv_cache"
+
+
+def _uv_test_cache(start: Path) -> Path:
+    """The folder PRD_TEST_UV_CACHE names (a relative one resolved against `start`), or the default when unset or empty."""
+    named = os.environ.get("PRD_TEST_UV_CACHE", "")
+    return start / named if named else DEFAULT_UV_TEST_CACHE
+
+
+def pytest_configure(config):
+    workerinput = getattr(config, "workerinput", None)
+    if workerinput is not None and _WORKER_KEY in workerinput:  # an xdist worker: the controller's cache
+        cache = Path(workerinput[_WORKER_KEY])
+    else:
+        cache = _uv_test_cache(Path(config.invocation_params.dir))
+    os.environ["UV_CACHE_DIR"] = str(cache)
+    config.stash[_UV_TEST_CACHE] = cache
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_configure_node(node):
+    """pytest-xdist: hand each worker the controller's test cache."""
+    node.workerinput[_WORKER_KEY] = str(node.config.stash[_UV_TEST_CACHE])
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Delete the test cache's environments once, when the whole run ends; its other folders stay."""
+    if hasattr(session.config, "workerinput"):  # a worker ends before the run does
+        return
+    envs = session.config.stash[_UV_TEST_CACHE] / "environments-v2"
+    try:
+        shutil.rmtree(envs)
+    except FileNotFoundError:
+        pass
 
 
 @pytest.fixture
