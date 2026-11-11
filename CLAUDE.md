@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects), **stl-generator-toolkit**, and **prd-toolkit** (the living PRD). The **acuantia-dataform** plugin moved to Acuantia's private marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and the stale copy here was removed 2026-09-20. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
+This is a Claude Code plugin marketplace repository containing data engineering and 3D-printing workflow plugins: **sqlanvil-toolkit** (PostgreSQL/Supabase data projects) and **stl-generator-toolkit**. **prd-toolkit** moved to its own repository, PRDAnvil/prd-toolkit, on 2026-11-10; only a pointer README remains in `prd-toolkit/`. The **acuantia-dataform** plugin moved to Acuantia's private marketplace (gitlab.com/acuantia/claude-plugins) on 2026-09-01 and the stale copy here was removed 2026-09-20. The former **dataform-toolkit** plugin was retired 2026-09-15; its `dataform-engineering-fundamentals` skill now lives only in the `acuantia-gcp-dataform` repo (`.claude/skills/`).
 
 **Author**: Ivan Histand (ihistand@rotoplas.com)
 
@@ -63,8 +63,6 @@ the `SKILLS` array in `scripts/sync-skills.sh`. Do **not** edit the plugin copie
 directly — the next sync overwrites them. After a sqlanvil release updates the
 agent-skills repo, run the sync here too, or the plugin falls behind (it had drifted
 from core 1.2 to 1.32.9 before 2026-10-04).
-
-`prd-toolkit` is the exception: it is authored in place in this repo (its skills share scripts, templates and references and are useless apart) and is not in `sync-skills.sh`.
 
 Claude Code only loads plugin skills laid out as `skills/<name>/SKILL.md`. A flat
 `skills/<name>.md` is silently ignored (verified 2026-10-04 with `claude -p --plugin-dir`:
@@ -203,33 +201,3 @@ Following Strunk & White principles (elements-of-style skill):
 - Red flags and common rationalizations
 - Integration with other skills
 - Practical examples with "WRONG" vs "CORRECT" comparisons
-
-<!-- prd-toolkit:start -->
-## Product requirements (by prd_block.py; do not edit)
-
-The PRD at `docs/prd/prd-toolkit` (version 6.2.0) is the authority.
-
-- To learn what an area does, run `/prd-context <area>` and work from its pack; read whole PRD
-  files only to edit them. Build an approved change with `/prd-build <area> <IDs>`. Code
-  implements the PRD; it never defines behaviour the PRD lacks.
-- Every behaviour change in an adopted area starts with `/prd-change`, before code.
-- Gap rule: if the PRD is silent on what you need, stop and raise it with `/prd-change`.
-  Do not guess or read the code to fill the gap.
-- Deploy with `/prd-deploy`; never run a runbook command yourself.
-- A bug, a failing test, an error or a failed deploy goes to `/prd-error` (skill
-  `prd-toolkit:handling-errors`) before any code changes.
-- Commits cite IDs: `Refs: FR-012`.
-- Run `.prd-toolkit/prd_hooks.py install` once per clone:
-  `uv run --script .prd-toolkit/prd_hooks.py install docs/prd/prd-toolkit`.
-- Lint runs inside the prd-toolkit skills; after any PRD edit, finish through `/prd-change`.
-
-Required skills:
-- `superpowers:writing-skills` for a change to `prd-toolkit/skills/**`
-- `superpowers-developing-for-claude-code:developing-claude-code-plugins` for a change to the plugin's layout or manifests
-- `superpowers:test-driven-development` for any code change
-- `superpowers:systematic-debugging` for a bug or a failing test
-- `superpowers:verification-before-completion` for a claim that work is done
-- `superpowers:writing-plans` for planning a change
-
-Adopted areas: lint-cli, lint-structure
-<!-- prd-toolkit:end -->

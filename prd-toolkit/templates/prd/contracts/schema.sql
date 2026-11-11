@@ -1,4 +1,0 @@
--- Format: references/contract-types.md, "schema".
--- Required content: per column the type, nullability and default; PRIMARY KEY, FOREIGN KEY,
--- UNIQUE and CHECK constraints; COMMENT ON for every table and column.
--- [NEEDS CLARIFICATION: first table; COMMENT ON every table and column]

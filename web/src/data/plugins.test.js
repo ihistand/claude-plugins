@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { plugins } from './plugins.js'
 
 describe('plugins data', () => {
-  it('exports an array of 3 plugins', () => {
+  it('exports an array of 2 plugins', () => {
     expect(Array.isArray(plugins)).toBe(true)
-    expect(plugins).toHaveLength(3)
+    expect(plugins).toHaveLength(2)
   })
 
   it('each plugin has required fields', () => {
@@ -36,48 +36,10 @@ describe('plugins data', () => {
     }
   })
 
-  it('prd-toolkit has 10 commands', () => {
-    const prd = plugins.find(p => p.id === 'prd-toolkit')
-    expect(prd.commands.map(c => c.name)).toEqual(['/prd-new', '/prd-adopt', '/prd-change', '/prd-context', '/prd-build', '/prd-status', '/prd-deploy', '/prd-error', '/prd-publish', '/prd-change-set'])
-    expect(prd.version).toBe('0.8.1')
-    expect(prd.description).toContain('/prd-context')
-    expect(prd.description).toContain('/prd-build')
-    expect(prd.description).toContain('/prd-status')
-    expect(prd.description).toContain('/prd-deploy')
-    expect(prd.description).toContain('/prd-error')
-    expect(prd.description).toContain('/prd-publish')
-    expect(prd.description).toContain('/prd-change-set')
-    expect(prd.description).toContain('links PRDs across repositories')
-    expect(prd.description).toContain('packs, languages and judged test cases')
-    expect(prd.description).not.toContain('across repositories, and packs')
-    expect(prd.skills.map(k => k.name)).toContain('coordinating-prds')
-    expect(prd.skills.map(k => k.name)).toContain('deploying-from-prds')
-    expect(prd.skills.map(k => k.name)).toContain('building-from-prds')
-    expect(prd.skills.map(k => k.name)).toContain('handling-errors')
-    expect(prd.skills.map(k => k.name)).toContain('publishing-prds')
-  })
-
-  it('prd-toolkit dry-runs with prd-tester and links the design specs', () => {
-    const prd = plugins.find(p => p.id === 'prd-toolkit')
-    const prdNew = prd.commands.find(c => c.name === '/prd-new')
-    expect(prdNew.workflow).toContain('prd-tester dry run')
-    expect(prdNew.workflow).not.toContain('fresh-agent')
-    const urls = prd.references.map(r => r.url)
-    expect(urls.some(u => u.endsWith('/2026-10-29-prd-toolkit-design.md'))).toBe(true)
-    expect(urls.some(u => u.endsWith('/2026-10-29-prd-toolkit-0.2-design.md'))).toBe(true)
-    expect(urls.some(u => u.endsWith('/2026-10-30-prd-toolkit-0.3-design.md'))).toBe(true)
-    expect(urls.some(u => u.endsWith('/2026-10-31-prd-toolkit-0.4-design.md'))).toBe(true)
-    expect(urls.some(u => u.endsWith('/2026-11-01-prd-toolkit-0.5-design.md'))).toBe(true)
-    expect(urls.some(u => u.endsWith('/2026-11-03-prd-toolkit-0.8.1-design.md'))).toBe(true)
-    const change = prd.commands.find(c => c.name === '/prd-change')
-    expect(change.workflow).toContain('prd_change.py')
-    expect(change.workflow).toContain('--review')
-  })
-
   it('plugin ids match known routes', () => {
     const ids = plugins.map(p => p.id)
     expect(ids).toContain('sqlanvil-toolkit')
     expect(ids).toContain('stl-generator-toolkit')
-    expect(ids).toContain('prd-toolkit')
+    expect(ids).not.toContain('prd-toolkit')  // moved to PRDAnvil/prd-toolkit on 2026-11-10
   })
 })

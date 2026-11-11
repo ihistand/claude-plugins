@@ -1,4 +1,0 @@
-schema_version: "1.1"
-name: changing-refuses-retarget
-context:
-  scaffold_script: scaffold.sh
