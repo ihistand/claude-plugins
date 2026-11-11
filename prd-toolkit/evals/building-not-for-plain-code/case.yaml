@@ -1,4 +1,0 @@
-schema_version: "1.1"
-name: building-not-for-plain-code
-context:
-  scaffold_script: scaffold.sh
