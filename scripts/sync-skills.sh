@@ -26,6 +26,7 @@ SKILLS=(
   "sqlanvil-engineering-fundamentals sqlanvil-toolkit $SQLANVIL_SKILLS"
   "sqlanvil-sqlx-lint sqlanvil-toolkit $SQLANVIL_SKILLS"
   "stl-generator stl-generator-toolkit $CLAUDE_SKILLS"
+  "macos-app-design macos-app-toolkit $CLAUDE_SKILLS"
 )
 
 changed=0
