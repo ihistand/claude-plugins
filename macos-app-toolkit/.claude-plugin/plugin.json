@@ -1,6 +1,6 @@
 {
   "name": "macos-app-toolkit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Design native macOS apps that look and behave like the Mac: the Mac's own containers in place of web styling, Apple's names and shortcuts for commands, and a screenshot check before calling a screen done. SwiftUI and AppKit.",
   "author": {
     "name": "Ivan Histand",
